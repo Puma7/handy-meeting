@@ -1,5 +1,7 @@
 # Lokale Agentenschnittstelle v1
 
+Dieser Vertrag gilt für die bisherigen Prototypen 0.4.1/0.5.0-preview.1. Die vollständige Rust-Übernahme ist noch offen. Tauri-Befehle der Migrationsbeta sind kein bereits freigegebener externer Agentenvertrag.
+
 HandyMeeting stellt ein eigenes **JSON-RPC-2.0-Protokoll über stdin/stdout** bereit. Es ist noch kein MCP-Server. Die Schnittstelle öffnet keinen TCP-Port und steuert die Oberfläche nicht über Koordinaten. Ein Agent muss zuerst die Fähigkeiten abfragen; Kontextmenüs und englische UI-Begriffe muss er dafür nicht erraten.
 
 Mit dem Programm aus `dist-0.4.1` beziehungsweise der portablen Vorschau starten:

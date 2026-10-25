@@ -1,5 +1,7 @@
 # HandyMeeting · lokale Meetings im Handy-Ökosystem
 
+**Nächste Hauptversion:** Die schrittweise Migration zu Rust und Tauri läuft als `1.0.0-beta.1`, zunächst für Windows. Handys aktuelle Modellliste und offizielle Erkennungsbibliotheken bleiben die Basis. Bisherige Prototypen und Aufnahmen bleiben erhalten. [Umfang und Freigabeschritte](docs/RUST_MIGRATION.md).
+
 HandyMeeting nimmt Computerton und optional Mikrofon getrennt auf und transkribiert **während des Meetings**. Die Erkennung verwendet eine lokale transcribe.cpp-Engine und ein bereits in Handy installiertes Streaming-Modell. Das Modell bleibt für die Sitzung geladen.
 
 **Plattformstand:** Windows 0.4.1; technische Linux-Vorschau 0.5.0-preview.1 für Ubuntu/Debian x64; Mac-DMGs für Apple Silicon und Intel wurden auf echten Mac-Runnern gebaut und geprüft. Echte Mac-/Linux-Audiogeräte und lange Meetings sind damit noch nicht validiert. Die Mac-Vorschau zielt auf macOS 15 oder neuer und ist ad hoc signiert, nicht Apple-notarisiert. Downloads und aktuelle Build-Nachweise: [BUILD_STATUS.md](BUILD_STATUS.md). Weitere Grenzen: [PORTABILITY.md](PORTABILITY.md). Eigenes Logo, App-Icon und Favicon liegen unter `assets/`. Dies ist eine eigenständige Companion App und kein offizielles Handy-Produkt.

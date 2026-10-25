@@ -1,0 +1,26 @@
+[package]
+name = "handy-bridge"
+version = "1.0.0-beta.1"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT"
+description = "Read-only integration with the installed Handy model registry"
+
+[features]
+default = []
+native-asr = ["dep:transcribe-cpp"]
+vulkan = ["native-asr", "transcribe-cpp/dynamic-backends", "transcribe-cpp/vulkan"]
+metal = ["native-asr", "transcribe-cpp/metal"]
+
+[dependencies]
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = "=1.0.145"
+sha2 = "=0.10.9"
+thiserror = "=2.0.17"
+transcribe-cpp = { version = "=0.4.1", default-features = false, optional = true }
+
+[dev-dependencies]
+tempfile = "=3.23.0"
+
+[lints.rust]
+unsafe_code = "forbid"

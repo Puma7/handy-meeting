@@ -60,7 +60,11 @@ public static class RealtimeSoakTest
     }
     public static async Task MonitorChecksAsync(string root)
     {
-        var path = Path.Combine(root, "monitor-probe.json"); JsonData.Save(path, new MonitorProbe(731));
+        var fixtureRoot = Path.Combine(root, "reader-fixtures");
+        Require(!Directory.Exists(fixtureRoot) && !File.Exists(Path.Combine(root, "monitor-checks.json")), "Monitor checks require a new output directory; previous evidence is retained.");
+        var writer = new MonitorFixtureWriter(fixtureRoot); var fixtureStats = new MonitorFixtureWriteStats();
+        var path = Path.Combine(fixtureRoot, "monitor-probe.json");
+        await writer.WriteAsync(path, JsonSerializer.SerializeToUtf8Bytes(new MonitorProbe(731)), fixtureStats, TimeSpan.FromSeconds(5));
         var locked = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
         Task<MonitorProbe> reading;
         try { reading = ReadMonitorStateAsync<MonitorProbe>(path); await Task.Delay(250); }
@@ -68,16 +72,104 @@ public static class RealtimeSoakTest
         Require((await reading).Value == 731, "Vorübergehende Statussperre wurde nicht überstanden.");
         try { await ReadMonitorStateAsync<MonitorProbe>(Path.Combine(root, "missing.json")); throw new InvalidOperationException("Fehlende Statusdatei wurde nicht erkannt."); }
         catch (FileNotFoundException) { }
-        JsonData.SaveText(path, "{defekt");
+        await writer.WriteAsync(path, Encoding.UTF8.GetBytes("{defekt"), fixtureStats, TimeSpan.FromSeconds(5));
         try { await ReadMonitorStateAsync<MonitorProbe>(path); throw new InvalidOperationException("Defekte Statusdatei wurde nicht erkannt."); }
         catch (JsonException) { }
-        JsonData.Save(path, new MonitorProbe(0));
-        var writing = Task.Run(() => { for (var i = 1; i <= 1000; i++) JsonData.Save(path, new MonitorProbe(i)); });
+        await writer.WriteAsync(path, JsonSerializer.SerializeToUtf8Bytes(new MonitorProbe(0)), fixtureStats, TimeSpan.FromSeconds(5));
+        var writing = Task.Run(async () => { for (var i = 1; i <= 1000; i++) await writer.WriteAsync(path, JsonSerializer.SerializeToUtf8Bytes(new MonitorProbe(i)), fixtureStats, TimeSpan.FromSeconds(5)); });
         var reads = 0;
         while (!writing.IsCompleted) { _ = await ReadMonitorStateAsync<MonitorProbe>(path, true); reads++; await Task.Delay(1); }
         await writing;
         Require((await ReadMonitorStateAsync<MonitorProbe>(path)).Value == 1000, "Letzter atomarer Statusstand fehlt.");
-        JsonData.Save(Path.Combine(root, "monitor-checks.json"), new { Passed = true, ExclusiveLockSurvived = true, MissingFileReported = true, CorruptFileReported = true, AtomicReplacements = 1000, ConcurrentReads = reads });
+        Require(reads > 0, "No concurrent monitor reads were exercised.");
+        var releasedStats = new MonitorFixtureWriteStats(); var activeStats = new MonitorFixtureWriteStats();
+        var releasePath = Path.Combine(fixtureRoot, "release-regression.json"); var original = JsonSerializer.SerializeToUtf8Bytes(new MonitorProbe(313));
+        await writer.WriteAsync(releasePath, original, releasedStats, TimeSpan.FromSeconds(5));
+        Task releaseWriting;
+        using (var held = new FileStream(releasePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+        {
+            releaseWriting = writer.WriteAsync(releasePath, JsonSerializer.SerializeToUtf8Bytes(new MonitorProbe(314)), releasedStats, TimeSpan.FromSeconds(2));
+            await Task.Delay(75); Require(!releaseWriting.IsCompleted, "Fixture writer ignored an active deny-delete lease.");
+        }
+        await releaseWriting;
+        Require((await ReadMonitorStateAsync<MonitorProbe>(releasePath)).Value == 314 && releasedStats.Retries > 0, "Fixture writer did not recover after temporary lease release.");
+        var activePath = Path.Combine(fixtureRoot, "active-regression.json");
+        await writer.WriteAsync(activePath, original, activeStats, TimeSpan.FromSeconds(5));
+        using (var held = new FileStream(activePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+        {
+            var timedOut = false;
+            try { await writer.WriteAsync(activePath, JsonSerializer.SerializeToUtf8Bytes(new MonitorProbe(999)), activeStats, TimeSpan.FromMilliseconds(150)); }
+            catch (TimeoutException error) when (error.InnerException is IOException io && MonitorFixtureWriter.IsRetryable(io)) { timedOut = true; }
+            Require(timedOut && !held.SafeFileHandle.IsClosed, "Fixture writer must fail its deadline while a lease is still held.");
+        }
+        Require(original.SequenceEqual(File.ReadAllBytes(activePath)), "Fixture deadline changed the protected original file.");
+        var missingFailed = false;
+        try { await writer.WriteAsync(Path.Combine(fixtureRoot, "missing-directory", "state.json"), original, new(), TimeSpan.FromSeconds(1)); }
+        catch (DirectoryNotFoundException) { missingFailed = true; }
+        Require(missingFailed, "Fixture writer swallowed an unrelated I/O failure.");
+        var outside = Path.Combine(root, "outside-fixture.json"); var outsideRejected = false;
+        try { await writer.WriteAsync(outside, original, new(), TimeSpan.FromSeconds(1)); }
+        catch (ArgumentException) { outsideRejected = true; }
+        Require(outsideRejected && !File.Exists(outside), "Fixture writer touched a file outside its owned fixture scope.");
+        var report = new { Passed = true, ExclusiveLockSurvived = true, MissingFileReported = true, CorruptFileReported = true, AtomicReplacements = 1000, ConcurrentReads = reads,
+            FixtureWriteRetries = fixtureStats.Retries, FixtureWriteHResults = fixtureStats.HResults, FixtureWriteNativeErrors = fixtureStats.NativeErrors,
+            TemporaryFixtureLeaseSurvived = true, TemporaryFixtureWriteRetries = releasedStats.Retries, TemporaryFixtureHResults = releasedStats.HResults,
+            ActiveFixtureLeaseDeadlineReported = true, ActiveFixtureDeadlineRetries = activeStats.Retries, ActiveFixtureHResults = activeStats.HResults,
+            UnrelatedFixtureIoFailureReported = true, OutsideFixtureScopeRejected = true, FixtureWriterOnly = true, LegacyProductionWriterValidated = false };
+        using var reportFile = new FileStream(Path.Combine(root, "monitor-checks.json"), FileMode.CreateNew, FileAccess.Write, FileShare.Read);
+        reportFile.Write(JsonSerializer.SerializeToUtf8Bytes(report, JsonData.Options)); reportFile.Flush(true);
+    }
+    private sealed class MonitorFixtureWriteStats
+    {
+        public int Retries { get; private set; }
+        public Dictionary<string, int> HResults { get; } = [];
+        public Dictionary<int, int> NativeErrors { get; } = [];
+        public void Record(IOException error)
+        {
+            Retries++; var code = $"0x{unchecked((uint)error.HResult):X8}"; var native = error.HResult & 0xffff;
+            HResults[code] = HResults.GetValueOrDefault(code) + 1; NativeErrors[native] = NativeErrors.GetValueOrDefault(native) + 1;
+        }
+    }
+    // Deliberately independent of JsonData.WriteAtomic: this suite exercises the
+    // monitor READER, not the legacy production writer's contention behavior.
+    private sealed class MonitorFixtureWriter
+    {
+        private readonly string scope, staging;
+        public MonitorFixtureWriter(string root)
+        {
+            scope = Path.GetFullPath(root) + Path.DirectorySeparatorChar;
+            Directory.CreateDirectory(scope); staging = Path.Combine(scope, "staging"); Directory.CreateDirectory(staging);
+        }
+        public static bool IsRetryable(IOException error) => error.HResult == unchecked((int)0x80070020)
+            || error.HResult == unchecked((int)0x80070021) || error.HResult == unchecked((int)0x80070497);
+        public async Task WriteAsync(string path, byte[] bytes, MonitorFixtureWriteStats stats, TimeSpan deadline)
+        {
+            path = Path.GetFullPath(path);
+            if (!path.StartsWith(scope, StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Fixture target is outside the owned test scope.", nameof(path));
+            if (deadline <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(deadline));
+            var clock = Stopwatch.StartNew(); IOException? last = null;
+            var next = Path.Combine(staging, $"next-{Guid.NewGuid():N}.json");
+            using (var file = new FileStream(next, FileMode.CreateNew, FileAccess.Write, FileShare.Read, 4096, FileOptions.WriteThrough)) { file.Write(bytes); file.Flush(true); }
+            while (true)
+            {
+                if (clock.Elapsed >= deadline) throw new TimeoutException("The owned fixture replacement remained blocked past its deadline.", last);
+                try
+                {
+                    // Each superseded fixture is retained under a new backup name.
+                    // ERROR_UNABLE_TO_REMOVE_REPLACED (1175) leaves both original
+                    // names unchanged; partially moved 1176/1177 states are not retried.
+                    if (File.Exists(path)) File.Replace(next, path, Path.Combine(staging, $"previous-{Guid.NewGuid():N}.json"), true);
+                    else File.Move(next, path);
+                    return;
+                }
+                catch (IOException error) when (IsRetryable(error))
+                {
+                    last = error; stats.Record(error); var remaining = deadline - clock.Elapsed;
+                    if (remaining <= TimeSpan.Zero) throw new TimeoutException("The owned fixture replacement remained blocked past its deadline.", error);
+                    await Task.Delay(remaining < TimeSpan.FromMilliseconds(10) ? remaining : TimeSpan.FromMilliseconds(10));
+                }
+            }
+        }
     }
     private static void AppendJson(string path, object value)
     {

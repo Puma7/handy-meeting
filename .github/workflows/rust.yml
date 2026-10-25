@@ -1,0 +1,193 @@
+name: Rust beta checks
+on:
+  push:
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.cargo/**'
+      - 'rust-toolchain.toml'
+      - 'crates/**'
+      - 'apps/desktop/**'
+      - 'assets/**'
+      - 'licenses/**'
+      - 'scripts/**'
+      - 'src/**'
+      - 'verify.ps1'
+      - 'global.json'
+      - 'LICENSE'
+      - 'THIRD_PARTY_NOTICES.txt'
+      - '.github/workflows/rust.yml'
+  pull_request:
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.cargo/**'
+      - 'rust-toolchain.toml'
+      - 'crates/**'
+      - 'apps/desktop/**'
+      - 'assets/**'
+      - 'licenses/**'
+      - 'scripts/**'
+      - 'src/**'
+      - 'verify.ps1'
+      - 'global.json'
+      - 'LICENSE'
+      - 'THIRD_PARTY_NOTICES.txt'
+      - '.github/workflows/rust.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  CARGO_TERM_COLOR: never
+  RUSTFLAGS: '-D warnings'
+jobs:
+  windows:
+    name: Windows Rust beta verification and package
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: '26.7.0'
+      - name: Install pinned Rust tooling
+        shell: pwsh
+        run: |
+          rustup toolchain install 1.91.1 --profile minimal --component rustfmt --component clippy
+          if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain installation failed.' }
+          rustup default 1.91.1
+          if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain selection failed.' }
+      - name: Prepare pinned npm with the provided package manager
+        shell: pwsh
+        run: |
+          $systemNpm = Join-Path (Split-Path (Get-Command node).Source -Parent) 'node_modules/npm/bin/npm-cli.js'
+          $tools = Join-Path $PWD '.build/tools'
+          New-Item -ItemType Directory -Path $tools -Force | Out-Null
+          $packed = & node $systemNpm pack npm@12.2.1 --json --ignore-scripts --pack-destination $tools
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned npm package preparation failed.' }
+          $package = $packed | ConvertFrom-Json
+          if ($package.Count -ne 1 -or $package[0].integrity -ne 'sha512-bKCmFRVT/BB+YPEYbZwQ1XUI3N5t4xKSpU1MxOjo7z3iWzKBJ0ZXRC1xFdEN+TC7N5TdywaBzf2dMXGJq/e2PQ==') { throw 'The npm package integrity differs from the reviewed version.' }
+          & node $systemNpm install --prefix (Join-Path $tools 'npm-bootstrap') --ignore-scripts --no-audit --no-fund --no-save --package-lock=false (Join-Path $tools $package[0].filename)
+          if ($LASTEXITCODE -ne 0) { throw 'Local pinned npm installation failed.' }
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value ('HANDYMEETING_NPM_CLI=' + (Join-Path $tools 'npm-bootstrap/node_modules/npm/bin/npm-cli.js'))
+      - name: Prepare reviewed native SDK separately
+        shell: pwsh
+        run: ./scripts/prepare-rust-native.ps1
+      - name: Bind separate checks to this source tree
+        shell: pwsh
+        run: node scripts/rust-artifacts.mjs begin-check
+      - name: Verify the preserved C sharp prototype
+        shell: pwsh
+        run: |
+          ./verify.ps1
+          if (-not $?) { throw 'Legacy verification failed.' }
+          node scripts/rust-artifacts.mjs record-check legacy 0
+      - name: Check filesystem artifact guards
+        shell: pwsh
+        run: |
+          node scripts/rust-artifacts.mjs self-test
+          node scripts/rust-artifacts.mjs record-check artifact-guards $LASTEXITCODE
+      - name: Check Rust formatting
+        shell: pwsh
+        run: |
+          cargo fmt --all -- --check
+          node scripts/rust-artifacts.mjs record-check cargo-format $LASTEXITCODE
+      - name: Install locked frontend dependencies
+        shell: pwsh
+        run: |
+          node $env:HANDYMEETING_NPM_CLI --prefix apps/desktop ci --ignore-scripts --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw 'Locked frontend installation failed.' }
+      - name: Test frontend behavior
+        shell: pwsh
+        run: |
+          node $env:HANDYMEETING_NPM_CLI --prefix apps/desktop test
+          node scripts/rust-artifacts.mjs record-check frontend-tests $LASTEXITCODE
+      - name: Build tested frontend assets
+        shell: pwsh
+        run: |
+          node $env:HANDYMEETING_NPM_CLI --prefix apps/desktop run build
+          node scripts/rust-artifacts.mjs record-check frontend-build $LASTEXITCODE
+      - name: Test locked Rust workspace
+        shell: pwsh
+        run: |
+          $env:TRANSCRIBE_DIR = Join-Path $PWD '.build/rust-native-0.4.1'
+          $env:PATH = (Join-Path $env:TRANSCRIBE_DIR 'bin') + ';' + $env:PATH
+          cargo test --workspace --all-targets --locked
+          node scripts/rust-artifacts.mjs record-check rust-tests $LASTEXITCODE
+      - name: Reject Rust compiler and Clippy warnings
+        shell: pwsh
+        run: |
+          $env:TRANSCRIBE_DIR = Join-Path $PWD '.build/rust-native-0.4.1'
+          $env:PATH = (Join-Path $env:TRANSCRIBE_DIR 'bin') + ';' + $env:PATH
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          node scripts/rust-artifacts.mjs record-check rust-clippy $LASTEXITCODE
+      - name: Verify unchanged source and retained notices
+        shell: pwsh
+        run: node scripts/rust-artifacts.mjs finish-check
+      - name: Build release from the independently checked source
+        shell: pwsh
+        run: ./scripts/build-rust.ps1 -UseExistingVerification
+      - name: Bind release executable to its separate check
+        shell: pwsh
+        run: |
+          $pending = node scripts/rust-artifacts.mjs begin-release-check | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Release check preparation failed.' }
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value ('HM_RELEASE_CHECK_DIR=' + $pending.outputDirectory)
+      - name: Check the exact release executable without Handy or models
+        shell: pwsh
+        run: |
+          $env:PATH = (Join-Path $PWD '.build/rust-native-0.4.1/bin') + ';' + $env:PATH
+          & ./.build/rust-target/x86_64-pc-windows-msvc/release/HandyMeeting.exe --release-checks $env:HM_RELEASE_CHECK_DIR | Out-Host
+          if ($LASTEXITCODE -ne 0) { throw 'Release executable checks failed.' }
+      - name: Stage only checked payload files
+        shell: pwsh
+        run: node scripts/rust-artifacts.mjs stage
+      - name: Create candidate ZIP using filesystem operations only
+        shell: pwsh
+        run: ./scripts/package-rust-windows.ps1
+      - name: Keep model-free verification records
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rust-windows-checks
+          include-hidden-files: true
+          retention-days: 14
+          path: |
+            .build/rust-verification.json
+            .build/rust-check-runs/**/*.json
+            .build/rust-release-verification.json
+            .build/rust-release-check-current.json
+            .build/rust-release-checks-*/release-verification.json
+            .build/rust-release-checks-*/release-checks.json
+      - name: Keep candidate package without publishing a release
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rust-windows-beta-candidate
+          path: packages/HandyMeeting-1.0.0-beta.1-windows-x64.zip*
+          retention-days: 14
+  portable-core:
+    name: Portable core (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, macos-15, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - name: Install pinned Rust tooling
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.91.1 --profile minimal --component rustfmt --component clippy
+          rustup default 1.91.1
+      - name: Format and synthetic core checks only
+        run: |
+          set -euo pipefail
+          cargo fmt --all -- --check
+          cargo test -p handy-bridge -p meeting-core -p meeting-notes --all-targets --no-default-features --locked
+          cargo clippy -p handy-bridge -p meeting-core -p meeting-notes --all-targets --no-default-features --locked -- -D warnings
+# No model weights, Handy installation, real-device recording, cloud credentials,
+# native ASR inference, portable GUI build or public release is used by these jobs.

@@ -1,0 +1,6 @@
+{
+  "identifier": "main-window",
+  "description": "Local app controls only. No filesystem, shell or remote network plugin exposed to the WebView.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

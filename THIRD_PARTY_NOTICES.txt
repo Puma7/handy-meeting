@@ -27,3 +27,22 @@ MicroCom.Runtime 0.11.0 (MIT), Tmds.DBus.Protocol 0.21.3 (MIT), Inter font (SIL 
 The pinned NuGet metadata and supplied license/third-party texts are collected under licenses/.
 Self-contained .NET distributions retain their runtime LICENSE.txt and ThirdPartyNotices.txt.
 No speech model weights are redistributed in these packages. Their licenses remain separate.
+
+Rust/Tauri migration beta 1.0.0-beta.1 (Windows x64)
+The Rust application uses official transcribe-cpp and transcribe-cpp-sys 0.4.1
+(MIT), Tauri 2.11.5 (MIT OR Apache-2.0), WASAPI 0.26.0 (MIT), Hound 3.5.1
+(Apache-2.0), and the locked dependency graph. Original supplied and pinned
+upstream license/notice texts are collected under licenses/rust and indexed
+by package, version, source and SHA-256 in its target-specific manifest.
+This includes build dependencies; not every listed crate is linked at runtime.
+
+React/React DOM 18.3.1, @tauri-apps/api 2.11.0, Lucide React 0.542.0 and their
+production dependencies retain original texts under licenses/frontend.
+The Handy palette is copied from cjpais/Handy, commit
+73c095857bc4eadff097f64767c40ad129cc372d under MIT, copyright 2025 CJ Pais.
+The complete attribution is in HANDY_STYLE_NOTICE.md in the Rust distribution
+and apps/desktop/HANDY_STYLE_NOTICE.md in source. No endorsement is implied.
+
+The official native runtime retains its supplied notices in native-licenses
+in the Rust distribution. Model weights remain excluded. See
+docs/RUST_DEPENDENCIES.md for reviewed scope and remaining warnings.

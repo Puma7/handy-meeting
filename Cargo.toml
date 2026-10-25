@@ -1,0 +1,20 @@
+[workspace]
+members = ["crates/handy-bridge", "crates/meeting-core", "crates/meeting-notes", "apps/desktop/src-tauri"]
+resolver = "2"
+
+[workspace.package]
+version = "1.0.0-beta.1"
+edition = "2021"
+license = "MIT"
+rust-version = "1.91"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+panic = "unwind"
+
+# Match Handy's Windows shutdown/Wayland fixes until its upstream pin is retired.
+[patch.crates-io]
+tao = { git = "https://github.com/cjpais/tao", rev = "c3bee28c1d446d95f08c95c3b6f8d4bde052b876" }
+tao-macros = { git = "https://github.com/cjpais/tao", rev = "c3bee28c1d446d95f08c95c3b6f8d4bde052b876" }

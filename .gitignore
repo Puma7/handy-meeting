@@ -17,3 +17,6 @@ packages/
 data/
 Sessions/
 *.user
+target/
+**/node_modules/
+apps/desktop/dist/

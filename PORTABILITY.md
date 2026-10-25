@@ -2,6 +2,8 @@
 
 Stand: 25.10.2026. Windows und portable Vorschau werden getrennt bereitgestellt. Keine Installation beendet fremde Handy-Prozesse oder laufende Nutzeraufnahmen.
 
+**Rust/Tauri 1.0.0-beta.1 ist eine zusätzliche Windows-Migrationsbeta.** Ihre Geräte- und Langzeitfreigabe sowie Mac-/Linux-Aufnahmeadapter stehen aus. Die folgenden portablen Downloads gelten weiterhin für Avalonia 0.5.0-preview.1. [Migrationsplan](docs/RUST_MIGRATION.md).
+
 | Ziel | Stand | Nächste Freigabeprüfung |
 | --- | --- | --- |
 | Windows x64 | Bestehende WPF-App; 0.4.1 mit verständlicherem Editor, Logo und lokaler Agentenschnittstelle | `verify.ps1` und gezielte native Regression |

@@ -11,6 +11,8 @@ An independent companion prototype for the [Handy](https://github.com/cjpais/Han
 
 [Deutsche Anleitung](README.de.md) · [Build status](BUILD_STATUS.md) · [Platform status](PORTABILITY.md) · [Agent API](AGENT_API.md) · [Test evidence](TEST_REPORT.md) · [Contributing](CONTRIBUTING.md)
 
+**Rust/Tauri migration:** the next main version is being implemented as `1.0.0-beta.1`, starting with Windows. It reuses Handy's live model registry, official transcribe.cpp Rust bindings and shared palette. Existing C# prototypes and recordings are preserved. See [scope and release gates](docs/RUST_MIGRATION.md); this migration beta is not a release candidate or a new Mac/Linux capture validation.
+
 ## Why a companion app?
 
 In [Handy discussion #1923](https://github.com/cjpais/Handy/discussions/1923), the maintainer put meeting mode outside Handy's scope and mentioned a separate companion application. This project explores that direction. It is independently developed, uses its own name and logo, and has no official integration agreement or endorsement.
@@ -18,6 +20,8 @@ In [Handy discussion #1923](https://github.com/cjpais/Handy/discussions/1923), t
 HandyMeeting detects a compatible Handy installation, reads its installed-model metadata, and reuses existing local model weights. The companion includes a pinned transcribe.cpp runtime and runs inference in its **own process**. It does not inject into Handy or share an already-loaded model process. A stable shared model-discovery or service contract is an open discussion topic.
 
 ## What works today
+
+This feature list describes the existing prototypes. The Rust beta's migrated scope and remaining differences are listed in [RUST_MIGRATION.md](docs/RUST_MIGRATION.md).
 
 - Separate local system-audio and optional microphone tracks.
 - Streaming transcription using a compatible model already installed through Handy; tested with Nemotron Streaming 3.5.
@@ -59,6 +63,8 @@ The optional cloud text path requires explicit per-run consent. It receives tran
 Windows keys use current-user encryption. Portable-preview keys stay in memory for the session; native keychain integration is unfinished. Original recordings and derived versions are never automatically deleted. Sessions are ordinary local files; a folder-sync service can independently transmit them.
 
 ## Build and verify
+
+For the Rust/Tauri beta, use the [dedicated build and verification instructions](docs/RUST_BUILD.md). The commands below remain the C# prototype build paths.
 
 Use .NET SDK 10 as pinned in `global.json`. Dependencies and native-runtime downloads are version-locked; native downloads are checked against fixed SHA-256 values.
 

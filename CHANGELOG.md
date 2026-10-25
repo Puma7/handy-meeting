@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-beta.1 — Rust/Tauri migration
+
+- Windows migration target with an independent Rust workspace and a Handy-style Tauri/React interface.
+- Installed Handy remains authoritative for fresh model lists; official transcribe.cpp Rust bindings reuse installed weights.
+- Immutable model/runtime identity, isolated per-track recognition workers, durable audio/text journals and bounded live previews.
+- Read-only legacy session access, original-quote analysis, editable templates, local-first transport and explicit per-run cloud text consent.
+- Windows hardware/long-session validation, portable Rust capture adapters and complete legacy feature parity remain release gates. Existing prototypes and recordings are preserved.
+
 ## 0.5.0-preview.1 — portable development
 
 - Shared platform-neutral C# core for durable PCM, transcript journals, streaming coordination and source-linked notes.
