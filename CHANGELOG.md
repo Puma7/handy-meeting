@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.0-beta.2 — guided meeting analysis and portable candidates
+
+- Discover local text-model IDs from the configured loopback server; guide LM Studio setup and require an explicit model choice.
+- Separate meeting history/details from new recording; identify analysis sources with title, date, time and duration.
+- Show confirmed-task progress, elapsed time, cancellation and failure feedback; preserve exact resumable analysis requests.
+- Copy validated Markdown with literal original quotes and internal source references.
+- Read Handy's installed-package version without trying an unsupported CLI flag.
+- Drain queued Windows audio packets and stop tails, retain bounded device diagnostics and surface device failures instead of padding over them.
+- Add Linux PulseAudio/PipeWire-Pulse and macOS capture adapters, official native SDK preparation, DEB/DMG candidate packaging and actual target-host CI jobs. Device and long-session validation remain release gates.
+- Preserve byte identities of locked dependency and license files across Windows checkouts; retain old programs and user sessions.
+
 ## 1.0.0-beta.1 — Rust/Tauri migration
 
 - Windows migration target with an independent Rust workspace and a Handy-style Tauri/React interface.

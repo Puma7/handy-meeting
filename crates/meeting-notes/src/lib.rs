@@ -1,11 +1,15 @@
 //! Source-linked text analysis, separated into data, validation, transport and orchestration.
+mod control;
+mod markdown;
 mod models;
 mod service;
 mod transport;
 mod validation;
+pub use control::{is_cancelled, new_job_id, AnalysisControl, AnalysisProgress};
+pub use markdown::render_markdown;
 pub use models::{Analysis, Connection, Evidence, Fact, Kind, Section, Source, Step, Template};
-pub use service::{analyze, read_analysis, render_text, source_hash};
-pub use transport::TextClient;
+pub use service::{analyze, analyze_controlled, read_analysis, render_text, source_hash};
+pub use transport::{local_model_ids, TextClient};
 pub use validation::{validate_answer, validate_template};
 pub const PROMPT_VERSION: &str = "handymeeting-rust-notes-2";
 

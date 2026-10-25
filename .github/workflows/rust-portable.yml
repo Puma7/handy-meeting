@@ -1,0 +1,147 @@
+name: Rust portable desktop candidates
+on:
+  push:
+    branches: [main]
+    paths: ['Cargo.toml', 'Cargo.lock', '.gitattributes', 'rust-toolchain.toml', '.cargo/**', 'crates/**', 'apps/desktop/**', 'platform/**', 'scripts/**', 'licenses/**', 'assets/**', 'LICENSE', 'THIRD_PARTY_NOTICES.txt', '.github/workflows/rust-portable.yml']
+  pull_request:
+    paths: ['Cargo.toml', 'Cargo.lock', '.gitattributes', 'rust-toolchain.toml', '.cargo/**', 'crates/**', 'apps/desktop/**', 'platform/**', 'scripts/**', 'licenses/**', 'assets/**', 'LICENSE', 'THIRD_PARTY_NOTICES.txt', '.github/workflows/rust-portable.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: rust-portable-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CARGO_TERM_COLOR: never
+jobs:
+  desktop:
+    name: ${{ matrix.rid }} GUI build and package
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            rid: linux-x64
+            target: x86_64-unknown-linux-gnu
+          - runner: macos-15
+            rid: osx-arm64
+            target: aarch64-apple-darwin
+          - runner: macos-15-intel
+            rid: osx-x64
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 50
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: '26.7.0'
+      - name: Install Linux GUI development libraries
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libvulkan1 pulseaudio-utils
+      - name: Install pinned Rust tooling
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.91.1 --profile minimal --component rustfmt --component clippy --target '${{ matrix.target }}'
+      - name: Prepare local pinned npm without global changes
+        run: |
+          set -euo pipefail
+          mkdir -p .build/tools
+          npm pack npm@12.2.1 --json --ignore-scripts --pack-destination .build/tools > .build/npm-package.json
+          python3 -c 'import json; x=json.load(open(".build/npm-package.json")); assert len(x)==1 and x[0]["integrity"]=="sha512-bKCmFRVT/BB+YPEYbZwQ1XUI3N5t4xKSpU1MxOjo7z3iWzKBJ0ZXRC1xFdEN+TC7N5TdywaBzf2dMXGJq/e2PQ=="'
+          npm install --prefix .build/tools/npm-bootstrap --ignore-scripts --no-audit --no-fund --no-save --package-lock=false "$PWD/.build/tools/npm-12.2.1.tgz"
+          echo "HANDYMEETING_NPM_CLI=$PWD/.build/tools/npm-bootstrap/node_modules/npm/bin/npm-cli.js" >> "$GITHUB_ENV"
+      - name: Prepare and inspect the reviewed native SDK
+        env:
+          RID: ${{ matrix.rid }}
+        run: |
+          set -euo pipefail
+          python3 scripts/prepare-rust-portable.py "$RID"
+          python3 scripts/prepare-rust-portable.py "$RID" --check-abi
+          sdk="$PWD/.build/rust-native-beta2-0.4.1-$RID"
+          echo "TRANSCRIBE_DIR=$sdk" >> "$GITHUB_ENV"
+          if [[ "$RID" = linux-x64 ]]; then
+            echo "LD_LIBRARY_PATH=$sdk/lib" >> "$GITHUB_ENV"
+            echo 'RUSTFLAGS=-D warnings -C link-arg=-Wl,-rpath,$ORIGIN/native' >> "$GITHUB_ENV"
+          else
+            echo "DYLD_LIBRARY_PATH=$sdk/lib" >> "$GITHUB_ENV"
+            echo 'RUSTFLAGS=-D warnings -C link-arg=-Wl,-rpath,@executable_path/native' >> "$GITHUB_ENV"
+            echo 'MACOSX_DEPLOYMENT_TARGET=13.0' >> "$GITHUB_ENV"
+          fi
+      - name: Bind the portable checks to source bytes
+        run: |
+          set -euo pipefail
+          node scripts/rust-artifacts.mjs source-fingerprint > .build/portable-source-before.json
+          python3 -m py_compile scripts/prepare-rust-portable.py scripts/rust-portable-artifacts.py
+          python3 -m unittest discover -s scripts -p test_rust_portable.py
+          bash -n scripts/package-rust-portable.sh
+      - name: Verify frontend and bounded portable audio transport
+        run: |
+          set -euo pipefail
+          cargo +1.91.1 fmt --all -- --check
+          node "$HANDYMEETING_NPM_CLI" --prefix apps/desktop ci --ignore-scripts --no-audit --no-fund
+          node "$HANDYMEETING_NPM_CLI" --prefix apps/desktop test
+          node "$HANDYMEETING_NPM_CLI" --prefix apps/desktop run build
+          cargo +1.91.1 test --workspace --all-targets --locked --target '${{ matrix.target }}'
+          cargo +1.91.1 clippy --workspace --all-targets --locked --target '${{ matrix.target }}' -- -D warnings
+      - name: Build the complete Rust Tauri desktop executable
+        run: |
+          set -euo pipefail
+          cargo +1.91.1 build --release --locked --target '${{ matrix.target }}' -p handy-meeting-desktop
+          python3 scripts/rust-portable-artifacts.py begin-release '${{ matrix.rid }}' .build/portable-source-before.json
+      - name: Check exact release linkage and synthetic import without devices or models
+        run: |
+          set -euo pipefail
+          .build/rust-target/${{ matrix.target }}/release/HandyMeeting --release-checks .build/portable-release-checks
+          node scripts/rust-artifacts.mjs source-fingerprint > .build/portable-source-after.json
+          python3 -c 'import json; assert json.load(open(".build/portable-source-before.json"))==json.load(open(".build/portable-source-after.json")), "Source changed during portable checks"'
+      - name: Package the independently checked desktop and prove relocation
+        run: |
+          set -euo pipefail
+          bash scripts/package-rust-portable.sh '${{ matrix.rid }}' .build/portable-source-after.json .build/portable-release-checks
+      - name: Check Debian12 and13 installation and relocated headless CLI
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          for distribution in bookworm-slim trixie-slim; do
+            docker run --rm -v "$PWD/packages:/candidate:ro" "debian:$distribution" sh -eu -c '
+              apt-get update >/dev/null
+              apt-get install -y /candidate/*.deb >/dev/null
+              version=$(dpkg-query -W handymeeting-rust-beta)
+              test -n "$version"
+              executable=$(dpkg-query -L handymeeting-rust-beta | sed -n "/\/HandyMeeting$/p")
+              "$executable" --release-checks /tmp/handymeeting-release-checks
+              cat /tmp/handymeeting-release-checks/release-checks.json
+            '
+          done
+      - name: Keep candidate packages and hashes without publishing a release
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rust-desktop-${{ matrix.rid }}
+          retention-days: 14
+          path: |
+            packages/HandyMeeting-1.0.0-beta.2-*.dmg*
+            packages/HandyMeeting-1.0.0-beta.2-linux-amd64.deb*
+      - name: Keep model-free proof and ABI requirements
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rust-portable-checks-${{ matrix.rid }}
+          include-hidden-files: true
+          retention-days: 14
+          path: |
+            .build/portable-source-*.json
+            .build/portable-release-checks/release-checks.json
+            .build/rust-native-beta2-0.4.1-${{ matrix.rid }}/ABI_REPORT.json
+            .build/rust-native-beta2-0.4.1-${{ matrix.rid }}/SDK_PROVENANCE.json
+            .build/rust-portable-${{ matrix.rid }}-pending.json
+            .build/rust-portable-package/**/package-manifest.json
+            .build/rust-portable-package/**/relocated-checks/release-checks.json
+# No real microphone/system capture, model download, cloud call, two-hour test,
+# Developer ID, notarization, or public release is claimed by this workflow.

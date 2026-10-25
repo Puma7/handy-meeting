@@ -10,7 +10,8 @@ $frontendOutput = Join-Path $root 'licenses/frontend'
 New-Item -ItemType Directory -Path $rustOutput, $frontendOutput -Force | Out-Null
 
 # These packages omit a standalone license from their published crate. The Git
-# revisions come from that exact crate's supplied .cargo_vcs_info.json. No text
+# current-source revisions come from that exact crate's .cargo_vcs_info.json;
+# separately retained historical notices are explicitly labeled below. No text
 # is synthesized from SPDX identifiers. selectors references Mozilla's MPL.
 $fallback = @{
     'alloc-stdlib@0.2.2' = @(
@@ -19,15 +20,47 @@ $fallback = @{
     'clipboard-win@5.4.3' = @(
         @{ Original = 'LICENSE'; Url = 'https://raw.githubusercontent.com/DoumanAsh/clipboard-win/ed27008ae5d1f10cfbb266de039f0fb35fd05a56/LICENSE' }
     )
+    'dlopen2@0.8.2' = @(
+        @{ Original = 'LICENSE'; Url = 'https://raw.githubusercontent.com/OpenByteDev/dlopen2/cc80e4a0a90d499b677fdf7743699b4b3a43a989/LICENSE' }
+    )
+    'dlopen2_derive@0.4.3' = @(
+        @{ Original = 'LICENSE'; Url = 'https://raw.githubusercontent.com/OpenByteDev/dlopen2/cc80e4a0a90d499b677fdf7743699b4b3a43a989/LICENSE' }
+    )
+    'libappindicator-sys@0.9.0' = @(
+        @{ Original = 'LICENSE-MIT'; Url = 'https://raw.githubusercontent.com/tauri-apps/libappindicator-rs/eafd1e3682a1247f595410266091e9684021cb6f/LICENSE-MIT' },
+        @{ Original = 'LICENSE-APACHE'; Url = 'https://raw.githubusercontent.com/tauri-apps/libappindicator-rs/eafd1e3682a1247f595410266091e9684021cb6f/LICENSE-APACHE' }
+    )
     'selectors@0.36.1' = @(
         @{ Original = 'MPL-2.0.txt'; Url = 'https://www.mozilla.org/media/MPL/2.0/index.txt' }
     )
 }
 foreach ($name in @('unic-char-property', 'unic-char-range', 'unic-common', 'unic-ucd-ident', 'unic-ucd-version')) {
+    $revision = if ($name -eq 'unic-ucd-ident') { '8a6ce83063d90b91ae2ce59eddb803edd393fca9' } else { '5878605364af97a3358368a6eaef02104af2e016' }
     $fallback[$name + '@0.9.0'] = @(
-        @{ Original = 'LICENSE-MIT'; Url = 'https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-MIT' },
-        @{ Original = 'LICENSE-APACHE'; Url = 'https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-APACHE' },
-        @{ Original = 'COPYRIGHT.md'; Url = 'https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/COPYRIGHT.md' }
+        @{ Original = 'LICENSE-MIT'; Url = "https://raw.githubusercontent.com/open-i18n/rust-unic/$revision/LICENSE-MIT" },
+        @{ Original = 'LICENSE-APACHE'; Url = "https://raw.githubusercontent.com/open-i18n/rust-unic/$revision/LICENSE-APACHE" },
+        @{ Original = 'COPYRIGHT.md'; Url = "https://raw.githubusercontent.com/open-i18n/rust-unic/$revision/COPYRIGHT.md" }
+    )
+}
+# The current objc2 LICENSE.md explicitly permits MIT for all these crates.
+# Preserve that exact-revision explanation, including its Apple SDK boundary,
+# alongside the original MIT notice retained from before upstream replaced it
+# in cfb199226661ec6e4939fcd7cd7531b3c5453076. No copyright text is synthesized.
+$objcRevisions = @{
+    'block2@0.6.2' = 'b4167b582b2f75f9a1be75495c41b765344fd03c'
+    'dispatch2@0.3.0' = 'e68410e22a2d29d5f37a0b4c1b7e8e194808eade'
+    'objc2@0.6.4' = '8852b424193ca41602281b3d7540d7c8ed51e49a'
+    'objc2-encode@4.1.0' = '8d214f5477365ffcbcbb7de058c86ed9a518efb7'
+    'objc2-exception-helper@0.1.1' = '8d214f5477365ffcbcbb7de058c86ed9a518efb7'
+}
+foreach ($name in @('app-kit', 'core-foundation', 'core-graphics', 'foundation', 'io-surface', 'web-kit')) {
+    $objcRevisions["objc2-$name@0.3.2"] = '7b1abfd750a2cacaea71d6a56ecfb83cb7de560b'
+}
+foreach ($key in $objcRevisions.Keys) {
+    $revision = $objcRevisions[$key]
+    $fallback[$key] = @(
+        @{ Original = 'LICENSE.md'; Url = "https://raw.githubusercontent.com/madsmtm/objc2/$revision/LICENSE.md" },
+        @{ Original = 'LICENSE.txt'; Url = 'https://raw.githubusercontent.com/madsmtm/objc2/757cd841d0293341dbefd9b99d7548dec244ffde/LICENSE.txt'; Note = 'Historical upstream MIT notice with original copyright; retained alongside this package revision''s LICENSE.md. The current notice expressly permits the MIT option. Replaced upstream in cfb199226661ec6e4939fcd7cd7531b3c5453076; not claimed to be supplied by this crate archive.' }
     )
 }
 foreach ($version in @('webview2-com@0.38.2', 'webview2-com-macros@0.8.1', 'webview2-com-sys@0.38.2')) {
@@ -36,6 +69,7 @@ foreach ($version in @('webview2-com@0.38.2', 'webview2-com-macros@0.8.1', 'webv
     )
 }
 $remoteHashes = @{
+    'https://raw.githubusercontent.com/OpenByteDev/dlopen2/cc80e4a0a90d499b677fdf7743699b4b3a43a989/LICENSE' = '39fa265207450e77c62e90c5594a06c085b655d8374c7ced4bf7894b6bd95dd2'
     'https://raw.githubusercontent.com/dropbox/rust-alloc-no-stdlib/6032b6a9b20e03737135c55a0270ccffcc1438ef/LICENSE' = 'c0c56f26d9c051cac4d200c34c84e7ae9aaa853e01a982a1df08b09931e518ae'
     'https://raw.githubusercontent.com/DoumanAsh/clipboard-win/ed27008ae5d1f10cfbb266de039f0fb35fd05a56/LICENSE' = 'c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566'
     'https://www.mozilla.org/media/MPL/2.0/index.txt' = '3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04'
@@ -43,6 +77,15 @@ $remoteHashes = @{
     'https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-APACHE' = 'a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2'
     'https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/COPYRIGHT.md' = 'f5c342c49f3ac804f3e8e7bb62a8040a44c50d47bb36902b1abd13f66a1adf8b'
     'https://raw.githubusercontent.com/wravery/webview2-rs/b74dc5e2b394044bea5191052868ce7a106c202c/LICENSE' = '0dcf41516e608bbcb6cdc5229feb7b86fe4a643b85e7df251133c93408fdac73'
+    'https://raw.githubusercontent.com/tauri-apps/libappindicator-rs/eafd1e3682a1247f595410266091e9684021cb6f/LICENSE-MIT' = 'eb227437252b2a7a9c1fc342c93ade1f3d7ce38cc6dd754f613db07d53ceff0b'
+    'https://raw.githubusercontent.com/tauri-apps/libappindicator-rs/eafd1e3682a1247f595410266091e9684021cb6f/LICENSE-APACHE' = 'a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2'
+    'https://raw.githubusercontent.com/open-i18n/rust-unic/8a6ce83063d90b91ae2ce59eddb803edd393fca9/LICENSE-MIT' = '23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3'
+    'https://raw.githubusercontent.com/open-i18n/rust-unic/8a6ce83063d90b91ae2ce59eddb803edd393fca9/LICENSE-APACHE' = 'a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2'
+    'https://raw.githubusercontent.com/open-i18n/rust-unic/8a6ce83063d90b91ae2ce59eddb803edd393fca9/COPYRIGHT.md' = 'f5c342c49f3ac804f3e8e7bb62a8040a44c50d47bb36902b1abd13f66a1adf8b'
+    'https://raw.githubusercontent.com/madsmtm/objc2/757cd841d0293341dbefd9b99d7548dec244ffde/LICENSE.txt' = 'e353f37b12aefbb9f9b29490e837cfee05d9bda70804b3562839a3285c1df1e5'
+}
+foreach ($revision in ($objcRevisions.Values | Sort-Object -Unique)) {
+    $remoteHashes["https://raw.githubusercontent.com/madsmtm/objc2/$revision/LICENSE.md"] = '7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54'
 }
 $remoteCache = @{}
 function Hash-Bytes([byte[]]$Bytes) { return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($Bytes)).ToLowerInvariant() }
@@ -132,6 +175,7 @@ try {
                 $bytes = Remote-License $remote.Url (Join-Path $rustOutput $filename)
                 $entry = Save-License $rustOutput $package.name $package.version $remote.Original $bytes
                 $entry.Source = 'upstream-license'; $entry.SourceURL = $remote.Url
+                if ($remote.Note) { $entry.SourceNote = $remote.Note }
                 $licenseFiles += $entry
             }
         }
@@ -170,8 +214,10 @@ try {
     $handyFile = Save-License $frontendOutput 'Handy-palette' '73c095857bc4eadff097f64767c40ad129cc372d' 'HANDY_STYLE_NOTICE.md' ([IO.File]::ReadAllBytes($handyNotice))
     $frontendManifest += [ordered]@{ Name = 'Handy shared frontend palette'; Version = '73c095857bc4eadff097f64767c40ad129cc372d'; SPDX = 'MIT'; Repository = 'https://github.com/cjpais/Handy'; LicenseFiles = @($handyFile) }
     Write-Manifest (Join-Path $frontendOutput 'manifest.json') ([ordered]@{ PackageLockSHA256 = (Get-FileHash -LiteralPath $lockPath -Algorithm SHA256).Hash.ToLowerInvariant(); Scope = 'Locked production JavaScript packages and reused Handy palette; development tools are excluded from the shipped bundle notices.'; PackageCount = $production.Count; Packages = @($frontendManifest) })
+    $applicationVersion = @($metadata.packages | Where-Object name -EQ 'handy-meeting-desktop')[0].version
+    if (-not $applicationVersion) { throw 'Application version missing from locked metadata.' }
     $addition = @"
-HandyMeeting 1.0.0-beta.1 - additional third-party notices
+HandyMeeting $applicationVersion - additional third-party notices
 
 Rust dependency records and verbatim license texts: licenses/rust/$Target/.
 Frontend production dependency records and verbatim license texts: licenses/frontend/.

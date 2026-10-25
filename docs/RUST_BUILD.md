@@ -1,6 +1,6 @@
 # Building the Rust/Tauri beta
 
-The Windows candidate is version `1.0.0-beta.1`. The output is a checked ZIP, not a validated NSIS installer or stable release. Existing C# programs, their launcher, recordings and settings are preserved. Nothing in this workflow publishes a GitHub release or pushes Git history.
+The Windows candidate is version `1.0.0-beta.2`. The output is a checked ZIP, not a validated NSIS installer or stable release. Existing C# programs, their launcher, recordings and settings are preserved. Nothing in this workflow publishes a GitHub release or pushes Git history.
 
 ## Separate tools and filesystem bookkeeping
 
@@ -99,7 +99,7 @@ node scripts/rust-artifacts.mjs stage
 
 Keep the native SDK's `bin` directory in the current process PATH for the direct release check. The release-check mode opens no GUI, microphone, Handy installation or model. Staging requires its fresh successful versioned JSON, the exact unchanged executable SHA-256, and the original checked source fingerprint.
 
-The only program destination is `dist-rust-1.0.0-beta.1`. Its payload contains the checked executable, known native DLLs and original native licenses, Rust/frontend notices, project license, and Handy palette attribution. A manifest hashes every retained file. Existing different bytes are rejected before publishing any new payload. The separate launcher is **HandyMeeting Rust Beta starten.cmd**. The original **HandyMeeting starten.cmd** remains untouched.
+The only program destination is `dist-rust-1.0.0-beta.2`. Its payload contains the checked executable, known native DLLs and original native licenses, Rust/frontend notices, project license, and Handy palette attribution. A manifest hashes every retained file. Existing different bytes are rejected before publishing any new payload. The separate launcher is **HandyMeeting 1.0.0-beta.2 starten.cmd**. The original **HandyMeeting starten.cmd** remains untouched.
 
 Rust user data lives outside this directory under local `HandyMeeting/RustBeta` application data. No model weights, recordings, settings or API keys are staged.
 
@@ -118,3 +118,7 @@ An existing ZIP is preserved. Use a new version or a fresh `-OutputDirectory` in
 Ubuntu and both Mac architectures run only the three portable Rust crates with default ASR features disabled, including synthetic persistence/transport tests and strict warnings. They do not validate a native GUI, real capture, speech inference or portable recording reliability.
 
 Real local text-model references, the native two-track speech/restart smoke test, actual audio devices/disconnects, and a new two-hour Rust memory/recovery run are separate release gates. Fixtures and raw reports stay outside public source export. The earlier C# two-hour result does not certify this beta. Process termination is not a power-loss test. See `TEST_REPORT.md` and `RUST_STORAGE.md` for actual measurements and outstanding checks.
+
+## Cross-platform byte identity
+
+The first Windows CI run detected that Git checkout expanded LF lockfiles to CRLF; its Cargo.lock SHA-256 exactly matched an independently reproduced CRLF expansion. The repository now disables checkout text conversion in .gitattributes. Lock and original-license checks remain byte-exact; the expected hashes were not relaxed. Portable desktop packaging is a separate target-host workflow documented in RUST_PORTABLE.md.

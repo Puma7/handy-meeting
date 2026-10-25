@@ -13,17 +13,17 @@ function ChildPath([string]$Base, [string]$Relative) {
 }
 function SourceFingerprint {
     $inputs = @{}
-    foreach ($relative in @('Cargo.toml','Cargo.lock','.cargo/config.toml','rust-toolchain.toml','verify.ps1','global.json','NuGet.config','LICENSE','THIRD_PARTY_NOTICES.txt','.github/workflows/rust.yml')) {
+    foreach ($relative in @('Cargo.toml','Cargo.lock','.gitattributes','.cargo/config.toml','rust-toolchain.toml','verify.ps1','global.json','NuGet.config','LICENSE','THIRD_PARTY_NOTICES.txt','.github/workflows/rust.yml','.github/workflows/rust-portable.yml')) {
         $file = Join-Path $root $relative
         if (Test-Path -LiteralPath $file -PathType Leaf) { $inputs[$relative] = Get-Item -LiteralPath $file }
     }
-    foreach ($relative in @('crates','apps/desktop','src','scripts','assets','licenses/rust','licenses/frontend')) {
+    foreach ($relative in @('crates','apps/desktop','src','scripts','platform','assets','licenses/rust','licenses/frontend')) {
         $directory = Join-Path $root $relative
         if (-not (Test-Path -LiteralPath $directory)) { continue }
         foreach ($file in Get-ChildItem -LiteralPath $directory -File -Recurse -Force) {
             $name = [IO.Path]::GetRelativePath($root,$file.FullName).Replace('\','/')
             if ($name -match '(^|/)(node_modules|target|dist|bin|obj|\.build|\.vite|test-results|playwright-report)(/|$)' -or $file.Extension -eq '.tsbuildinfo' -or $name -match '^apps/desktop/src-tauri/(gen|generated-schemas)(/|$)') { continue }
-            if ($file.Extension -in @('.rs','.toml','.lock','.json','.ts','.tsx','.css','.html','.svg','.png','.ico','.md','.txt','.ps1','.mjs','.sh','.py','.yml','.yaml','.config','.manifest','.cs','.csproj','.xaml','.axaml','.props','.targets')) { $inputs[$name] = $file }
+            if ($file.Extension -in @('.rs','.toml','.lock','.json','.ts','.tsx','.css','.html','.svg','.png','.ico','.md','.txt','.ps1','.mjs','.sh','.py','.swift','.yml','.yaml','.config','.manifest','.cs','.csproj','.xaml','.axaml','.props','.targets')) { $inputs[$name] = $file }
         }
     }
     $names = [string[]]@($inputs.Keys); [Array]::Sort($names,[StringComparer]::Ordinal)
@@ -52,11 +52,11 @@ foreach ($entry in $receipt.programFiles) {
     Copy-Item -LiteralPath $source -Destination $target
     if ((FileHash $target) -ne $entry.sha256) { throw 'A payload file changed while being copied.' }
 }
-if ($receipt.launcherFile -ne 'HandyMeeting Rust Beta starten.cmd') { throw 'Unexpected checked launcher.' }
+if ($receipt.launcherFile -ne ('HandyMeeting ' + $version + ' starten.cmd')) { throw 'Unexpected checked launcher.' }
 $launcher = Join-Path $root $receipt.launcherFile
 if ((FileHash $launcher) -ne $receipt.launcherSHA256) { throw 'The checked Rust launcher changed.' }
 Copy-Item -LiteralPath $launcher -Destination $app
-$instructions = "HandyMeeting $version - Rust/Tauri Windows x64 beta`n`nExtract the full archive and open HandyMeeting Rust Beta starten.cmd. Keep the version folder together.`nInstall Handy with a compatible downloaded streaming model. Future native model formats can require a HandyMeeting update.`nWindows WebView2 and the Microsoft Visual C++ runtime may be required. .NET is not required to run this Rust beta.`nUser data stays in local application data under HandyMeeting/RustBeta, outside the program folder. Existing C# sessions remain unchanged.`nNo models, recordings, settings or keys are included. This is an independent beta, not an official Handy release. Real-device capture, device loss, full disk and a new two-hour Rust run are not yet validated. Test only with recordings that are independently backed up.`nEvidence and limits: https://github.com/Puma7/handy-meeting/blob/codex/rust-tauri-beta1/TEST_REPORT.md`n"
+$instructions = "HandyMeeting $version - Rust/Tauri Windows x64 beta`n`nExtract the full archive and open HandyMeeting $version starten.cmd. Keep the version folder together.`nInstall Handy with a compatible downloaded streaming model. Future native model formats can require a HandyMeeting update.`nWindows WebView2 and the Microsoft Visual C++ runtime may be required. .NET is not required to run this Rust beta.`nUser data stays in local application data under HandyMeeting/RustBeta, outside the program folder. Existing C# sessions remain unchanged.`nNo models, recordings, settings or keys are included. This is an independent beta, not an official Handy release. Real-device capture, device loss, full disk and a new two-hour Rust run are not yet validated. Test only with recordings that are independently backed up.`nEvidence and limits: https://github.com/Puma7/handy-meeting/blob/codex/rust-tauri-beta1/TEST_REPORT.md`n"
 [IO.File]::WriteAllText((Join-Path $app 'START-HERE.txt'),$instructions,[Text.UTF8Encoding]::new($false))
 if (-not $OutputDirectory) { $OutputDirectory = Join-Path $root 'packages' }
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)

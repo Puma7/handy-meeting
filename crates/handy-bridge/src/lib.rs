@@ -6,6 +6,7 @@ mod discovery;
 mod identity;
 mod paths;
 mod process;
+mod version;
 
 #[cfg(feature = "native-asr")]
 pub mod native;
@@ -19,6 +20,7 @@ pub use identity::{
 pub use identity::{create_model_identity, verify_model_snapshot, write_model_snapshot};
 pub use paths::ModelRoots;
 pub use process::{CommandLimits, ModelListRunner, SystemModelListRunner};
+pub use version::installed_version;
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};

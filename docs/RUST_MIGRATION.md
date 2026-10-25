@@ -1,6 +1,6 @@
 # Handy-nahe Migration zu Rust und Tauri
 
-Zielversion: **1.0.0-beta.1**, Stand 25.10.2026. Die erste Migrationsbeta zielt auf Windows. Sie ist kein Release Candidate. Die bisherigen Prototypen, Aufnahmen und Auswertungen bleiben erhalten.
+Zielversion: **1.0.0-beta.2**, Stand 25.10.2026. Nach der ersten Windows-Beta folgen geführte Nachbearbeitung und eigene Linux-/Mac-Adapter mit nativer Paketierung. Tatsächlich bestandene CI-/Geräteprüfungen und offene Grenzen stehen im Prüfbericht. Dies ist kein Release Candidate. Die bisherigen Prototypen, Aufnahmen und Auswertungen bleiben erhalten.
 
 ## Vorhandene Handy-Bausteine verwenden
 
@@ -37,7 +37,7 @@ Schema 2 verwendet getrennte PCM-Dateien und append-only Audio-/Textjournale. Be
 ## Freigabestufen
 
 1. **Beta 1:** Windows-Kern und Tauri-Oberfläche, Handy-Modellabfragen, lokale Streaming-Bindings, Historie und belegte Nachbearbeitung. Kurze synthetische Abbruchtests und echte lokale Modellprüfungen. Grenzen sichtbar dokumentieren.
-2. **Weitere Betas:** Geräteaufnahme, Geräteverlust und voller Datenträger, Mikrofon-Stummschaltung, vollständige Agenten-/Wiederaufnahmebedienung und erneuter Zweistundenlauf mit vorab festgelegten Speichergrenzen. Mac-/Linux-Adapter schrittweise anbinden und auf echten Zielrechnern testen.
+2. **Beta 2 und weitere Betas:** Lokale Textmodelle finden, Auswertung einem eindeutigen Meeting zuordnen, Fortschritt und Abbruch sowie belegtes Markdown. Windows-Paketabruf und Abschluss sichern; native Mac-/Linux-Pakete tatsächlich bauen. Geräteverlust, voller Datenträger, Mikrofon-Stummschaltung, vollständige Agentenbedienung und erneuter Zweistundenlauf mit vorab festgelegten Speichergrenzen bleiben weitere Prüfziele. Mac-/Linux-Geräte auf echten Zielrechnern prüfen.
 3. **Release Candidate:** Zielplattformen bestehen Geräte-, Abbruch-, Update- und Langzeittests. RAM, Private Bytes und GPU-Speicher werden je Prozess/Backend berichtet. Offene Datenverlust- und Datenschutzfehler sperren die Freigabe.
 4. **1.0:** Erst nach abgeschlossener RC-Prüfung und dokumentierter Plattformfreigabe. Eine Versionsnummer ersetzt keinen Nachweis.
 

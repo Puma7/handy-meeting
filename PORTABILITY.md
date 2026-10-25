@@ -2,7 +2,7 @@
 
 Stand: 25.10.2026. Windows und portable Vorschau werden getrennt bereitgestellt. Keine Installation beendet fremde Handy-Prozesse oder laufende Nutzeraufnahmen.
 
-**Rust/Tauri 1.0.0-beta.1 ist eine zusätzliche Windows-Migrationsbeta.** Ihre Geräte- und Langzeitfreigabe sowie Mac-/Linux-Aufnahmeadapter stehen aus. Die folgenden portablen Downloads gelten weiterhin für Avalonia 0.5.0-preview.1. [Migrationsplan](docs/RUST_MIGRATION.md).
+**Rust/Tauri 1.0.0-beta.2 ist eine zusätzliche Migrationsbeta.** Linux-/Mac-Aufnahmeadapter und native DEB-/DMG-Builds sind angelegt; erreichte CI-Ergebnisse sind im [Prüfbericht](TEST_REPORT.md) getrennt von echten Geräte- und Langzeitnachweisen dokumentiert. Zielversionen: Ubuntu 22.04/24.04, Debian 12/13 x64 und macOS 13+ auf Apple Silicon/Intel. [Details und Grenzen](docs/RUST_PORTABLE.md). Die nachfolgenden älteren Download-/Hardwareangaben gelten für WPF/Avalonia 0.4.1 beziehungsweise 0.5.0-preview.1.
 
 | Ziel | Stand | Nächste Freigabeprüfung |
 | --- | --- | --- |

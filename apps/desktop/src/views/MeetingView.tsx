@@ -6,6 +6,7 @@ import {
   Monitor,
   RefreshCw,
   Square,
+  Sparkles,
 } from "lucide-react";
 import type {
   AppState,
@@ -15,7 +16,8 @@ import type {
   AudioPart,
 } from "../types";
 import type { MessageKey, extraDe } from "../i18n";
-import { clock, trackName } from "../domain";
+import { clock } from "../domain";
+import TranscriptBody from "./TranscriptBody";
 type Props = {
   t: Record<MessageKey, string>;
   x: Record<keyof typeof extraDe, string>;
@@ -26,6 +28,8 @@ type Props = {
   busy: boolean;
   connected: boolean;
   title: string;
+  defaultTitle: string;
+  onAnalyse: () => void;
   modelId: string;
   systemId: string;
   micId: string;
@@ -58,6 +62,8 @@ export default function MeetingView({
   busy,
   connected,
   title,
+  defaultTitle,
+  onAnalyse,
   modelId,
   systemId,
   micId,
@@ -91,7 +97,7 @@ export default function MeetingView({
           <input
             value={title}
             disabled={recording || busy}
-            placeholder={t.emptyTitle}
+            placeholder={defaultTitle}
             maxLength={200}
             onChange={(event) => setTitle(event.target.value)}
           />
@@ -285,43 +291,31 @@ export default function MeetingView({
             <h2>{meeting?.title ?? t.live}</h2>
             <p>{t.sourceTimes}</p>
           </div>
-          <button
-            className="secondary"
-            disabled={
-              busy || !meeting?.parts.some((item) => (item.text ?? "").trim())
-            }
-            title={t.copyTooltip}
-            onClick={() => void copyFullTranscript()}
-          >
-            {copied ? <Check size={16} /> : <Copy size={16} />}
-            <span>{copied ? t.copied : t.copy}</span>
-          </button>
-        </div>
-        <div className="transcript-content" aria-live="polite">
-          {recentParts.length ? (
-            recentParts.map((part, index) => (
-              <article
-                className="transcript-part"
-                key={part.file ?? part.source + part.startSample + index}
+          <div className="detail-actions">
+            <button
+              className="secondary"
+              disabled={
+                busy || !meeting?.parts.some((item) => (item.text ?? "").trim())
+              }
+              title={t.copyTooltip}
+              onClick={() => void copyFullTranscript()}
+            >
+              {copied ? <Check size={16} /> : <Copy size={16} />}
+              <span>{copied ? t.copied : t.copy}</span>
+            </button>
+            {meeting?.status === "complete" && (
+              <button
+                className="primary"
+                disabled={busy || !recentParts.length}
+                onClick={onAnalyse}
               >
-                <div className="part-meta">
-                  <span>
-                    {clock(part.startSample / 16)}–
-                    {clock((part.startSample + part.sampleCount) / 16)}
-                  </span>
-                  <span>{trackName(part.source, locale)}</span>
-                  {part.status !== "complete" && <span>{t.pending}</span>}
-                </div>
-                <p>{part.text}</p>
-              </article>
-            ))
-          ) : (
-            <div className="empty">
-              <AudioLines size={30} />
-              <p>{t.emptyTranscript}</p>
-            </div>
-          )}
+                <Sparkles size={16} />
+                {t.analyzeMeeting}
+              </button>
+            )}
+          </div>
         </div>
+        <TranscriptBody parts={recentParts} locale={locale} t={t} />
       </section>
     </>
   );

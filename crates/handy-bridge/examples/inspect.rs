@@ -11,7 +11,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!(
         "{}",
         serde_json::to_string_pretty(
-            &serde_json::json!({"modelCount":catalog.models.len(),"installedStreaming":installed,"catalogFingerprint":catalog.fingerprint_sha256})
+            &serde_json::json!({"modelCount":catalog.models.len(),"installedVersion":handy_bridge::installed_version(bridge.executable()),"installedStreaming":installed,"catalogFingerprint":catalog.fingerprint_sha256})
         )?
     );
     Ok(())

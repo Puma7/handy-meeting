@@ -11,7 +11,7 @@ An independent companion prototype for the [Handy](https://github.com/cjpais/Han
 
 [Deutsche Anleitung](README.de.md) · [Build status](BUILD_STATUS.md) · [Platform status](PORTABILITY.md) · [Agent API](AGENT_API.md) · [Test evidence](TEST_REPORT.md) · [Contributing](CONTRIBUTING.md)
 
-**Rust/Tauri migration:** the next main version is being implemented as `1.0.0-beta.1`, starting with Windows. It reuses Handy's live model registry, official transcribe.cpp Rust bindings and shared palette. Existing C# prototypes and recordings are preserved. See [scope and release gates](docs/RUST_MIGRATION.md); this migration beta is not a release candidate or a new Mac/Linux capture validation.
+**Rust/Tauri migration:** `1.0.0-beta.2` adds local text-model discovery, explicit meeting selection, confirmed-task progress, cancellation and source-linked Markdown. Linux and both Mac architectures now have capture adapters and native candidate package workflows. See [actual evidence and remaining gates](TEST_REPORT.md), [migration scope](docs/RUST_MIGRATION.md) and [portable Rust candidates](docs/RUST_PORTABLE.md). Existing C# releases and recordings are preserved; this remains a migration beta, not a release candidate.
 
 ## Why a companion app?
 

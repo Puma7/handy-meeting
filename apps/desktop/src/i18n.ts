@@ -1,4 +1,60 @@
 export const de = {
+  meetingDetail: "Sitzungsdetails",
+  chooseMeeting: "Meeting für die Auswertung",
+  selectMeeting: "Bitte ein Meeting auswählen",
+  analyzeMeeting: "Dieses Meeting auswerten",
+  backHistory: "Zur Historie",
+  localServiceHelp:
+    "Für Zusammenfassungen brauchst du zusätzlich einen lokalen Textmodelldienst, zum Beispiel LM Studio. Lade dort ein Textmodell und starte den lokalen Server. Übernimm dessen API-Adresse; die Standardadresse von LM Studio steht unten. Handy übernimmt weiterhin die Spracherkennung.",
+  localEndpoint: "Adresse des lokalen Textmodelldienstes",
+  refreshTextModels: "Textmodelle aktualisieren",
+  loadingTextModels: "Textmodelle werden abgefragt …",
+  selectTextModel: "Lokales Textmodell auswählen",
+  noTextModels: "Der lokale Dienst bietet noch kein Textmodell an.",
+  textModelsHelp:
+    "Prüfe, ob der lokale Server in LM Studio oder deinem anderen Textmodelldienst läuft und dort ein Modell bereitsteht. Danach die Textmodelle aktualisieren.",
+  manualTextModel: "Modellnamen manuell eingeben",
+  textModelUnavailable:
+    "Die bisherige Modellwahl wird von diesem Dienst nicht angeboten. Bitte ausdrücklich ein verfügbares Modell auswählen oder den Namen manuell bestätigen.",
+  notesTask: "Auswertung",
+  cancelAnalysis: "Auswertung abbrechen",
+  cancelRequested: "Abbruch angefordert …",
+  cancelHelp:
+    "Gesicherte Schritte bleiben erhalten. Der Textmodelldienst kann bereits gestartete Berechnungen noch beenden.",
+  notesCancelled:
+    "Auswertung abgebrochen. Gesicherte Schritte bleiben erhalten.",
+  notesComplete: "Auswertung gespeichert.",
+  notesFailed:
+    "Auswertung fehlgeschlagen. Bereits gesicherte Schritte bleiben erhalten.",
+  cancelUnavailable:
+    "Der Abbruch wurde nicht bestätigt. Der aktuelle Status wird geprüft.",
+  elapsed: "Vergangene Zeit",
+  confirmedTasks: "geprüfte und gespeicherte Teilaufgaben",
+  inferenceUnknown:
+    "Die Rechenzeit des Modells ist nicht vorhersehbar. Der Fortschritt zählt ausschließlich gesicherte Teilaufgaben.",
+  stagePreparing: "Transkript und Arbeitsaufträge vorbereiten",
+  stageRequesting: "Textmodell verarbeitet den aktuellen Abschnitt",
+  stageValidating: "Originalzitate und Quellen prüfen",
+  stageSaving: "Arbeitsstand lokal speichern",
+  progressUnavailable: "Der Fortschritt ist vorübergehend nicht erreichbar.",
+  openAnalysisMeeting: "Zugehöriges Meeting öffnen",
+  resumeAnalysis: "Gesicherte Auswertung fortsetzen",
+  resumeHelp:
+    "Verwendet den ursprünglichen Transkriptstand, die Vorlage und das Modell dieses Laufs.",
+  copyMarkdown: "Alle Ergebnisse als Markdown kopieren",
+  markdownHelp:
+    "Enthält alle Tabs sowie wörtliche Belege und Verweise auf das Originaltranskript. Aktiver HTML-Inhalt wird entschärft.",
+  wrongMeeting:
+    "Diese Auswertung gehört zu einer anderen Sitzung und wird hier nicht verwendet.",
+  pendingNotes:
+    "Bitte zuerst die offenen Transkriptabschnitte nachholen oder ein vollständig erkanntes Meeting auswählen.",
+  dismiss: "Hinweis schließen",
+  preferencesError:
+    "Die gespeicherten Einstellungen sind nicht lesbar oder nicht beschreibbar. Vorhandene Werte bleiben erhalten.",
+  handyVersionMissing:
+    "Handy erkannt; die Installation liefert keine Versionsangabe",
+  firstModelLoad:
+    "Die Liste enthält die vom Dienst gemeldeten Modellkennungen. Wähle ein Modell für Textantworten. Manche Dienste laden es erst bei der ersten Anfrage; dabei kann die erste Auswertung länger dauern.",
   meeting: "Meeting",
   history: "Historie",
   notes: "Nachbearbeitung",
@@ -142,6 +198,60 @@ export const extraEn: Record<keyof typeof extraDe, string> = {
 };
 export type MessageKey = keyof typeof de;
 export const en: Record<MessageKey, string> = {
+  meetingDetail: "Session details",
+  chooseMeeting: "Meeting to analyse",
+  selectMeeting: "Please select a meeting",
+  analyzeMeeting: "Analyse this meeting",
+  backHistory: "Back to history",
+  localServiceHelp:
+    "Summaries need an additional local text-model service, such as LM Studio. Load a text model there and start its local server. Use that server's API address; LM Studio's default is shown below. Handy continues to provide speech recognition.",
+  localEndpoint: "Local text-model service address",
+  refreshTextModels: "Refresh text models",
+  loadingTextModels: "Reading available text models …",
+  selectTextModel: "Select a local text model",
+  noTextModels: "The local service does not offer a text model yet.",
+  textModelsHelp:
+    "Check that the local server in LM Studio or your other text-model service is running and has a model available. Then refresh text models.",
+  manualTextModel: "Enter the model name manually",
+  textModelUnavailable:
+    "This service does not offer the previous model selection. Explicitly choose an available model or confirm its name manually.",
+  notesTask: "Analysis",
+  cancelAnalysis: "Cancel analysis",
+  cancelRequested: "Cancellation requested …",
+  cancelHelp:
+    "Saved steps are preserved. The text-model service may still finish calculations it has already started.",
+  notesCancelled: "Analysis cancelled. Saved steps are preserved.",
+  notesComplete: "Analysis saved.",
+  notesFailed: "Analysis failed. Previously saved steps are preserved.",
+  cancelUnavailable:
+    "Cancellation was not confirmed. The current status is being checked.",
+  handyVersionMissing:
+    "Handy detected; this installation does not report a version",
+  firstModelLoad:
+    "The list contains model identifiers reported by the service. Choose a model for text replies. Some services load it on the first request, so the first analysis can take longer.",
+  elapsed: "Elapsed time",
+  confirmedTasks: "validated and saved subtasks",
+  inferenceUnknown:
+    "The model's remaining computation time is unknown. Progress counts only durably saved subtasks.",
+  stagePreparing: "Preparing transcript and instructions",
+  stageRequesting: "The text model is processing the current section",
+  stageValidating: "Checking original quotes and sources",
+  stageSaving: "Saving the local checkpoint",
+  progressUnavailable: "Progress is temporarily unavailable.",
+  openAnalysisMeeting: "Open the associated meeting",
+  resumeAnalysis: "Resume saved analysis",
+  resumeHelp:
+    "Uses this run's original transcript snapshot, template and model.",
+  copyMarkdown: "Copy all results as Markdown",
+  markdownHelp:
+    "Includes every tab, verbatim evidence and original-transcript references. Active HTML content is escaped.",
+  wrongMeeting:
+    "This analysis belongs to another session and will not be used here.",
+  pendingNotes:
+    "First process pending transcript sections or choose a fully transcribed meeting.",
+  dismiss: "Dismiss notice",
+  preferencesError:
+    "Saved preferences cannot be read or written. Existing values are preserved.",
   meeting: "Meeting",
   history: "History",
   notes: "Post-processing",

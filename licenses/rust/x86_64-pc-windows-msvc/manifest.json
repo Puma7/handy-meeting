@@ -1,6 +1,6 @@
 {
   "Target": "x86_64-pc-windows-msvc",
-  "CargoLockSHA256": "bf189970c52cdf7a332ee9424f850112309bfd1bc4b2113664c086c4ea66e212",
+  "CargoLockSHA256": "d7b93ad3cb55700c3b0466adc0350fff5071c13e86155b1ed38a068c41f8ab5b",
   "Scope": "Active Cargo resolve nodes, including build dependencies, filtered to this target; excludes workspace packages.",
   "PackageCount": 313,
   "Packages": [
@@ -5243,21 +5243,21 @@
           "File": "unic-ucd-ident-0.9.0-LICENSE-MIT.txt",
           "SHA256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
           "Source": "upstream-license",
-          "SourceURL": "https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-MIT"
+          "SourceURL": "https://raw.githubusercontent.com/open-i18n/rust-unic/8a6ce83063d90b91ae2ce59eddb803edd393fca9/LICENSE-MIT"
         },
         {
           "OriginalFilename": "LICENSE-APACHE",
           "File": "unic-ucd-ident-0.9.0-LICENSE-APACHE.txt",
           "SHA256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
           "Source": "upstream-license",
-          "SourceURL": "https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-APACHE"
+          "SourceURL": "https://raw.githubusercontent.com/open-i18n/rust-unic/8a6ce83063d90b91ae2ce59eddb803edd393fca9/LICENSE-APACHE"
         },
         {
           "OriginalFilename": "COPYRIGHT.md",
           "File": "unic-ucd-ident-0.9.0-COPYRIGHT.md.txt",
           "SHA256": "f5c342c49f3ac804f3e8e7bb62a8040a44c50d47bb36902b1abd13f66a1adf8b",
           "Source": "upstream-license",
-          "SourceURL": "https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/COPYRIGHT.md"
+          "SourceURL": "https://raw.githubusercontent.com/open-i18n/rust-unic/8a6ce83063d90b91ae2ce59eddb803edd393fca9/COPYRIGHT.md"
         }
       ]
     },

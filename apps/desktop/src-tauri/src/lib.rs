@@ -1,4 +1,6 @@
 mod asr;
+mod notes_commands;
+mod notes_service;
 
 use handy_bridge::{HandyBridge, ModelCatalog};
 use meeting_core::{AudioDevice, CaptureController, CaptureOptions, SessionData, SessionStore};
@@ -118,7 +120,7 @@ struct Service {
     inner: Mutex<Inner>,
     transition: Mutex<()>,
     refresh_gate: Mutex<()>,
-    notes_running: AtomicBool,
+    notes_jobs: notes_service::NotesJobs,
 }
 impl Service {
     fn new(root: PathBuf) -> AppResult<Self> {
@@ -152,7 +154,7 @@ impl Service {
             inner: Mutex::new(inner),
             transition: Mutex::new(()),
             refresh_gate: Mutex::new(()),
-            notes_running: AtomicBool::new(false),
+            notes_jobs: notes_service::NotesJobs::default(),
         })
     }
     fn lock(&self) -> AppResult<MutexGuard<'_, Inner>> {
@@ -203,7 +205,7 @@ impl Service {
             recording,
             error,
             data_directory: self.root.to_string_lossy().into_owned(),
-            notes_running: self.notes_running.load(Ordering::Acquire),
+            notes_running: self.notes_jobs.running(),
             transitioning: inner.transitioning,
         })
     }
@@ -244,7 +246,7 @@ impl Service {
                 .collect();
             let status = HandyStatus {
                 executable: Some(bridge.executable().to_string_lossy().into_owned()),
-                version: None,
+                version: handy_bridge::installed_version(bridge.executable()),
                 models,
                 error: None,
             };
@@ -615,48 +617,7 @@ impl Service {
             .collect())
     }
     fn analyze(&self, request: NotesRequest) -> AppResult<meeting_notes::Analysis> {
-        if self
-            .notes_running
-            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-            .is_err()
-        {
-            return Err("Eine Auswertung läuft bereits. Bitte deren Abschluss abwarten.".into());
-        }
-        struct Reset<'a>(&'a AtomicBool);
-        impl Drop for Reset<'_> {
-            fn drop(&mut self) {
-                self.0.store(false, Ordering::Release);
-            }
-        }
-        let _reset = Reset(&self.notes_running);
-        if valid_legacy_id(&request.meeting_id) {
-            return Err("Diese Beta verändert Originalimporte nicht. Ihre Auswertung bleibt in der bisherigen Version verfügbar.".into());
-        }
-        let data = self.data(&request.meeting_id)?;
-        if data.status != "complete" || data.parts.iter().any(|p| p.status != "complete") {
-            return Err("Bitte zuerst alle offenen Transkriptabschnitte nachholen. Ausgewertet wird nur ein abgeschlossener Originalstand.".into());
-        }
-        let sources = note_sources(&data)?;
-        let connection = meeting_notes::Connection {
-            endpoint: request.endpoint,
-            model: request.model,
-            mode: request.mode,
-            cloud_consent: request.cloud_consent,
-            api_key: request.api_key,
-        };
-        meeting_notes::analyze(
-            &self
-                .root
-                .join("sessions")
-                .join(&request.meeting_id)
-                .join("analyses"),
-            &request.meeting_id,
-            sources,
-            request.template,
-            connection,
-            request.resume_run_id.as_deref(),
-        )
-        .map_err(|e| e.to_string())
+        notes_service::analyze(self, request)
     }
 }
 fn note_sources(data: &SessionData) -> AppResult<Vec<meeting_notes::Source>> {
@@ -738,6 +699,8 @@ struct StartRequest {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct NotesRequest {
+    #[serde(default)]
+    job_id: Option<String>,
     meeting_id: String,
     template: meeting_notes::Template,
     endpoint: String,
@@ -868,7 +831,7 @@ pub fn run() {
         let service=Arc::clone(app.state::<Arc<Service>>().inner());
         tauri::async_runtime::spawn_blocking(move|| {let _=service.refresh(None);});
         Ok(())
-    }).invoke_handler(tauri::generate_handler![get_app_state,refresh_handy,list_devices,start_meeting,stop_meeting,list_meetings,get_meeting,resume_meeting,import_legacy,copy_text,generate_notes,list_analyses])
+    }).invoke_handler(tauri::generate_handler![get_app_state,refresh_handy,list_devices,start_meeting,stop_meeting,list_meetings,get_meeting,resume_meeting,import_legacy,copy_text,generate_notes,list_analyses,notes_commands::list_text_models,notes_commands::get_notes_progress,notes_commands::cancel_notes,notes_commands::notes_markdown])
     .on_window_event(|window,event|{if let tauri::WindowEvent::CloseRequested{api,..}=event{let service=window.state::<Arc<Service>>();let blocked=service.lock().is_ok_and(|inner|inner.transitioning||inner.active.as_ref().is_some_and(|a|a.capture.is_some()));if blocked{api.prevent_close();if let Ok(mut inner)=service.lock(){inner.error=Some(if inner.transitioning { "Ein Vorgang läuft noch. Bitte warten, bis Audioabschluss und Verarbeitung beendet sind.".into() } else { "Bitte zuerst „Meeting beenden“ wählen. Audio wird gesichert und offene Abschnitte werden verarbeitet.".into() });}let _=window.emit("recording-close-blocked",());}}})
     .run(tauri::generate_context!()).expect("HandyMeeting konnte nicht gestartet werden.");
 }
@@ -876,6 +839,18 @@ pub fn run_cli(args: &[String]) -> Option<AppResult<()>> {
     match args.first().map(String::as_str) {
         Some("--asr-worker") => Some(asr::worker_main(&args[1..])),
         Some("--synthetic-smoke") => Some(asr::synthetic_smoke(&args[1..])),
+        Some("--list-text-models") => Some((|| {
+            if args.len() != 2 {
+                return Err("Genau eine lokale KI-Adresse wird benötigt.".into());
+            }
+            let models = meeting_notes::local_model_ids(&args[1]).map_err(|e| e.to_string())?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&models)
+                    .map_err(|_| "Modellliste konnte nicht ausgegeben werden.")?
+            );
+            Ok(())
+        })()),
         Some("--model-probe") => Some((|| {
             if args.len() != 3 {
                 return Err("Invalid model probe arguments".into());

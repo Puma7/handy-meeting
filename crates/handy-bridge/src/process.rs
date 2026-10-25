@@ -32,62 +32,70 @@ pub struct SystemModelListRunner;
 
 impl ModelListRunner for SystemModelListRunner {
     fn list_models(&self, executable: &Path, limits: CommandLimits) -> Result<Vec<u8>> {
-        let mut command = Command::new(executable);
-        command
-            .args(["--list-models", "--json"])
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        if let Some(parent) = executable.parent() {
-            command.current_dir(parent);
-        }
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW for this owned headless query only.
-        }
-        let mut child = command.spawn().map_err(|_| BridgeError::QueryFailed)?;
-        let overflow = Arc::new(AtomicBool::new(false));
-        let stdout = child.stdout.take().ok_or(BridgeError::QueryFailed)?;
-        let stderr = child.stderr.take().ok_or(BridgeError::QueryFailed)?;
-        let stdout_overflow = overflow.clone();
-        let stderr_overflow = overflow.clone();
-        let out =
-            std::thread::spawn(move || read_bounded(stdout, limits.stdout_bytes, stdout_overflow));
-        let err =
-            std::thread::spawn(move || read_bounded(stderr, limits.stderr_bytes, stderr_overflow));
-        let started = Instant::now();
-        let result = loop {
-            if overflow.load(Ordering::Acquire) {
-                break Err(BridgeError::OutputLimit);
-            }
-            if started.elapsed() >= limits.timeout {
-                break Err(BridgeError::Timeout);
-            }
-            match child.try_wait() {
-                Ok(Some(status)) => {
-                    break if status.success() {
-                        Ok(())
-                    } else {
-                        Err(BridgeError::QueryFailed)
-                    }
-                }
-                Ok(None) => std::thread::sleep(Duration::from_millis(10)),
-                Err(_) => break Err(BridgeError::QueryFailed),
-            }
-        };
-        if result.is_err() {
-            let _ = child.kill();
-        }
-        let _ = child.wait();
-        let stdout = out.join().map_err(|_| BridgeError::QueryFailed)??;
-        let _ = err.join().map_err(|_| BridgeError::QueryFailed)??;
-        result?;
-        if overflow.load(Ordering::Acquire) {
-            return Err(BridgeError::OutputLimit);
-        }
-        Ok(stdout)
+        run_query(executable, &["--list-models", "--json"], limits)
     }
+}
+
+pub(crate) fn run_query(
+    executable: &Path,
+    arguments: &[&str],
+    limits: CommandLimits,
+) -> Result<Vec<u8>> {
+    let mut command = Command::new(executable);
+    command
+        .args(arguments)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    if let Some(parent) = executable.parent() {
+        command.current_dir(parent);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW for this owned headless query only.
+    }
+    let mut child = command.spawn().map_err(|_| BridgeError::QueryFailed)?;
+    let overflow = Arc::new(AtomicBool::new(false));
+    let stdout = child.stdout.take().ok_or(BridgeError::QueryFailed)?;
+    let stderr = child.stderr.take().ok_or(BridgeError::QueryFailed)?;
+    let stdout_overflow = overflow.clone();
+    let stderr_overflow = overflow.clone();
+    let out =
+        std::thread::spawn(move || read_bounded(stdout, limits.stdout_bytes, stdout_overflow));
+    let err =
+        std::thread::spawn(move || read_bounded(stderr, limits.stderr_bytes, stderr_overflow));
+    let started = Instant::now();
+    let result = loop {
+        if overflow.load(Ordering::Acquire) {
+            break Err(BridgeError::OutputLimit);
+        }
+        if started.elapsed() >= limits.timeout {
+            break Err(BridgeError::Timeout);
+        }
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                break if status.success() {
+                    Ok(())
+                } else {
+                    Err(BridgeError::QueryFailed)
+                }
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(10)),
+            Err(_) => break Err(BridgeError::QueryFailed),
+        }
+    };
+    if result.is_err() {
+        let _ = child.kill();
+    }
+    let _ = child.wait();
+    let stdout = out.join().map_err(|_| BridgeError::QueryFailed)??;
+    let _ = err.join().map_err(|_| BridgeError::QueryFailed)??;
+    result?;
+    if overflow.load(Ordering::Acquire) {
+        return Err(BridgeError::OutputLimit);
+    }
+    Ok(stdout)
 }
 
 fn read_bounded(

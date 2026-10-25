@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import type { AppState, Locale, Theme } from "../types";
 import type { MessageKey } from "../i18n";
-export type Page = "meeting" | "history" | "notes" | "settings";
+export type Page = "meeting" | "history" | "detail" | "notes" | "settings";
 type Props = {
   app: AppState | null;
   page: Page;
@@ -40,7 +40,7 @@ export default function Sidebar({
         <img src="/handymeeting.svg" width="34" height="34" alt="" />
         <div>
           <strong>HandyMeeting</strong>
-          <small>{app?.version ?? "1.0.0-beta.1"}</small>
+          <small>{app?.version ?? "1.0.0-beta.2"}</small>
         </div>
       </div>
       <nav aria-label={locale === "de" ? "Hauptnavigation" : "Main navigation"}>
@@ -54,8 +54,16 @@ export default function Sidebar({
         ).map(([id, Icon]) => (
           <button
             key={id}
-            className={page === id ? "nav-item selected" : "nav-item"}
-            aria-current={page === id ? "page" : undefined}
+            className={
+              page === id || (page === "detail" && id === "history")
+                ? "nav-item selected"
+                : "nav-item"
+            }
+            aria-current={
+              page === id || (page === "detail" && id === "history")
+                ? "page"
+                : undefined
+            }
             title={t[id]}
             onClick={() => void navigate(id)}
           >

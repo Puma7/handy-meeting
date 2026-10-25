@@ -5,9 +5,9 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
-const SOURCE_ROOTS = ['crates', 'apps/desktop', 'src', 'scripts', 'assets', 'licenses/rust', 'licenses/frontend'];
-const SOURCE_FILES = ['Cargo.toml', 'Cargo.lock', '.cargo/config.toml', 'rust-toolchain.toml', 'verify.ps1', 'global.json', 'NuGet.config', 'LICENSE', 'THIRD_PARTY_NOTICES.txt', '.github/workflows/rust.yml'];
-const EXTENSIONS = new Set(['.rs', '.toml', '.lock', '.json', '.ts', '.tsx', '.css', '.html', '.svg', '.png', '.ico', '.md', '.txt', '.ps1', '.mjs', '.sh', '.py', '.yml', '.yaml', '.config', '.manifest', '.cs', '.csproj', '.xaml', '.axaml', '.props', '.targets']);
+const SOURCE_ROOTS = ['crates', 'apps/desktop', 'src', 'scripts', 'platform', 'assets', 'licenses/rust', 'licenses/frontend'];
+const SOURCE_FILES = ['Cargo.toml', 'Cargo.lock', '.gitattributes', '.cargo/config.toml', 'rust-toolchain.toml', 'verify.ps1', 'global.json', 'NuGet.config', 'LICENSE', 'THIRD_PARTY_NOTICES.txt', '.github/workflows/rust.yml', '.github/workflows/rust-portable.yml'];
+const EXTENSIONS = new Set(['.rs', '.toml', '.lock', '.json', '.ts', '.tsx', '.css', '.html', '.svg', '.png', '.ico', '.md', '.txt', '.ps1', '.mjs', '.sh', '.py', '.swift', '.yml', '.yaml', '.config', '.manifest', '.cs', '.csproj', '.xaml', '.axaml', '.props', '.targets']);
 const EXCLUDED = /(^|\/)(node_modules|target|dist|bin|obj|\.build|\.vite|test-results|playwright-report)(\/|$)/i;
 const GENERATED = /^apps\/desktop\/src-tauri\/(gen|generated-schemas)(\/|$)/i;
 const CHECKS = ['legacy', 'artifact-guards', 'cargo-format', 'frontend-tests', 'frontend-build', 'rust-tests', 'rust-clippy'];
@@ -188,7 +188,7 @@ async function stage() {
   for (const [name, file] of [...inputs].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) { payloadName(name); files.push({ path: name, sha256: await sha(file), bytes: (await fs.stat(file)).size }); }
   const manifest = { version: currentVersion, sourceFingerprintSHA256: checked.sourceFingerprintSHA256, executableSHA256: pending.executableSHA256, files };
   const manifestBytes = Buffer.from(JSON.stringify(manifest, null, 2) + '\n');
-  const launcherFile = 'HandyMeeting Rust Beta starten.cmd';
+  const launcherFile = `HandyMeeting ${currentVersion} starten.cmd`;
   const launcher = Buffer.from(`@echo off\r\nif not exist "%~dp0${programDirectory}\\HandyMeeting.exe" (\r\n  echo Bitte das vollstaendige Rust-Beta-Paket entpacken.\r\n  pause\r\n  exit /b 1\r\n)\r\nstart "" "%~dp0${programDirectory}\\HandyMeeting.exe"\r\n`, 'ascii');
   // Check all conflicts before publishing a single new payload file.
   for (const file of files) { const target = inside(ROOT, programDirectory + '/' + file.path); if (await exists(target)) insist(await sha(target) === file.sha256, 'This version directory already contains different program bytes.'); }

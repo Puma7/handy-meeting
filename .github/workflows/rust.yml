@@ -1,7 +1,9 @@
 name: Rust beta checks
 on:
   push:
+    branches: [main]
     paths:
+      - '.gitattributes'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.cargo/**'
@@ -19,6 +21,7 @@ on:
       - '.github/workflows/rust.yml'
   pull_request:
     paths:
+      - '.gitattributes'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.cargo/**'
@@ -37,6 +40,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: rust-beta-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 env:
   CARGO_TERM_COLOR: never
   RUSTFLAGS: '-D warnings'
@@ -166,7 +172,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: rust-windows-beta-candidate
-          path: packages/HandyMeeting-1.0.0-beta.1-windows-x64.zip*
+          path: packages/HandyMeeting-1.0.0-beta.2-windows-x64.zip*
           retention-days: 14
   portable-core:
     name: Portable core (${{ matrix.runner }})

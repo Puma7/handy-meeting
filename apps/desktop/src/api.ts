@@ -22,6 +22,12 @@ export const desktopApi: DesktopApi = {
   importLegacy: (manifest) => desktopInvoke("import_legacy", { manifest }),
   generateNotes: (request) => desktopInvoke("generate_notes", { request }),
   listAnalyses: (meetingId) => desktopInvoke("list_analyses", { meetingId }),
+  listTextModels: (endpoint) =>
+    desktopInvoke("list_text_models", { endpoint, mode: "local" }),
+  getNotesProgress: () => desktopInvoke("get_notes_progress"),
+  cancelNotes: (jobId) => desktopInvoke("cancel_notes", { jobId }),
+  notesMarkdown: (meetingId, analysisId) =>
+    desktopInvoke("notes_markdown", { meetingId, analysisId }),
   copyText: (text) => desktopInvoke("copy_text", { text }),
 };
 export function errorMessage(error: unknown): string {

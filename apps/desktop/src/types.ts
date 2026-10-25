@@ -107,6 +107,8 @@ export interface StartRequest {
   microphoneDeviceId: string | null;
 }
 export interface NotesRequest {
+  jobId?: string;
+  resumeRunId?: string;
   meetingId: string;
   template: AnalysisTemplate;
   endpoint: string;
@@ -114,6 +116,23 @@ export interface NotesRequest {
   mode: "local" | "cloud";
   cloudConsent: boolean;
   apiKey: string;
+}
+export interface NotesProgress {
+  jobId: string;
+  runId: string | null;
+  meetingId: string;
+  status: "running" | "complete" | "cancelled" | "failed";
+  stage: "preparing" | "requesting" | "validating" | "saving" | "finished";
+  stepName: string | null;
+  stepIndex: number;
+  totalSteps: number;
+  batchIndex: number;
+  totalBatches: number;
+  confirmedTasks: number;
+  totalTasks: number;
+  elapsedMs: number;
+  error: string | null;
+  cancelRequested: boolean;
 }
 export interface DesktopApi {
   getAppState(): Promise<AppState>;
@@ -127,5 +146,9 @@ export interface DesktopApi {
   importLegacy(manifest: string): Promise<Meeting>;
   generateNotes(request: NotesRequest): Promise<AnalysisResult>;
   listAnalyses(meetingId: string): Promise<AnalysisResult[]>;
+  listTextModels(endpoint: string): Promise<string[]>;
+  getNotesProgress(): Promise<NotesProgress | null>;
+  cancelNotes(jobId: string): Promise<boolean>;
+  notesMarkdown(meetingId: string, analysisId: string): Promise<string>;
   copyText(text: string): Promise<void>;
 }

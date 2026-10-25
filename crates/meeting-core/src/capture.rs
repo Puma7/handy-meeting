@@ -8,12 +8,22 @@ use std::{
     thread::JoinHandle,
 };
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 use std::{sync::mpsc, thread, time::Duration};
 
 #[cfg(windows)]
 #[path = "windows_capture.rs"]
 mod platform;
+
+#[cfg(target_os = "linux")]
+#[path = "linux_capture.rs"]
+mod platform;
+#[cfg(target_os = "macos")]
+#[path = "macos_capture.rs"]
+mod platform;
+#[cfg(any(target_os = "linux", target_os = "macos", test))]
+#[path = "portable_capture.rs"]
+mod portable;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -33,12 +43,12 @@ pub struct CaptureController {
 
 impl CaptureController {
     pub fn start(store: SessionStore, options: CaptureOptions) -> Result<Self> {
-        #[cfg(not(windows))]
+        #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
         {
             let _ = (store, options);
-            Err("Rust capture is currently implemented on Windows; keep using the portable preview on this platform until its native adapter is migrated".into())
+            Err("This operating system has no supported audio capture adapter.".into())
         }
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
         {
             let stop = Arc::new(AtomicBool::new(false));
             let mut controller = Self {
@@ -62,7 +72,7 @@ impl CaptureController {
         }
     }
 
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
     fn start_track(&mut self, source: &'static str, device_id: Option<String>) -> Result<()> {
         let stop = Arc::clone(&self.stop);
         let store = self.store.clone();
@@ -73,7 +83,8 @@ impl CaptureController {
             }
         })?;
         self.tracks.push(track);
-        match result.recv_timeout(Duration::from_secs(10)) {
+        let timeout = if cfg!(target_os = "macos") { 60 } else { 10 };
+        match result.recv_timeout(Duration::from_secs(timeout)) {
             Ok(Ok(())) => Ok(()),
             Ok(Err(error)) => Err(error.into()),
             Err(_) => Err("Audio device did not become ready in time".into()),
@@ -111,14 +122,14 @@ impl Drop for CaptureController {
 }
 
 pub fn list_devices() -> Result<Vec<AudioDevice>> {
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
     {
         thread::spawn(platform::list_devices)
             .join()
             .map_err(|_| "Device enumeration stopped unexpectedly")?
     }
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
     {
-        Ok(vec![])
+        Err("This operating system has no supported audio device adapter.".into())
     }
 }

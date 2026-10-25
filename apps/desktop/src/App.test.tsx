@@ -72,6 +72,12 @@ function fakeApi(active: Meeting | null = null): DesktopApi {
     importLegacy: vi.fn().mockResolvedValue({ ...meeting, readOnly: true }),
     generateNotes: vi.fn(),
     listAnalyses: vi.fn().mockResolvedValue([]),
+    listTextModels: vi.fn().mockResolvedValue(["synthetic-text-model"]),
+    getNotesProgress: vi.fn().mockResolvedValue(null),
+    cancelNotes: vi.fn().mockResolvedValue(false),
+    notesMarkdown: vi
+      .fn()
+      .mockResolvedValue("# Synthetic analysis\n\nEscaped source text.\n"),
     copyText: vi.fn().mockResolvedValue(undefined),
   };
 }
@@ -100,7 +106,9 @@ describe("migration frontend boundaries (synthetic IPC)", () => {
     );
     await waitFor(() =>
       expect(api.startMeeting).toHaveBeenCalledWith({
-        title: "Mein Meeting",
+        title: expect.stringMatching(
+          /^Meeting \d{1,2}\.\d{1,2}\.\d{4} \d{2}:\d{2}$/,
+        ),
         modelId: "installed-stream",
         systemDeviceId: "out",
         microphoneDeviceId: "mic",

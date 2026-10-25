@@ -1283,19 +1283,21 @@ dependencies = [
 
 [[package]]
 name = "handy-bridge"
-version = "1.0.0-beta.1"
+version = "1.0.0-beta.2"
 dependencies = [
+ "plist",
  "serde",
  "serde_json",
  "sha2",
  "tempfile",
  "thiserror 2.0.17",
  "transcribe-cpp",
+ "winreg",
 ]
 
 [[package]]
 name = "handy-meeting-desktop"
-version = "1.0.0-beta.1"
+version = "1.0.0-beta.2"
 dependencies = [
  "anyhow",
  "arboard",
@@ -1866,7 +1868,7 @@ dependencies = [
 
 [[package]]
 name = "meeting-core"
-version = "1.0.0-beta.1"
+version = "1.0.0-beta.2"
 dependencies = [
  "chrono",
  "fs2",
@@ -1881,7 +1883,7 @@ dependencies = [
 
 [[package]]
 name = "meeting-notes"
-version = "1.0.0-beta.1"
+version = "1.0.0-beta.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1890,6 +1892,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "tempfile",
+ "tokio",
  "url",
  "uuid",
 ]

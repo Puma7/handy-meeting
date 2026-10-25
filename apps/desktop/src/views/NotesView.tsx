@@ -7,20 +7,34 @@ import {
   Plus,
   Sparkles,
   Trash2,
+  RefreshCw,
 } from "lucide-react";
-import { uid, renderAnalysis } from "../domain";
+import { uid, meetingLabel } from "../domain";
 import type {
   AnalysisResult,
   AnalysisStep,
   AnalysisTemplate,
   Evidence,
   Meeting,
+  MeetingSummary,
   Locale,
 } from "../types";
 import type { MessageKey } from "../i18n";
 type Props = {
   t: Record<MessageKey, string>;
   meeting: Meeting | null;
+  meetingId: string;
+  meetings: MeetingSummary[];
+  meetingLoading: boolean;
+  selectMeeting: (id: string) => void;
+  localModels: string[];
+  modelsLoading: boolean;
+  modelsError: string | null;
+  modelsLoaded: boolean;
+  refreshModels: () => void;
+  manualModel: boolean;
+  setManualModel: (manual: boolean) => void;
+  modelReady: boolean;
   libraryInvalid: boolean;
   templates: AnalysisTemplate[];
   notesBusy: boolean;
@@ -52,13 +66,25 @@ type Props = {
   moveStep: (delta: number) => void;
   updateTemplate: (v: AnalysisTemplate) => void;
   copied: boolean;
-  copy: (text: string) => Promise<void>;
+  copyResults: () => Promise<void>;
   showEvidence: (evidence: Evidence) => void;
   locale: Locale;
 };
 export default function NotesView({
   t,
   meeting,
+  meetingId,
+  meetings,
+  meetingLoading,
+  selectMeeting,
+  localModels,
+  modelsLoading,
+  modelsError,
+  modelsLoaded,
+  refreshModels,
+  manualModel,
+  setManualModel,
+  modelReady,
   libraryInvalid,
   templates,
   notesBusy,
@@ -90,19 +116,48 @@ export default function NotesView({
   moveStep,
   updateTemplate,
   copied,
-  copy,
+  copyResults,
   showEvidence,
   locale,
 }: Props) {
   return (
     <>
+      <section className="notes-meeting-picker">
+        <label>
+          {t.chooseMeeting}
+          <select
+            value={meetingId}
+            disabled={!connected}
+            onChange={(event) => selectMeeting(event.target.value)}
+          >
+            <option value="">{t.selectMeeting}</option>
+            {meetings.map((item) => (
+              <option key={item.id} value={item.id}>
+                {meetingLabel(item, locale)}
+              </option>
+            ))}
+          </select>
+        </label>
+        {meetingLoading && (
+          <p className="muted">
+            <RefreshCw size={14} className="spinning" />
+            {t.busy}
+          </p>
+        )}
+      </section>
       {!meeting && <div className="notice warning">{t.noMeeting}</div>}
+      {meeting && meeting.status !== "complete" && (
+        <div className="notice warning">{t.pendingNotes}</div>
+      )}
       {libraryInvalid && (
         <div role="alert" className="notice error">
           {t.templateError}
         </div>
       )}
       <section className="notes-config">
+        {mode === "local" && (
+          <p className="local-service-help">{t.localServiceHelp}</p>
+        )}
         <div className="settings-grid">
           <label>
             {t.processing}
@@ -125,17 +180,86 @@ export default function NotesView({
           </label>
           <label>
             {t.textModel}
-            <input
-              value={textModel}
-              disabled={notesBusy}
-              onChange={(event) => setTextModel(event.target.value)}
-              placeholder="google/gemma-4-e4b"
-              autoComplete="off"
-            />
+            {mode === "local" && !manualModel ? (
+              <div className="inline-control">
+                <select
+                  value={textModel}
+                  disabled={notesBusy || modelsLoading}
+                  onChange={(event) => setTextModel(event.target.value)}
+                >
+                  <option value="">
+                    {modelsLoading ? t.loadingTextModels : t.selectTextModel}
+                  </option>
+                  {textModel && !localModels.includes(textModel) && (
+                    <option value={textModel} disabled>
+                      {textModel} · {t.notFound}
+                    </option>
+                  )}
+                  {localModels.map((model) => (
+                    <option value={model} key={model}>
+                      {model}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="icon-button bordered"
+                  onClick={refreshModels}
+                  disabled={notesBusy || modelsLoading || !connected}
+                  title={t.refreshTextModels}
+                  aria-label={t.refreshTextModels}
+                >
+                  <RefreshCw
+                    size={17}
+                    className={modelsLoading ? "spinning" : undefined}
+                  />
+                </button>
+              </div>
+            ) : (
+              <input
+                value={textModel}
+                disabled={notesBusy}
+                onChange={(event) => setTextModel(event.target.value)}
+                autoComplete="off"
+              />
+            )}
           </label>
         </div>
+        {mode === "local" && <p className="muted">{t.firstModelLoad}</p>}
+        {mode === "local" && (
+          <>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={manualModel}
+                disabled={notesBusy}
+                onChange={(event) => setManualModel(event.target.checked)}
+              />
+              {t.manualTextModel}
+            </label>
+            {modelsError && (
+              <div className="notice warning">
+                <div>
+                  <strong>{modelsError}</strong>
+                  <p>{t.textModelsHelp}</p>
+                </div>
+              </div>
+            )}
+            {modelsLoaded && !localModels.length && (
+              <p className="muted">
+                {t.noTextModels} {t.textModelsHelp}
+              </p>
+            )}
+            {textModel &&
+              !manualModel &&
+              modelsLoaded &&
+              !localModels.includes(textModel) && (
+                <p className="inline-error">{t.textModelUnavailable}</p>
+              )}
+          </>
+        )}
         <label>
-          {t.endpoint}
+          {mode === "local" ? t.localEndpoint : t.endpoint}
           <input
             type="url"
             value={endpoint}
@@ -151,6 +275,7 @@ export default function NotesView({
             <input
               type="password"
               value={apiKey}
+              disabled={notesBusy}
               onChange={(event) => setApiKey(event.target.value)}
               autoComplete="new-password"
             />
@@ -243,17 +368,19 @@ export default function NotesView({
           </label>
         )}
         <div className="notes-run">
-          <span>{meeting?.title ?? t.noMeeting}</span>
+          <span>{meeting ? meetingLabel(meeting, locale) : t.noMeeting}</span>
           <button
             className="primary"
             disabled={
               !connected ||
               !meeting ||
+              meetingLoading ||
               meeting.status !== "complete" ||
               recording ||
               notesBusy ||
               busy ||
               !textModel.trim() ||
+              !modelReady ||
               !endpoint.trim() ||
               libraryInvalid
             }
@@ -414,10 +541,11 @@ export default function NotesView({
           <button
             className="secondary"
             disabled={!result || busy}
-            onClick={() => result && void copy(renderAnalysis(result))}
+            onClick={() => result && void copyResults()}
+            title={t.markdownHelp}
           >
             {copied ? <Check size={16} /> : <Copy size={16} />}
-            <span>{copied ? t.copied : t.copyResults}</span>
+            <span>{copied ? t.copied : t.copyMarkdown}</span>
           </button>
         </div>
       </section>

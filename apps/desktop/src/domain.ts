@@ -3,8 +3,31 @@ import type {
   AnalysisTemplate,
   Locale,
   Meeting,
+  MeetingSummary,
   Track,
 } from "./types";
+export function meetingLabel(meeting: MeetingSummary, locale: Locale): string {
+  return (
+    meeting.title +
+    " · " +
+    new Date(meeting.startedAt).toLocaleString(
+      locale === "de" ? "de-DE" : "en-GB",
+    ) +
+    " · " +
+    clock(meeting.durationMs)
+  );
+}
+export function defaultMeetingTitle(locale: Locale, date = new Date()): string {
+  return (
+    "Meeting " +
+    date.toLocaleDateString(locale === "de" ? "de-DE" : "en-GB") +
+    " " +
+    date.toLocaleTimeString(locale === "de" ? "de-DE" : "en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+  );
+}
 export function uid(): string {
   return crypto.randomUUID().replaceAll("-", "");
 }

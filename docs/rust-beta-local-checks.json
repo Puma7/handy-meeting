@@ -1,0 +1,80 @@
+{
+  "version": "1.0.0-beta.1",
+  "checkedAtUtc": "2026-10-25T18:51:34.255Z",
+  "sourceFingerprintSHA256": "3551ee3a784e6a3480337fb359c5ad9382db91fec0a241a9873165c872672d1f",
+  "standardChecksPassed": true,
+  "standardChecks": [
+    {
+      "name": "legacy",
+      "exitCode": 0
+    },
+    {
+      "name": "artifact-guards",
+      "exitCode": 0
+    },
+    {
+      "name": "cargo-format",
+      "exitCode": 0
+    },
+    {
+      "name": "frontend-tests",
+      "exitCode": 0
+    },
+    {
+      "name": "frontend-build",
+      "exitCode": 0
+    },
+    {
+      "name": "rust-tests",
+      "exitCode": 0
+    },
+    {
+      "name": "rust-clippy",
+      "exitCode": 0
+    }
+  ],
+  "rustTestsPassed": 57,
+  "frontendTestsPassed": 21,
+  "artifactGuardTestsPassed": 9,
+  "legacyTestsPassed": 89,
+  "legacyMonitorReaderPassed": true,
+  "legacyProductionMetadataWriterValidated": false,
+  "nativeSpeechProbe": {
+    "success": true,
+    "backend": "CPU",
+    "synthetic": true,
+    "accelerated": true,
+    "elapsedSeconds": 5.9542028,
+    "intentionalAsrKill": true,
+    "confirmedAudioHashesPreserved": true,
+    "confirmedTextJournalPrefixPreserved": true,
+    "bothTranscriptsComplete": true,
+    "realAudioDevicesOpened": false
+  },
+  "localTextReference": {
+    "actualLocalModel": true,
+    "cloudTested": false,
+    "due": "Freitag",
+    "elapsedSeconds": 46.5778054,
+    "mode": "local",
+    "model": "google/gemma-4-e4b",
+    "negativeDecisions": 0,
+    "negativeTasks": 0,
+    "owner": "Anna",
+    "positiveDecisions": 1,
+    "positiveTasks": 1,
+    "promptVersion": "handymeeting-rust-notes-2",
+    "success": true,
+    "syntheticText": true
+  },
+  "limits": [
+    "Windows migration beta only",
+    "No new two-hour Rust or real-device capture validation",
+    "No reliable Rust memory peaks, trends or GPU memory measurement",
+    "Two simultaneous speech tracks use separate model instances",
+    "Process termination is not power-loss validation",
+    "Unconfirmed final audio may be missing",
+    "Cloud transport simulated; no real cloud provider called",
+    "Prepared CI is not evidence of a completed CI run"
+  ]
+}

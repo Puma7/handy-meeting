@@ -4,12 +4,12 @@ $stamp=Get-Date -Format 'yyyyMMdd-HHmmss'
 $stage=Join-Path $root ('.build/source-export-' + $stamp)
 New-Item -ItemType Directory -Path $stage | Out-Null
 $roots=@('src','scripts','platform','assets','.github','licenses','crates','apps','docs','.cargo')
-$names=@('AGENTS.md','README.md','README.de.md','CONTRIBUTING.md','SECURITY.md','CHANGELOG.md','BUILD_STATUS.md','MASTERPLAN.md','TEST_REPORT.md','DAUERTEST.md','PORTABILITY.md','AGENT_API.md','REPOSITORY_READY.md','LICENSE','THIRD_PARTY_NOTICES.txt','System.Numerics.Tensors.LICENSE.txt','System.Numerics.Tensors.NOTICES.txt','.gitignore','Cargo.toml','Cargo.lock','global.json','NuGet.config','build.ps1','verify.ps1','setup-native.ps1','HandyMeeting starten.cmd','HandyMeeting Rust Beta starten.cmd')
+$names=@('AGENTS.md','README.md','README.de.md','CONTRIBUTING.md','SECURITY.md','CHANGELOG.md','BUILD_STATUS.md','MASTERPLAN.md','TEST_REPORT.md','DAUERTEST.md','PORTABILITY.md','AGENT_API.md','REPOSITORY_READY.md','LICENSE','THIRD_PARTY_NOTICES.txt','System.Numerics.Tensors.LICENSE.txt','System.Numerics.Tensors.NOTICES.txt','.gitignore','.gitattributes','Cargo.toml','Cargo.lock','global.json','NuGet.config','build.ps1','verify.ps1','setup-native.ps1','HandyMeeting starten.cmd','HandyMeeting Rust Beta starten.cmd','HandyMeeting 1.0.0-beta.2 starten.cmd')
 $files=@()
 foreach ($name in $names) { $path=Join-Path $root $name; if (Test-Path -LiteralPath $path -PathType Leaf) { $files+=Get-Item -LiteralPath $path } }
 foreach ($folder in $roots) {
  $path=Join-Path $root $folder
- if (Test-Path -LiteralPath $path) { $files+=Get-ChildItem -LiteralPath $path -File -Recurse -Force | Where-Object { $_.FullName -notmatch '[\\/](bin|obj|node_modules|\.git|target|dist|gen)[\\/]' -and $_.Extension -ne '.tsbuildinfo' } }
+ if (Test-Path -LiteralPath $path) { $files+=Get-ChildItem -LiteralPath $path -File -Recurse -Force | Where-Object { $_.FullName -notmatch '[\\/](bin|obj|node_modules|__pycache__|\.git|target|dist|gen)[\\/]' -and $_.Extension -ne '.tsbuildinfo' } }
 }
 $manifest=foreach ($file in $files) {
  $relative=[IO.Path]::GetRelativePath($root,$file.FullName)

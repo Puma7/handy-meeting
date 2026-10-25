@@ -19,4 +19,6 @@ Sessions/
 *.user
 target/
 **/node_modules/
+**/__pycache__/
+*.pyc
 apps/desktop/dist/

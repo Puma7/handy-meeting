@@ -1,11 +1,17 @@
 import NotesView from "./views/NotesView";
 import Sidebar, { type Page } from "./views/Sidebar";
 import MeetingView from "./views/MeetingView";
+import MeetingDetail from "./views/MeetingDetail";
+import NotesProgressPanel from "./views/NotesProgressPanel";
+import { useLocalTextModels } from "./useLocalTextModels";
+import { useNotesJob } from "./useNotesJob";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FolderClock, RefreshCw, X } from "lucide-react";
 import { desktopApi, errorMessage } from "./api";
 import {
   clock,
+  defaultMeetingTitle,
+  meetingLabel,
   defaultTemplate,
   renderTranscript,
   trackName,
@@ -31,17 +37,24 @@ import type {
 
 const TEMPLATE_KEY = "handymeeting.rust.beta.templates.v1";
 const PREFS_KEY = "handymeeting.rust.beta.preferences.v1";
-function loadPreferences(): { locale: Locale; theme: Theme } {
+function loadPreferences(): {
+  locale: Locale;
+  theme: Theme;
+  persistable: boolean;
+} {
   try {
     const value = JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}");
+    if (!value || typeof value !== "object" || Array.isArray(value))
+      throw new Error("Invalid preferences");
     return {
       locale: value.locale === "en" ? "en" : "de",
       theme: ["dark", "light", "system"].includes(value.theme)
         ? value.theme
         : "system",
+      persistable: true,
     };
   } catch {
-    return { locale: "de", theme: "system" };
+    return { locale: "de", theme: "system", persistable: false };
   }
 }
 function loadLibrary(): { templates: AnalysisTemplate[]; invalid: boolean } {
@@ -71,10 +84,13 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     [busy, setBusy] = useState(false),
     [isStopping, setIsStopping] = useState(false),
     [refreshingHandy, setRefreshingHandy] = useState(false),
-    [copied, setCopied] = useState(false);
+    [copied, setCopied] = useState<"transcript" | "notes" | null>(null);
   const [devices, setDevices] = useState<AudioDevice[]>([]),
     [history, setHistory] = useState<MeetingSummary[]>([]),
-    [meeting, setMeeting] = useState<Meeting | null>(null);
+    [meeting, setMeeting] = useState<Meeting | null>(null),
+    [liveMeeting, setLiveMeeting] = useState<Meeting | null>(null),
+    [notesMeetingId, setNotesMeetingId] = useState(""),
+    [notesMeetingLoading, setNotesMeetingLoading] = useState(false);
   const [legacyManifest, setLegacyManifest] = useState("");
   const [title, setTitle] = useState(""),
     [modelId, setModelId] = useState(""),
@@ -94,11 +110,11 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     } | null>(null);
   const [endpoint, setEndpoint] = useState("http://127.0.0.1:1234/v1/"),
     [textModel, setTextModel] = useState(""),
+    [manualTextModel, setManualTextModel] = useState(false),
     [apiKey, setApiKey] = useState(""),
     [mode, setMode] = useState<"local" | "cloud">("local");
   const [analyses, setAnalyses] = useState<AnalysisResult[]>([]),
     [resultId, setResultId] = useState(""),
-    [notesBusy, setNotesBusy] = useState(false),
     [cloudRequest, setCloudRequest] = useState<NotesRequest | null>(null),
     [source, setSource] = useState<{
       source: TranscriptSource;
@@ -107,6 +123,9 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
   const requestSequence = useRef(0),
     selectedRef = useRef<string | null>(null),
     fullMeetingRef = useRef<string | null>(null),
+    liveFullRef = useRef<string | null>(null),
+    notesSelectionRef = useRef(""),
+    notesLoadSequence = useRef(0),
     initialModelSelected = useRef(false),
     initialCatalogSeen = useRef(false),
     lastModelRefresh = useRef(Date.now()),
@@ -126,7 +145,38 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     ["catching-up", "streaming"].includes(app?.activeMeeting?.status ?? "");
   const latestRuntime = useRef({ app, busy, isStopping, connected });
   latestRuntime.current = { app, busy, isStopping, connected };
-  const activeId = app?.activeMeeting?.id;
+  const onNotesResult = useCallback((next: AnalysisResult) => {
+    if (notesSelectionRef.current !== next.meetingId) return;
+    setAnalyses((items) => [
+      next,
+      ...items.filter((item) => item.id !== next.id),
+    ]);
+    setResultId(next.id);
+    setStepId(next.sections[0]?.id ?? "");
+  }, []);
+  const notesJob = useNotesJob(
+    api,
+    connected,
+    app?.notesRunning ?? false,
+    onNotesResult,
+  );
+  const notesBusy = notesJob.busy;
+  const localTextModels = useLocalTextModels(
+    api,
+    endpoint,
+    mode,
+    connected,
+    page === "notes",
+  );
+  const notesMeeting = meeting?.id === notesMeetingId ? meeting : null;
+  const notesMeetingOptions =
+    history.some((item) => item.id === meeting?.id) || !meeting
+      ? history
+      : [meeting, ...history];
+  const notesModelReady =
+    mode === "cloud" ||
+    manualTextModel ||
+    (localTextModels.loaded && localTextModels.models.includes(textModel));
 
   useEffect(() => {
     mounted.current = true;
@@ -138,10 +188,17 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     document.documentElement.lang = locale;
+    if (!preferences.persistable) return;
     try {
-      localStorage.setItem(PREFS_KEY, JSON.stringify({ locale, theme }));
+      const previous = JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}");
+      if (!previous || typeof previous !== "object" || Array.isArray(previous))
+        throw new Error("Invalid preferences");
+      localStorage.setItem(
+        PREFS_KEY,
+        JSON.stringify({ ...previous, locale, theme }),
+      );
     } catch {
-      /* Preferences are optional. */
+      setError(t.preferencesError);
     }
   }, [locale, theme]);
   useEffect(() => {
@@ -271,29 +328,33 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       setApp(state);
       setConnected(true);
       setLoading(false);
-      if (
-        state.activeMeeting &&
-        (!selectedRef.current || selectedRef.current === state.activeMeeting.id)
-      ) {
-        selectedRef.current = state.activeMeeting.id;
+      if (state.activeMeeting) {
         const active = state.activeMeeting;
         const live =
           state.recording ||
           ["recording", "catching-up", "streaming"].includes(active.status);
         if (live) {
-          fullMeetingRef.current = null;
-          setMeeting(active);
-        } else if (fullMeetingRef.current !== active.id) {
-          // A completed history view is loaded once. Its full transcript must
-          // never be replaced by the next bounded status-preview response.
+          liveFullRef.current = null;
+          setLiveMeeting(active);
+          if (!selectedRef.current || selectedRef.current === active.id) {
+            selectedRef.current = active.id;
+            fullMeetingRef.current = null;
+            setMeeting(active);
+          }
+        } else if (
+          liveFullRef.current !== active.id ||
+          ((!selectedRef.current || selectedRef.current === active.id) &&
+            fullMeetingRef.current !== active.id)
+        ) {
           const full = await api.getMeeting(active.id);
-          if (
-            seq !== requestSequence.current ||
-            selectedRef.current !== active.id
-          )
-            return;
-          fullMeetingRef.current = full.id;
-          setMeeting(full);
+          if (seq !== requestSequence.current) return;
+          liveFullRef.current = full.id;
+          setLiveMeeting(full);
+          if (!selectedRef.current || selectedRef.current === active.id) {
+            selectedRef.current = full.id;
+            fullMeetingRef.current = full.id;
+            setMeeting(full);
+          }
         }
       }
     } catch (failure) {
@@ -402,7 +463,11 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       setBusy(false);
     }
   }
-  async function openMeeting(id: string, nextPage: Page = "meeting") {
+  async function openMeeting(id: string, nextPage: Page = "detail") {
+    if (nextPage === "notes") {
+      await openNotesFor(id);
+      return;
+    }
     await action(async () => {
       const item = await api.getMeeting(id);
       selectedRef.current = item.id;
@@ -411,31 +476,84 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       setAnalyses([]);
       setResultId("");
       setPage(nextPage);
-      if (nextPage === "notes") await readAnalyses(item.id);
     });
   }
-  async function readAnalyses(id: string) {
-    const items = await api.listAnalyses(id);
-    if (selectedRef.current !== id) return;
-    setAnalyses(items);
-    setResultId(items[0]?.id ?? "");
+  async function selectNotesMeeting(id: string) {
+    const sequence = ++notesLoadSequence.current;
+    notesSelectionRef.current = id;
+    setNotesMeetingId(id);
+    setAnalyses([]);
+    setResultId("");
+    if (!id) {
+      setNotesMeetingLoading(false);
+      return;
+    }
+    setNotesMeetingLoading(true);
+    setError(null);
+    try {
+      const current = await api.getMeeting(id);
+      if (
+        !mounted.current ||
+        sequence !== notesLoadSequence.current ||
+        notesSelectionRef.current !== id
+      )
+        return;
+      if (current.id !== id) throw new Error(t.wrongMeeting);
+      selectedRef.current = current.id;
+      fullMeetingRef.current = current.id;
+      setMeeting(current);
+      const items = await api.listAnalyses(id);
+      if (
+        !mounted.current ||
+        sequence !== notesLoadSequence.current ||
+        notesSelectionRef.current !== id
+      )
+        return;
+      if (items.some((item) => item.meetingId !== id))
+        throw new Error(t.wrongMeeting);
+      setAnalyses(items);
+      setResultId(items[0]?.id ?? "");
+    } catch (failure) {
+      if (mounted.current && sequence === notesLoadSequence.current)
+        setError(errorMessage(failure));
+    } finally {
+      if (mounted.current && sequence === notesLoadSequence.current)
+        setNotesMeetingLoading(false);
+    }
+  }
+  async function openNotesFor(id: string) {
+    setPage("notes");
+    void refreshHistory().catch((failure) => setError(errorMessage(failure)));
+    await selectNotesMeeting(id);
   }
   async function navigate(next: Page) {
     setPage(next);
     if (next === "history") void action(refreshHistory);
-    if (next === "notes" && meeting)
-      void action(() => readAnalyses(meeting.id));
+    if (next === "notes") {
+      const id =
+        (page === "detail"
+          ? meeting?.id
+          : page === "meeting"
+            ? liveMeeting?.id
+            : notesSelectionRef.current) ||
+        meeting?.id ||
+        "";
+      void refreshHistory().catch((failure) => setError(errorMessage(failure)));
+      void selectNotesMeeting(id);
+    }
   }
   async function start() {
     await action(async () => {
       const item = await api.startMeeting({
-        title: title.trim() || t.emptyTitle,
+        title: title.trim() || defaultMeetingTitle(locale),
         modelId,
         systemDeviceId: systemId,
         microphoneDeviceId: micEnabled ? micId : null,
       });
       selectedRef.current = item.id;
       fullMeetingRef.current = null;
+      liveFullRef.current = null;
+      setLiveMeeting(item);
       setMeeting(item);
       setAnalyses([]);
       setResultId("");
@@ -450,6 +568,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         const item = await api.stopMeeting();
         selectedRef.current = item.id;
         fullMeetingRef.current = item.id;
+        liveFullRef.current = item.id;
+        setLiveMeeting(item);
         setMeeting(item);
         await poll();
         await refreshHistory();
@@ -458,23 +578,15 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       }
     });
   }
-  async function copy(text: string) {
-    await action(async () => {
-      await api.copyText(text);
-      setCopied(true);
-      if (copyTimer.current) clearTimeout(copyTimer.current);
-      copyTimer.current = setTimeout(() => setCopied(false), 2000);
-    });
-  }
-  async function copyFullTranscript() {
-    if (!meeting) return;
-    const id = meeting.id;
+  async function copyFullTranscript(target: Meeting | null = meeting) {
+    if (!target) return;
+    const id = target.id;
     await action(async () => {
       const full = await api.getMeeting(id);
       await api.copyText(renderTranscript(full, locale));
-      setCopied(true);
+      setCopied("transcript");
       if (copyTimer.current) clearTimeout(copyTimer.current);
-      copyTimer.current = setTimeout(() => setCopied(false), 2000);
+      copyTimer.current = setTimeout(() => setCopied(null), 2000);
     });
   }
   function updateTemplate(next: AnalysisTemplate) {
@@ -515,9 +627,9 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     updateTemplate({ ...template, steps });
   }
   function beginNotes() {
-    if (!meeting) return;
+    if (!notesMeeting || !notesModelReady || notesMeetingLoading) return;
     const request: NotesRequest = {
-      meetingId: meeting.id,
+      meetingId: notesMeeting.id,
       template: structuredClone(template),
       endpoint: endpoint.trim(),
       model: textModel.trim(),
@@ -529,24 +641,30 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     else void runNotes(request);
   }
   async function runNotes(request: NotesRequest) {
-    if (notesBusy) return;
-    setNotesBusy(true);
     setError(null);
     setCloudRequest(null);
-    try {
-      const next = await api.generateNotes(request);
-      if (selectedRef.current !== next.meetingId) return;
-      setAnalyses((items) => [
-        next,
-        ...items.filter((item) => item.id !== next.id),
-      ]);
-      setResultId(next.id);
-      setStepId(next.sections[0]?.id ?? template.steps[0].id);
-    } catch (failure) {
-      setError(errorMessage(failure));
-    } finally {
-      setNotesBusy(false);
+    await notesJob.run(request);
+  }
+  function resumeNotes() {
+    const previous = notesJob.lastRequest,
+      runId = notesJob.progress?.runId;
+    if (!previous || !runId || previous.meetingId !== notesMeetingId) return;
+    const request = { ...previous, resumeRunId: runId, cloudConsent: false };
+    if (request.mode === "cloud") setCloudRequest(request);
+    else void runNotes(request);
+  }
+  async function copyNotesMarkdown() {
+    if (!result || !notesMeeting || result.meetingId !== notesMeeting.id) {
+      setError(t.wrongMeeting);
+      return;
     }
+    await action(async () => {
+      const markdown = await api.notesMarkdown(result.meetingId, result.id);
+      await api.copyText(markdown);
+      setCopied("notes");
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopied(null), 2000);
+    });
   }
   function showEvidence(evidence: Evidence) {
     const original = result?.sources.find(
@@ -570,8 +688,9 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     template.steps.find((item) => item.id === stepId) ?? template.steps[0];
   const resultSection =
     result?.sections.find((item) => item.id === stepId) ?? result?.sections[0];
-  const orderedParts = meeting
-    ? [...meeting.parts]
+  const shownMeeting = page === "meeting" ? liveMeeting : meeting;
+  const orderedParts = shownMeeting
+    ? [...shownMeeting.parts]
         .sort(
           (a, b) =>
             a.startSample - b.startSample || a.source.localeCompare(b.source),
@@ -579,14 +698,14 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         .filter((item) => (item.text ?? "").trim())
     : [];
   const recentParts =
-    meeting?.status === "complete" && !meeting.livePreviewLimited
+    shownMeeting?.status === "complete" && !shownMeeting.livePreviewLimited
       ? orderedParts
       : orderedParts.slice(-40);
   const savedByTrack = (track: "system" | "microphone") =>
-    meeting?.savedAudioMs?.[track] ??
+    shownMeeting?.savedAudioMs?.[track] ??
     Math.max(
       0,
-      ...(meeting?.parts ?? [])
+      ...(shownMeeting?.parts ?? [])
         .filter((item) => item.source === track)
         .map(
           (item) =>
@@ -596,14 +715,14 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         ),
     );
   const backlog =
-    meeting?.pendingAudioMs ??
-    (meeting?.livePreviewLimited
+    shownMeeting?.pendingAudioMs ??
+    (shownMeeting?.livePreviewLimited
       ? null
       : Math.max(
           0,
           ...["system", "microphone"].map(
             (track) =>
-              (meeting?.parts ?? [])
+              (shownMeeting?.parts ?? [])
                 .filter((item) => item.source === track)
                 .reduce(
                   (sum, item) =>
@@ -634,13 +753,13 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       <main>
         <header className="page-header">
           <div>
-            <h1>{t[page]}</h1>
+            <h1>{page === "detail" ? t.meetingDetail : t[page]}</h1>
             <p>
               {page === "meeting"
                 ? t.preserve
                 : page === "notes"
                   ? t.draft
-                  : page === "history"
+                  : page === "history" || page === "detail"
                     ? t.legacyHelp
                     : t.compatibility}
             </p>
@@ -649,7 +768,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             <button
               className="recording-link"
               onClick={() => {
-                if (activeId) void openMeeting(activeId);
+                setPage("meeting");
               }}
             >
               <span className="recording-dot" />
@@ -691,12 +810,44 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             </button>
           </div>
         )}
+        <NotesProgressPanel
+          progress={notesJob.progress}
+          elapsedMs={notesJob.elapsedMs}
+          cancelPending={notesJob.cancelPending}
+          feedback={notesJob.feedback}
+          pollError={notesJob.pollError}
+          meetingTitle={(() => {
+            const id =
+              notesJob.progress?.meetingId ?? notesJob.feedback?.meetingId;
+            const value = [meeting, liveMeeting, ...history].find(
+              (item) => item?.id === id,
+            );
+            return value
+              ? meetingLabel(value, locale)
+              : [t.notesTask, id].filter(Boolean).join(" · ");
+          })()}
+          t={t}
+          onCancel={() => void notesJob.cancel()}
+          onOpen={() => {
+            const id =
+              notesJob.progress?.meetingId ?? notesJob.feedback?.meetingId;
+            if (id) void openNotesFor(id);
+          }}
+          onDismiss={notesJob.dismiss}
+          onResume={
+            notesJob.progress?.runId &&
+            ["failed", "cancelled"].includes(notesJob.progress.status) &&
+            notesJob.lastRequest?.meetingId === notesMeetingId
+              ? resumeNotes
+              : null
+          }
+        />
         {page === "meeting" && (
           <MeetingView
             t={t}
             x={x}
             app={app}
-            meeting={meeting}
+            meeting={liveMeeting}
             recording={recording}
             busy={
               busy ||
@@ -707,13 +858,17 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             isStopping={isStopping}
             connected={connected}
             title={title}
+            defaultTitle={defaultMeetingTitle(locale)}
+            onAnalyse={() => {
+              if (liveMeeting) void openNotesFor(liveMeeting.id);
+            }}
             modelId={modelId}
             systemId={systemId}
             micId={micId}
             micEnabled={micEnabled}
             models={models}
             devices={devices}
-            copied={copied}
+            copied={copied === "transcript"}
             backlog={backlog}
             recentParts={recentParts}
             locale={locale}
@@ -725,7 +880,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             start={start}
             stop={stop}
             savedByTrack={savedByTrack}
-            copyFullTranscript={copyFullTranscript}
+            copyFullTranscript={() => copyFullTranscript(liveMeeting)}
             refreshHandy={() => void action(() => refreshModels(false))}
             resume={() =>
               void action(async () => {
@@ -737,6 +892,18 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
                 await poll();
               })
             }
+          />
+        )}
+        {page === "detail" && meeting && (
+          <MeetingDetail
+            meeting={meeting}
+            locale={locale}
+            t={t}
+            busy={busy}
+            copied={copied === "transcript"}
+            onBack={() => void navigate("history")}
+            onCopy={() => void copyFullTranscript(meeting)}
+            onAnalyse={() => void openNotesFor(meeting.id)}
           />
         )}
         {page === "history" && (
@@ -785,6 +952,9 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         )}
         {page === "settings" && (
           <div className="settings-sections">
+            {!preferences.persistable && (
+              <div className="notice warning">{t.preferencesError}</div>
+            )}
             <section>
               <h2>{t.installation}</h2>
               <p>{t.executableHelp}</p>
@@ -809,7 +979,11 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
               </label>
               <div className="settings-actions">
                 <span>
-                  {t.version}: {app?.handy?.version ?? t.notFound}
+                  {t.version}:{" "}
+                  {app?.handy?.version ??
+                    (app?.handy?.executable
+                      ? t.handyVersionMissing
+                      : t.notFound)}
                 </span>
                 <button
                   className="secondary"
@@ -905,7 +1079,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
                   setMeeting(imported);
                   setAnalyses([]);
                   setResultId("");
-                  setPage("meeting");
+                  setPage("detail");
                   await refreshHistory();
                 })
               }
@@ -917,7 +1091,19 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         {page === "notes" && (
           <NotesView
             t={t}
-            meeting={meeting}
+            meeting={notesMeeting}
+            meetingId={notesMeetingId}
+            meetings={notesMeetingOptions}
+            meetingLoading={notesMeetingLoading}
+            selectMeeting={(id) => void selectNotesMeeting(id)}
+            localModels={localTextModels.models}
+            modelsLoading={localTextModels.loading}
+            modelsError={localTextModels.error}
+            modelsLoaded={localTextModels.loaded}
+            refreshModels={() => void localTextModels.refresh()}
+            manualModel={manualTextModel}
+            setManualModel={setManualTextModel}
+            modelReady={notesModelReady}
             libraryInvalid={library.invalid}
             templates={templates}
             notesBusy={notesBusy}
@@ -939,7 +1125,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             setTemplates={setTemplates}
             connected={connected}
             recording={recording}
-            busy={busy}
+            busy={busy || notesMeetingLoading}
             beginNotes={beginNotes}
             result={result}
             resultSection={resultSection}
@@ -948,8 +1134,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             setEditingNew={setEditingNew}
             moveStep={moveStep}
             updateTemplate={updateTemplate}
-            copied={copied}
-            copy={copy}
+            copied={copied === "notes"}
+            copyResults={copyNotesMarkdown}
             showEvidence={showEvidence}
             locale={locale}
           />
