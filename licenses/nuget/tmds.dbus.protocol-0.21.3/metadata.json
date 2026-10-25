@@ -1,0 +1,7 @@
+{
+  "Package": "tmds.dbus.protocol/0.21.3",
+  "License": "MIT",
+  "Type": "expression",
+  "Copyright": "Tom Deseyn",
+  "URL": "https://licenses.nuget.org/MIT"
+}

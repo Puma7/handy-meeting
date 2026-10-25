@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+ <PropertyGroup><OutputType>WinExe</OutputType><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><TreatWarningsAsErrors>true</TreatWarningsAsErrors><AssemblyName>HandyMeeting</AssemblyName><Version>0.5.0-preview.1</Version><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile><ApplicationManifest>app.manifest</ApplicationManifest></PropertyGroup>
+ <PropertyGroup><RuntimeIdentifiers>linux-x64;osx-arm64;osx-x64;win-x64</RuntimeIdentifiers></PropertyGroup>
+ <ItemGroup><ProjectReference Include="../HandyMeeting.Core/HandyMeeting.Core.csproj"/><PackageReference Include="Avalonia.Desktop" Version="[11.3.22]"/><PackageReference Include="Avalonia.Themes.Fluent" Version="[11.3.22]"/><PackageReference Include="Avalonia.Fonts.Inter" Version="[11.3.22]"/></ItemGroup>
+ <ItemGroup><None Include="../../assets/handymeeting.ico;../../assets/handymeeting.png" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest"/></ItemGroup>
+</Project>

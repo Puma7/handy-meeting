@@ -1,0 +1,26 @@
+name: Bug report
+description: Report a reproducible prototype problem without private meeting data.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not upload recordings, real transcripts, journals, API keys or credentials. Use synthetic reproductions.
+  - type: input
+    id: version
+    attributes: {label: App version, placeholder: "0.4.1 or 0.5.0-preview.1"}
+    validations: {required: true}
+  - type: input
+    id: platform
+    attributes: {label: OS and architecture, placeholder: "Windows 11 x64 / Ubuntu 24.04 x64 / macOS 15 arm64"}
+    validations: {required: true}
+  - type: textarea
+    id: reproduction
+    attributes: {label: Steps and expected result}
+    validations: {required: true}
+  - type: textarea
+    id: actual
+    attributes: {label: Actual result and sanitized diagnostics}
+    validations: {required: true}
+  - type: textarea
+    id: environment
+    attributes: {label: Local model, audio backend and relevant setup}

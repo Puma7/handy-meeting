@@ -1,0 +1,63 @@
+<Window x:Class="HandyMeeting.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="HandyMeeting · Lokales Streaming" Icon="/Assets/handymeeting.ico" Width="1120" Height="940" MinWidth="980" MinHeight="850" WindowStartupLocation="CenterScreen">
+  <Grid Margin="28,22">
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+    <Grid>
+      <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+      <StackPanel><StackPanel Orientation="Horizontal" Margin="0,0,0,2"><Image Source="/Assets/handymeeting.png" Width="36" Height="36" Margin="0,0,10,0"/><TextBlock Text="HandyMeeting" FontSize="28" FontWeight="SemiBold" VerticalAlignment="Center"/></StackPanel><TextBlock Text="Audio sichern. Während des Meetings lokal mitschreiben." Foreground="{DynamicResource Muted}" Margin="0,4,0,8"/><StackPanel Orientation="Horizontal" Margin="0,0,0,12"><ComboBox x:Name="LanguageCombo" Width="130" SelectionChanged="AppearanceChanged"><ComboBoxItem Content="Deutsch"/><ComboBoxItem Content="English"/></ComboBox><ComboBox x:Name="ThemeCombo" Width="130" Margin="8,0,0,0" SelectionChanged="AppearanceChanged"><ComboBoxItem Content="Hell / Light"/><ComboBoxItem Content="Dunkel / Dark"/></ComboBox></StackPanel></StackPanel>
+      <StackPanel Grid.Column="1" HorizontalAlignment="Right"><TextBlock x:Name="TimerText" Text="00:00" FontSize="28" FontWeight="Light" HorizontalAlignment="Right"/><TextBlock x:Name="StateText" Text="Wird eingerichtet …" Foreground="{DynamicResource Muted}" Margin="0,4,0,0"/></StackPanel>
+    </Grid>
+    <Border Grid.Row="1" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="8" Padding="20,16">
+      <Grid x:Name="SetupPanel">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+        <StackPanel>
+          <TextBlock Text="Aufnahme" FontSize="18" FontWeight="SemiBold"/>
+          <TextBlock Text="NAME DES MEETINGS" Style="{StaticResource Label}"/><TextBox x:Name="TitleInput" Text="Mein Meeting" MaxLength="160"/>
+          <TextBlock Text="COMPUTERTON · AUDIOAUSGABE DES MEETINGS" Style="{StaticResource Label}"/>
+          <ComboBox x:Name="OutputCombo" ToolTip="Dieselbe Audioausgabe wählen, die Zoom oder Teams verwendet."/>
+          <ProgressBar x:Name="SystemMeter" Height="5" Maximum="1" Margin="0,7,0,0" Foreground="#247757"/>
+          <CheckBox x:Name="MicCheck" Content="Mein Mikrofon zusätzlich aufnehmen" Margin="0,18,0,8" Checked="MicChoiceChanged" Unchecked="MicChoiceChanged"/>
+          <ComboBox x:Name="MicCombo" IsEnabled="False"/>
+          <ProgressBar x:Name="MicMeter" Height="5" Maximum="1" Margin="0,7,0,0" Foreground="#247757"/>
+        </StackPanel>
+        <StackPanel Grid.Column="2">
+          <TextBlock Text="Lokale Transkription" FontSize="18" FontWeight="SemiBold"/>
+          <TextBlock Text="INSTALLIERTES HANDY" Style="{StaticResource Label}"/>
+          <DockPanel><Button x:Name="BrowseButton" DockPanel.Dock="Right" Content="Auswählen" Click="BrowseHandy" Margin="8,0,0,0"/><TextBox x:Name="HandyPathInput" FontSize="12"/></DockPanel>
+          <TextBlock Text="INSTALLIERTES STREAMING-MODELL" Style="{StaticResource Label}"/>
+          <DockPanel><Button x:Name="ReloadButton" DockPanel.Dock="Right" Content="Prüfen" Click="ReloadModels" Margin="8,0,0,0"/><ComboBox x:Name="ModelCombo" SelectionChanged="ModelChanged"/></DockPanel>
+          <TextBlock Text="Das Modell bleibt geladen. Audio und Live-Text werden parallel lokal gesichert. Ein Streaming-Fehler beendet die Audioaufnahme nicht." Foreground="{DynamicResource Muted}" Margin="0,16,0,0" FontSize="13"/>
+          <Button Content="Audiogeräte aktualisieren" ToolTip="Liest angeschlossene Audioausgaben und Mikrofone erneut ein." Click="RefreshDevices" HorizontalAlignment="Left" Padding="9,5" Margin="0,12,0,0" FontSize="12"/>
+        </StackPanel>
+      </Grid>
+    </Border>
+    <StackPanel Grid.Row="2" Margin="0,16,0,15">
+      <WrapPanel>
+        <Button x:Name="StartButton" Content="Aufnahme starten" Background="#1C6249" Foreground="White" BorderBrush="#1C6249" FontWeight="SemiBold" IsEnabled="False" Click="StartRecording"/>
+        <Button x:Name="StopButton" Content="Meeting beenden" IsEnabled="False" Click="StopRecording"/>
+        <Button x:Name="MuteButton" Content="Mikrofon stummschalten" Visibility="Collapsed" Click="ToggleMicrophone"/>
+        <Button x:Name="CancelButton" Content="Transkription abbrechen" Visibility="Collapsed" Click="CancelTranscription"/>
+      </WrapPanel>
+      <TextBlock x:Name="StatusText" Text="Handy und Audiogeräte werden geprüft …" Margin="0,10,0,0" FontSize="13" Foreground="{DynamicResource Muted}"/>
+      <TextBlock x:Name="SafetyText" Text="Originalaudio bleibt erhalten. Gespeicherte Textstände können aus dem Journal wiederhergestellt werden." Margin="0,5,0,0" FontSize="12" Foreground="{DynamicResource Muted}"/>
+    </StackPanel>
+    <Border Grid.Row="3" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="8" Padding="16,12">
+      <Grid>
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <DockPanel Margin="0,0,0,10"><Button x:Name="CopyTranscriptButton" Content="Transkript kopieren" DockPanel.Dock="Right" Click="CopyTranscript" Padding="10,5" Margin="12,0,0,0" IsEnabled="False"/><TextBlock Text="Live-Transkript" FontSize="18" FontWeight="SemiBold"/><TextBlock x:Name="TranscriptHint" Text="Erscheint während der Aufnahme" Foreground="{DynamicResource Muted}" HorizontalAlignment="Right" FontSize="12" VerticalAlignment="Center"/></DockPanel>
+        <TextBox x:Name="TranscriptBox" Grid.Row="1" IsReadOnly="True" TextWrapping="Wrap" VerticalContentAlignment="Top" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" BorderThickness="0" Padding="0" FontSize="14" Text="Dein Meeting erscheint hier abschnittsweise als Computerton und optional als Mikrofonspur.&#10;&#10;Für deine eigene Stimme aktiviere das Mikrofon. Die Stummschaltung in Teams oder Zoom gilt nicht für diese App. Mit Kopfhörern vermeidest du doppelte Stimmen durch Lautsprecher-Echo."/>
+      </Grid>
+    </Border>
+    <Grid Grid.Row="4" Margin="0,15,0,0">
+      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+      <DockPanel Grid.ColumnSpan="2" Margin="0,0,0,12">
+        <TextBlock Text="Historie" DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,12,0" FontWeight="SemiBold"/>
+        <Button x:Name="HistoryRefreshButton" DockPanel.Dock="Right" Content="Aktualisieren" Click="RefreshHistory" Margin="8,0,0,0"/>
+        <Button x:Name="HistoryOpenButton" DockPanel.Dock="Right" Content="Anzeigen" Click="OpenHistory" Margin="8,0,0,0"/>
+        <ComboBox x:Name="HistoryCombo" SelectionChanged="HistorySelectionChanged"/>
+      </DockPanel>
+      <WrapPanel Grid.Row="1"><Button x:Name="OpenSessionButton" Content="Sitzungsdatei öffnen" Click="OpenSession"/><Button x:Name="RetryButton" Content="Offene Abschnitte nachholen" IsEnabled="False" Click="RetryTranscription"/><Button x:Name="NotesButton" Content="Nachbearbeitung" IsEnabled="False" Click="OpenNotes"/><Button x:Name="FolderButton" Content="Ordner öffnen" IsEnabled="False" Click="OpenFolder"/></WrapPanel>
+      <TextBlock x:Name="VersionText" Grid.Row="1" Grid.Column="1" Foreground="{DynamicResource Muted}" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0"/>
+    </Grid>
+  </Grid>
+</Window>

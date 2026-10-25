@@ -1,0 +1,9 @@
+# GitHub-Vorbereitung
+
+Ein eigenes Repository ist sinnvoll: eigenständige Companion App, gemeinsamer Kern, nachvollziehbare Tests und getrennte Plattformpakete. Vorschlag: **Puma7/handy-meeting**, zunächst privat für Build- und Testerprüfung, danach nach ausdrücklicher Freigabe öffentlich. MIT-Lizenz und eigene Logo-/Icon-Dateien liegen vor. HandyMeeting ist ein unabhängiger Arbeitsname und kein offizielles Handy-Produkt.
+
+Das aktuelle Projekt liegt innerhalb eines übergeordneten Git-Repositorys des Benutzerordners. Dessen Verlauf oder Dateien werden nicht übernommen. `scripts/export-source.ps1` erzeugt deshalb einen frischen, geprüften Quelltext-Export aus einer Positivliste. Ein späterer erster GitHub-Commit darf nur aus diesem Export erstellt werden, niemals durch Pushen des übergeordneten Repositorys.
+
+Ausgeschlossen sind Aufnahmen, Journale, Transkripte, Analyseergebnisse, Schlüssel, Einstellungen, lokale Build-Ausgaben, Modelle und native Binärarchive. Die Skripte und Prüfsummen für den reproduzierbaren Bezug der Bibliotheken sind enthalten. Die `.gitignore` ist eine zusätzliche Absicherung; sie ersetzt die Positivliste nicht. Große Modelldateien werden nicht ins Repository aufgenommen.
+
+Vor einem öffentlichen Release bleiben folgende Punkte offen: reale Mac-/Linux-Hardwareprüfungen, lange Aufnahmen auf den neuen Backends, Mac-Notarisierung, vollständige portable Schlüsselbundanbindung und ein tatsächlich ausgeführter GitHub-Workflow. NuGet-Lizenzmetadaten, mitgelieferte Dritthinweise, Avalonia-MIT und Inter-OFL wurden unter `licenses/` gesammelt; die plattformspezifischen nativen Bibliotheken behalten ihre eigenen Lizenzdateien. Vorbereitete Workflows sind kein CI-Erfolgsnachweis. Lokale Testberichte nennen ihre Grenzen; rohe Nutzeraufnahmen werden niemals als CI-Artefakte veröffentlicht.

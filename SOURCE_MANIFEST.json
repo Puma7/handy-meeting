@@ -1,0 +1,717 @@
+[
+  {
+    "Path": "AGENTS.md",
+    "SHA256": "0FB1EB734D57BABBD41001DBA583EEA01030F3241A24B2D314997701240F0592",
+    "Bytes": 3633
+  },
+  {
+    "Path": "README.md",
+    "SHA256": "7B3E99699DDAC2DB9234DD043AA47D45F2C070F090DEC91B4EC9F38D04788216",
+    "Bytes": 7718
+  },
+  {
+    "Path": "README.de.md",
+    "SHA256": "5884B67E143AACEC7CD3DCDC431DE2FC8F9B9E4C7FAF3A5813629605DBA574A2",
+    "Bytes": 19768
+  },
+  {
+    "Path": "CONTRIBUTING.md",
+    "SHA256": "8FA60DDEAE5AA1CFCACF2B0BA229C784207ED323CD9A320E3B1964BA1C49D662",
+    "Bytes": 1825
+  },
+  {
+    "Path": "SECURITY.md",
+    "SHA256": "C58457D482C15B7BEDB3E12FDE327FEF361523E56EBC1A35389D472CAC2380AA",
+    "Bytes": 1128
+  },
+  {
+    "Path": "CHANGELOG.md",
+    "SHA256": "FFA360556609C1A94D27C11028900F14D59B0FDFDF74182C6FB1815FD8C6243F",
+    "Bytes": 1274
+  },
+  {
+    "Path": "MASTERPLAN.md",
+    "SHA256": "3C2BDBA56DC8A979469E108A208D832EFA3526ED97916F0192659A902FE62DE2",
+    "Bytes": 47824
+  },
+  {
+    "Path": "TEST_REPORT.md",
+    "SHA256": "C33A1BE25E64A58B68EE3780A98BEE805F0D7D82AA858562FDFEE6E8E94DB087",
+    "Bytes": 26671
+  },
+  {
+    "Path": "DAUERTEST.md",
+    "SHA256": "2ADDD34ACF8FA3CDC94DC5FD059BEF9387FC2AA170E70FB423DD241F2EC18854",
+    "Bytes": 6636
+  },
+  {
+    "Path": "PORTABILITY.md",
+    "SHA256": "313C37E92C0187BD458CB37AFAE9B83E3C63A34A6363C93BB5C6E8BDA243B646",
+    "Bytes": 5599
+  },
+  {
+    "Path": "AGENT_API.md",
+    "SHA256": "B258BA2402EFC01B3CF8E893B06E19F68545E61CDC64C1B9D21EB7E0FCFC8BD6",
+    "Bytes": 4177
+  },
+  {
+    "Path": "REPOSITORY_READY.md",
+    "SHA256": "FA5A521CA9C485B97672C889418EF41064C7357C9391CD6A3039CDE5DE153561",
+    "Bytes": 1852
+  },
+  {
+    "Path": "LICENSE",
+    "SHA256": "15EC727D2FCF05B17ECF7F6D9808742557EC1AE1DB375AC110E175182109C696",
+    "Bytes": 1082
+  },
+  {
+    "Path": "THIRD_PARTY_NOTICES.txt",
+    "SHA256": "05BD72D40C91D7F1827AB7A447BB2443E215A9639D8B793282B881B411EF0D89",
+    "Bytes": 2116
+  },
+  {
+    "Path": "System.Numerics.Tensors.LICENSE.txt",
+    "SHA256": "D7A68596AB69B06F51CA278A6545148E4269A9381C26D597C13DF5D88E08CF5B",
+    "Bytes": 1139
+  },
+  {
+    "Path": "System.Numerics.Tensors.NOTICES.txt",
+    "SHA256": "40686C6447A7D5B5D3693068E4571B5F483D7ED335AEEE773EF662440DE4C5D5",
+    "Bytes": 75640
+  },
+  {
+    "Path": ".gitignore",
+    "SHA256": "D14BE6E69993AC2A1F52E672489870BA6512795542F41D9E8E1CAC0F7FBA70FD",
+    "Bytes": 186
+  },
+  {
+    "Path": "global.json",
+    "SHA256": "18EA538C11996502DF5706EE4D9EA54BD078F4FF8DF25FE91D087CB2932CF106",
+    "Bytes": 69
+  },
+  {
+    "Path": "NuGet.config",
+    "SHA256": "9C118019523F0AA9F419734E62BD2EA3AA1DD1F6B32859A7DD2F4ED0FA9E513D",
+    "Bytes": 262
+  },
+  {
+    "Path": "build.ps1",
+    "SHA256": "A0ABB4D8B399D93CC8856504A88EC295555B22F23613F2609523E4E44B3CE7D7",
+    "Bytes": 1240
+  },
+  {
+    "Path": "verify.ps1",
+    "SHA256": "F948AD06F75D4E164C14504AABCBD1B09894CF547D1F7F53F3409D05BBB07605",
+    "Bytes": 2261
+  },
+  {
+    "Path": "setup-native.ps1",
+    "SHA256": "CAC14497A2E93A58EB991E658B75312FDB86D7511A9285477BE0859BCF900EDE",
+    "Bytes": 1392
+  },
+  {
+    "Path": "HandyMeeting starten.cmd",
+    "SHA256": "88C89B780E6B151D4EB63802C1F074378696AE8D9E14AE9301094B4F08438076",
+    "Bytes": 175
+  },
+  {
+    "Path": "src/HandyMeeting/AgentProtocol.cs",
+    "SHA256": "4A6C96BAD96E4079A2633623DDC7B927245E16581093C4056763F9555E5221DB",
+    "Bytes": 9292
+  },
+  {
+    "Path": "src/HandyMeeting/AgentVerification.cs",
+    "SHA256": "B445434FAD2606D780EC7143406E442C643B70A41C86D2148A952037F6F35390",
+    "Bytes": 4769
+  },
+  {
+    "Path": "src/HandyMeeting/App.xaml",
+    "SHA256": "3995988762B09BABB6C605F944F4D013CB47E0F276DC532FFBF9FBC6A831FA0C",
+    "Bytes": 7877
+  },
+  {
+    "Path": "src/HandyMeeting/App.xaml.cs",
+    "SHA256": "0579B29B8B55FCCB826C37A0D57934CB5958CFD578BCEB971E1AE387116FFECE",
+    "Bytes": 1363
+  },
+  {
+    "Path": "src/HandyMeeting/AppStorage.cs",
+    "SHA256": "E949AD5DC36D48D7529E0215B3DA9D425CAA0BA9473BE741272085E8D9D5A04D",
+    "Bytes": 627
+  },
+  {
+    "Path": "src/HandyMeeting/Capture.cs",
+    "SHA256": "D16945F9611BD3F66F92D9FDFC2B06A8BF8390D845E3E32CD8EC2DB079FBF34C",
+    "Bytes": 10797
+  },
+  {
+    "Path": "src/HandyMeeting/HandyClient.cs",
+    "SHA256": "8C8B2CCF8BD0708DB9A8030B8E7EF9959EAFB2F2CA6F7B9E7C977569EE0EB908",
+    "Bytes": 9354
+  },
+  {
+    "Path": "src/HandyMeeting/HandyMeeting.csproj",
+    "SHA256": "7B4FD2E09C1B8609E2BEB402B2A4863E23AC9ED88F263891DB870B66F7E1B407",
+    "Bytes": 1439
+  },
+  {
+    "Path": "src/HandyMeeting/MainWindow.xaml",
+    "SHA256": "74634FF987E1D329B377C62F337441C7B7064524ECC5130CF7B43EE2097806E9",
+    "Bytes": 8043
+  },
+  {
+    "Path": "src/HandyMeeting/MainWindow.xaml.cs",
+    "SHA256": "EEDC5E662E1191605459AFF3CB31A55612A4A74A04EB77CE480132E849BEBCF7",
+    "Bytes": 18866
+  },
+  {
+    "Path": "src/HandyMeeting/MeetingNotesService.cs",
+    "SHA256": "0C910B47504D9CF2721421F9D77553F47371B9EAE19BFBCFB08EC4F69F26CA3A",
+    "Bytes": 16268
+  },
+  {
+    "Path": "src/HandyMeeting/MemoryVerification.cs",
+    "SHA256": "3FA32D62772E57F1F1589BAC1471FDAAC14FBDBDE3A426DFE03F629DDB3FA520",
+    "Bytes": 6837
+  },
+  {
+    "Path": "src/HandyMeeting/ModelPaths.cs",
+    "SHA256": "56A6A0C5C0C10C876524CFE80E06733CC0C6CFDDF682E916F32777E98446DE15",
+    "Bytes": 2908
+  },
+  {
+    "Path": "src/HandyMeeting/Models.cs",
+    "SHA256": "FC7FBDFDAAFF6ED267A007C30168BE06F52E88A4481593636EFCBC7F49C9B057",
+    "Bytes": 10189
+  },
+  {
+    "Path": "src/HandyMeeting/NativeStreaming.cs",
+    "SHA256": "F63676363956E49ABDBC38F9E5ECD7DF0236380EC439BF02C933FC88DB9CA70B",
+    "Bytes": 17463
+  },
+  {
+    "Path": "src/HandyMeeting/NotesModels.cs",
+    "SHA256": "3FA1202BDCDED2C77EC2B7065F2D6456A58156FAB8615EC0CDFFBAB50FE2E498",
+    "Bytes": 10982
+  },
+  {
+    "Path": "src/HandyMeeting/NotesTemplates.cs",
+    "SHA256": "746616DF9E147E027CE46E39DDCB999ADFA3419445E084415D6B2537CFC45036",
+    "Bytes": 5248
+  },
+  {
+    "Path": "src/HandyMeeting/NotesVerification.cs",
+    "SHA256": "B876D9FECC1CC56472F0F5A61CFCE377FEEA5D5CE778B108AA3B69757BD84183",
+    "Bytes": 23334
+  },
+  {
+    "Path": "src/HandyMeeting/NotesWindow.xaml",
+    "SHA256": "7BC02FDCCCB2DA61B0E6F06B1FCE0ED9867DE1B220562C59C0F855138D2B9B84",
+    "Bytes": 9431
+  },
+  {
+    "Path": "src/HandyMeeting/NotesWindow.xaml.cs",
+    "SHA256": "FC40E7B172CA33487E5BC1C5EBE4F20E83427AA9337E8F7B9014D3897BC8F181",
+    "Bytes": 20342
+  },
+  {
+    "Path": "src/HandyMeeting/packages.lock.json",
+    "SHA256": "3AFB1AAD0DF364261EFA65334F41AC6F23A6F64735B07F1F53EC48128D499AB7",
+    "Bytes": 920
+  },
+  {
+    "Path": "src/HandyMeeting/PcmTimeline.cs",
+    "SHA256": "E0F7FEF3342EAB51AB7AFF778987F72F6A4196D853DE0971919B7639E0512C0A",
+    "Bytes": 6250
+  },
+  {
+    "Path": "src/HandyMeeting/RealtimeSoakTest.cs",
+    "SHA256": "A509D8F28E651449FF84328DA0FE4951232BEBCB3C37275B6C412D87A7A1720C",
+    "Bytes": 34549
+  },
+  {
+    "Path": "src/HandyMeeting/SessionJournal.cs",
+    "SHA256": "74EC5997E0081A38B13CACF3AE8C066B75FABD5B45AD1EE1EBDC5BC1A2D64283",
+    "Bytes": 9391
+  },
+  {
+    "Path": "src/HandyMeeting/StreamingCoordinator.cs",
+    "SHA256": "E8C6BE94035B7BAFD615A26509EBCD409EDCA853A374D89D27519FFB43628633",
+    "Bytes": 8437
+  },
+  {
+    "Path": "src/HandyMeeting/StreamingVerification.cs",
+    "SHA256": "90001B767953A5CEB8127748429CF81599768E643B89E5F631796EFE661DFA86",
+    "Bytes": 16589
+  },
+  {
+    "Path": "src/HandyMeeting/TemplateEditor.cs",
+    "SHA256": "592B180CF8448F9E37A3C46A3BEE817F696B335FFEE721DD5F2A11051DFCFCD0",
+    "Bytes": 4513
+  },
+  {
+    "Path": "src/HandyMeeting/TemplateNotesService.cs",
+    "SHA256": "47CA9C946A6406886A760BAF09213E2EE77F01253128BA31FC09803BC5BD08BF",
+    "Bytes": 9517
+  },
+  {
+    "Path": "src/HandyMeeting/TemplateVerification.cs",
+    "SHA256": "EAD9815B2C11EEFEBBEDCC24FCFC9995404458D264E3D055A9A4878F97C92461",
+    "Bytes": 21067
+  },
+  {
+    "Path": "src/HandyMeeting/TextModelClient.cs",
+    "SHA256": "75D5FF1E8AA932AED05D4E1CD4EF322D589F59DD7AC3848AF0E7AB583C5B7033",
+    "Bytes": 11869
+  },
+  {
+    "Path": "src/HandyMeeting/Ui.cs",
+    "SHA256": "E9132F2239A0882B863518303C611CC2CCC7AA224F870574E12B1CB9DFA133A9",
+    "Bytes": 30176
+  },
+  {
+    "Path": "src/HandyMeeting/Verification.cs",
+    "SHA256": "E6FFAC22B7961478190D47E27C2F4918DCB95185FFD6EDB24173B9413C76D943",
+    "Bytes": 14981
+  },
+  {
+    "Path": "src/HandyMeeting.Core/HandyMeeting.Core.csproj",
+    "SHA256": "B839A606DFDA251C41A9478832FDA02FFF8F9D94D45A94B25BD724D9C3D06B04",
+    "Bytes": 1103
+  },
+  {
+    "Path": "src/HandyMeeting.Core/MeetingWorkspace.cs",
+    "SHA256": "C9D0B37D675F36E1FE34ECB96FB330F38C4F46FA93E241DBF22EED11F24C7CA9",
+    "Bytes": 2981
+  },
+  {
+    "Path": "src/HandyMeeting.Core/packages.lock.json",
+    "SHA256": "5F17FEE3711AD43620B89D33857BF49AFC448870936EBC29AEF00F47DAE3187B",
+    "Bytes": 182
+  },
+  {
+    "Path": "src/HandyMeeting.Core/PortableCapture.cs",
+    "SHA256": "89C4E37E50FB39299818C4CA4BD1988358897F37F30849B289FE4B350128CCC0",
+    "Bytes": 7680
+  },
+  {
+    "Path": "src/HandyMeeting.Core/PortableCaptureChecks.cs",
+    "SHA256": "E0AE233B450147B5914156FD8C64B4415BA348F706095F4E97694699156C3DAD",
+    "Bytes": 4922
+  },
+  {
+    "Path": "src/HandyMeeting.Core/PortableChecks.cs",
+    "SHA256": "D5312D9C5746756A2042B5539F7CCE6AAA737044AEF7E339C443B6C7BE67BDDE",
+    "Bytes": 7770
+  },
+  {
+    "Path": "src/HandyMeeting.Core/PortableText.cs",
+    "SHA256": "0EC5022FA2B41CE973572AEA06F99ED73F6D2A6B6946D2E418CCF0DD9DDBD0D8",
+    "Bytes": 910
+  },
+  {
+    "Path": "src/HandyMeeting.Core/StreamingWorkerEntry.cs",
+    "SHA256": "946D87AEE6E5AE40F20B63EBA3B1FD24E641E5FA671E50C982CF6D5E374DAAAC",
+    "Bytes": 121
+  },
+  {
+    "Path": "src/HandyMeeting.Portable/app.manifest",
+    "SHA256": "B0DA9B9D4C0E117624C31A3ADAADFAD9BB5D2CF4F1DB72FC66570F5BACCD2127",
+    "Bytes": 378
+  },
+  {
+    "Path": "src/HandyMeeting.Portable/HandyMeeting.Portable.csproj",
+    "SHA256": "57F06C0689CF152FC110209FE7884E48CEEACCCBA4F91D46C2DD4B137B3EA0F0",
+    "Bytes": 1090
+  },
+  {
+    "Path": "src/HandyMeeting.Portable/packages.lock.json",
+    "SHA256": "3EDD57A17F4C51D7806123B985445733760D210245CCBE8957DC13A536B61632",
+    "Bytes": 15467
+  },
+  {
+    "Path": "src/HandyMeeting.Portable/PortableNotesWindow.cs",
+    "SHA256": "57A3683838E5FE0DD82498F91223F5FE570CCEA4EA3A5BE5135FA728C7D4899E",
+    "Bytes": 12498
+  },
+  {
+    "Path": "src/HandyMeeting.Portable/PortableWindow.cs",
+    "SHA256": "9B7D6F2844330E36F64A9970A879724116EBEEC336B6795D7B678E78AA9B5852",
+    "Bytes": 8594
+  },
+  {
+    "Path": "src/HandyMeeting.Portable/Program.cs",
+    "SHA256": "CF219CE899411462788ECD79D8A2A4681A8AD520D243ADBCBB81868695B8A677",
+    "Bytes": 2006
+  },
+  {
+    "Path": "src/HandyMeeting.UiChecks/HandyMeeting.UiChecks.csproj",
+    "SHA256": "0A809638E99EC8A6FC1EEE6803328034092FA6A66409CC14CE7115DCC48A70B9",
+    "Bytes": 498
+  },
+  {
+    "Path": "src/HandyMeeting.UiChecks/packages.lock.json",
+    "SHA256": "2A71BB87BE5A8C44AEA6CF4830563F73EA19E240BE331632A2966526801E82BE",
+    "Bytes": 7915
+  },
+  {
+    "Path": "src/HandyMeeting.UiChecks/Program.cs",
+    "SHA256": "C542EFD2765F2DD4342E5CF69966C0853318524BDCFCD370243CEF18309BF8E1",
+    "Bytes": 978
+  },
+  {
+    "Path": "scripts/build-portable.ps1",
+    "SHA256": "AB5656495B2699A6DE6D7586F1C723D7CCA37866A516EE69E189EAB0C57A665C",
+    "Bytes": 1234
+  },
+  {
+    "Path": "scripts/export-source.ps1",
+    "SHA256": "FBEA60C889A63A41288E36A6454EE85F8F1376B5167F2BC07AE2728B6CEF9DD6",
+    "Bytes": 3032
+  },
+  {
+    "Path": "scripts/native-assets.json",
+    "SHA256": "1F1BFCEE2C2C5D2347638894472C54B75ECD65311908F4DC30352F973AA92B64",
+    "Bytes": 474
+  },
+  {
+    "Path": "scripts/native-runtime.py",
+    "SHA256": "F6C14E4101D3ECBFFB73C3F3FC9152B48247098C7E42C86DACBF198C110DB208",
+    "Bytes": 2065
+  },
+  {
+    "Path": "scripts/package-linux.sh",
+    "SHA256": "EA56E483645D81B515F6D397784D30D8A4501CDDD9026FD90C48F4E4D1F0E09F",
+    "Bytes": 2127
+  },
+  {
+    "Path": "scripts/package-macos.sh",
+    "SHA256": "6F081E03215C9C98AFFCF0A3945211EEFA31F4F5C681A085F12A057AD58DF9FD",
+    "Bytes": 3020
+  },
+  {
+    "Path": "scripts/prepare-native.ps1",
+    "SHA256": "3C3289DD24DF8783AFC6F9C45A991CF5C9A6C4091A31DD0ADBA159EA104D21B1",
+    "Bytes": 1254
+  },
+  {
+    "Path": "platform/macos/HandyMeetingCapture.swift",
+    "SHA256": "7189F47E5521A20697369290E6811E2EB8623002A567B0BDD6E59737325114E1",
+    "Bytes": 6771
+  },
+  {
+    "Path": "assets/favicon.ico",
+    "SHA256": "A919F675413C9EF2FDFD8EA268F028E51F5A261ED4C201F94DA27DA2125C5ABD",
+    "Bytes": 4910
+  },
+  {
+    "Path": "assets/handymeeting.ico",
+    "SHA256": "A919F675413C9EF2FDFD8EA268F028E51F5A261ED4C201F94DA27DA2125C5ABD",
+    "Bytes": 4910
+  },
+  {
+    "Path": "assets/handymeeting.png",
+    "SHA256": "57BE8D4186D33B3EB2A038B7A364EF943D31393D7D6C4FFCCB458A8B4B55DFA0",
+    "Bytes": 4888
+  },
+  {
+    "Path": "assets/handymeeting.svg",
+    "SHA256": "BECFE0ED6E19B519451C71D3A50E9374C53115EBCD116528DFB14212625B7C2F",
+    "Bytes": 443
+  },
+  {
+    "Path": ".github/CODEOWNERS",
+    "SHA256": "B0E1B4877FE0C0E739844CFBC22CF2C8017AB695356648FD3CCDD4A53E0CD953",
+    "Bytes": 9
+  },
+  {
+    "Path": ".github/pull_request_template.md",
+    "SHA256": "16E9E5183122D7F86C424E197E9E9FA3C0B907FE10AFC5D242C3D1BF4464E0FD",
+    "Bytes": 439
+  },
+  {
+    "Path": ".github/ISSUE_TEMPLATE/bug_report.yml",
+    "SHA256": "F1B6B22DA5ADD7ADD0EE51199E4B882B2CB024941C6756B8F2FD4EAF67FA158D",
+    "Bytes": 967
+  },
+  {
+    "Path": ".github/ISSUE_TEMPLATE/config.yml",
+    "SHA256": "13064E7BEA658E01E718B414FBB7B3B244F36411FE25EE2055C151F7B534547A",
+    "Bytes": 27
+  },
+  {
+    "Path": ".github/ISSUE_TEMPLATE/feature_request.yml",
+    "SHA256": "9AFD4DB04633C9D8B4E9C8BFAA466C0FC246C39D1135D150C63815035B1F6570",
+    "Bytes": 487
+  },
+  {
+    "Path": ".github/workflows/portable.yml",
+    "SHA256": "DD25CDB05C1F27CFE7A065DB3D0CD380F89E2226238CD6141839F23754EEEB33",
+    "Bytes": 1923
+  },
+  {
+    "Path": ".github/workflows/windows.yml",
+    "SHA256": "BE09A4E1CC66D9C39A198F5DCEF3CFF971ED2F2DC690EA2169B62CA56BD971B1",
+    "Bytes": 1023
+  },
+  {
+    "Path": "licenses/Avalonia-MIT.txt",
+    "SHA256": "213814D306090074D234D760239FF0F67EB9B8D20EEFB4D5631BB39DBE0B769B",
+    "Bytes": 1096
+  },
+  {
+    "Path": "licenses/Inter-OFL.txt",
+    "SHA256": "262481E844521B326F5ECD053E59B98C8B2DA78C8EE1BDBB6E8174305E54935A",
+    "Bytes": 4380
+  },
+  {
+    "Path": "licenses/nuget-packages.json",
+    "SHA256": "8B7909E21AC74134FB8BB7FD29F8DE5CB4977EFA0CE82E2631F9AB06DADE7959",
+    "Bytes": 5912
+  },
+  {
+    "Path": "licenses/nuget/avalonia-11.3.22/metadata.json",
+    "SHA256": "25990EEE30A4A73858EDC31CCB42AE8EC300446419EE865C52D7B2D16F5FEB3E",
+    "Bytes": 194
+  },
+  {
+    "Path": "licenses/nuget/avalonia.angle.windows.natives-2.1.25547.20250602/LICENSE",
+    "SHA256": "54AFF7276217DF9F6B5181613999D208C9E40D2B1D51BF55217837E6871A4A63",
+    "Bytes": 1675
+  },
+  {
+    "Path": "licenses/nuget/avalonia.angle.windows.natives-2.1.25547.20250602/metadata.json",
+    "SHA256": "BE25A85ECDBB0A792940880E4D9C44BC48FE7CBA47E93DC21488AAFE4C54B785",
+    "Bytes": 229
+  },
+  {
+    "Path": "licenses/nuget/avalonia.buildservices-11.3.2/metadata.json",
+    "SHA256": "A354114EFC08DCAED4E376A48B10D81E98BAE4A1B4AF776446321A811D3278E4",
+    "Bytes": 207
+  },
+  {
+    "Path": "licenses/nuget/avalonia.desktop-11.3.22/metadata.json",
+    "SHA256": "4B65F087F7961F3B686A02BD2486796E3B8B05986133721FECFC0E093D56BCAF",
+    "Bytes": 202
+  },
+  {
+    "Path": "licenses/nuget/avalonia.fonts.inter-11.3.22/metadata.json",
+    "SHA256": "08768CDDFA46566A69CFD11B7AD1C2B9707F81196D754C5939A0274FC808CEE3",
+    "Bytes": 206
+  },
+  {
+    "Path": "licenses/nuget/avalonia.freedesktop-11.3.22/metadata.json",
+    "SHA256": "C040642E309DEA4AD9B632B419941CC5B3617C901939DBA1ABA105C034CBF357",
+    "Bytes": 206
+  },
+  {
+    "Path": "licenses/nuget/avalonia.native-11.3.22/metadata.json",
+    "SHA256": "1C12B671113349B23187AA4C45D8F121F7C3E6FDB886A3D2AAFA08F4AC6CDE48",
+    "Bytes": 201
+  },
+  {
+    "Path": "licenses/nuget/avalonia.remote.protocol-11.3.22/metadata.json",
+    "SHA256": "7B6355B691531FBD74E12694943899129A9093F6396A10FA6E5E8994D523F827",
+    "Bytes": 210
+  },
+  {
+    "Path": "licenses/nuget/avalonia.skia-11.3.22/metadata.json",
+    "SHA256": "DBB51D2FCBC43E0D178D2AB36AE61AFA9E08A681D3BC86DAEBA7E9512DBE99C5",
+    "Bytes": 199
+  },
+  {
+    "Path": "licenses/nuget/avalonia.themes.fluent-11.3.22/metadata.json",
+    "SHA256": "747B9DDD4C4C101FB65C1FF92CD6C8F6A3B6D61B0A6D740591F150C202F4C8D3",
+    "Bytes": 208
+  },
+  {
+    "Path": "licenses/nuget/avalonia.win32-11.3.22/metadata.json",
+    "SHA256": "AACCE49097749706EB9D7DCA82CFCDCC8271B5759EBDDFECCFC318902AA5511B",
+    "Bytes": 200
+  },
+  {
+    "Path": "licenses/nuget/avalonia.x11-11.3.22/metadata.json",
+    "SHA256": "207BAD70D90527B3F6E2CC04DF820ACB6F856FD95313B40AEF0E1EA9B4BE1266",
+    "Bytes": 198
+  },
+  {
+    "Path": "licenses/nuget/harfbuzzsharp-8.3.1.1/LICENSE.txt",
+    "SHA256": "89101E35A8C66FD4D6DFFC1763259161D35CB564C169714EC227A768C89F2938",
+    "Bytes": 1129
+  },
+  {
+    "Path": "licenses/nuget/harfbuzzsharp-8.3.1.1/metadata.json",
+    "SHA256": "9EB35E3CBBFAE5EF6F4740551B2547C9D555ADD4A9CAD3B5E566CE4338014071",
+    "Bytes": 200
+  },
+  {
+    "Path": "licenses/nuget/harfbuzzsharp.nativeassets.linux-8.3.1.1/LICENSE.txt",
+    "SHA256": "89101E35A8C66FD4D6DFFC1763259161D35CB564C169714EC227A768C89F2938",
+    "Bytes": 1129
+  },
+  {
+    "Path": "licenses/nuget/harfbuzzsharp.nativeassets.linux-8.3.1.1/metadata.json",
+    "SHA256": "14EFD4EA85F6424AA137FE685FB15CCE1BCCEDD9530D412F26F1EB95C0786CB7",
+    "Bytes": 219
+  },
+  {
+    "Path": "licenses/nuget/harfbuzzsharp.nativeassets.linux-8.3.1.1/THIRD-PARTY-NOTICES.txt",
+    "SHA256": "21504C46C4C58AA64C1055BD2DCBC5F9A136B4B8C412ED3CC6740E22C5B127F5",
+    "Bytes": 139775
+  },
+  {
+    "Path": "licenses/nuget/harfbuzzsharp.nativeassets.macos-8.3.1.1/LICENSE.txt",
+    "SHA256": "89101E35A8C66FD4D6DFFC1763259161D35CB564C169714EC227A768C89F2938",
+    "Bytes": 1129
+  },
+  {
+    "Path": "licenses/nuget/harfbuzzsharp.nativeassets.macos-8.3.1.1/metadata.json",
+    "SHA256": "3CDD780013585A77CA068EA288F1A03D5B87D00DA2301A24F566EEDBCFA74C74",
+    "Bytes": 219
+  },
+  {
+    "Path": "licenses/nuget/harfbuzzsharp.nativeassets.macos-8.3.1.1/THIRD-PARTY-NOTICES.txt",
+    "SHA256": "21504C46C4C58AA64C1055BD2DCBC5F9A136B4B8C412ED3CC6740E22C5B127F5",
+    "Bytes": 139775
+  },
+  {
+    "Path": "licenses/nuget/harfbuzzsharp.nativeassets.webassembly-8.3.1.1/LICENSE.txt",
+    "SHA256": "89101E35A8C66FD4D6DFFC1763259161D35CB564C169714EC227A768C89F2938",
+    "Bytes": 1129
+  },
+  {
+    "Path": "licenses/nuget/harfbuzzsharp.nativeassets.webassembly-8.3.1.1/metadata.json",
+    "SHA256": "F67CECAE7AD6ED11452EF4EA030063F92F6E5D964BE15499D3FD97AB990E2E98",
+    "Bytes": 225
+  },
+  {
+    "Path": "licenses/nuget/harfbuzzsharp.nativeassets.webassembly-8.3.1.1/THIRD-PARTY-NOTICES.txt",
+    "SHA256": "21504C46C4C58AA64C1055BD2DCBC5F9A136B4B8C412ED3CC6740E22C5B127F5",
+    "Bytes": 139775
+  },
+  {
+    "Path": "licenses/nuget/harfbuzzsharp.nativeassets.win32-8.3.1.1/LICENSE.txt",
+    "SHA256": "89101E35A8C66FD4D6DFFC1763259161D35CB564C169714EC227A768C89F2938",
+    "Bytes": 1129
+  },
+  {
+    "Path": "licenses/nuget/harfbuzzsharp.nativeassets.win32-8.3.1.1/metadata.json",
+    "SHA256": "8B87014FAE18E3AC9E5C29184C831DFCCA10ABED93102F4632D74E9B84114AC1",
+    "Bytes": 219
+  },
+  {
+    "Path": "licenses/nuget/harfbuzzsharp.nativeassets.win32-8.3.1.1/THIRD-PARTY-NOTICES.txt",
+    "SHA256": "21504C46C4C58AA64C1055BD2DCBC5F9A136B4B8C412ED3CC6740E22C5B127F5",
+    "Bytes": 139775
+  },
+  {
+    "Path": "licenses/nuget/microcom.runtime-0.11.0/metadata.json",
+    "SHA256": "7321A71666CD5351DE7FD9DDEC8E93AF1F823C5552546BA2DCAC7772BC930C2A",
+    "Bytes": 189
+  },
+  {
+    "Path": "licenses/nuget/naudio.core-3.3.0/metadata.json",
+    "SHA256": "D7CCB85E318DEE542D16409F2911051EBE08F9793310BD991246ED3F14B3AB81",
+    "Bytes": 168
+  },
+  {
+    "Path": "licenses/nuget/naudio.wasapi-3.3.0/metadata.json",
+    "SHA256": "5E63BBDE747ABA84B3BAAE28DE804957A10EADF3D9F9B73A4680C946437A8966",
+    "Bytes": 170
+  },
+  {
+    "Path": "licenses/nuget/skiasharp-2.88.9/LICENSE.txt",
+    "SHA256": "89101E35A8C66FD4D6DFFC1763259161D35CB564C169714EC227A768C89F2938",
+    "Bytes": 1129
+  },
+  {
+    "Path": "licenses/nuget/skiasharp-2.88.9/metadata.json",
+    "SHA256": "F9AA346439810EDEDC2E89BFD4035F16034E75C2FF26E6AAE6B9B1F562FBF47D",
+    "Bytes": 195
+  },
+  {
+    "Path": "licenses/nuget/skiasharp-2.88.9/THIRD-PARTY-NOTICES.txt",
+    "SHA256": "21504C46C4C58AA64C1055BD2DCBC5F9A136B4B8C412ED3CC6740E22C5B127F5",
+    "Bytes": 139775
+  },
+  {
+    "Path": "licenses/nuget/skiasharp.nativeassets.linux-2.88.9/LICENSE.txt",
+    "SHA256": "89101E35A8C66FD4D6DFFC1763259161D35CB564C169714EC227A768C89F2938",
+    "Bytes": 1129
+  },
+  {
+    "Path": "licenses/nuget/skiasharp.nativeassets.linux-2.88.9/metadata.json",
+    "SHA256": "C4088440E86E35C86F0E08378D8A6F375F94F6C6C698140A9FB36E5F628378DA",
+    "Bytes": 214
+  },
+  {
+    "Path": "licenses/nuget/skiasharp.nativeassets.linux-2.88.9/THIRD-PARTY-NOTICES.txt",
+    "SHA256": "21504C46C4C58AA64C1055BD2DCBC5F9A136B4B8C412ED3CC6740E22C5B127F5",
+    "Bytes": 139775
+  },
+  {
+    "Path": "licenses/nuget/skiasharp.nativeassets.macos-2.88.9/LICENSE.txt",
+    "SHA256": "89101E35A8C66FD4D6DFFC1763259161D35CB564C169714EC227A768C89F2938",
+    "Bytes": 1129
+  },
+  {
+    "Path": "licenses/nuget/skiasharp.nativeassets.macos-2.88.9/metadata.json",
+    "SHA256": "E1A9D9ED7F9926D7BDE5C6CFDFFB85E5DFEA4FDBBABC53C4B850B528AFC4C8D7",
+    "Bytes": 214
+  },
+  {
+    "Path": "licenses/nuget/skiasharp.nativeassets.macos-2.88.9/THIRD-PARTY-NOTICES.txt",
+    "SHA256": "21504C46C4C58AA64C1055BD2DCBC5F9A136B4B8C412ED3CC6740E22C5B127F5",
+    "Bytes": 139775
+  },
+  {
+    "Path": "licenses/nuget/skiasharp.nativeassets.webassembly-2.88.9/LICENSE.txt",
+    "SHA256": "89101E35A8C66FD4D6DFFC1763259161D35CB564C169714EC227A768C89F2938",
+    "Bytes": 1129
+  },
+  {
+    "Path": "licenses/nuget/skiasharp.nativeassets.webassembly-2.88.9/metadata.json",
+    "SHA256": "4AF46C50895DD3A49E86A5E24CBF48C34DFC1B00F39907665CF07F9AF04E483D",
+    "Bytes": 220
+  },
+  {
+    "Path": "licenses/nuget/skiasharp.nativeassets.webassembly-2.88.9/THIRD-PARTY-NOTICES.txt",
+    "SHA256": "21504C46C4C58AA64C1055BD2DCBC5F9A136B4B8C412ED3CC6740E22C5B127F5",
+    "Bytes": 139775
+  },
+  {
+    "Path": "licenses/nuget/skiasharp.nativeassets.win32-2.88.9/LICENSE.txt",
+    "SHA256": "89101E35A8C66FD4D6DFFC1763259161D35CB564C169714EC227A768C89F2938",
+    "Bytes": 1129
+  },
+  {
+    "Path": "licenses/nuget/skiasharp.nativeassets.win32-2.88.9/metadata.json",
+    "SHA256": "585692BC75F021D113C2F4D8024BCC32337A95FBA5EAA13AC6A5C7C7C2B85901",
+    "Bytes": 214
+  },
+  {
+    "Path": "licenses/nuget/skiasharp.nativeassets.win32-2.88.9/THIRD-PARTY-NOTICES.txt",
+    "SHA256": "21504C46C4C58AA64C1055BD2DCBC5F9A136B4B8C412ED3CC6740E22C5B127F5",
+    "Bytes": 139775
+  },
+  {
+    "Path": "licenses/nuget/system.numerics.tensors-9.0.0/LICENSE.TXT",
+    "SHA256": "D7A68596AB69B06F51CA278A6545148E4269A9381C26D597C13DF5D88E08CF5B",
+    "Bytes": 1139
+  },
+  {
+    "Path": "licenses/nuget/system.numerics.tensors-9.0.0/metadata.json",
+    "SHA256": "84D730DE3398DAD337817153B6A850B7C2946CCA91864511179A846C7953CDC4",
+    "Bytes": 208
+  },
+  {
+    "Path": "licenses/nuget/system.numerics.tensors-9.0.0/THIRD-PARTY-NOTICES.TXT",
+    "SHA256": "40686C6447A7D5B5D3693068E4571B5F483D7ED335AEEE773EF662440DE4C5D5",
+    "Bytes": 75640
+  },
+  {
+    "Path": "licenses/nuget/tmds.dbus.protocol-0.21.3/metadata.json",
+    "SHA256": "4CEBD8E3DABF847FFACE498AACB0567A804806FB0FAE7C82BC37CD9A2FDFB981",
+    "Bytes": 168
+  }
+]

@@ -1,0 +1,55 @@
+name: Portable preview packages
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  mac:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+        with:
+          global-json-file: global.json
+      - name: Build native capture helper and preview DMG
+        run: bash scripts/package-macos.sh '${{ matrix.arch }}'
+      - name: Synthetic persistence and agent checks on this architecture
+        run: |
+          app='.build/mac-osx-${{ matrix.arch }}/HandyMeeting.app/Contents/MacOS/HandyMeeting'
+          "$app" --portable-checks '.build/mac-checks-${{ matrix.arch }}'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mac-preview-${{ matrix.arch }}
+          path: |
+            packages/*.dmg*
+            .build/mac-checks-*/**
+          include-hidden-files: true
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+        with:
+          global-json-file: global.json
+      - shell: pwsh
+        run: ./scripts/build-portable.ps1 -Runtime linux-x64
+      - run: |
+          .build/portable/linux-x64/HandyMeeting --portable-checks .build/linux-checks
+          bash scripts/package-linux.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: linux-preview
+          path: |
+            packages/*.deb*
+            .build/linux-checks/**
+          include-hidden-files: true

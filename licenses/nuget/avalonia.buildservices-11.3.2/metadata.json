@@ -1,0 +1,7 @@
+{
+  "Package": "avalonia.buildservices/11.3.2",
+  "License": "MIT",
+  "Type": "expression",
+  "Copyright": "Copyright 2023-2025 © The AvaloniaUI Project",
+  "URL": "https://licenses.nuget.org/MIT"
+}

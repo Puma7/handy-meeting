@@ -1,0 +1,7 @@
+{
+  "Package": "system.numerics.tensors/9.0.0",
+  "License": "MIT",
+  "Type": "expression",
+  "Copyright": "© Microsoft Corporation. All rights reserved.",
+  "URL": "https://licenses.nuget.org/MIT"
+}

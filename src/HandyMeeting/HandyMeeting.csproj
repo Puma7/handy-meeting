@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>HandyMeeting</AssemblyName>
+    <Version>0.4.1</Version>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <ApplicationIcon>../../assets/handymeeting.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup><PackageReference Include="NAudio.Wasapi" Version="[3.3.0]" /></ItemGroup>
+  <ItemGroup>
+    <Resource Include="../../assets/handymeeting.png" Link="Assets/handymeeting.png"/><Resource Include="../../assets/handymeeting.ico" Link="Assets/handymeeting.ico"/>
+    <None Include="..\..\native\transcribe-0.4.1\**\*" Link="native\%(RecursiveDir)%(Filename)%(Extension)" CopyToPublishDirectory="PreserveNewest" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\THIRD_PARTY_NOTICES.txt" Link="THIRD_PARTY_NOTICES.txt" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="..\..\System.Numerics.Tensors.LICENSE.txt" Link="System.Numerics.Tensors.LICENSE.txt" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="..\..\System.Numerics.Tensors.NOTICES.txt" Link="System.Numerics.Tensors.NOTICES.txt" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,191 @@
+[
+  {
+    "Package": "avalonia.angle.windows.natives/2.1.25547.20250602",
+    "License": "LICENSE",
+    "Type": "file",
+    "Copyright": "Copyright 2013-2025 © The AvaloniaUI Project",
+    "URL": "https://aka.ms/deprecateLicenseUrl"
+  },
+  {
+    "Package": "avalonia.buildservices/11.3.2",
+    "License": "MIT",
+    "Type": "expression",
+    "Copyright": "Copyright 2023-2025 © The AvaloniaUI Project",
+    "URL": "https://licenses.nuget.org/MIT"
+  },
+  {
+    "Package": "avalonia.desktop/11.3.22",
+    "License": "MIT",
+    "Type": "expression",
+    "Copyright": "Copyright 2013-2026 © The AvaloniaUI Project",
+    "URL": "https://licenses.nuget.org/MIT"
+  },
+  {
+    "Package": "avalonia.fonts.inter/11.3.22",
+    "License": "MIT",
+    "Type": "expression",
+    "Copyright": "Copyright 2013-2026 © The AvaloniaUI Project",
+    "URL": "https://licenses.nuget.org/MIT"
+  },
+  {
+    "Package": "avalonia.freedesktop/11.3.22",
+    "License": "MIT",
+    "Type": "expression",
+    "Copyright": "Copyright 2013-2026 © The AvaloniaUI Project",
+    "URL": "https://licenses.nuget.org/MIT"
+  },
+  {
+    "Package": "avalonia.native/11.3.22",
+    "License": "MIT",
+    "Type": "expression",
+    "Copyright": "Copyright 2013-2026 © The AvaloniaUI Project",
+    "URL": "https://licenses.nuget.org/MIT"
+  },
+  {
+    "Package": "avalonia.remote.protocol/11.3.22",
+    "License": "MIT",
+    "Type": "expression",
+    "Copyright": "Copyright 2013-2026 © The AvaloniaUI Project",
+    "URL": "https://licenses.nuget.org/MIT"
+  },
+  {
+    "Package": "avalonia.skia/11.3.22",
+    "License": "MIT",
+    "Type": "expression",
+    "Copyright": "Copyright 2013-2026 © The AvaloniaUI Project",
+    "URL": "https://licenses.nuget.org/MIT"
+  },
+  {
+    "Package": "avalonia.themes.fluent/11.3.22",
+    "License": "MIT",
+    "Type": "expression",
+    "Copyright": "Copyright 2013-2026 © The AvaloniaUI Project",
+    "URL": "https://licenses.nuget.org/MIT"
+  },
+  {
+    "Package": "avalonia.win32/11.3.22",
+    "License": "MIT",
+    "Type": "expression",
+    "Copyright": "Copyright 2013-2026 © The AvaloniaUI Project",
+    "URL": "https://licenses.nuget.org/MIT"
+  },
+  {
+    "Package": "avalonia.x11/11.3.22",
+    "License": "MIT",
+    "Type": "expression",
+    "Copyright": "Copyright 2013-2026 © The AvaloniaUI Project",
+    "URL": "https://licenses.nuget.org/MIT"
+  },
+  {
+    "Package": "avalonia/11.3.22",
+    "License": "MIT",
+    "Type": "expression",
+    "Copyright": "Copyright 2013-2026 © The AvaloniaUI Project",
+    "URL": "https://licenses.nuget.org/MIT"
+  },
+  {
+    "Package": "harfbuzzsharp.nativeassets.linux/8.3.1.1",
+    "License": "MIT",
+    "Type": "expression",
+    "Copyright": "© Microsoft Corporation. All rights reserved.",
+    "URL": "https://licenses.nuget.org/MIT"
+  },
+  {
+    "Package": "harfbuzzsharp.nativeassets.macos/8.3.1.1",
+    "License": "MIT",
+    "Type": "expression",
+    "Copyright": "© Microsoft Corporation. All rights reserved.",
+    "URL": "https://licenses.nuget.org/MIT"
+  },
+  {
+    "Package": "harfbuzzsharp.nativeassets.webassembly/8.3.1.1",
+    "License": "MIT",
+    "Type": "expression",
+    "Copyright": "© Microsoft Corporation. All rights reserved.",
+    "URL": "https://licenses.nuget.org/MIT"
+  },
+  {
+    "Package": "harfbuzzsharp.nativeassets.win32/8.3.1.1",
+    "License": "MIT",
+    "Type": "expression",
+    "Copyright": "© Microsoft Corporation. All rights reserved.",
+    "URL": "https://licenses.nuget.org/MIT"
+  },
+  {
+    "Package": "harfbuzzsharp/8.3.1.1",
+    "License": "MIT",
+    "Type": "expression",
+    "Copyright": "© Microsoft Corporation. All rights reserved.",
+    "URL": "https://licenses.nuget.org/MIT"
+  },
+  {
+    "Package": "microcom.runtime/0.11.0",
+    "License": "MIT",
+    "Type": "expression",
+    "Copyright": "Copyright 2021 © Nikita Tsukanov",
+    "URL": "https://licenses.nuget.org/MIT"
+  },
+  {
+    "Package": "naudio.core/3.3.0",
+    "License": "MIT",
+    "Type": "expression",
+    "Copyright": "© Mark Heath 2026",
+    "URL": "https://licenses.nuget.org/MIT"
+  },
+  {
+    "Package": "naudio.wasapi/3.3.0",
+    "License": "MIT",
+    "Type": "expression",
+    "Copyright": "© Mark Heath 2026",
+    "URL": "https://licenses.nuget.org/MIT"
+  },
+  {
+    "Package": "skiasharp.nativeassets.linux/2.88.9",
+    "License": "MIT",
+    "Type": "expression",
+    "Copyright": "© Microsoft Corporation. All rights reserved.",
+    "URL": "https://licenses.nuget.org/MIT"
+  },
+  {
+    "Package": "skiasharp.nativeassets.macos/2.88.9",
+    "License": "MIT",
+    "Type": "expression",
+    "Copyright": "© Microsoft Corporation. All rights reserved.",
+    "URL": "https://licenses.nuget.org/MIT"
+  },
+  {
+    "Package": "skiasharp.nativeassets.webassembly/2.88.9",
+    "License": "MIT",
+    "Type": "expression",
+    "Copyright": "© Microsoft Corporation. All rights reserved.",
+    "URL": "https://licenses.nuget.org/MIT"
+  },
+  {
+    "Package": "skiasharp.nativeassets.win32/2.88.9",
+    "License": "MIT",
+    "Type": "expression",
+    "Copyright": "© Microsoft Corporation. All rights reserved.",
+    "URL": "https://licenses.nuget.org/MIT"
+  },
+  {
+    "Package": "skiasharp/2.88.9",
+    "License": "MIT",
+    "Type": "expression",
+    "Copyright": "© Microsoft Corporation. All rights reserved.",
+    "URL": "https://licenses.nuget.org/MIT"
+  },
+  {
+    "Package": "system.numerics.tensors/9.0.0",
+    "License": "MIT",
+    "Type": "expression",
+    "Copyright": "© Microsoft Corporation. All rights reserved.",
+    "URL": "https://licenses.nuget.org/MIT"
+  },
+  {
+    "Package": "tmds.dbus.protocol/0.21.3",
+    "License": "MIT",
+    "Type": "expression",
+    "Copyright": "Tom Deseyn",
+    "URL": "https://licenses.nuget.org/MIT"
+  }
+]
