@@ -6,18 +6,27 @@ Repository: [Puma7/handy-meeting](https://github.com/Puma7/handy-meeting), publi
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Windows verification | Success: 86 named checks plus monitor status-file checks | [Run 40210563368](https://github.com/Puma7/handy-meeting/actions/runs/40210563368) |
-| Linux package and synthetic core checks | Success on Ubuntu 24.04 | [Portable run 40210637828](https://github.com/Puma7/handy-meeting/actions/runs/40210637828) |
+| Windows verification | Success: 86 named checks plus monitor status-file checks | [Run 40211743753](https://github.com/Puma7/handy-meeting/actions/runs/40211743753) |
+| Linux package and synthetic core checks | Success on Ubuntu 24.04 | [Portable run 40211949623](https://github.com/Puma7/handy-meeting/actions/runs/40211949623) |
 | Apple Silicon helper, DMG, signature and synthetic checks | Success on macOS 15 arm64 | Same portable run |
 | Intel Mac helper, DMG, signature and synthetic checks | Success on macOS 15 x64 | Same portable run |
 
-These results apply to commit `60335cd0c26aca341a4013dac21bcf5423f95ffe`. Subsequent packaging refinements, including the explicit macOS-15 minimum and application icon, receive a new build before publication. See the current [Actions runs](https://github.com/Puma7/handy-meeting/actions).
+These results apply to release commit `cbc0f1e358b51ee3c568ad3f319d8fc02281ca07`, including the explicit macOS-15 minimum and application icon. [Publishing run 40212183105](https://github.com/Puma7/handy-meeting/actions/runs/40212183105) repeated Windows verification, checked the packaged program against the verified build, accepted portable artifacts only from that exact commit, and published both prereleases. Both release tags resolve to that commit. See the current [Actions runs](https://github.com/Puma7/handy-meeting/actions).
 
 The first private Windows attempt was not started because of the account's Actions budget. After approved public publication, the standard runners executed. The first Mac attempt found an unsigned managed assembly in the app bundle. The corrected script signs the complete .NET payload before the apphost and bundle and explicitly verifies that assembly. Both architectures then passed.
 
 ## Downloads
 
-Published prototype downloads are listed in [Releases](https://github.com/Puma7/handy-meeting/releases). A draft or an Actions artifact is not a stable release. Windows is version 0.4.1; portable packages use 0.5.0-preview.1. The manually invoked download-publishing workflow only accepts successful portable artifacts from its exact source commit and never overwrites already published assets.
+The following prototype downloads were published on 25 October 2026. They are prereleases, not stable production releases. The manually invoked download-publishing workflow only accepts successful portable artifacts from its exact source commit and never overwrites already published assets.
+
+| Package | Download | Bytes |
+| --- | --- | ---: |
+| Windows x64 0.4.1 | [ZIP](https://github.com/Puma7/handy-meeting/releases/download/v0.4.1/HandyMeeting-0.4.1-windows-x64.zip) | 19,096,763 |
+| Mac Apple Silicon 0.5.0-preview.1 | [DMG](https://github.com/Puma7/handy-meeting/releases/download/v0.5.0-preview.1/HandyMeeting-0.5.0-preview.1-osx-arm64.dmg) | 54,386,159 |
+| Mac Intel 0.5.0-preview.1 | [DMG](https://github.com/Puma7/handy-meeting/releases/download/v0.5.0-preview.1/HandyMeeting-0.5.0-preview.1-osx-x64.dmg) | 55,192,533 |
+| Ubuntu/Debian x64 0.5.0-preview.1 | [DEB](https://github.com/Puma7/handy-meeting/releases/download/v0.5.0-preview.1/HandyMeeting-0.5.0-preview.1-linux-amd64.deb) | 44,704,698 |
+
+Checksums: [Windows SHA-256](https://github.com/Puma7/handy-meeting/releases/download/v0.4.1/HandyMeeting-0.4.1-windows-x64.zip.sha256), [portable SHA-256 manifest](https://github.com/Puma7/handy-meeting/releases/download/v0.5.0-preview.1/SHA256SUMS.txt). GitHub reports all six assets uploaded; release metadata records matching artifact SHA-256 digests. Model weights and personal sessions are absent. Dependencies, bundled upstream notices and locked native downloads were reviewed before publication. The test Windows ZIP is extracted alongside existing versions; portable preview storage is separate from the installed application. Problems are reported through Issues, with private security reporting available for sensitive findings.
 
 Mac packages are architecture-specific, require macOS 15+, and are ad-hoc signed rather than Developer-ID signed/notarized. The Linux `.deb` requires the declared local runtime/graphics/audio-service dependencies. Model weights and personal session data are excluded.
 

@@ -40,13 +40,13 @@ This is a prototype. Speaker diarization, exact word timestamps and reliable wor
 
 ## Downloads and first run
 
-Check [Releases](https://github.com/Puma7/handy-meeting/releases) for published prototype packages. Experimental outputs may instead be available as artifacts in [Actions](https://github.com/Puma7/handy-meeting/actions); private-repository artifacts require repository access. No package is implied to exist merely because its build script is present.
+Published prototype packages: [Windows 0.4.1](https://github.com/Puma7/handy-meeting/releases/tag/v0.4.1) and [Mac/Linux 0.5.0-preview.1](https://github.com/Puma7/handy-meeting/releases/tag/v0.5.0-preview.1). The portable release contains separate Apple Silicon and Intel DMGs and an Ubuntu/Debian x64 DEB. SHA-256 manifests accompany the downloads; exact build evidence is in [BUILD_STATUS.md](BUILD_STATUS.md).
 
 **Windows:** extract the complete Windows package, install .NET Desktop Runtime 10, then run the included start file. Install Handy and a compatible streaming model first. Select the same audio output used by your meeting app, optionally enable your microphone, and start recording. Keep the extracted directory together.
 
 **Linux preview:** install the `.deb` using your package manager so dependencies are resolved. A local PulseAudio-compatible server, including PipeWire-Pulse, is required. The preview does not start or replace your system audio service. Read [PORTABILITY.md](PORTABILITY.md) before recording an important meeting.
 
-**Mac preview:** use the package matching Apple Silicon or Intel when available. Microphone and system-audio permissions are required. Preview builds may use ad-hoc signing and are not Apple-notarized releases. Real hardware testing remains necessary after a successful package build.
+**Mac preview:** use the package matching Apple Silicon or Intel, on macOS 15 or newer. Microphone and system-audio permissions are required. These preview builds are ad-hoc signed and are not Apple-notarized releases. Real hardware testing remains necessary after a successful package build.
 
 For local notes, run a compatible local text-model service such as LM Studio or Ollama. The default endpoint is `http://127.0.0.1:1234/v1/`; select a locally executed instruct model with structured-output support. Speech recognition and text analysis use separate model types. The companion does not download either model's weights.
 

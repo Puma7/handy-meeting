@@ -11,6 +11,8 @@ Stand: 25.10.2026. Windows und portable Vorschau werden getrennt bereitgestellt.
 
 **Mac-DMGs wurden inzwischen auf GitHub gebaut und geprüft.** Der erfolgreiche Workflow lief auf echten Mac-Runnern beider Architekturen. Das belegt den Swift-Build, Paket-/Signaturprüfungen und synthetische Kernprüfungen, aber keine funktionierende Aufnahme realer Meetings. Der aktuelle Prüfumfang steht in [BUILD_STATUS.md](BUILD_STATUS.md).
 
+Die [portable Vorschau 0.5.0-preview.1](https://github.com/Puma7/handy-meeting/releases/tag/v0.5.0-preview.1) enthält jetzt tatsächlich veröffentlichte DMGs für Apple Silicon/Intel und das Ubuntu-/Debian-DEB, ergänzt um `SHA256SUMS.txt`. Diese Dateien stammen aus dem erfolgreichen Build von Release-Commit `cbc0f1e358b51ee3c568ad3f319d8fc02281ca07`. Die Veröffentlichung ersetzt die offenen Hardwareprüfungen nicht.
+
 ## Architektur und Größe
 
 `HandyMeeting.Core` verwendet dieselben Quelldateien für PCM-Sicherung, Transkriptjournal, Streaming, Quellenprüfung und Nachbearbeitung wie die Windows-App. `HandyMeeting.Portable` ergänzt eine Avalonia-Oberfläche; die bestehende Windows-App wird während der Portierung erhalten. Es wird keine zweite Erkennungsengine entwickelt.

@@ -6,7 +6,9 @@ HandyMeeting nimmt Computerton und optional Mikrofon getrennt auf und transkribi
 
 ## Starten
 
-**HandyMeeting starten.cmd** doppelklicken oder **dist-0.4.1\HandyMeeting.exe** öffnen. Eine noch laufende ältere Fassung vorher regulär schließen. Windows x64, .NET Desktop Runtime 10 und Handy mit einem installierten Streaming-Modell werden benötigt.
+Downloads: [Windows-ZIP 0.4.1](https://github.com/Puma7/handy-meeting/releases/tag/v0.4.1), [Mac-DMGs und Linux-DEB 0.5.0-preview.1](https://github.com/Puma7/handy-meeting/releases/tag/v0.5.0-preview.1). Beide Vorschau-Releases enthalten Prüfsummen. Mac und Linux benötigen noch reale Geräte- und Langzeitprüfungen.
+
+Das Windows-ZIP vollständig entpacken und **Start HandyMeeting.cmd** doppelklicken. Im Quellprojekt heißt diese Datei **HandyMeeting starten.cmd**; alternativ **dist-0.4.1\HandyMeeting.exe** öffnen. Eine noch laufende ältere Fassung vorher regulär schließen. Windows x64, .NET Desktop Runtime 10 und Handy mit einem installierten Streaming-Modell werden benötigt.
 
 Neue Versionen werden in einem eigenen Programmordner bereitgestellt. Die Startdatei verweist nach einem erfolgreichen Build auf die neue Fassung. **Sessions** und **data** bleiben gemeinsam im Projektordner; vorhandene Aufnahmen, Textstände und Einstellungen werden weiterverwendet.
 
