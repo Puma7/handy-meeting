@@ -386,8 +386,13 @@
   },
   {
     "Path": "scripts/package-macos.sh",
-    "SHA256": "6F081E03215C9C98AFFCF0A3945211EEFA31F4F5C681A085F12A057AD58DF9FD",
-    "Bytes": 3020
+    "SHA256": "3818E24BBDB36114216C70693BE45418A9700F97941A705E8954B7F73F835291",
+    "Bytes": 3573
+  },
+  {
+    "Path": "scripts/package-windows.ps1",
+    "SHA256": "F020DBC382A8BAF1233CA7CF91EE46C4969258695064F6A584948406F876747A",
+    "Bytes": 3125
   },
   {
     "Path": "scripts/prepare-native.ps1",

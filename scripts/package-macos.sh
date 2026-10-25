@@ -24,9 +24,18 @@ EOF
 plutil -lint "$app/Contents/Info.plist"
 # Test artifacts use ad-hoc signing. Public distribution additionally needs a Developer ID and notarization.
 identity="${HANDYMEETING_SIGNING_IDENTITY:--}"
-find "$app/Contents/MacOS" -type f \( -name '*.dylib' -o -name 'HandyMeetingCapture' -o -name 'HandyMeeting' \) -print0 | while IFS= read -r -d '' binary; do codesign --force --sign "$identity" "$binary"; done
+# This .NET bundle layout places managed assemblies and runtime data in MacOS too.
+# Seal every regular payload file before the helpers/apphost and the bundle itself.
+# Signing only dylibs left managed DLLs unsigned and caused bundle verification to fail.
+while IFS= read -r -d '' binary; do
+  codesign --force --sign "$identity" "$binary"
+done < <(find "$app/Contents/MacOS" -type f ! -name 'HandyMeetingCapture' ! -name 'HandyMeeting' -print0)
+codesign --force --sign "$identity" "$app/Contents/MacOS/HandyMeetingCapture"
+codesign --force --sign "$identity" "$app/Contents/MacOS/HandyMeeting"
 codesign --force --sign "$identity" "$app"
 codesign --verify --deep --strict "$app"
+# Explicit regression check for the managed assembly that failed in the first CI run.
+codesign --verify --strict "$app/Contents/MacOS/System.Diagnostics.Contracts.dll"
 image="$root/packages/HandyMeeting-0.5.0-preview.1-$rid.dmg"
 hdiutil create -volname 'HandyMeeting Preview' -srcfolder "$(dirname "$app")" -ov -format UDZO "$image"
 hdiutil verify "$image"
