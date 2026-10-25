@@ -73,6 +73,10 @@ impl SessionStore {
     pub fn folder(&self) -> &Path {
         &self.folder
     }
+    #[cfg(test)]
+    pub(crate) fn test_owner_count(&self) -> usize {
+        Arc::strong_count(&self.inner)
+    }
     pub fn snapshot(&self) -> Result<SessionData> {
         Ok(self
             .inner

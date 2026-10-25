@@ -306,6 +306,28 @@ mod tests {
     fn python() -> Command {
         Command::new(if cfg!(windows) { "python" } else { "python3" })
     }
+    // Test harness only, after the fixture's owned writer/process/reader handles
+    // have closed. Parallel Unix child launches can briefly retain a CLOEXEC
+    // flock descriptor until exec. Always acquire the real exclusive lease;
+    // never unlock, delete its file, or ignore any other recovery error.
+    fn reopen_released_fixture(
+        folder: &std::path::Path,
+        timeout: Duration,
+    ) -> Result<SessionStore> {
+        let deadline = Instant::now() + timeout;
+        loop {
+            match SessionStore::open(folder) {
+                Ok(store) => return Ok(store),
+                Err(error)
+                    if error.to_string() == "This session is already active in another process"
+                        && Instant::now() < deadline =>
+                {
+                    thread::sleep(Duration::from_millis(5));
+                }
+                Err(error) => return Err(error),
+            }
+        }
+    }
     #[test]
     fn metadata_query_rejects_unbounded_output_and_preserves_nonzero_exit() {
         assert!(
@@ -415,8 +437,13 @@ mod tests {
             .map(|part| part.confirmed_sha256.clone())
             .collect();
         let folder = store.folder().to_owned();
+        assert_eq!(
+            store.test_owner_count(),
+            1,
+            "Joined capture tracks must release every store clone"
+        );
         drop(store);
-        let reopened = SessionStore::open(&folder).unwrap();
+        let reopened = reopen_released_fixture(&folder, Duration::from_secs(2)).unwrap();
         let recovered = reopened.snapshot().unwrap();
         assert_eq!(recovered.parts.len(), 2);
         assert_eq!(
@@ -465,8 +492,73 @@ mod tests {
         assert!(before.parts[0].confirmed_sample_count >= 16000);
         let hash = before.parts[0].confirmed_sha256.clone();
         let folder = store.folder().to_owned();
+        assert_eq!(
+            store.test_owner_count(),
+            1,
+            "A stopped helper and finalized writer must release every store clone"
+        );
         drop(store);
-        let reopened = SessionStore::open(&folder).unwrap();
+        let reopened = reopen_released_fixture(&folder, Duration::from_secs(2)).unwrap();
         assert_eq!(reopened.snapshot().unwrap().parts[0].confirmed_sha256, hash);
+    }
+    #[test]
+    fn bounded_fixture_reopen_never_bypasses_an_active_writer_lease() {
+        let root = tempfile::tempdir().unwrap();
+        let store = SessionStore::create(
+            root.path(),
+            "Synthetic active lease",
+            "synthetic",
+            "fake",
+            None,
+        )
+        .unwrap();
+        let folder = store.folder().to_owned();
+        let original = std::fs::read(folder.join("session.json")).unwrap();
+        let result = reopen_released_fixture(&folder, Duration::from_millis(25));
+        let error = result
+            .err()
+            .expect("An active writer must remain exclusive after the deadline");
+        assert_eq!(
+            error.to_string(),
+            "This session is already active in another process"
+        );
+        assert_eq!(store.test_owner_count(), 1);
+        assert_eq!(
+            std::fs::read(folder.join("session.json")).unwrap(),
+            original
+        );
+        drop(store);
+        assert!(reopen_released_fixture(&folder, Duration::from_secs(2)).is_ok());
+    }
+    #[test]
+    fn bounded_fixture_reopen_propagates_original_manifest_errors() {
+        let root = tempfile::tempdir().unwrap();
+        let store = SessionStore::create(
+            root.path(),
+            "Synthetic damaged manifest",
+            "synthetic",
+            "fake",
+            None,
+        )
+        .unwrap();
+        let folder = store.folder().to_owned();
+        drop(store);
+        std::fs::write(folder.join("session.json"), b"not JSON").unwrap();
+        std::fs::write(folder.join("session.json.bak"), b"not JSON either").unwrap();
+        let error = reopen_released_fixture(&folder, Duration::from_secs(2))
+            .err()
+            .expect("Damaged metadata must not become a successful recovery");
+        assert!(
+            error.downcast_ref::<serde_json::Error>().is_some(),
+            "Keep the original typed JSON failure: {error}"
+        );
+        assert_eq!(
+            std::fs::read(folder.join("session.json")).unwrap(),
+            b"not JSON"
+        );
+        assert_eq!(
+            std::fs::read(folder.join("session.json.bak")).unwrap(),
+            b"not JSON either"
+        );
     }
 }
