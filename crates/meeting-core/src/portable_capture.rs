@@ -297,6 +297,12 @@ fn pad_estimated(writer: &mut PcmWriter, target: u64) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    struct StopOnExit(Arc<AtomicBool>);
+    impl Drop for StopOnExit {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::Release);
+        }
+    }
     fn python() -> Command {
         Command::new(if cfg!(windows) { "python" } else { "python3" })
     }
@@ -320,17 +326,60 @@ mod tests {
         )
         .unwrap();
         let stop = Arc::new(AtomicBool::new(false));
+        let _stop_on_exit = StopOnExit(Arc::clone(&stop));
+        let gate = root.path().join("synthetic-pcm-start");
         let mut tracks = vec![];
         for (source, hex) in [("system", "0100"), ("microphone", "feff")] {
             let store = store.clone();
             let flag = Arc::clone(&stop);
+            let gate = gate.clone();
             let (tx, rx) = mpsc::sync_channel(1);
             tracks.push(thread::spawn(move || {
                 let mut cmd = python();
-                cmd.args(["-c", &format!("import sys,time;sys.stdout.buffer.write(bytes.fromhex('{hex}')*16000);sys.stdout.buffer.flush();time.sleep(30)")]);
+                // Startup acknowledgement is deliberately earlier than all PCM.
+                // The parent releases this barrier only after both helpers are ready.
+                cmd.args(["-c", &format!("import pathlib,sys,time\ngate=pathlib.Path(sys.argv[1])\nwhile not gate.exists(): time.sleep(0.01)\nsys.stdout.buffer.write(bytes.fromhex('{hex}')*16000)\nsys.stdout.buffer.flush()\ntime.sleep(30)")]).arg(gate);
                 record(store, source, flag, tx, HelperSpec { command: cmd, readiness_marker: false, graceful_stdin: false })
             }));
             rx.recv_timeout(Duration::from_secs(5)).unwrap().unwrap();
+        }
+        assert!(store.snapshot().unwrap().parts.is_empty());
+        std::fs::write(&gate, b"release synthetic PCM").unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let snapshot = store.snapshot().unwrap();
+            let confirmed_fixtures = ["system", "microphone"].iter().all(|source| {
+                snapshot
+                    .parts
+                    .iter()
+                    .filter(|part| part.source == *source)
+                    .any(|part| {
+                        if part.confirmed_sample_count < 16000 {
+                            return false;
+                        }
+                        let expected = if *source == "system" { 1_i16 } else { -2_i16 };
+                        // Count only samples acknowledged after sync, excluding estimated
+                        // silence. An alive process or a padded duration cannot pass.
+                        hound::WavReader::open(store.audio_path(part).unwrap())
+                            .unwrap()
+                            .samples::<i16>()
+                            .take(part.confirmed_sample_count as usize)
+                            .filter(|sample| {
+                                sample.as_ref().is_ok_and(|sample| *sample == expected)
+                            })
+                            .count()
+                            == 16000
+                    })
+            });
+            if confirmed_fixtures {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "Both complete synthetic PCM fixtures must be durably confirmed before stop: {:?}",
+                snapshot.parts
+            );
+            thread::sleep(Duration::from_millis(10));
         }
         stop.store(true, Ordering::Release);
         for track in tracks {
@@ -343,12 +392,42 @@ mod tests {
             before.parts[0].confirmed_sha256,
             before.parts[1].confirmed_sha256
         );
+        for part in &before.parts {
+            let expected = if part.source == "system" {
+                1_i16
+            } else {
+                -2_i16
+            };
+            let actual_samples = hound::WavReader::open(store.audio_path(part).unwrap())
+                .unwrap()
+                .samples::<i16>()
+                .map(|sample| sample.unwrap())
+                .filter(|sample| *sample == expected)
+                .count();
+            assert_eq!(
+                actual_samples, 16000,
+                "The complete distinct fixture must survive stop"
+            );
+        }
+        let before_hashes: Vec<_> = before
+            .parts
+            .iter()
+            .map(|part| part.confirmed_sha256.clone())
+            .collect();
         let folder = store.folder().to_owned();
         drop(store);
         let reopened = SessionStore::open(&folder).unwrap();
-        assert!(reopened
-            .snapshot()
-            .unwrap()
+        let recovered = reopened.snapshot().unwrap();
+        assert_eq!(recovered.parts.len(), 2);
+        assert_eq!(
+            recovered
+                .parts
+                .iter()
+                .map(|part| part.confirmed_sha256.clone())
+                .collect::<Vec<_>>(),
+            before_hashes
+        );
+        assert!(recovered
             .parts
             .iter()
             .all(|p| p.audio_closed && p.confirmed_sample_count >= 16000));

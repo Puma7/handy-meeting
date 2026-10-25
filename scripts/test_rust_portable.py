@@ -7,6 +7,7 @@ import json
 import pathlib
 import tempfile
 import unittest
+from unittest import mock
 
 
 def load(name, file):
@@ -108,6 +109,58 @@ class PortableArtifactGuards(unittest.TestCase):
         manifest = artifacts.read(work / "package-manifest.json")
         self.assertNotIn("app", manifest)
         self.assertNotIn(str(self.root), json.dumps(manifest))
+
+    def proof_fixture(self):
+        work = self.root / ".build/rust-portable-package/osx-arm64-synthetic"
+        self.put(".build/portable-source-before.json", {"synthetic": True})
+        self.put(str(work.relative_to(self.root) / "package-manifest.json"), {"synthetic": "known manifest"})
+        self.put(str(work.relative_to(self.root) / "relocated-checks/release-checks.json"), {"synthetic": "known checks"})
+        self.put(str(work.relative_to(self.root) / "source-after-package.json"), {"synthetic": "known source"})
+        return work
+
+    def assert_flat_proof_scope(self, work):
+        observed = []
+        original_read = artifacts.read
+
+        def observe(file):
+            observed.append(file)
+            return original_read(file)
+
+        # A future recursive search is a regression even when its current result
+        # happens to contain only safe files. The collector must use exact names.
+        with mock.patch.object(pathlib.Path, "rglob", side_effect=AssertionError("Never search an application/image tree")), mock.patch.object(artifacts, "read", side_effect=observe), contextlib.redirect_stdout(io.StringIO()):
+            artifacts.collect_proofs("osx-arm64", work)
+        output = self.root / ".build/rust-portable-proofs/osx-arm64"
+        expected = {"source-before.json", "package-manifest.json", "relocated-release-checks.json", "source-after-package.json"}
+        self.assertEqual({file.name for file in output.iterdir()}, expected)
+        self.assertTrue(all(file.is_file() and not file.is_symlink() for file in output.iterdir()))
+        self.assertEqual(len(observed), len(expected))
+        self.assertTrue(all(file.is_relative_to(self.root) for file in observed))
+
+    def test_proof_collector_uses_only_explicit_files_and_never_recurses(self):
+        work = self.proof_fixture()
+        self.put(str(work.relative_to(self.root) / "image/Applications/unrelated-proof.json"), {"never": "upload this"})
+        self.assert_flat_proof_scope(work)
+
+    def test_applications_symlink_cannot_expand_proof_scope(self):
+        work = self.proof_fixture()
+        image = work / "image"
+        image.mkdir()
+        with tempfile.TemporaryDirectory() as external:
+            outside = pathlib.Path(external)
+            (outside / "package-manifest.json").write_text('{"never":"read or upload this external file"}')
+            try:
+                (image / "Applications").symlink_to(outside, target_is_directory=True)
+            except OSError as error:
+                self.skipTest("This test account cannot create directory symlinks: " + str(error))
+            self.assert_flat_proof_scope(work)
+
+    def test_proof_output_rejects_unexpected_directories(self):
+        work = self.proof_fixture()
+        output = self.root / ".build/rust-portable-proofs/osx-arm64"
+        (output / "Applications").mkdir(parents=True)
+        with self.assertRaisesRegex(RuntimeError, "unexpected"):
+            artifacts.collect_proofs("osx-arm64", work)
 
 
 if __name__ == "__main__":

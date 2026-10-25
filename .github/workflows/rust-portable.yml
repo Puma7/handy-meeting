@@ -128,20 +128,18 @@ jobs:
           path: |
             packages/HandyMeeting-1.0.0-beta.2-*.dmg*
             packages/HandyMeeting-1.0.0-beta.2-linux-amd64.deb*
-      - name: Keep model-free proof and ABI requirements
+      - name: Collect only explicit regular model-free proof files
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 scripts/rust-portable-artifacts.py collect-proofs '${{ matrix.rid }}'
+      - name: Keep flat model-free proof and ABI requirements
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: rust-portable-checks-${{ matrix.rid }}
           include-hidden-files: true
           retention-days: 14
-          path: |
-            .build/portable-source-*.json
-            .build/portable-release-checks/release-checks.json
-            .build/rust-native-beta2-0.4.1-${{ matrix.rid }}/ABI_REPORT.json
-            .build/rust-native-beta2-0.4.1-${{ matrix.rid }}/SDK_PROVENANCE.json
-            .build/rust-portable-${{ matrix.rid }}-pending.json
-            .build/rust-portable-package/**/package-manifest.json
-            .build/rust-portable-package/**/relocated-checks/release-checks.json
+          path: .build/rust-portable-proofs/${{ matrix.rid }}/*.json
 # No real microphone/system capture, model download, cloud call, two-hour test,
 # Developer ID, notarization, or public release is claimed by this workflow.

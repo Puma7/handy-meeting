@@ -41,8 +41,8 @@
   },
   {
     "Path": "TEST_REPORT.md",
-    "SHA256": "7B5D6F208E92235216128C63E7F5BFB8AB7C59FBA48168485CA810480E166369",
-    "Bytes": 44432
+    "SHA256": "048C3B7F64FB5194326DF2FBBE314ADCDBD3B57DD273EC22FD77B2E6AEAD3FD8",
+    "Bytes": 46447
   },
   {
     "Path": "DAUERTEST.md",
@@ -137,6 +137,11 @@
   {
     "Path": "HandyMeeting Rust Beta starten.cmd",
     "SHA256": "72624F2EE0E6E3C3D7CFE8C04B8C424DB099F7EE9151AC83263F5D52B57F1BFF",
+    "Bytes": 215
+  },
+  {
+    "Path": "HandyMeeting 1.0.0-beta.2 starten.cmd",
+    "SHA256": "FE1964802011378CC0658E0D4A3758337B9CD3955F92645B16DBCF8692874CF5",
     "Bytes": 215
   },
   {
@@ -426,8 +431,8 @@
   },
   {
     "Path": "scripts/package-rust-portable.sh",
-    "SHA256": "E3C8C7F75F9960BCCEDEF3C692FBFECC5B6B7E8B132922B75C5A91BF4AECEEF9",
-    "Bytes": 5552
+    "SHA256": "C70BFA2EAF85E9E571857B24071A9F793A0577AB47470F75FE428257F11A01F9",
+    "Bytes": 5778
   },
   {
     "Path": "scripts/package-rust-windows.ps1",
@@ -461,13 +466,13 @@
   },
   {
     "Path": "scripts/rust-portable-artifacts.py",
-    "SHA256": "65F0FA65183CDF4E090F38F2AB3121AEB3537D771E5807C069FA89FE742FD899",
-    "Bytes": 11538
+    "SHA256": "00370AACDC0944AB482552B8F1E4C5FBDB13188222AE4786E9DB676A2C7D6B1B",
+    "Bytes": 15094
   },
   {
     "Path": "scripts/test_rust_portable.py",
-    "SHA256": "5AAB569A86498973A8C1E4DA5E80C2F00D10C5569281D4AE900DE695E02230AF",
-    "Bytes": 5671
+    "SHA256": "BA2831C6C6D54796D7F416651702F943F749400A32A56B1E64F2071C4E5824A2",
+    "Bytes": 8692
   },
   {
     "Path": "platform/macos/HandyMeetingCapture.swift",
@@ -541,8 +546,8 @@
   },
   {
     "Path": ".github/workflows/rust-portable.yml",
-    "SHA256": "9D6A75D62D858202DB6C6A9A86AB2A56BFE255F160E8FCB4C623897B20B0E043",
-    "Bytes": 7940
+    "SHA256": "999B34095015074EA05259FA66384E12F822B55C5D46E5E1441A2A21367936E5",
+    "Bytes": 7741
   },
   {
     "Path": ".github/workflows/rust.yml",
@@ -12166,8 +12171,8 @@
   },
   {
     "Path": "crates/meeting-core/src/portable_capture.rs",
-    "SHA256": "FE5E20FE2835E325C74B1E025084D2C71503861FFF9A910FC88B7C23439BBB6A",
-    "Bytes": 16391
+    "SHA256": "9AEE907CDE413DD1BA5394AD7F88A6709C6577B8947D59608156F0B1F498F619",
+    "Bytes": 19800
   },
   {
     "Path": "crates/meeting-core/src/storage.rs",

@@ -96,4 +96,7 @@ else
   (cd packages && shasum -a 256 "$(basename "$package")") > "$package.sha256"
 fi
 cp "$work/package-manifest.json" "$package.manifest.json"
+# Only explicit regular JSON files enter the flat upload directory. The image's
+# Applications link must never be searched by a recursive artifact glob.
+python3 scripts/rust-portable-artifacts.py collect-proofs "$rid" "$work"
 echo 'Candidate built. No real-device, long-session or notarization result is implied.'
