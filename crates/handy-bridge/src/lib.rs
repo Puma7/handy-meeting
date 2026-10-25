@@ -2,6 +2,7 @@
 //! installed state and advertised capabilities; this crate has no model catalog
 //! or downloader. Model additions are discovered by a new CLI query.
 
+mod companion;
 mod discovery;
 mod identity;
 mod paths;
@@ -11,6 +12,7 @@ mod version;
 #[cfg(feature = "native-asr")]
 pub mod native;
 
+pub use companion::{companion_capabilities, CompanionCapabilities, COMPANION_CONTRACT_VERSION};
 pub use discovery::discover_handy;
 pub use identity::{
     capture_model_identity, read_model_snapshot, verify_catalog_model, verify_model_identity,

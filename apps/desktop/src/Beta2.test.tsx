@@ -9,6 +9,7 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "./App";
+import { testServices } from "./test-services";
 import { clock, meetingLabel } from "./domain";
 import type {
   AnalysisResult,
@@ -79,6 +80,7 @@ function apiFixture() {
     analyses = new Map<string, AnalysisResult[]>();
   let progress: NotesProgress | null = null;
   const api: DesktopApi = {
+    ...testServices(),
     getAppState: vi.fn().mockResolvedValue(appState()),
     refreshHandy: vi.fn().mockResolvedValue(appState().handy),
     listDevices: vi.fn().mockResolvedValue([
@@ -340,9 +342,7 @@ describe("beta.2 guided meeting analysis", () => {
       .closest(".session-row") as HTMLElement;
     await userEvent.click(within(row).getByRole("button", { name: "Öffnen" }));
     await screen.findByRole("heading", { name: "Sitzungsdetails" });
-    await userEvent.click(
-      screen.getByRole("button", { name: "Meeting" }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: "Meeting" }));
     expect(screen.getByText(first.parts[0].text!)).toBeTruthy();
     expect(screen.queryByText(second.parts[0].text!)).toBeNull();
     await userEvent.click(

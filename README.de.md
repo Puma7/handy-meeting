@@ -1,6 +1,6 @@
 # HandyMeeting · lokale Meetings im Handy-Ökosystem
 
-**Nächste Hauptversion:** `1.0.0-beta.2` erweitert die Rust-/Tauri-Migration um lokale Textmodellerkennung, geführte Meetingauswahl, Fortschritt und Abbrechen sowie Markdown mit Originalbelegen. Linux- und Mac-Aufnahmeadapter samt DEB-/DMG-Paketierung sind implementiert; tatsächlich erreichte Prüfstände und noch offene Geräte-/Langzeitprüfungen stehen im [Prüfbericht](TEST_REPORT.md). Die bisherigen veröffentlichten C#-Pakete und Aufnahmen bleiben erhalten. [Rust-Migration](docs/RUST_MIGRATION.md), [portable Rust-Kandidaten](docs/RUST_PORTABLE.md).
+**Nächste Hauptversion:** `1.0.0-beta.3` ergänzt versionierte Vorlagenverwaltung, freiwillige sichere Schlüsselablage im Betriebssystem und sichtbare Agentenfreigabe pro Sitzung. Lokale Modellerkennung, Historie und belegte Auswertungen bleiben erhalten. [Handy-Anbindung](docs/HANDY_UPSTREAM_PROPOSAL.md), [Agentenprotokoll](docs/RUST_AGENT_PROTOCOL.md), [Schlüsselablage](docs/RUST_CREDENTIALS.md), [Prüfbericht](TEST_REPORT.md) und [Geräteprüfplan](docs/NATIVE_VALIDATION.md) erklären Stand und Grenzen. Die Rust-Pakete benötigen kein .NET; die älteren veröffentlichten C#-Vorschauen unten benötigen es weiterhin. Dies ist eine Migrationsbeta, kein Release Candidate.
 
 HandyMeeting nimmt Computerton und optional Mikrofon getrennt auf und transkribiert **während des Meetings**. Die Erkennung verwendet eine lokale transcribe.cpp-Engine und ein bereits in Handy installiertes Streaming-Modell. Das Modell bleibt für die Sitzung geladen.
 

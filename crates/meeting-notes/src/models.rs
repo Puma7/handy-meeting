@@ -89,3 +89,9 @@ pub struct Connection {
     pub cloud_consent: bool,
     pub api_key: String,
 }
+impl Drop for Connection {
+    fn drop(&mut self) {
+        use zeroize::Zeroize;
+        self.api_key.zeroize();
+    }
+}

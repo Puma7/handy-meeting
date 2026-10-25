@@ -1,6 +1,10 @@
+mod agent;
 mod asr;
+mod credential_commands;
+mod credential_service;
 mod notes_commands;
 mod notes_service;
+mod template_commands;
 
 use handy_bridge::{HandyBridge, ModelCatalog};
 use meeting_core::{AudioDevice, CaptureController, CaptureOptions, SessionData, SessionStore};
@@ -98,8 +102,10 @@ struct AppView {
     data_directory: String,
     notes_running: bool,
     transitioning: bool,
+    agent: Option<agent::View>,
 }
 struct Active {
+    owner: Option<String>,
     store: SessionStore,
     capture: Option<CaptureController>,
     stop: Arc<AtomicBool>,
@@ -116,6 +122,7 @@ struct Inner {
     transitioning: bool,
 }
 struct Service {
+    agent: agent::Controller,
     root: PathBuf,
     inner: Mutex<Inner>,
     transition: Mutex<()>,
@@ -150,6 +157,7 @@ impl Service {
             }
         }
         Ok(Self {
+            agent: agent::Controller::default(),
             root,
             inner: Mutex::new(inner),
             transition: Mutex::new(()),
@@ -207,6 +215,7 @@ impl Service {
             data_directory: self.root.to_string_lossy().into_owned(),
             notes_running: self.notes_jobs.running(),
             transitioning: inner.transitioning,
+            agent: self.agent.view()?,
         })
     }
     fn refresh(
@@ -276,11 +285,17 @@ impl Service {
         attempt
     }
     fn start(&self, request: StartRequest) -> AppResult<MeetingView> {
+        self.start_for(request, None)
+    }
+    fn start_for(&self, request: StartRequest, owner: Option<String>) -> AppResult<MeetingView> {
         let _gate = self
             .transition
             .lock()
             .map_err(|_| "Aufnahmesteuerung ist gesperrt.")?;
         self.reap_finished()?;
+        if let Some(owner) = owner.as_deref() {
+            self.agent.start_permitted(owner)?;
+        }
         {
             let mut inner = self.lock()?;
             if inner.active.is_some() {
@@ -291,7 +306,7 @@ impl Service {
             }
             inner.transitioning = true;
         }
-        let result = self.start_inner(request);
+        let result = self.start_inner(request, owner);
         let mut inner = self.lock()?;
         inner.transitioning = false;
         if let Err(error) = &result {
@@ -299,7 +314,7 @@ impl Service {
         }
         result
     }
-    fn start_inner(&self, request: StartRequest) -> AppResult<MeetingView> {
+    fn start_inner(&self, request: StartRequest, owner: Option<String>) -> AppResult<MeetingView> {
         if request.title.chars().count() > 200 || request.model_id.len() > 4096 {
             return Err("Titel oder Modellkennung ist zu lang.".into());
         }
@@ -332,7 +347,16 @@ impl Service {
         handy_bridge::write_model_snapshot(store.folder(), model, &resolved, &provenance)
             .map_err(|error| error.to_string())?;
         // Begin durable audio before any model load. Worker failures never own capture.
-        let capture=CaptureController::start(store.clone(),CaptureOptions{output_id:Some(system.id.clone()),microphone_id:microphone.map(|m|m.id.clone()),include_microphone:microphone.is_some()}).map_err(|_|{let _=store.warn("Aufnahme konnte nicht vollständig gestartet werden. Gesicherte Daten bleiben erhalten; Audiogerät und Berechtigungen prüfen.");"Audioaufnahme konnte nicht gestartet werden. Audiogerät und Berechtigungen prüfen.".to_string()})?;
+        let capture = self.agent.capture_if_permitted(owner.as_deref(), || {
+            CaptureController::start(store.clone(), CaptureOptions {
+                output_id: Some(system.id.clone()),
+                microphone_id: microphone.map(|m|m.id.clone()),
+                include_microphone: microphone.is_some(),
+            }).map_err(|_| {
+                let _=store.warn("Aufnahme konnte nicht vollständig gestartet werden. Gesicherte Daten bleiben erhalten; Audiogerät und Berechtigungen prüfen.");
+                "Audioaufnahme konnte nicht gestartet werden. Audiogerät und Berechtigungen prüfen.".to_string()
+            })
+        })?;
         let stop = Arc::new(AtomicBool::new(false));
         let mut workers = vec![asr::spawn_track(
             store.clone(),
@@ -356,6 +380,7 @@ impl Service {
         let mut inner = self.lock()?;
         inner.error = None;
         inner.active = Some(Active {
+            owner,
             store,
             capture: Some(capture),
             stop,
@@ -364,12 +389,33 @@ impl Service {
         Ok(meeting_view(data, true))
     }
     fn stop(&self) -> AppResult<MeetingView> {
+        self.stop_for(None, None)
+    }
+    fn stop_for(&self, owner: Option<&str>, session: Option<&str>) -> AppResult<MeetingView> {
         let _gate = self
             .transition
             .lock()
             .map_err(|_| "Aufnahmesteuerung ist gesperrt.")?;
         let mut active = {
             let mut inner = self.lock()?;
+            if owner.is_some()
+                && inner
+                    .active
+                    .as_ref()
+                    .is_none_or(|active| active.owner.as_deref() != owner)
+            {
+                return Err("This agent does not own the active recording".into());
+            }
+            if session.is_some()
+                && !inner.active.as_ref().is_some_and(|active| {
+                    active
+                        .store
+                        .preview_snapshot(0)
+                        .is_ok_and(|data| Some(data.id.as_str()) == session)
+                })
+            {
+                return Err("The requested recording is no longer active".into());
+            }
             inner.transitioning = true;
             match inner.active.take() {
                 Some(active) => active,
@@ -386,6 +432,9 @@ impl Service {
             .map(CaptureController::stop)
             .transpose();
         active.capture = None;
+        if active.owner.is_some() {
+            self.agent.capture_ended();
+        }
         active.stop.store(true, Ordering::Release);
         for worker in active.workers.drain(..) {
             if worker.join().is_err() {
@@ -551,6 +600,7 @@ impl Service {
             })
             .collect();
         self.lock()?.active = Some(Active {
+            owner: None,
             store: store.clone(),
             capture: None,
             stop,
@@ -700,6 +750,8 @@ struct StartRequest {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct NotesRequest {
     #[serde(default)]
+    use_saved_key: bool,
+    #[serde(default)]
     job_id: Option<String>,
     meeting_id: String,
     template: meeting_notes::Template,
@@ -762,6 +814,21 @@ async fn start_meeting(
 async fn stop_meeting(service: State<'_, Arc<Service>>) -> AppResult<MeetingView> {
     let service = Arc::clone(&service);
     blocking(move || service.stop()).await
+}
+#[tauri::command]
+async fn agent_decide_recording(
+    service: State<'_, Arc<Service>>,
+    request_id: String,
+    approve: bool,
+    request: Option<StartRequest>,
+) -> AppResult<()> {
+    let service = Arc::clone(&service);
+    blocking(move || service.decide_agent(&request_id, approve, request)).await
+}
+#[tauri::command]
+fn agent_revoke(service: State<'_, Arc<Service>>) -> AppResult<()> {
+    service.agent.revoke();
+    Ok(())
 }
 #[tauri::command]
 async fn list_meetings(service: State<'_, Arc<Service>>) -> AppResult<Vec<MeetingView>> {
@@ -829,14 +896,59 @@ pub fn run() {
         Arc::new(Service::new(root).expect("Lokale Sitzungsablage konnte nicht geöffnet werden."));
     tauri::Builder::default().manage(service).setup(|app| {
         let service=Arc::clone(app.state::<Arc<Service>>().inner());
+        if std::env::args().skip(1).eq(["--agent", "serve"]) { agent::start_stdio(Arc::clone(&service)).map_err(std::io::Error::other)?; }
         tauri::async_runtime::spawn_blocking(move|| {let _=service.refresh(None);});
         Ok(())
-    }).invoke_handler(tauri::generate_handler![get_app_state,refresh_handy,list_devices,start_meeting,stop_meeting,list_meetings,get_meeting,resume_meeting,import_legacy,copy_text,generate_notes,list_analyses,notes_commands::list_text_models,notes_commands::get_notes_progress,notes_commands::cancel_notes,notes_commands::notes_markdown])
+    }).invoke_handler(tauri::generate_handler![get_app_state,refresh_handy,list_devices,start_meeting,stop_meeting,agent_decide_recording,agent_revoke,list_meetings,get_meeting,resume_meeting,import_legacy,copy_text,generate_notes,list_analyses,notes_commands::list_text_models,notes_commands::get_notes_progress,notes_commands::cancel_notes,notes_commands::notes_markdown,template_commands::list_templates,template_commands::save_templates,template_commands::import_templates,credential_commands::credential_status,credential_commands::save_credential,credential_commands::remove_credential])
     .on_window_event(|window,event|{if let tauri::WindowEvent::CloseRequested{api,..}=event{let service=window.state::<Arc<Service>>();let blocked=service.lock().is_ok_and(|inner|inner.transitioning||inner.active.as_ref().is_some_and(|a|a.capture.is_some()));if blocked{api.prevent_close();if let Ok(mut inner)=service.lock(){inner.error=Some(if inner.transitioning { "Ein Vorgang läuft noch. Bitte warten, bis Audioabschluss und Verarbeitung beendet sind.".into() } else { "Bitte zuerst „Meeting beenden“ wählen. Audio wird gesichert und offene Abschnitte werden verarbeitet.".into() });}let _=window.emit("recording-close-blocked",());}}})
     .run(tauri::generate_context!()).expect("HandyMeeting konnte nicht gestartet werden.");
 }
 pub fn run_cli(args: &[String]) -> Option<AppResult<()>> {
     match args.first().map(String::as_str) {
+        Some("--agent-protocol-check-stdio") => Some(if args.len() == 1 {
+            agent::check_stdio()
+        } else {
+            Err("The synthetic protocol check accepts no arguments".into())
+        }),
+        Some("--credential-checks") => Some((|| {
+            if args.len() != 2 {
+                return Err("Exactly one new credential-check directory is required".into());
+            }
+            credential_service::native_checks(Path::new(&args[1]))
+        })()),
+        Some("--companion-capabilities") => Some((|| {
+            let version = match &args[1..] {
+                [] => 1,
+                [flag, value] if flag == "--contract-version" => value
+                    .parse::<u32>()
+                    .map_err(|_| "Invalid contract version")?,
+                _ => return Err("Use --companion-capabilities [--contract-version 1]".into()),
+            };
+            if version != 1 {
+                return Err("Unsupported companion contract version".into());
+            }
+            let bridge = HandyBridge::discover(None).map_err(|error| error.to_string())?;
+            let catalog = bridge.refresh().map_err(|error| error.to_string())?;
+            let capabilities = handy_bridge::companion_capabilities(
+                version,
+                &catalog,
+                handy_bridge::installed_version(bridge.executable()),
+            )
+            .map_err(|error| error.to_string())?;
+            println!(
+                "{}",
+                serde_json::to_string(&capabilities).map_err(|_| "Capabilities unavailable")?
+            );
+            Ok(())
+        })()),
+        Some("--agent") if args == ["--agent", "serve"] => None,
+        Some("--agent") => Some((|| {
+            if args != ["--agent", "capabilities"] {
+                return Err("Use --agent capabilities or --agent serve; recording requires visible in-app consent.".into());
+            }
+            println!("{}", agent::capabilities());
+            Ok(())
+        })()),
         Some("--asr-worker") => Some(asr::worker_main(&args[1..])),
         Some("--synthetic-smoke") => Some(asr::synthetic_smoke(&args[1..])),
         Some("--list-text-models") => Some((|| {

@@ -117,10 +117,91 @@ export const de = {
   cloud: "Cloud · nur Text",
   endpoint: "API-Adresse",
   textModel: "Textmodell",
-  apiKey: "API-Schlüssel (nur für diese App-Sitzung)",
+  apiKey: "API-Schlüssel (optional)",
   apiKeyHelp:
     "Schlüssel werden nicht im Browser gespeichert. Die Cloud erhält ausschließlich freigegebenen Text, keine Audiodateien.",
   template: "Vorlage",
+  templateName: "Name der Vorlage",
+  sessionKey: "Schlüssel nur für diese App-Sitzung",
+  credentialStored:
+    "Für diese Adresse liegt ein Schlüssel im geschützten Betriebssystem-Speicher.",
+  credentialMissing: "Für diese Adresse ist kein Schlüssel gespeichert.",
+  credentialUnavailable:
+    "Der geschützte Schlüsselspeicher ist nicht verfügbar. Vorhandene Einträge werden nicht ersetzt.",
+  useSavedKey: "Gespeicherten Schlüssel für diese Adresse verwenden",
+  replaceCredential:
+    "Den vorhandenen, lesbaren Schlüssel ausdrücklich ersetzen",
+  confirmRemoveCredential:
+    "Ich möchte den gespeicherten Schlüssel für diese Adresse entfernen",
+  removeCredential: "Gespeicherten Schlüssel entfernen",
+  saveCredential: "Schlüssel im Betriebssystem speichern",
+  credentialHelp:
+    "Speichern und Entfernen erfolgen nur durch diese Schaltflächen. Ein gespeicherter Schlüssel erteilt keine Cloudfreigabe; Transkripttext muss weiterhin für jeden Lauf bestätigt werden.",
+  agentControl: "Lokaler Agentenzugriff",
+  agentConnected: "Verbindung aktiv",
+  agentDisconnected: "Verbindung beendet",
+  agentScope:
+    "Eine Freigabe gilt nur für die angefragte Aufnahme und deren Live-Transkript. Sie erlaubt keine Cloudübertragung oder Anbieterwechsel. Aufnahmeende bei Zeitlimit oder Verbindungsende.",
+  agentOwnedSession: "Eigene Agentensitzung",
+  agentExpires: "endet spätestens",
+  agentDuration: "Höchstdauer",
+  agentWithMicrophone: "Computerton und Mikrofon angefragt",
+  agentSystemOnly: "Nur Computerton angefragt",
+  agentMicrophoneConsent:
+    "Mein Mikrofon ausdrücklich für diese Anfrage freigeben",
+  agentChooseDevices:
+    "Bitte zuerst unter Meeting ein verfügbares Streaming-Modell und die Computerausgabe auswählen.",
+  agentChooseMicrophone:
+    "Bitte zuerst unter Meeting ein verfügbares Mikrofon auswählen.",
+  agentBusy:
+    "Eine Aufnahme oder deren Abschluss läuft bereits. Die neue Anfrage kann erst danach freigegeben werden.",
+  agentDeny: "Anfrage ablehnen",
+  agentApprove: "Diese Aufnahme erlauben",
+  agentRevoke: "Agentenzugriff widerrufen",
+  agentRevoked:
+    "Zugriff widerrufen. Eine manuell gestartete Aufnahme bleibt unberührt.",
+  duplicateTemplate: "Vorlage duplizieren",
+  duplicateName: "Kopie",
+  newTemplateHelp:
+    "Erstellt eine neue Vorlage mit den drei Standardaufträgen. Danach kannst du Schritte hinzufügen, entfernen und ändern.",
+  duplicateTemplateHelp:
+    "Erstellt eine unabhängige Kopie aller Arbeitsaufträge. Gespeicherte Auswertungen bleiben unverändert.",
+  renameTemplateHelp: "Ändert nur den Vorlagennamen für künftige Auswertungen.",
+  deleteTemplateHelp:
+    "Diese Vorlage aus der Auswahl entfernen? Bereits gespeicherte Auswertungen und ihre ursprünglichen Arbeitsaufträge bleiben erhalten.",
+  duplicateTemplateName:
+    "Dieser Vorlagenname ist bereits vergeben. Bitte einen anderen Namen wählen.",
+  templateSaveFailed:
+    "Die Vorlage konnte nicht gespeichert werden. Deine Eingaben bleiben geöffnet. Nach einem Konflikt die Bibliothek aktualisieren und die Änderung erneut anwenden.",
+  templateLoadFailed:
+    "Die Vorlagenbibliothek konnte nicht geladen werden. Bitte erneut laden; vorhandene Daten werden nicht ersetzt.",
+  refreshTemplates: "Vorlagen neu laden",
+  importBrowserTemplates: "Frühere Browser-Vorlagen übernehmen",
+  browserTemplatesHelp:
+    "Übernimmt die alten lokalen Browser-Vorlagen in den App-Speicher. Bestehende Vorlagen und Auswertungen bleiben erhalten; Konflikte werden als zusätzliche Kopien übernommen.",
+  templatesPortable:
+    "Vorlagen werden versioniert im lokalen App-Speicher gesichert. Gespeicherte Auswertungen behalten ihren eigenen Stand.",
+  templateLimit:
+    "Maximal 100 Vorlagen und 100 Schritte pro Vorlage. Namen bis 100 Zeichen, Arbeitsaufträge bis 8000 Zeichen.",
+  lastTemplate: "Mindestens eine Vorlage muss erhalten bleiben.",
+  editCurrentTemplate: "Aktuelle Vorlage bearbeiten",
+  inspectInstructions: "Gesicherte Arbeitsaufträge ansehen",
+  snapshotInstructions: "Gesicherter Arbeitsauftrag · schreibgeschützt",
+  historicalTemplateHelp:
+    "Du siehst eine gespeicherte Auswertung. Ihre Arbeitsaufträge bleiben unverändert. Zum Anpassen eine eigene Vorlage duplizieren oder zur aktuellen Vorlage wechseln.",
+  stepKindHelp:
+    "Zusammenfassung bündelt Themen. Entscheidungen verlangt ausdrückliche Beschlüsse. To-dos ergänzt Zuständige und Termine nur bei Belegen. Freie Analyse untersucht deine eigene Fragestellung. Die Belegpflicht gilt bei allen Ausgabeformen.",
+  tabKeyboardHelp:
+    "Tab auswählen: Pfeiltasten, Pos1 oder Ende. Arbeitsauftrag über Bearbeiten oder F2 öffnen.",
+  previousSource: "Vorheriger Originalabschnitt",
+  nextSource: "Nächster Originalabschnitt",
+  sourceSection: "Originalabschnitt",
+  sourceSnapshot:
+    "Originaltranskriptstand dieser Auswertung. Das hervorgehobene Zitat ist wörtlich belegt; Abschnittszeiten sind keine Wortzeiten.",
+  noSystemHelp:
+    "Keine Computerausgabe verfügbar. Prüfe das Ausgabegerät und die Audiofreigabe deines Systems; danach Audiogeräte aktualisieren.",
+  noMicrophoneHelp:
+    "Kein Mikrofon verfügbar. Prüfe Verbindung und Mikrofonfreigabe oder nimm nur den Computerton auf.",
   newTemplate: "Neue Vorlage",
   renameTemplate: "Vorlage umbenennen",
   removeTemplate: "Vorlage entfernen",
@@ -313,10 +394,86 @@ export const en: Record<MessageKey, string> = {
   cloud: "Cloud · text only",
   endpoint: "API address",
   textModel: "Text model",
-  apiKey: "API key (this app session only)",
+  apiKey: "API key (optional)",
   apiKeyHelp:
     "Keys are not stored in the browser. Cloud processing receives only approved text, never audio files.",
   template: "Template",
+  templateName: "Template name",
+  sessionKey: "Key for this app session only",
+  credentialStored:
+    "A key for this address is stored in the protected operating-system store.",
+  credentialMissing: "No key is stored for this address.",
+  credentialUnavailable:
+    "The protected key store is unavailable. Existing entries will not be replaced.",
+  useSavedKey: "Use the stored key for this address",
+  replaceCredential: "Explicitly replace the existing readable key",
+  confirmRemoveCredential: "I want to remove the stored key for this address",
+  removeCredential: "Remove stored key",
+  saveCredential: "Save key in the operating system",
+  credentialHelp:
+    "Only these buttons save or remove keys. A stored key does not grant cloud permission; transcript text still requires confirmation for every run.",
+  agentControl: "Local agent access",
+  agentConnected: "Connection active",
+  agentDisconnected: "Connection ended",
+  agentScope:
+    "Approval applies only to the requested recording and its live transcript. It does not permit cloud transmission or provider changes. Recording ends at the time limit or when the connection closes.",
+  agentOwnedSession: "Agent-owned session",
+  agentExpires: "ends no later than",
+  agentDuration: "Maximum duration",
+  agentWithMicrophone: "System audio and microphone requested",
+  agentSystemOnly: "System audio only requested",
+  agentMicrophoneConsent: "Explicitly allow my microphone for this request",
+  agentChooseDevices:
+    "First choose an available streaming model and system output under Meeting.",
+  agentChooseMicrophone: "First select an available microphone under Meeting.",
+  agentBusy:
+    "A recording or its completion is already running. The new request can be approved afterwards.",
+  agentDeny: "Deny request",
+  agentApprove: "Allow this recording",
+  agentRevoke: "Revoke agent access",
+  agentRevoked: "Access revoked. A manually started recording is unaffected.",
+  duplicateTemplate: "Duplicate template",
+  duplicateName: "Copy",
+  newTemplateHelp:
+    "Creates a new template with the three default tasks. You can then add, remove and change steps.",
+  duplicateTemplateHelp:
+    "Creates an independent copy of every instruction. Saved analyses remain unchanged.",
+  renameTemplateHelp: "Changes only the template name for future analyses.",
+  deleteTemplateHelp:
+    "Remove this template from the selection? Saved analyses and their original instructions are preserved.",
+  duplicateTemplateName:
+    "This template name is already used. Please choose a different name.",
+  templateSaveFailed:
+    "The template could not be saved. Your input remains open. After a conflict, reload the library and apply the change again.",
+  templateLoadFailed:
+    "The template library could not be loaded. Please retry; existing data will not be replaced.",
+  refreshTemplates: "Reload templates",
+  importBrowserTemplates: "Import previous browser templates",
+  browserTemplatesHelp:
+    "Copies the old local browser templates into app storage. Existing templates and analyses are preserved; conflicts are imported as additional copies.",
+  templatesPortable:
+    "Templates are versioned in local app storage. Saved analyses keep their own snapshot.",
+  templateLimit:
+    "Up to 100 templates and 100 steps per template. Names may contain 100 characters and instructions 8000 characters.",
+  lastTemplate: "At least one template must remain.",
+  editCurrentTemplate: "Edit current template",
+  inspectInstructions: "View saved instructions",
+  snapshotInstructions: "Saved instruction · read only",
+  historicalTemplateHelp:
+    "This is a saved analysis. Its instructions remain unchanged. Duplicate it as your own template or return to the current template to make changes.",
+  stepKindHelp:
+    "Summary groups topics. Decisions requires explicit decisions. To-dos adds owners and dates only with evidence. Custom analysis explores your own question. Every output type requires source evidence.",
+  tabKeyboardHelp:
+    "Select tabs with arrow keys, Home or End. Open instructions with Edit or F2.",
+  previousSource: "Previous original section",
+  nextSource: "Next original section",
+  sourceSection: "Original section",
+  sourceSnapshot:
+    "Original transcript snapshot for this analysis. Highlighted quotes are verbatim evidence; section times are not word timestamps.",
+  noSystemHelp:
+    "No system output is available. Check your output device and system audio permission, then refresh the audio devices.",
+  noMicrophoneHelp:
+    "No microphone is available. Check its connection and microphone permission, or record system audio only.",
   newTemplate: "New template",
   renameTemplate: "Rename template",
   removeTemplate: "Remove template",

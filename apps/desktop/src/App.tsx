@@ -3,6 +3,10 @@ import Sidebar, { type Page } from "./views/Sidebar";
 import MeetingView from "./views/MeetingView";
 import MeetingDetail from "./views/MeetingDetail";
 import NotesProgressPanel from "./views/NotesProgressPanel";
+import TemplateDialog, { type TemplateAction } from "./views/TemplateDialog";
+import SourceDialog, { type SourceSelection } from "./views/SourceDialog";
+import AgentPanel from "./views/AgentPanel";
+import { useTemplateLibrary } from "./useTemplateLibrary";
 import { useLocalTextModels } from "./useLocalTextModels";
 import { useNotesJob } from "./useNotesJob";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -14,9 +18,7 @@ import {
   meetingLabel,
   defaultTemplate,
   renderTranscript,
-  trackName,
   uid,
-  validateLibrary,
 } from "./domain";
 import { de, en, extraDe, extraEn } from "./i18n";
 import type {
@@ -32,10 +34,8 @@ import type {
   MeetingSummary,
   NotesRequest,
   Theme,
-  TranscriptSource,
 } from "./types";
 
-const TEMPLATE_KEY = "handymeeting.rust.beta.templates.v1";
 const PREFS_KEY = "handymeeting.rust.beta.preferences.v1";
 function loadPreferences(): {
   locale: Locale;
@@ -55,19 +55,6 @@ function loadPreferences(): {
     };
   } catch {
     return { locale: "de", theme: "system", persistable: false };
-  }
-}
-function loadLibrary(): { templates: AnalysisTemplate[]; invalid: boolean } {
-  const initial = { templates: [defaultTemplate()], invalid: false };
-  try {
-    const raw = localStorage.getItem(TEMPLATE_KEY);
-    if (!raw) return initial;
-    const templates: unknown = JSON.parse(raw);
-    return validateLibrary(templates)
-      ? { templates, invalid: false }
-      : { ...initial, invalid: true };
-  } catch {
-    return { ...initial, invalid: true };
   }
 }
 export default function App({ api = desktopApi }: { api?: DesktopApi }) {
@@ -98,28 +85,33 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     [micId, setMicId] = useState(""),
     [micEnabled, setMicEnabled] = useState(false),
     [handyPath, setHandyPath] = useState("");
-  const [library] = useState(loadLibrary),
-    [templates, setTemplates] = useState(library.templates),
-    [templateId, setTemplateId] = useState(library.templates[0].id),
-    [stepId, setStepId] = useState(library.templates[0].steps[0].id);
+  const templateStore = useTemplateLibrary(api, connected, locale);
+  const templates = templateStore.templates;
+  const [templateId, setTemplateId] = useState(""),
+    [stepId, setStepId] = useState("");
   const [editing, setEditing] = useState<AnalysisStep | null>(null),
     [editingNew, setEditingNew] = useState(false),
-    [templateName, setTemplateName] = useState<{
-      id: string | null;
-      name: string;
-    } | null>(null);
+    [inspectingStep, setInspectingStep] = useState(false),
+    [templateAction, setTemplateAction] = useState<TemplateAction | null>(null),
+    [templateActionError, setTemplateActionError] = useState<string | null>(
+      null,
+    );
   const [endpoint, setEndpoint] = useState("http://127.0.0.1:1234/v1/"),
     [textModel, setTextModel] = useState(""),
     [manualTextModel, setManualTextModel] = useState(false),
     [apiKey, setApiKey] = useState(""),
+    [savedKeyScope, setSavedKeyScope] = useState<string | null>(null),
     [mode, setMode] = useState<"local" | "cloud">("local");
+  const credentialScope = JSON.stringify([mode, endpoint.trim()]);
+  const useSavedKey = savedKeyScope === credentialScope;
+  const setUseSavedKey = useCallback(
+    (value: boolean) => setSavedKeyScope(value ? credentialScope : null),
+    [credentialScope],
+  );
   const [analyses, setAnalyses] = useState<AnalysisResult[]>([]),
     [resultId, setResultId] = useState(""),
     [cloudRequest, setCloudRequest] = useState<NotesRequest | null>(null),
-    [source, setSource] = useState<{
-      source: TranscriptSource;
-      quote: string;
-    } | null>(null);
+    [source, setSource] = useState<SourceSelection | null>(null);
   const requestSequence = useRef(0),
     selectedRef = useRef<string | null>(null),
     fullMeetingRef = useRef<string | null>(null),
@@ -134,6 +126,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     copyTimer = useRef<ReturnType<typeof setTimeout>>();
   const template =
     templates.find((item) => item.id === templateId) ?? templates[0];
+  const templatePending = useRef(templateStore.pending);
+  templatePending.current = templateStore.pending;
   const result = analyses.find((item) => item.id === resultId);
   const models = (app?.handy?.models ?? []).filter(
     (item) =>
@@ -201,25 +195,15 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       setError(t.preferencesError);
     }
   }, [locale, theme]);
-  useEffect(() => {
-    if (library.invalid) return;
-    try {
-      localStorage.setItem(TEMPLATE_KEY, JSON.stringify(templates));
-    } catch {
-      setError(
-        locale === "de"
-          ? "Vorlagen konnten nicht lokal gespeichert werden."
-          : "Templates could not be saved locally.",
-      );
-    }
-  }, [templates, library.invalid, locale]);
   useEffect(
     () => () => {
       if (copyTimer.current) clearTimeout(copyTimer.current);
     },
     [],
   );
-  const modalOpen = Boolean(editing || templateName || cloudRequest || source);
+  const modalOpen = Boolean(
+    editing || templateAction || cloudRequest || source,
+  );
   useEffect(() => {
     if (!modalOpen) return;
     const previous = document.activeElement as HTMLElement | null;
@@ -239,8 +223,12 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     )?.focus();
     const keydown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        if (templatePending.current) {
+          event.preventDefault();
+          return;
+        }
         setEditing(null);
-        setTemplateName(null);
+        setTemplateAction(null);
         setCloudRequest(null);
         setSource(null);
         return;
@@ -589,12 +577,12 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       copyTimer.current = setTimeout(() => setCopied(null), 2000);
     });
   }
-  function updateTemplate(next: AnalysisTemplate) {
-    setTemplates((items) =>
-      items.map((item) => (item.id === next.id ? next : item)),
+  async function updateTemplate(next: AnalysisTemplate) {
+    return templateStore.commit(
+      templates.map((item) => (item.id === next.id ? next : item)),
     );
   }
-  function saveStep() {
+  async function saveStep() {
     if (!editing) return;
     if (!editing.name.trim() || !editing.prompt.trim()) {
       setError(t.invalidTemplate);
@@ -605,12 +593,15 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       name: editing.name.trim(),
       prompt: editing.prompt.trim(),
     };
-    updateTemplate({
-      ...template,
-      steps: editingNew
-        ? [...template.steps, next]
-        : template.steps.map((item) => (item.id === next.id ? next : item)),
-    });
+    if (
+      !(await updateTemplate({
+        ...template,
+        steps: editingNew
+          ? [...template.steps, next]
+          : template.steps.map((item) => (item.id === next.id ? next : item)),
+      }))
+    )
+      return;
     setStepId(next.id);
     setEditing(null);
   }
@@ -624,10 +615,83 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       return;
     const steps = [...template.steps];
     [steps[index], steps[index + delta]] = [steps[index + delta], steps[index]];
-    updateTemplate({ ...template, steps });
+    void updateTemplate({ ...template, steps });
+  }
+  function openTemplateAction(
+    kind: TemplateAction["kind"],
+    original = template,
+  ) {
+    setTemplateActionError(null);
+    setTemplateAction({
+      kind,
+      original: structuredClone(original),
+      name:
+        kind === "new"
+          ? ""
+          : kind === "duplicate"
+            ? original.name + " · " + t.duplicateName
+            : original.name,
+    });
+  }
+  async function saveTemplateAction() {
+    if (!templateAction) return;
+    const { kind, original } = templateAction;
+    const name = templateAction.name.trim();
+    if (
+      kind !== "delete" &&
+      templates.some(
+        (item) =>
+          item.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase() &&
+          !(kind === "rename" && item.id === original.id),
+      )
+    ) {
+      setTemplateActionError(t.duplicateTemplateName);
+      return;
+    }
+    let next: AnalysisTemplate | null = null;
+    let updated: AnalysisTemplate[];
+    if (kind === "delete") {
+      if (templates.length < 2) return;
+      updated = templates.filter((item) => item.id !== original.id);
+    } else if (kind === "rename") {
+      const current = templates.find((item) => item.id === original.id);
+      if (!current) {
+        setTemplateActionError(t.templateSaveFailed);
+        return;
+      }
+      next = { ...current, name };
+      updated = templates.map((item) =>
+        item.id === original.id ? next! : item,
+      );
+    } else {
+      const base = kind === "new" ? defaultTemplate(locale) : original;
+      next = {
+        ...structuredClone(base),
+        id: uid(),
+        name,
+        steps: base.steps.map((item) => ({ ...item, id: uid() })),
+      };
+      updated = [...templates, next];
+    }
+    if (!(await templateStore.commit(updated))) {
+      setTemplateActionError(t.templateSaveFailed);
+      return;
+    }
+    const selected = next ?? updated[0];
+    setTemplateId(selected.id);
+    setStepId(selected.steps[0].id);
+    setResultId("");
+    setTemplateAction(null);
   }
   function beginNotes() {
-    if (!notesMeeting || !notesModelReady || notesMeetingLoading) return;
+    if (
+      !notesMeeting ||
+      !notesModelReady ||
+      notesMeetingLoading ||
+      !templateStore.ready ||
+      templateStore.pending
+    )
+      return;
     const request: NotesRequest = {
       meetingId: notesMeeting.id,
       template: structuredClone(template),
@@ -636,6 +700,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       mode,
       cloudConsent: false,
       apiKey,
+      useSavedKey,
     };
     if (mode === "cloud") setCloudRequest(request);
     else void runNotes(request);
@@ -674,7 +739,11 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       setError(t.sourceMissing);
       return;
     }
-    setSource({ source: original, quote: evidence.quote });
+    setSource({
+      sources: result!.sources,
+      index: result!.sources.indexOf(original),
+      quote: evidence.quote,
+    });
   }
   const statusName = (value: string) =>
     value === "complete"
@@ -840,6 +909,52 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             notesJob.lastRequest?.meetingId === notesMeetingId
               ? resumeNotes
               : null
+          }
+        />
+        <AgentPanel
+          agent={app?.agent}
+          blocked={
+            recording || isStopping || catchingUp || Boolean(app?.transitioning)
+          }
+          devicesReady={Boolean(
+            modelId &&
+              models.some((item) => item.id === modelId) &&
+              devices.some(
+                (item) => item.id === systemId && item.source === "system",
+              ),
+          )}
+          microphoneReady={devices.some(
+            (item) => item.id === micId && item.source === "microphone",
+          )}
+          busy={busy}
+          t={t}
+          onDecide={(approve) => {
+            const pending = app?.agent?.pending;
+            if (!pending) return;
+            void action(async () => {
+              await api.agentDecideRecording(
+                pending.requestId,
+                approve,
+                approve
+                  ? {
+                      title: pending.title,
+                      modelId,
+                      systemDeviceId: systemId,
+                      microphoneDeviceId: pending.includeMicrophone
+                        ? micId
+                        : null,
+                    }
+                  : undefined,
+              );
+              await poll();
+              await refreshHistory();
+            });
+          }}
+          onRevoke={() =>
+            void action(async () => {
+              await api.agentRevoke();
+              await poll();
+            })
           }
         />
         {page === "meeting" && (
@@ -1091,6 +1206,9 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         {page === "notes" && (
           <NotesView
             t={t}
+            api={api}
+            useSavedKey={useSavedKey}
+            setUseSavedKey={setUseSavedKey}
             meeting={notesMeeting}
             meetingId={notesMeetingId}
             meetings={notesMeetingOptions}
@@ -1104,7 +1222,16 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             manualModel={manualTextModel}
             setManualModel={setManualTextModel}
             modelReady={notesModelReady}
-            libraryInvalid={library.invalid}
+            libraryInvalid={!templateStore.ready}
+            libraryPending={templateStore.pending}
+            libraryError={templateStore.error ?? templateStore.migrationError}
+            browserInvalid={templateStore.browserInvalid}
+            refreshTemplates={() => void templateStore.refresh()}
+            importBrowser={
+              templateStore.hasBrowserTemplates
+                ? () => void templateStore.importBrowser()
+                : null
+            }
             templates={templates}
             notesBusy={notesBusy}
             mode={mode}
@@ -1121,8 +1248,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             setTemplateId={setTemplateId}
             setStepId={setStepId}
             setResultId={setResultId}
-            setTemplateName={setTemplateName}
-            setTemplates={setTemplates}
+            openTemplateAction={openTemplateAction}
             connected={connected}
             recording={recording}
             busy={busy || notesMeetingLoading}
@@ -1130,7 +1256,14 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             result={result}
             resultSection={resultSection}
             selectedStep={selectedStep}
-            setEditing={setEditing}
+            setEditing={(value) => {
+              setInspectingStep(false);
+              setEditing(value);
+            }}
+            inspectStep={(value) => {
+              setInspectingStep(true);
+              setEditing(value);
+            }}
             setEditingNew={setEditingNew}
             moveStep={moveStep}
             updateTemplate={updateTemplate}
@@ -1142,7 +1275,12 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         )}
       </main>
       {editing && (
-        <div className="modal-backdrop" onClick={() => setEditing(null)}>
+        <div
+          className="modal-backdrop"
+          onClick={() => {
+            if (!templateStore.pending) setEditing(null);
+          }}
+        >
           <section
             role="dialog"
             aria-modal="true"
@@ -1151,9 +1289,12 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             onClick={(event) => event.stopPropagation()}
           >
             <div className="section-heading">
-              <h2 id="step-title">{t.editTab}</h2>
+              <h2 id="step-title">
+                {inspectingStep ? t.snapshotInstructions : t.editTab}
+              </h2>
               <button
                 className="icon-button"
+                disabled={templateStore.pending}
                 aria-label={t.close}
                 onClick={() => setEditing(null)}
               >
@@ -1161,11 +1302,13 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
               </button>
             </div>
             <p>{t.instructionHelp}</p>
+            <p className="muted">{t.templateLimit}</p>
             <label>
               {t.tabName}
               <input
                 maxLength={100}
                 value={editing.name}
+                readOnly={inspectingStep || templateStore.pending}
                 onChange={(event) =>
                   setEditing({ ...editing, name: event.target.value })
                 }
@@ -1175,6 +1318,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
               {t.kind}
               <select
                 value={editing.kind}
+                disabled={inspectingStep || templateStore.pending}
                 onChange={(event) =>
                   setEditing({
                     ...editing,
@@ -1191,86 +1335,69 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
                 )}
               </select>
             </label>
+            <p className="muted">{t.stepKindHelp}</p>
             <label>
               {t.instruction}
               <textarea
                 rows={8}
                 maxLength={8000}
                 value={editing.prompt}
+                readOnly={inspectingStep || templateStore.pending}
                 onChange={(event) =>
                   setEditing({ ...editing, prompt: event.target.value })
                 }
               />
             </label>
             <div className="dialog-actions">
-              <button className="secondary" onClick={() => setEditing(null)}>
-                {t.cancel}
-              </button>
+              {templateStore.error && (
+                <div>
+                  <p className="inline-error" role="alert">
+                    {t.templateSaveFailed}
+                  </p>
+                  <button
+                    className="secondary"
+                    disabled={templateStore.pending}
+                    onClick={() => void templateStore.refresh()}
+                  >
+                    {t.refreshTemplates}
+                  </button>
+                </div>
+              )}
               <button
-                className="primary"
-                onClick={saveStep}
-                disabled={!editing.name.trim() || !editing.prompt.trim()}
+                className="secondary"
+                disabled={templateStore.pending}
+                onClick={() => setEditing(null)}
               >
-                {t.save}
+                {inspectingStep ? t.close : t.cancel}
               </button>
+              {!inspectingStep && (
+                <button
+                  className="primary"
+                  onClick={() => void saveStep()}
+                  disabled={
+                    templateStore.pending ||
+                    !editing.name.trim() ||
+                    !editing.prompt.trim()
+                  }
+                >
+                  {templateStore.pending ? t.busy : t.save}
+                </button>
+              )}
             </div>
           </section>
         </div>
       )}
-      {templateName && (
-        <div className="modal-backdrop">
-          <form
-            className="dialog small"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="template-title"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!templateName.name.trim()) return;
-              if (templateName.id)
-                updateTemplate({ ...template, name: templateName.name.trim() });
-              else {
-                const next = {
-                  ...structuredClone(template),
-                  id: uid(),
-                  name: templateName.name.trim(),
-                  steps: template.steps.map((item) => ({ ...item, id: uid() })),
-                };
-                setTemplates([...templates, next]);
-                setTemplateId(next.id);
-                setStepId(next.steps[0].id);
-                setResultId("");
-              }
-              setTemplateName(null);
-            }}
-          >
-            <h2 id="template-title">
-              {templateName.id ? t.renameTemplate : t.newTemplate}
-            </h2>
-            <label>
-              {t.template}
-              <input
-                value={templateName.name}
-                maxLength={100}
-                onChange={(event) =>
-                  setTemplateName({ ...templateName, name: event.target.value })
-                }
-              />
-            </label>
-            <div className="dialog-actions">
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => setTemplateName(null)}
-              >
-                {t.cancel}
-              </button>
-              <button className="primary" disabled={!templateName.name.trim()}>
-                {t.save}
-              </button>
-            </div>
-          </form>
-        </div>
+      {templateAction && (
+        <TemplateDialog
+          action={templateAction}
+          pending={templateStore.pending}
+          error={templateActionError}
+          t={t}
+          onChange={(name) => setTemplateAction({ ...templateAction, name })}
+          onSave={() => void saveTemplateAction()}
+          onClose={() => setTemplateAction(null)}
+          onRefresh={() => void templateStore.refresh()}
+        />
       )}
       {cloudRequest && (
         <div className="modal-backdrop">
@@ -1306,43 +1433,12 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         </div>
       )}
       {source && (
-        <div className="modal-backdrop" onClick={() => setSource(null)}>
-          <section
-            className="dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="source-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="section-heading">
-              <h2 id="source-title">
-                {t.evidence} [{source.source.id}]
-              </h2>
-              <button
-                className="icon-button"
-                aria-label={t.close}
-                onClick={() => setSource(null)}
-              >
-                <X size={19} />
-              </button>
-            </div>
-            <p className="muted">
-              {trackName(source.source.source, locale)} ·{" "}
-              {clock(source.source.startMs)}–{clock(source.source.endMs)}
-            </p>
-            <p className="source-text">
-              {source.source.text
-                .split(source.quote)
-                .map((part, index, array) => (
-                  <span key={index}>
-                    {part}
-                    {index < array.length - 1 && <mark>{source.quote}</mark>}
-                  </span>
-                ))}
-            </p>
-            <p className="muted">{t.sourceTimes}</p>
-          </section>
-        </div>
+        <SourceDialog
+          selection={source}
+          locale={locale}
+          t={t}
+          onClose={() => setSource(null)}
+        />
       )}
     </div>
   );

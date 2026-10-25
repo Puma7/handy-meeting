@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.0-beta.3 — issue implementation and verification
+
+- Manage named templates explicitly with create, duplicate, rename, reviewed removal and optional browser import. Keep prior revisions and historical analysis prompts immutable; reject conflicting or damaged stores.
+- Add optional Windows Credential Manager, macOS Keychain and Linux Secret Service storage. Session-only remains the default; locked/unreadable/ambiguous entries cannot be overwritten or silently replaced by plaintext.
+- Add a private local agent protocol with visible consent for each new owned session, separate microphone consent, bounded live reads, precise stop ownership and revocation on disconnect/deadline. A revoked/expired preparation cannot open capture afterward. This is not MCP.
+- Expose a consumer-owned versioned Handy integration description without model paths or session data; document the proposed upstream boundary without claiming maintainer agreement.
+- Add explicit opt-in long device diagnostics and confirmed PCM-prefix recovery checks; Mac/Linux physical-device validation remains outstanding.
+- Add a preregistered dense native-worker memory comparison preserving the original warning, binaries and thresholds. This isolated experiment does not replace a full-app two-hour test.
+
 ## 1.0.0-beta.2 — guided meeting analysis and portable candidates
 
 - Discover local text-model IDs from the configured loopback server; guide LM Studio setup and require an explicit model choice.

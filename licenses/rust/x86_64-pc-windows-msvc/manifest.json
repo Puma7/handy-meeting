@@ -1,8 +1,8 @@
 {
   "Target": "x86_64-pc-windows-msvc",
-  "CargoLockSHA256": "d7b93ad3cb55700c3b0466adc0350fff5071c13e86155b1ed38a068c41f8ab5b",
+  "CargoLockSHA256": "e6a7aa95fc3e550f62a0154a882e2eec1afab4cc86fa1ec131009c7336114fbb",
   "Scope": "Active Cargo resolve nodes, including build dependencies, filtered to this target; excludes workspace packages.",
-  "PackageCount": 313,
+  "PackageCount": 316,
   "Packages": [
     {
       "Name": "adler2",
@@ -2366,6 +2366,50 @@
           "OriginalFilename": "LICENSE-MIT",
           "File": "keyboard-types-0.7.0-LICENSE-MIT.txt",
           "SHA256": "31dbbab009f1b2e59a1622d5955dfafc38ebe834000215b49d954c6f85fe927c",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
+      "Name": "keyring",
+      "Version": "4.2.0",
+      "SPDX": "MIT OR Apache-2.0",
+      "Repository": "https://github.com/open-source-cooperative/keyring-rs",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/keyring/4.2.0/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE-APACHE",
+          "File": "keyring-4.2.0-LICENSE-APACHE.txt",
+          "SHA256": "78ebc2ea2a1cec9cbec2e1a6fc15e73474fe22bdad7575518e7f4628651d49c4",
+          "Source": "provided-crate-file"
+        },
+        {
+          "OriginalFilename": "LICENSE-MIT",
+          "File": "keyring-4.2.0-LICENSE-MIT.txt",
+          "SHA256": "157cc607717b1b372a69f6b4526f6ad18c1279af9f3267835cca2943f37bc07d",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
+      "Name": "keyring-core",
+      "Version": "1.0.1",
+      "SPDX": "MIT OR Apache-2.0",
+      "Repository": "https://github.com/open-source-cooperative/keyring-core.git",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/keyring-core/1.0.1/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE-APACHE",
+          "File": "keyring-core-1.0.1-LICENSE-APACHE.txt",
+          "SHA256": "78ebc2ea2a1cec9cbec2e1a6fc15e73474fe22bdad7575518e7f4628651d49c4",
+          "Source": "provided-crate-file"
+        },
+        {
+          "OriginalFilename": "LICENSE-MIT",
+          "File": "keyring-core-1.0.1-LICENSE-MIT.txt",
+          "SHA256": "157cc607717b1b372a69f6b4526f6ad18c1279af9f3267835cca2943f37bc07d",
           "Source": "provided-crate-file"
         }
       ]
@@ -4996,6 +5040,22 @@
       ]
     },
     {
+      "Name": "tracing-attributes",
+      "Version": "0.1.31",
+      "SPDX": "MIT",
+      "Repository": "https://github.com/tokio-rs/tracing",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/tracing-attributes/0.1.31/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE",
+          "File": "tracing-attributes-0.1.31-LICENSE.txt",
+          "SHA256": "898b1ae9821e98daf8964c8d6c7f61641f5f5aa78ad500020771c0939ee0dea1",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
       "Name": "tracing-core",
       "Version": "0.1.36",
       "SPDX": "MIT",
@@ -6008,6 +6068,28 @@
       ]
     },
     {
+      "Name": "windows-native-keyring-store",
+      "Version": "1.1.0",
+      "SPDX": "MIT OR Apache-2.0",
+      "Repository": "https://github.com/open-source-cooperative/windows-native-keyring-store.git",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/windows-native-keyring-store/1.1.0/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE-APACHE",
+          "File": "windows-native-keyring-store-1.1.0-LICENSE-APACHE.txt",
+          "SHA256": "c50e49cbc9917204c7e1d9c046342069e839c4947ef8c6027d23a3184ae73706",
+          "Source": "provided-crate-file"
+        },
+        {
+          "OriginalFilename": "LICENSE-MIT",
+          "File": "windows-native-keyring-store-1.1.0-LICENSE-MIT.txt",
+          "SHA256": "1b9916aeb17b63b74372d5493b6c6ce828eef2853e1dc48ac2bba701f148920c",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
       "Name": "windows-numerics",
       "Version": "0.2.0",
       "SPDX": "MIT OR Apache-2.0",
@@ -6134,28 +6216,6 @@
         {
           "OriginalFilename": "license-mit",
           "File": "windows-strings-0.5.1-license-mit.txt",
-          "SHA256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
-          "Source": "provided-crate-file"
-        }
-      ]
-    },
-    {
-      "Name": "windows-sys",
-      "Version": "0.52.0",
-      "SPDX": "MIT OR Apache-2.0",
-      "Repository": "https://github.com/microsoft/windows-rs",
-      "Source": "registry+https://github.com/rust-lang/crates.io-index",
-      "SourceArchive": "https://crates.io/api/v1/crates/windows-sys/0.52.0/download",
-      "LicenseFiles": [
-        {
-          "OriginalFilename": "license-apache-2.0",
-          "File": "windows-sys-0.52.0-license-apache-2.0.txt",
-          "SHA256": "c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b",
-          "Source": "provided-crate-file"
-        },
-        {
-          "OriginalFilename": "license-mit",
-          "File": "windows-sys-0.52.0-license-mit.txt",
           "SHA256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
           "Source": "provided-crate-file"
         }

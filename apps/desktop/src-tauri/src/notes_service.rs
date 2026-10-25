@@ -3,6 +3,7 @@ use crate::{note_sources, valid_legacy_id, AppResult, NotesRequest, Service};
 use meeting_notes::{Analysis, AnalysisControl, AnalysisProgress};
 use serde::Serialize;
 use std::{collections::HashSet, sync::Mutex, time::Instant};
+use zeroize::Zeroizing;
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -197,7 +198,8 @@ fn canonical_job_id(id: &str) -> AppResult<String> {
     Ok(id.replace('-', "").to_ascii_lowercase())
 }
 
-pub(crate) fn analyze(service: &Service, request: NotesRequest) -> AppResult<Analysis> {
+pub(crate) fn analyze(service: &Service, mut request: NotesRequest) -> AppResult<Analysis> {
+    let mut key = Zeroizing::new(std::mem::take(&mut request.api_key));
     let (id, control) = service.notes_jobs.begin(&request)?;
     struct Guard<'a> {
         jobs: &'a NotesJobs,
@@ -226,12 +228,21 @@ pub(crate) fn analyze(service: &Service, request: NotesRequest) -> AppResult<Ana
             .map_err(anyhow::Error::msg)?;
         anyhow::ensure!(data.status=="complete"&&data.parts.iter().all(|p|p.status=="complete"),"Bitte zuerst alle offenen Transkriptabschnitte nachholen. Ausgewertet wird nur ein abgeschlossener Originalstand.");
         let sources = note_sources(&data).map_err(anyhow::Error::msg)?;
+        if request.use_saved_key {
+            anyhow::ensure!(key.is_empty(),"Bitte entweder den gespeicherten Schlüssel oder einen Schlüssel nur für diese Sitzung wählen.");
+            key = crate::credential_service::load_for_run(
+                &request.endpoint,
+                &request.mode,
+                request.cloud_consent,
+            )
+            .map_err(anyhow::Error::msg)?;
+        }
         let connection = meeting_notes::Connection {
             endpoint: request.endpoint,
             model: request.model,
             mode: request.mode,
             cloud_consent: request.cloud_consent,
-            api_key: request.api_key,
+            api_key: std::mem::take(&mut *key),
         };
         meeting_notes::analyze_controlled(
             &service
@@ -270,6 +281,7 @@ mod tests {
             mode: "local".into(),
             cloud_consent: false,
             api_key: String::new(),
+            use_saved_key: false,
             resume_run_id: None,
         }
     }

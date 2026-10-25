@@ -27,6 +27,9 @@ serde_json = "=1.0.145"
 anyhow = "=1.0.104"
 dirs = "=6.0.0"
 arboard = { version = "=3.6.1", default-features = false }
+keyring = { version = "=4.2.0", default-features = false, features = ["v1"] }
+zeroize = "=1.8.2"
+fs2 = "=0.4.3"
 
 [features]
 default = ["custom-protocol"]

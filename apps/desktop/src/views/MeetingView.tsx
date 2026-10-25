@@ -91,6 +91,18 @@ export default function MeetingView({
       {!!app?.handy?.error && (
         <div className="notice warning">{app.handy.error}</div>
       )}
+      {connected && !devices.some((item) => item.source === "system") && (
+        <div className="notice warning" role="status">
+          {t.noSystemHelp}
+        </div>
+      )}
+      {connected &&
+        micEnabled &&
+        !devices.some((item) => item.source === "microphone") && (
+          <div className="notice warning" role="status">
+            {t.noMicrophoneHelp}
+          </div>
+        )}
       <section className="setup-panel" aria-label={t.meeting}>
         <label className="full">
           {t.title}

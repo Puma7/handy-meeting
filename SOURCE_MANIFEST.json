@@ -6,13 +6,13 @@
   },
   {
     "Path": "README.md",
-    "SHA256": "CF1B32F2E6DFF98FDCEF60A91F3067DA8E29F93BCD7E36B87EEADF178DE3EB05",
-    "Bytes": 9009
+    "SHA256": "1A27A40C89C5163E9FFD166C39975DBED43534B6E2419D0E32B312F5F36C923A",
+    "Bytes": 9141
   },
   {
     "Path": "README.de.md",
-    "SHA256": "A148AB72527FABF9631B4FEF651F9477EBF92A3CC395D215E313803199A9654D",
-    "Bytes": 20949
+    "SHA256": "E58B6A7172EEE254832E60A6E2A5E12516D52E3907E2853C375D6CFEE1910477",
+    "Bytes": 21068
   },
   {
     "Path": "CONTRIBUTING.md",
@@ -26,13 +26,13 @@
   },
   {
     "Path": "CHANGELOG.md",
-    "SHA256": "7BE10F7C05D51F5D5E80EFFC5129ED77CB0655419D0D8660DBF114FF82684221",
-    "Bytes": 3104
+    "SHA256": "A24D3D9E58B9D511EA0180F1E0CD91C92AD3A39B9D52AEDAC64FAD2A861E5173",
+    "Bytes": 4388
   },
   {
     "Path": "BUILD_STATUS.md",
-    "SHA256": "4F9F8ECB8D12BCF151E75AC78AE68BCFFA8FF0DA312EDFC7CB2387E1FD066A46",
-    "Bytes": 4397
+    "SHA256": "A689F50FB0EFEBE8EE497487EDEBB93B74F522B3878E2FD6C9A95A458B419577",
+    "Bytes": 6440
   },
   {
     "Path": "MASTERPLAN.md",
@@ -41,8 +41,8 @@
   },
   {
     "Path": "TEST_REPORT.md",
-    "SHA256": "B40B79700AEF474738FAB3664C2C553B120B46F0BBC30F5C46C428E9195CE4CF",
-    "Bytes": 47661
+    "SHA256": "1FABA083D4A8C38AF6C71DB5AB3AB6F002722810DD38413A613C55C4D35C836A",
+    "Bytes": 55655
   },
   {
     "Path": "DAUERTEST.md",
@@ -96,13 +96,13 @@
   },
   {
     "Path": "Cargo.toml",
-    "SHA256": "EDDA037B67ACAFA41C0C2BD025DA32080462EB2BCFCF6AC1E48529B93BDB5AD0",
+    "SHA256": "757FB9E8A60D85DA1D8EFCDCEB6B62C6B425C92D3DDBCC047D5B456F63BE867D",
     "Bytes": 619
   },
   {
     "Path": "Cargo.lock",
-    "SHA256": "D7B93AD3CB55700C3B0466ADC0350FFF5071C13E86155B1ED38A068C41F8AB5B",
-    "Bytes": 123174
+    "SHA256": "E6A7AA95FC3E550F62A0154A882E2EEC1AFAB4CC86FA1EC131009C7336114FBB",
+    "Bytes": 140141
   },
   {
     "Path": "global.json",
@@ -400,14 +400,19 @@
     "Bytes": 1526
   },
   {
+    "Path": "scripts/check-native-credentials.sh",
+    "SHA256": "2669193D82A4BEACEDEFC0BA336A7A09D1E96762683E14E6BA95D1AF2344801B",
+    "Bytes": 3102
+  },
+  {
     "Path": "scripts/collect-rust-notices.ps1",
     "SHA256": "B4B0BA0E61A7341E815B2FE116B78973F6E504C10BE0312125BFB852C3B85AF0",
     "Bytes": 18987
   },
   {
     "Path": "scripts/export-source.ps1",
-    "SHA256": "B05D9A0E3D919423840C4BC9C18472DE24A9EE2503F482CEBB64EF4AADCD70EC",
-    "Bytes": 3330
+    "SHA256": "DD22C292490E997099575117E935DD10A63FEBFA7F8DD37E6D3D07089CC1DC7A",
+    "Bytes": 3370
   },
   {
     "Path": "scripts/native-assets.json",
@@ -431,8 +436,8 @@
   },
   {
     "Path": "scripts/package-rust-portable.sh",
-    "SHA256": "C70BFA2EAF85E9E571857B24071A9F793A0577AB47470F75FE428257F11A01F9",
-    "Bytes": 5778
+    "SHA256": "E753BAFCA3A2FFD2B1F5C85B80A1D39EDA68E4DC901E71A34DCDD6F4DD1F6DBA",
+    "Bytes": 6154
   },
   {
     "Path": "scripts/package-rust-windows.ps1",
@@ -460,19 +465,29 @@
     "Bytes": 6593
   },
   {
+    "Path": "scripts/probe-worker-memory.py",
+    "SHA256": "BE60289C8F016EA7E52973B8268737922F609BE5F96941E8426305EC5B8DC920",
+    "Bytes": 20056
+  },
+  {
     "Path": "scripts/rust-artifacts.mjs",
     "SHA256": "D70B9009406486A5476184F3041B6AE96183257D83FD15051804E9099C7DB91C",
     "Bytes": 20354
   },
   {
     "Path": "scripts/rust-portable-artifacts.py",
-    "SHA256": "00370AACDC0944AB482552B8F1E4C5FBDB13188222AE4786E9DB676A2C7D6B1B",
-    "Bytes": 15094
+    "SHA256": "387D918D35D1329AD94C556607E86DA86ACC5E026B74BD3BC97A14C408D70DE3",
+    "Bytes": 15195
   },
   {
     "Path": "scripts/test_rust_portable.py",
-    "SHA256": "BA2831C6C6D54796D7F416651702F943F749400A32A56B1E64F2071C4E5824A2",
-    "Bytes": 8692
+    "SHA256": "58B2AAD0BE7DD1E24C986177BA28DEA7FF57E3396A7BE1E168E350C6975F9AAE",
+    "Bytes": 9199
+  },
+  {
+    "Path": "scripts/test_worker_memory.py",
+    "SHA256": "B75AF7D22015488E75B2F6BAB12B05ED56C7D6A1681EDA0D683468FAEFFEA0A6",
+    "Bytes": 1375
   },
   {
     "Path": "platform/macos/HandyMeetingCapture.swift",
@@ -546,13 +561,13 @@
   },
   {
     "Path": ".github/workflows/rust-portable.yml",
-    "SHA256": "999B34095015074EA05259FA66384E12F822B55C5D46E5E1441A2A21367936E5",
-    "Bytes": 7741
+    "SHA256": "6DCD43C9B05FFC63F70EBFFC8826D3A54E8315FEDA0E2D23FFB219D01644CE3A",
+    "Bytes": 7911
   },
   {
     "Path": ".github/workflows/rust.yml",
-    "SHA256": "935EF90DAB1F21CDDDE61EBFB3CB8A69359A1FCACE8A6C5DE7B9A33E6EBCA2B8",
-    "Bytes": 8828
+    "SHA256": "A9D9D089278C07AE636C953395E785911F26A0854F55B451F3BD0D0C5E5B97C8",
+    "Bytes": 9334
   },
   {
     "Path": ".github/workflows/windows.yml",
@@ -606,7 +621,7 @@
   },
   {
     "Path": "licenses/frontend/manifest.json",
-    "SHA256": "7B05747C61365B32032493084271E97B408D0ABB1180E6340E854203D889E1B1",
+    "SHA256": "181B95DA5CC407912D3443E6977241BCC3C949873880A79B9AFCDCDC11A941BC",
     "Bytes": 3812
   },
   {
@@ -871,7 +886,7 @@
   },
   {
     "Path": "licenses/rust/aarch64-apple-darwin/ADDITIONAL_NOTICES.txt",
-    "SHA256": "437D958486B59A77DB66AC25666685CC43FDB41D6CFEAA53854195FA5818922E",
+    "SHA256": "E2E511F52A768DB52F098F6B4AA0667EEE1719628AE92B1FD9238C58782A2D65",
     "Bytes": 1221
   },
   {
@@ -918,6 +933,16 @@
     "Path": "licenses/rust/aarch64-apple-darwin/anyhow-1.0.104-LICENSE-MIT.txt",
     "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
     "Bytes": 1023
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/apple-native-keyring-store-1.0.2-LICENSE-APACHE.txt",
+    "SHA256": "78EBC2EA2A1CEC9CBEC2E1A6FC15E73474FE22BDAD7575518E7F4628651D49C4",
+    "Bytes": 10842
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/apple-native-keyring-store-1.0.2-LICENSE-MIT.txt",
+    "SHA256": "157CC607717B1B372A69F6B4526F6AD18C1279AF9F3267835CCA2943F37BC07D",
+    "Bytes": 1062
   },
   {
     "Path": "licenses/rust/aarch64-apple-darwin/arboard-3.6.1-LICENSE-APACHE.txt",
@@ -1985,6 +2010,26 @@
     "Bytes": 1050
   },
   {
+    "Path": "licenses/rust/aarch64-apple-darwin/keyring-4.2.0-LICENSE-APACHE.txt",
+    "SHA256": "78EBC2EA2A1CEC9CBEC2E1A6FC15E73474FE22BDAD7575518E7F4628651D49C4",
+    "Bytes": 10842
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/keyring-4.2.0-LICENSE-MIT.txt",
+    "SHA256": "157CC607717B1B372A69F6B4526F6AD18C1279AF9F3267835CCA2943F37BC07D",
+    "Bytes": 1062
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/keyring-core-1.0.1-LICENSE-APACHE.txt",
+    "SHA256": "78EBC2EA2A1CEC9CBEC2E1A6FC15E73474FE22BDAD7575518E7F4628651D49C4",
+    "Bytes": 10842
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/keyring-core-1.0.1-LICENSE-MIT.txt",
+    "SHA256": "157CC607717B1B372A69F6B4526F6AD18C1279AF9F3267835CCA2943F37BC07D",
+    "Bytes": 1062
+  },
+  {
     "Path": "licenses/rust/aarch64-apple-darwin/libc-0.2.191-LICENSE-APACHE.txt",
     "SHA256": "62C7A1E35F56406896D7AA7CA52D0CC0D272AC022B5D2796E7D6905DB8A3636A",
     "Bytes": 9723
@@ -2036,8 +2081,8 @@
   },
   {
     "Path": "licenses/rust/aarch64-apple-darwin/manifest.json",
-    "SHA256": "F511A1B2F0451D5EB63B22D946EF4BA3C13A1F3DA3D32D022D00A36C1C55F54A",
-    "Bytes": 255053
+    "SHA256": "9545F690E6AA3A715F524A26869E6B7DB831BB10AF6C8E260C8A3FC477DA49BD",
+    "Bytes": 260316
   },
   {
     "Path": "licenses/rust/aarch64-apple-darwin/markup5ever-0.38.0-LICENSE-APACHE.txt",
@@ -2670,6 +2715,26 @@
     "Bytes": 1097
   },
   {
+    "Path": "licenses/rust/aarch64-apple-darwin/security-framework-3.7.0-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/security-framework-3.7.0-LICENSE-MIT.txt",
+    "SHA256": "91E934255BA3B2F21103D68C5581C23EF34AA95C4628E4405B8C901935E11C69",
+    "Bytes": 1081
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/security-framework-sys-2.17.0-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/security-framework-sys-2.17.0-LICENSE-MIT.txt",
+    "SHA256": "91E934255BA3B2F21103D68C5581C23EF34AA95C4628E4405B8C901935E11C69",
+    "Bytes": 1081
+  },
+  {
     "Path": "licenses/rust/aarch64-apple-darwin/selectors-0.36.1-lib.rs-license-notice.txt",
     "SHA256": "7523DF2468FDA84E4DF377EE0CFD844A83742F39E0425E7C7819A82E3E25F840",
     "Bytes": 205
@@ -3245,6 +3310,11 @@
     "Bytes": 1062
   },
   {
+    "Path": "licenses/rust/aarch64-apple-darwin/tracing-attributes-0.1.31-LICENSE.txt",
+    "SHA256": "898B1AE9821E98DAF8964C8D6C7F61641F5F5AA78AD500020771C0939EE0DEA1",
+    "Bytes": 1062
+  },
+  {
     "Path": "licenses/rust/aarch64-apple-darwin/tracing-core-0.1.36-LICENSE.txt",
     "SHA256": "898B1AE9821E98DAF8964C8D6C7F61641F5F5AA78AD500020771C0939EE0DEA1",
     "Bytes": 1062
@@ -3581,7 +3651,7 @@
   },
   {
     "Path": "licenses/rust/x86_64-apple-darwin/ADDITIONAL_NOTICES.txt",
-    "SHA256": "EEE768E3179B3E3AE669FDBC4262C9A164E3B6AA093C4372343698F838CA861C",
+    "SHA256": "3DE4967952950884403ACC9B2378AB669B50A5A736F2BD14F33B4A7D9E8E60DB",
     "Bytes": 1220
   },
   {
@@ -3628,6 +3698,16 @@
     "Path": "licenses/rust/x86_64-apple-darwin/anyhow-1.0.104-LICENSE-MIT.txt",
     "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
     "Bytes": 1023
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/apple-native-keyring-store-1.0.2-LICENSE-APACHE.txt",
+    "SHA256": "78EBC2EA2A1CEC9CBEC2E1A6FC15E73474FE22BDAD7575518E7F4628651D49C4",
+    "Bytes": 10842
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/apple-native-keyring-store-1.0.2-LICENSE-MIT.txt",
+    "SHA256": "157CC607717B1B372A69F6B4526F6AD18C1279AF9F3267835CCA2943F37BC07D",
+    "Bytes": 1062
   },
   {
     "Path": "licenses/rust/x86_64-apple-darwin/arboard-3.6.1-LICENSE-APACHE.txt",
@@ -4705,6 +4785,26 @@
     "Bytes": 1050
   },
   {
+    "Path": "licenses/rust/x86_64-apple-darwin/keyring-4.2.0-LICENSE-APACHE.txt",
+    "SHA256": "78EBC2EA2A1CEC9CBEC2E1A6FC15E73474FE22BDAD7575518E7F4628651D49C4",
+    "Bytes": 10842
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/keyring-4.2.0-LICENSE-MIT.txt",
+    "SHA256": "157CC607717B1B372A69F6B4526F6AD18C1279AF9F3267835CCA2943F37BC07D",
+    "Bytes": 1062
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/keyring-core-1.0.1-LICENSE-APACHE.txt",
+    "SHA256": "78EBC2EA2A1CEC9CBEC2E1A6FC15E73474FE22BDAD7575518E7F4628651D49C4",
+    "Bytes": 10842
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/keyring-core-1.0.1-LICENSE-MIT.txt",
+    "SHA256": "157CC607717B1B372A69F6B4526F6AD18C1279AF9F3267835CCA2943F37BC07D",
+    "Bytes": 1062
+  },
+  {
     "Path": "licenses/rust/x86_64-apple-darwin/libc-0.2.191-LICENSE-APACHE.txt",
     "SHA256": "62C7A1E35F56406896D7AA7CA52D0CC0D272AC022B5D2796E7D6905DB8A3636A",
     "Bytes": 9723
@@ -4756,8 +4856,8 @@
   },
   {
     "Path": "licenses/rust/x86_64-apple-darwin/manifest.json",
-    "SHA256": "F42369CF1C49407DCE5532AF4D4622466932C42294640D0FACC39626E019D576",
-    "Bytes": 255933
+    "SHA256": "965C00309008BAD80EFB3B0AD5A0B00B3672BB2FC5F7C35E4D8FB0C96EDBE1E4",
+    "Bytes": 261196
   },
   {
     "Path": "licenses/rust/x86_64-apple-darwin/markup5ever-0.38.0-LICENSE-APACHE.txt",
@@ -5390,6 +5490,26 @@
     "Bytes": 1097
   },
   {
+    "Path": "licenses/rust/x86_64-apple-darwin/security-framework-3.7.0-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/security-framework-3.7.0-LICENSE-MIT.txt",
+    "SHA256": "91E934255BA3B2F21103D68C5581C23EF34AA95C4628E4405B8C901935E11C69",
+    "Bytes": 1081
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/security-framework-sys-2.17.0-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/security-framework-sys-2.17.0-LICENSE-MIT.txt",
+    "SHA256": "91E934255BA3B2F21103D68C5581C23EF34AA95C4628E4405B8C901935E11C69",
+    "Bytes": 1081
+  },
+  {
     "Path": "licenses/rust/x86_64-apple-darwin/selectors-0.36.1-lib.rs-license-notice.txt",
     "SHA256": "7523DF2468FDA84E4DF377EE0CFD844A83742F39E0425E7C7819A82E3E25F840",
     "Bytes": 205
@@ -5965,6 +6085,11 @@
     "Bytes": 1062
   },
   {
+    "Path": "licenses/rust/x86_64-apple-darwin/tracing-attributes-0.1.31-LICENSE.txt",
+    "SHA256": "898B1AE9821E98DAF8964C8D6C7F61641F5F5AA78AD500020771C0939EE0DEA1",
+    "Bytes": 1062
+  },
+  {
     "Path": "licenses/rust/x86_64-apple-darwin/tracing-core-0.1.36-LICENSE.txt",
     "SHA256": "898B1AE9821E98DAF8964C8D6C7F61641F5F5AA78AD500020771C0939EE0DEA1",
     "Bytes": 1062
@@ -6301,7 +6426,7 @@
   },
   {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/ADDITIONAL_NOTICES.txt",
-    "SHA256": "B5CEAFB64C680853FC3693E5AE09C4A1CDF5AF22DA2A55D3945A28EAD0A3FB75",
+    "SHA256": "99359514EB773985E97995A9281FA81629E364A1EC6A505B820C7EA996CBF8D5",
     "Bytes": 1223
   },
   {
@@ -7300,6 +7425,26 @@
     "Bytes": 1050
   },
   {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/keyring-4.2.0-LICENSE-APACHE.txt",
+    "SHA256": "78EBC2EA2A1CEC9CBEC2E1A6FC15E73474FE22BDAD7575518E7F4628651D49C4",
+    "Bytes": 10842
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/keyring-4.2.0-LICENSE-MIT.txt",
+    "SHA256": "157CC607717B1B372A69F6B4526F6AD18C1279AF9F3267835CCA2943F37BC07D",
+    "Bytes": 1062
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/keyring-core-1.0.1-LICENSE-APACHE.txt",
+    "SHA256": "78EBC2EA2A1CEC9CBEC2E1A6FC15E73474FE22BDAD7575518E7F4628651D49C4",
+    "Bytes": 10842
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/keyring-core-1.0.1-LICENSE-MIT.txt",
+    "SHA256": "157CC607717B1B372A69F6B4526F6AD18C1279AF9F3267835CCA2943F37BC07D",
+    "Bytes": 1062
+  },
+  {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/libc-0.2.191-LICENSE-APACHE.txt",
     "SHA256": "62C7A1E35F56406896D7AA7CA52D0CC0D272AC022B5D2796E7D6905DB8A3636A",
     "Bytes": 9723
@@ -7351,8 +7496,8 @@
   },
   {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/manifest.json",
-    "SHA256": "C34067338C2444F0E5B6A9AD1F556DC2D4744CEC0142E3E92665C5EF51CC803F",
-    "Bytes": 259877
+    "SHA256": "F4CFF4AC219A405F4D2A72F866482F3BE8AB408B9C9F32CA9B332D73C955D3ED",
+    "Bytes": 262381
   },
   {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/markup5ever-0.38.0-LICENSE-APACHE.txt",
@@ -8450,6 +8595,11 @@
     "Bytes": 1062
   },
   {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/tracing-attributes-0.1.31-LICENSE.txt",
+    "SHA256": "898B1AE9821E98DAF8964C8D6C7F61641F5F5AA78AD500020771C0939EE0DEA1",
+    "Bytes": 1062
+  },
+  {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/tracing-core-0.1.36-LICENSE.txt",
     "SHA256": "898B1AE9821E98DAF8964C8D6C7F61641F5F5AA78AD500020771C0939EE0DEA1",
     "Bytes": 1062
@@ -8895,6 +9045,16 @@
     "Bytes": 1141
   },
   {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/windows-native-keyring-store-1.1.0-LICENSE-APACHE.txt",
+    "SHA256": "C50E49CBC9917204C7E1D9C046342069E839C4947EF8C6027D23A3184AE73706",
+    "Bytes": 11043
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/windows-native-keyring-store-1.1.0-LICENSE-MIT.txt",
+    "SHA256": "1B9916AEB17B63B74372D5493B6C6CE828EEF2853E1DC48AC2BBA701F148920C",
+    "Bytes": 1087
+  },
+  {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/windows-numerics-0.2.0-license-apache-2.0.txt",
     "SHA256": "C16F8DCF1A368B83BE78D826EA23DE4079FE1B4469A0AB9EE20563F37FF3D44B",
     "Bytes": 11351
@@ -9101,7 +9261,7 @@
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/ADDITIONAL_NOTICES.txt",
-    "SHA256": "62734E15D526D50E09458C0F896E529797D98FA2376663DBF2449EF65EED8CE5",
+    "SHA256": "0B9CFAE54451CC4E9F783D5A0C7589CC2CF8E0168896B2124890815DE8E535D4",
     "Bytes": 1225
   },
   {
@@ -9118,6 +9278,16 @@
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/adler2-2.0.1-LICENSE-MIT.txt",
     "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
     "Bytes": 1023
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/aes-0.9.3-LICENSE-APACHE.txt",
+    "SHA256": "A9040321C3712D8FD0B09CF52B17445DE04A23A10165049AE187CD39E5C86BE5",
+    "Bytes": 10849
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/aes-0.9.3-LICENSE-MIT.txt",
+    "SHA256": "25F77EFA393854F7C15EAF6A2589A2071DB2D7337642742763ADB12BDECF0445",
+    "Bytes": 1115
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/aho-corasick-1.1.4-COPYING.txt",
@@ -9158,6 +9328,106 @@
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/arboard-3.6.1-LICENSE-MIT.txt",
     "SHA256": "F35468024534E0F4F16BB94CD0E88C87FBD1314F919C2645A07D350FB77B40C0",
     "Bytes": 1081
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/async-broadcast-0.7.2-LICENSE-APACHE.txt",
+    "SHA256": "E4705DDAB847449A2CDCB3C88B005EA10330AA249D9148CA2EEF9C84C5D29895",
+    "Bytes": 10757
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/async-broadcast-0.7.2-LICENSE-MIT.txt",
+    "SHA256": "24E5860BF589D8501643E6EA51FFB3DF66DB2867492B09033D486183EFBFA970",
+    "Bytes": 1079
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/async-channel-2.5.0-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/async-channel-2.5.0-LICENSE-MIT.txt",
+    "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
+    "Bytes": 1023
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/async-executor-1.14.0-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/async-executor-1.14.0-LICENSE-MIT.txt",
+    "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
+    "Bytes": 1023
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/async-io-2.6.0-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/async-io-2.6.0-LICENSE-MIT.txt",
+    "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
+    "Bytes": 1023
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/async-lock-3.4.2-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/async-lock-3.4.2-LICENSE-MIT.txt",
+    "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
+    "Bytes": 1023
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/async-process-2.5.0-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/async-process-2.5.0-LICENSE-MIT.txt",
+    "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
+    "Bytes": 1023
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/async-recursion-1.2.0-LICENSE-APACHE.txt",
+    "SHA256": "B8601FC79BDF8D8088F0938BEA861FFC63ED0EEBBEDF25F44AB2CF2E85BD7EDC",
+    "Bytes": 11046
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/async-recursion-1.2.0-LICENSE-MIT.txt",
+    "SHA256": "CDBD06E25B8C9C5D6019949D2DE8123F56D29CEE4166396423D2BA8C81700845",
+    "Bytes": 1044
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/async-signal-0.2.14-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/async-signal-0.2.14-LICENSE-MIT.txt",
+    "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
+    "Bytes": 1023
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/async-task-4.7.1-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/async-task-4.7.1-LICENSE-MIT.txt",
+    "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
+    "Bytes": 1023
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/async-trait-0.1.92-LICENSE-APACHE.txt",
+    "SHA256": "62C7A1E35F56406896D7AA7CA52D0CC0D272AC022B5D2796E7D6905DB8A3636A",
+    "Bytes": 9723
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/async-trait-0.1.92-LICENSE-MIT.txt",
+    "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
+    "Bytes": 1023
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/atk-0.18.2-COPYRIGHT.txt",
@@ -9270,6 +9540,36 @@
     "Bytes": 1082
   },
   {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/block-buffer-0.12.1-LICENSE-APACHE.txt",
+    "SHA256": "A9040321C3712D8FD0B09CF52B17445DE04A23A10165049AE187CD39E5C86BE5",
+    "Bytes": 10849
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/block-buffer-0.12.1-LICENSE-MIT.txt",
+    "SHA256": "98181E7249D0C01737645EC982499CE99A0F07EB8F7D625B8840D799D10DBC01",
+    "Bytes": 1082
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/block-padding-0.4.2-LICENSE-APACHE.txt",
+    "SHA256": "A9040321C3712D8FD0B09CF52B17445DE04A23A10165049AE187CD39E5C86BE5",
+    "Bytes": 10849
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/block-padding-0.4.2-LICENSE-MIT.txt",
+    "SHA256": "98181E7249D0C01737645EC982499CE99A0F07EB8F7D625B8840D799D10DBC01",
+    "Bytes": 1082
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/blocking-1.7.0-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/blocking-1.7.0-LICENSE-MIT.txt",
+    "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
+    "Bytes": 1023
+  },
+  {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/brotli-8.0.2-LICENSE.MIT.txt",
     "SHA256": "3D180008E36922A4E8DAEC11C34C7AF264FED5962D07924AEA928C38E8663C94",
     "Bytes": 1084
@@ -9340,6 +9640,16 @@
     "Bytes": 1023
   },
   {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/cbc-0.2.1-LICENSE-APACHE.txt",
+    "SHA256": "A9040321C3712D8FD0B09CF52B17445DE04A23A10165049AE187CD39E5C86BE5",
+    "Bytes": 10849
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/cbc-0.2.1-LICENSE-MIT.txt",
+    "SHA256": "63AF4BEA227C94D021E99427F6CA3A4B8EFDDADCCA93AB6130F708CF6138CF68",
+    "Bytes": 1103
+  },
+  {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/cc-1.2.56-LICENSE-APACHE.txt",
     "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
     "Bytes": 10847
@@ -9395,6 +9705,16 @@
     "Bytes": 12307
   },
   {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/cipher-0.5.2-LICENSE-APACHE.txt",
+    "SHA256": "A9040321C3712D8FD0B09CF52B17445DE04A23A10165049AE187CD39E5C86BE5",
+    "Bytes": 10849
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/cipher-0.5.2-LICENSE-MIT.txt",
+    "SHA256": "950D712C518A02FCB7CFF96950AEE304A1CC5283361712C980EA21E8D6D669A5",
+    "Bytes": 1070
+  },
+  {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/cmake-0.1.57-LICENSE-APACHE.txt",
     "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
     "Bytes": 10847
@@ -9405,6 +9725,36 @@
     "Bytes": 1057
   },
   {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/cmov-0.5.4-LICENSE-APACHE.txt",
+    "SHA256": "CFC7749B96F63BD31C3C42B5C471BF756814053E847C10F3EB003417BC523D30",
+    "Bytes": 11358
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/cmov-0.5.4-LICENSE-MIT.txt",
+    "SHA256": "70C9D40F1F9545C3F133B8A67206E89DA850F6468EED072281BB3701514114A9",
+    "Bytes": 1082
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/concurrent-queue-2.5.0-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/concurrent-queue-2.5.0-LICENSE-MIT.txt",
+    "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
+    "Bytes": 1023
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/const-oid-0.10.2-LICENSE-APACHE.txt",
+    "SHA256": "A9040321C3712D8FD0B09CF52B17445DE04A23A10165049AE187CD39E5C86BE5",
+    "Bytes": 10849
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/const-oid-0.10.2-LICENSE-MIT.txt",
+    "SHA256": "73B9DC2E79C7308998DD30296E073AEFAEFB944A68FB89AA412C23C0EDCABCAA",
+    "Bytes": 1082
+  },
+  {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/cookie-0.18.1-LICENSE-APACHE.txt",
     "SHA256": "2773E20DF8F4C52A026B5B578C7F2457341F5AA3FB6612FD87E1D2E1BD8F48AD",
     "Bytes": 10863
@@ -9413,6 +9763,16 @@
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/cookie-0.18.1-LICENSE-MIT.txt",
     "SHA256": "F28420C1906AF38BE726CD7842798F0194B27C41D6051C0D1E9EE348B8A4A0EA",
     "Bytes": 1091
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/cpubits-0.1.1-LICENSE-APACHE.txt",
+    "SHA256": "A9040321C3712D8FD0B09CF52B17445DE04A23A10165049AE187CD39E5C86BE5",
+    "Bytes": 10849
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/cpubits-0.1.1-LICENSE-MIT.txt",
+    "SHA256": "003736BC98408B53511B9CC8FF5D1AF3BF0A8F17D53841CC39D8AB1B96A195B0",
+    "Bytes": 1082
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/cpufeatures-0.2.17-LICENSE-APACHE.txt",
@@ -9480,6 +9840,16 @@
     "Bytes": 1065
   },
   {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/crypto-common-0.2.2-LICENSE-APACHE.txt",
+    "SHA256": "A9040321C3712D8FD0B09CF52B17445DE04A23A10165049AE187CD39E5C86BE5",
+    "Bytes": 10849
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/crypto-common-0.2.2-LICENSE-MIT.txt",
+    "SHA256": "D2E7EC5355C96EEADE56B09187CEB48A6A30299DA3CE7531A66D3D11405AB963",
+    "Bytes": 1070
+  },
+  {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/cssparser-0.36.0-LICENSE.txt",
     "SHA256": "FAB3DD6BDAB226F1C08630B1DD917E11FCB4EC5E1E020E2C16F83A0A13863E85",
     "Bytes": 16726
@@ -9508,6 +9878,16 @@
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/ctor-proc-macro-0.0.7-LICENSE-MIT.txt",
     "SHA256": "BCCAA8B6C09F94E81F06696E179DBE058464BBDFBC823B6D49CADA1D71E84AC3",
     "Bytes": 1022
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/ctutils-0.4.5-LICENSE-APACHE.txt",
+    "SHA256": "CFC7749B96F63BD31C3C42B5C471BF756814053E847C10F3EB003417BC523D30",
+    "Bytes": 11358
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/ctutils-0.4.5-LICENSE-MIT.txt",
+    "SHA256": "91585C36E4FB9AB4CA0D3DFAC5D66D3C0C62CC51F640A0E1196542DAF2267EAE",
+    "Bytes": 1082
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/darling_core-0.21.3-LICENSE.txt",
@@ -9563,6 +9943,16 @@
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/digest-0.10.7-LICENSE-MIT.txt",
     "SHA256": "9E0DFD2DD4173A530E238CB6ADB37AA78C34C6BC7444E0E10C1AB5D8881F63BA",
     "Bytes": 1057
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/digest-0.11.3-LICENSE-APACHE.txt",
+    "SHA256": "A9040321C3712D8FD0B09CF52B17445DE04A23A10165049AE187CD39E5C86BE5",
+    "Bytes": 10849
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/digest-0.11.3-LICENSE-MIT.txt",
+    "SHA256": "AF59CEA35D7F5E2777A713B8D155D65EFA2C339EB43F3C14E868C6AC8506EDAD",
+    "Bytes": 1103
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/dirs-6.0.0-LICENSE-APACHE.txt",
@@ -9675,6 +10065,31 @@
     "Bytes": 1081
   },
   {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/endi-1.1.1-LICENSE-MIT.txt",
+    "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
+    "Bytes": 1023
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/enumflags2_derive-0.7.12-LICENSE-APACHE.txt",
+    "SHA256": "68D7C3AE5B131EC533FB33A9FD63753EB82FAC77D7597BB5058A5AF07ADF9F06",
+    "Bytes": 9696
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/enumflags2_derive-0.7.12-LICENSE-MIT.txt",
+    "SHA256": "D13669F0EAFF9B7015BFF0D8637297213B53D9F239826636C07A15633ACF7052",
+    "Bytes": 1054
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/enumflags2-0.7.12-LICENSE-APACHE.txt",
+    "SHA256": "41BA8A366E4129D0B7551F8B98211F59635B2E30C0A3C7845E828E2A7CE42064",
+    "Bytes": 9715
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/enumflags2-0.7.12-LICENSE-MIT.txt",
+    "SHA256": "2E3EDD2716FB15616E867BD53F724F0906732242E9AE76BB1FAAD1D88F7EEEBD",
+    "Bytes": 1077
+  },
+  {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/equivalent-1.0.2-LICENSE-APACHE.txt",
     "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
     "Bytes": 10847
@@ -9703,6 +10118,26 @@
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/errno-0.3.14-LICENSE-MIT.txt",
     "SHA256": "8764A597675778DDFD4E25F81B08A05DBCF089AC05662DF7613FE67F150E3AA2",
     "Bytes": 1054
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/event-listener-5.4.2-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/event-listener-5.4.2-LICENSE-MIT.txt",
+    "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
+    "Bytes": 1023
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/event-listener-strategy-0.5.4-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/event-listener-strategy-0.5.4-LICENSE-MIT.txt",
+    "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
+    "Bytes": 1023
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/fastrand-2.3.0-LICENSE-APACHE.txt",
@@ -9828,6 +10263,21 @@
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/futures-io-0.3.32-LICENSE-MIT.txt",
     "SHA256": "6652C868F35DFE5E8EF636810A4E576B9D663F3A17FB0F5613AD73583E1B88FD",
     "Bytes": 1094
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/futures-lite-2.6.1-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/futures-lite-2.6.1-LICENSE-MIT.txt",
+    "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
+    "Bytes": 1023
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/futures-lite-2.6.1-LICENSE-THIRD-PARTY.txt",
+    "SHA256": "6226D0632E2E1A80C23597E964DA9812AE193C535FE058154AFB034E94167AA5",
+    "Bytes": 1849
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/futures-macro-0.3.32-LICENSE-APACHE.txt",
@@ -10090,6 +10540,26 @@
     "Bytes": 1125
   },
   {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/hkdf-0.13.0-LICENSE-APACHE.txt",
+    "SHA256": "59013A5C8D3A19C26A457579105915A5D51BB0C09D579F8CDEDF12E4203C3018",
+    "Bytes": 10848
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/hkdf-0.13.0-LICENSE-MIT.txt",
+    "SHA256": "D288F9C9B4590446EC18C22EAD8F8B5A12A3D4025B68F62DC9015063EB9CCA69",
+    "Bytes": 1108
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/hmac-0.13.0-LICENSE-APACHE.txt",
+    "SHA256": "A9040321C3712D8FD0B09CF52B17445DE04A23A10165049AE187CD39E5C86BE5",
+    "Bytes": 10849
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/hmac-0.13.0-LICENSE-MIT.txt",
+    "SHA256": "9E0DFD2DD4173A530E238CB6ADB37AA78C34C6BC7444E0E10C1AB5D8881F63BA",
+    "Bytes": 1057
+  },
+  {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/hound-3.5.1-license.txt",
     "SHA256": "CFC7749B96F63BD31C3C42B5C471BF756814053E847C10F3EB003417BC523D30",
     "Bytes": 11358
@@ -10133,6 +10603,16 @@
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/httparse-1.10.1-LICENSE-MIT.txt",
     "SHA256": "391A5396CEC6230BFABD4EF4EB2350EB895BC5EFCE377A2218F5702ED020D3E3",
     "Bytes": 1063
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/hybrid-array-0.4.10-LICENSE-APACHE.txt",
+    "SHA256": "A9040321C3712D8FD0B09CF52B17445DE04A23A10165049AE187CD39E5C86BE5",
+    "Bytes": 10849
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/hybrid-array-0.4.10-LICENSE-MIT.txt",
+    "SHA256": "70C9D40F1F9545C3F133B8A67206E89DA850F6468EED072281BB3701514114A9",
+    "Bytes": 1082
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/hyper-1.8.1-LICENSE.txt",
@@ -10265,6 +10745,16 @@
     "Bytes": 1062
   },
   {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/inout-0.2.5-LICENSE-APACHE.txt",
+    "SHA256": "A9040321C3712D8FD0B09CF52B17445DE04A23A10165049AE187CD39E5C86BE5",
+    "Bytes": 10849
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/inout-0.2.5-LICENSE-MIT.txt",
+    "SHA256": "A07FCACC3C60DE4DC0FAB10AC9D6AABA7379974E28451C99DA7F7DF09C25B28C",
+    "Bytes": 1115
+  },
+  {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/ipnet-2.11.0-LICENSE-APACHE.txt",
     "SHA256": "87D9FEB9238C6BD8E0024FC4733B06CFF036F89F36D93B7DF1C8A0549BBB7A5B",
     "Bytes": 11352
@@ -10333,6 +10823,26 @@
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/keyboard-types-0.7.0-LICENSE-MIT.txt",
     "SHA256": "31DBBAB009F1B2E59A1622D5955DFAFC38EBE834000215B49D954C6F85FE927C",
     "Bytes": 1050
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/keyring-4.2.0-LICENSE-APACHE.txt",
+    "SHA256": "78EBC2EA2A1CEC9CBEC2E1A6FC15E73474FE22BDAD7575518E7F4628651D49C4",
+    "Bytes": 10842
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/keyring-4.2.0-LICENSE-MIT.txt",
+    "SHA256": "157CC607717B1B372A69F6B4526F6AD18C1279AF9F3267835CCA2943F37BC07D",
+    "Bytes": 1062
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/keyring-core-1.0.1-LICENSE-APACHE.txt",
+    "SHA256": "78EBC2EA2A1CEC9CBEC2E1A6FC15E73474FE22BDAD7575518E7F4628651D49C4",
+    "Bytes": 10842
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/keyring-core-1.0.1-LICENSE-MIT.txt",
+    "SHA256": "157CC607717B1B372A69F6B4526F6AD18C1279AF9F3267835CCA2943F37BC07D",
+    "Bytes": 1062
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/libappindicator-0.9.0-LICENSE-APACHE.txt",
@@ -10441,8 +10951,8 @@
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/manifest.json",
-    "SHA256": "FE9D4897CF1D71BEA68C4ABA89BF41A21D9E27E1EB0A931C327A2846C2A8D1FB",
-    "Bytes": 276618
+    "SHA256": "246BBB4C882EC55B2EFBF2C676034ABB40F6D3A2BA7EF53518B18955621CB97E",
+    "Bytes": 328268
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/markup5ever-0.38.0-LICENSE-APACHE.txt",
@@ -10525,6 +11035,36 @@
     "Bytes": 1057
   },
   {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/num-0.4.3-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/num-0.4.3-LICENSE-MIT.txt",
+    "SHA256": "6485B8ED310D3F0340BF1AD1F47645069CE4069DCC6BB46C7D5C6FAF41DE1FDB",
+    "Bytes": 1071
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/num-bigint-0.4.8-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/num-bigint-0.4.8-LICENSE-MIT.txt",
+    "SHA256": "6485B8ED310D3F0340BF1AD1F47645069CE4069DCC6BB46C7D5C6FAF41DE1FDB",
+    "Bytes": 1071
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/num-complex-0.4.6-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/num-complex-0.4.6-LICENSE-MIT.txt",
+    "SHA256": "6485B8ED310D3F0340BF1AD1F47645069CE4069DCC6BB46C7D5C6FAF41DE1FDB",
+    "Bytes": 1071
+  },
+  {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/num-conv-0.2.0-LICENSE-Apache.txt",
     "SHA256": "C0FD5F9DF8D17E13587F8FE403D2326B835E60D532817D0B42AE4AEA44209251",
     "Bytes": 11342
@@ -10533,6 +11073,36 @@
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/num-conv-0.2.0-LICENSE-MIT.txt",
     "SHA256": "AF85FFF507D80E6C7FF242ACFC4B0A7F5DE9A72286BB3C883C782772CA4B4402",
     "Bytes": 1055
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/num-integer-0.1.46-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/num-integer-0.1.46-LICENSE-MIT.txt",
+    "SHA256": "6485B8ED310D3F0340BF1AD1F47645069CE4069DCC6BB46C7D5C6FAF41DE1FDB",
+    "Bytes": 1071
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/num-iter-0.1.46-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/num-iter-0.1.46-LICENSE-MIT.txt",
+    "SHA256": "6485B8ED310D3F0340BF1AD1F47645069CE4069DCC6BB46C7D5C6FAF41DE1FDB",
+    "Bytes": 1071
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/num-rational-0.4.2-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/num-rational-0.4.2-LICENSE-MIT.txt",
+    "SHA256": "6485B8ED310D3F0340BF1AD1F47645069CE4069DCC6BB46C7D5C6FAF41DE1FDB",
+    "Bytes": 1071
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/num-traits-0.2.19-LICENSE-APACHE.txt",
@@ -10558,6 +11128,16 @@
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/option-ext-0.2.0-LICENSE.txt",
     "SHA256": "66A3107D5AD6A058AAB753EAAC2047CCB2ED0E39465DD0FE5844DA3E300D5172",
     "Bytes": 16727
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/ordered-stream-0.2.0-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/ordered-stream-0.2.0-LICENSE-MIT.txt",
+    "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
+    "Bytes": 1023
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/pango-0.18.3-COPYRIGHT.txt",
@@ -10593,6 +11173,21 @@
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/parking_lot-0.12.5-LICENSE-MIT.txt",
     "SHA256": "C9A75F18B9AB2927829A208FC6AA2CF4E63B8420887BA29CDB265D6619AE82D5",
     "Bytes": 1071
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/parking-2.2.1-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/parking-2.2.1-LICENSE-MIT.txt",
+    "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
+    "Bytes": 1023
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/parking-2.2.1-LICENSE-THIRD-PARTY.txt",
+    "SHA256": "9A6D7A3C1B8EDCC706C4B6C37F8DAE9A77F02C7F9051DF603F975DB136B55419",
+    "Bytes": 451
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/percent-encoding-2.3.2-LICENSE-APACHE.txt",
@@ -10650,6 +11245,16 @@
     "Bytes": 1065
   },
   {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/piper-0.2.5-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/piper-0.2.5-LICENSE-MIT.txt",
+    "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
+    "Bytes": 1023
+  },
+  {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/pkg-config-0.3.32-LICENSE-APACHE.txt",
     "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
     "Bytes": 10847
@@ -10683,6 +11288,16 @@
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/png-0.18.1-LICENSE-MIT.txt",
     "SHA256": "EAF40297C75DA471F7CDA1F3458E8D91B4B2EC866E609527A13ACFA93B638652",
     "Bytes": 1048
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/polling-3.11.0-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/polling-3.11.0-LICENSE-MIT.txt",
+    "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
+    "Bytes": 1023
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/potential_utf-0.1.4-LICENSE.txt",
@@ -10721,6 +11336,16 @@
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/proc-macro-crate-2.0.2-LICENSE-MIT.txt",
+    "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
+    "Bytes": 1023
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/proc-macro-crate-3.4.0-LICENSE-APACHE.txt",
+    "SHA256": "8ADA45CD9F843ACF64E4722AE262C622A2B3B3007C7310EF36AC1061A30F6ADB",
+    "Bytes": 10860
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/proc-macro-crate-3.4.0-LICENSE-MIT.txt",
     "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
     "Bytes": 1023
   },
@@ -11055,6 +11680,16 @@
     "Bytes": 1097
   },
   {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/secret-service-5.2.0-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/secret-service-5.2.0-LICENSE-MIT.txt",
+    "SHA256": "074585DBAF488DB540C26F7B20F36053A157D7580BB1C390DC9F6AFDB017C83A",
+    "Bytes": 1069
+  },
+  {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/selectors-0.36.1-lib.rs-license-notice.txt",
     "SHA256": "7523DF2468FDA84E4DF377EE0CFD844A83742F39E0425E7C7819A82E3E25F840",
     "Bytes": 205
@@ -11235,6 +11870,16 @@
     "Bytes": 1138
   },
   {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/sha2-0.11.1-LICENSE-APACHE.txt",
+    "SHA256": "A9040321C3712D8FD0B09CF52B17445DE04A23A10165049AE187CD39E5C86BE5",
+    "Bytes": 10849
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/sha2-0.11.1-LICENSE-MIT.txt",
+    "SHA256": "831E0F43AD0BF014C1C4FEC5767AAE470434C1D66D6E671BE2D823E729063E25",
+    "Bytes": 1196
+  },
+  {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/shlex-1.3.0-LICENSE-APACHE.txt",
     "SHA256": "553FFFCD9B1CB158BC3E9EDC35DA85CA5C3B3D7D2E61C883EBCFA8A65814B583",
     "Bytes": 566
@@ -11243,6 +11888,16 @@
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/shlex-1.3.0-LICENSE-MIT.txt",
     "SHA256": "4455BF75A91154108304CB283E0FEA9948C14F13E20D60887CF2552449DEA3B1",
     "Bytes": 1092
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/signal-hook-registry-1.4.8-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/signal-hook-registry-1.4.8-LICENSE-MIT.txt",
+    "SHA256": "503558BFEFE66CA15E4E3F7955B3CB0EC87FD52F29BF24B336AF7BD00E946D5C",
+    "Bytes": 1068
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/simd-adler32-0.3.8-LICENSE.md.txt",
@@ -11346,6 +12001,16 @@
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/syn-2.0.117-LICENSE-MIT.txt",
+    "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
+    "Bytes": 1023
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/syn-3.0.9-LICENSE-APACHE.txt",
+    "SHA256": "62C7A1E35F56406896D7AA7CA52D0CC0D272AC022B5D2796E7D6905DB8A3636A",
+    "Bytes": 9723
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/syn-3.0.9-LICENSE-MIT.txt",
     "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
     "Bytes": 1023
   },
@@ -11640,6 +12305,16 @@
     "Bytes": 1062
   },
   {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/toml_edit-0.23.10_spec-1.0.0-LICENSE-APACHE.txt",
+    "SHA256": "C6596EB7BE8581C18BE736C846FB9173B69ECCF6EF94C5135893EC56BD92BA08",
+    "Bytes": 11358
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/toml_edit-0.23.10_spec-1.0.0-LICENSE-MIT.txt",
+    "SHA256": "6EFB0476A1CC085077ED49357026D8C173BF33017278EF440F222FB9CBCB66E6",
+    "Bytes": 1062
+  },
+  {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/toml_parser-1.0.9_spec-1.1.0-LICENSE-APACHE.txt",
     "SHA256": "C6596EB7BE8581C18BE736C846FB9173B69ECCF6EF94C5135893EC56BD92BA08",
     "Bytes": 11358
@@ -11701,6 +12376,11 @@
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/tracing-0.1.44-LICENSE.txt",
+    "SHA256": "898B1AE9821E98DAF8964C8D6C7F61641F5F5AA78AD500020771C0939EE0DEA1",
+    "Bytes": 1062
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/tracing-attributes-0.1.31-LICENSE.txt",
     "SHA256": "898B1AE9821E98DAF8964C8D6C7F61641F5F5AA78AD500020771C0939EE0DEA1",
     "Bytes": 1062
   },
@@ -11980,6 +12660,11 @@
     "Bytes": 1023
   },
   {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/winnow-1.0.4-LICENSE-MIT.txt",
+    "SHA256": "CB5AEDB296C5246D1F22E9099F925A65146F9F0D6B4EEBBA97FD27A6CDBBAB2D",
+    "Bytes": 1023
+  },
+  {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/writeable-0.6.2-LICENSE.txt",
     "SHA256": "F367C1B8E1AA262435251E442901DA4607B4650E0E63A026F5044473ECFB90F2",
     "Bytes": 2195
@@ -12040,6 +12725,36 @@
     "Bytes": 2195
   },
   {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/zbus_macros-5.19.0-LICENSE.txt",
+    "SHA256": "260E4FF3FC493695880C90774283EB1E3D018F898FABE655BBD52DD2CBD2FCAD",
+    "Bytes": 1080
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/zbus_names-4.3.5-LICENSE.txt",
+    "SHA256": "260E4FF3FC493695880C90774283EB1E3D018F898FABE655BBD52DD2CBD2FCAD",
+    "Bytes": 1080
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/zbus-5.19.0-LICENSE.txt",
+    "SHA256": "260E4FF3FC493695880C90774283EB1E3D018F898FABE655BBD52DD2CBD2FCAD",
+    "Bytes": 1080
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/zbus-secret-service-keyring-store-1.0.1-LICENSE-APACHE.txt",
+    "SHA256": "78EBC2EA2A1CEC9CBEC2E1A6FC15E73474FE22BDAD7575518E7F4628651D49C4",
+    "Bytes": 10842
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/zbus-secret-service-keyring-store-1.0.1-LICENSE-MIT.txt",
+    "SHA256": "157CC607717B1B372A69F6B4526F6AD18C1279AF9F3267835CCA2943F37BC07D",
+    "Bytes": 1062
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/zcheapstr-1.1.0-LICENSE.txt",
+    "SHA256": "59871BB1612F8A0569655C10B995636827ECEAB42C6578CEBDC45AD2922E0142",
+    "Bytes": 1085
+  },
+  {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/zerofrom-0.1.6-LICENSE.txt",
     "SHA256": "F367C1B8E1AA262435251E442901DA4607B4650E0E63A026F5044473ECFB90F2",
     "Bytes": 2195
@@ -12075,14 +12790,34 @@
     "Bytes": 2195
   },
   {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/zvariant_derive-5.15.1-LICENSE.txt",
+    "SHA256": "260E4FF3FC493695880C90774283EB1E3D018F898FABE655BBD52DD2CBD2FCAD",
+    "Bytes": 1080
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/zvariant_utils-4.2.0-LICENSE.txt",
+    "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
+    "Bytes": 1023
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/zvariant-5.15.1-LICENSE.txt",
+    "SHA256": "260E4FF3FC493695880C90774283EB1E3D018F898FABE655BBD52DD2CBD2FCAD",
+    "Bytes": 1080
+  },
+  {
     "Path": "crates/handy-bridge/Cargo.toml",
-    "SHA256": "D07E7D8320750E0E78DC8CD63A6BF602ACC796F684301364D93C130B4C594A0A",
+    "SHA256": "F64F90666FA3A222FFA54AA8B9839B9489951583F5744ACA4A55914F7E9F211C",
     "Bytes": 803
   },
   {
     "Path": "crates/handy-bridge/examples/inspect.rs",
     "SHA256": "22216EEB073CBB1B4058D31C2D79F7FC21900D3917BBBC366E6D5A0A4DE141F5",
     "Bytes": 1046
+  },
+  {
+    "Path": "crates/handy-bridge/src/companion.rs",
+    "SHA256": "85E3B5E404A01F78095C690B435CCF5759CE31A057B642DCB418426863A2F08A",
+    "Bytes": 6309
   },
   {
     "Path": "crates/handy-bridge/src/discovery.rs",
@@ -12096,8 +12831,8 @@
   },
   {
     "Path": "crates/handy-bridge/src/lib.rs",
-    "SHA256": "6B641B1B559B894C1AA106B3E1C145B4141268D402839EA7B05C46DB1D00866F",
-    "Bytes": 8513
+    "SHA256": "6BF53EC995FDD2F28A7755C923523373AD28F6BB2B5EE74131C94EDBBD1C4B3D",
+    "Bytes": 8624
   },
   {
     "Path": "crates/handy-bridge/src/native.rs",
@@ -12126,13 +12861,13 @@
   },
   {
     "Path": "crates/meeting-core/Cargo.toml",
-    "SHA256": "88300E4BC3E8A5206239F246B7F439207C53CF9E679C5D31C5C79F1D30FDE2E9",
+    "SHA256": "9D903945F555CF24DAEFE3DCF56534C3F70B8BB635213692C7F873BA27694649",
     "Bytes": 524
   },
   {
     "Path": "crates/meeting-core/examples/device_capture.rs",
-    "SHA256": "3F39B13AE47F07832A00BFA2E7C887D9C9C93CCCCEA3F262D62B4AFFCFD3C283",
-    "Bytes": 2996
+    "SHA256": "16866B60131C9237B601F8FF69A4B1E40D341293036149BA04460297FC567CED",
+    "Bytes": 12171
   },
   {
     "Path": "crates/meeting-core/examples/synthetic_capture.rs",
@@ -12146,8 +12881,8 @@
   },
   {
     "Path": "crates/meeting-core/src/lib.rs",
-    "SHA256": "92FA2ADB4C1A2053EF6523B239BA6C7EAEA4D98F153D93DD08C87FE8E258A5DC",
-    "Bytes": 527
+    "SHA256": "47423AC507B4F7CD4EC01BEC34F1E017D838027877C4EE78C2C089CF3EE2FD67",
+    "Bytes": 564
   },
   {
     "Path": "crates/meeting-core/src/linux_capture.rs",
@@ -12161,8 +12896,8 @@
   },
   {
     "Path": "crates/meeting-core/src/model.rs",
-    "SHA256": "6892799AE3264EE1A2A742CE4C581CB257B6D82359803B3E649B78382AD37DCB",
-    "Bytes": 3923
+    "SHA256": "0E1F77F44C2D70601E9272EF27BF44718868074B961EF6D09BF8AD3C35FBF0DF",
+    "Bytes": 4484
   },
   {
     "Path": "crates/meeting-core/src/pcm.rs",
@@ -12176,8 +12911,8 @@
   },
   {
     "Path": "crates/meeting-core/src/storage.rs",
-    "SHA256": "63EF0A0964CFF76ECBD028FAFAE05FD90792AEF2E3EFADBA1239A1B3446EF998",
-    "Bytes": 29996
+    "SHA256": "E1EF0F7DE20613AAB4EFAF2F50C38DE747060EBA5F7950E2836C0DC06FEBD634",
+    "Bytes": 33194
   },
   {
     "Path": "crates/meeting-core/src/windows_capture.rs",
@@ -12186,13 +12921,13 @@
   },
   {
     "Path": "crates/meeting-core/tests/durability.rs",
-    "SHA256": "C3050AB967AA782AB907229C80A33711C692C558494D57992002FC34367C23DF",
-    "Bytes": 17227
+    "SHA256": "A901C906041E237C5F14731336CEF965F135E07652DFF1FB98C0C2E735A781AF",
+    "Bytes": 19027
   },
   {
     "Path": "crates/meeting-notes/Cargo.toml",
-    "SHA256": "A1B67AE109B69C34A5B5AC1C1C4DACBBF6CA3D70AE01938C1D344DDD7F9A0312",
-    "Bytes": 620
+    "SHA256": "F969F1F1D112988E840B149EF4300AE04D38028AC7A0C8AC84D7A26517C4D10D",
+    "Bytes": 654
   },
   {
     "Path": "crates/meeting-notes/examples/local_reference.rs",
@@ -12206,8 +12941,8 @@
   },
   {
     "Path": "crates/meeting-notes/src/lib.rs",
-    "SHA256": "F89F40517EB35F47B4630A40B5DF1C59456F45AF847C9807D4B8C51EDC6621C4",
-    "Bytes": 4430
+    "SHA256": "6106EBDB5F53FA7D58BCA70D7030E40B1ED485BE9E9FCEF81F2C106E2086490B",
+    "Bytes": 4536
   },
   {
     "Path": "crates/meeting-notes/src/markdown.rs",
@@ -12216,18 +12951,23 @@
   },
   {
     "Path": "crates/meeting-notes/src/models.rs",
-    "SHA256": "D5B9E71AA20A4F60358632A07BC52D8EA5ACE181276E30CDE958AD8A89FB3E17",
-    "Bytes": 2516
+    "SHA256": "B822BE64C4D793D8A37E22B280B151A4BC8CDD070CAA7CB597B73B1E9FE42865",
+    "Bytes": 2638
   },
   {
     "Path": "crates/meeting-notes/src/service.rs",
-    "SHA256": "D96D9BCD1F39EFBB7AECC7EB88EE860003B76234537165FC9675CCC357B8D5F8",
-    "Bytes": 11433
+    "SHA256": "25B96813AD3CB44ADBBC0C52345153FF776541DF9A2288A258AE3B6C3D24D1B8",
+    "Bytes": 11449
+  },
+  {
+    "Path": "crates/meeting-notes/src/templates.rs",
+    "SHA256": "18EE83D04CAE1627E261B7FDF3A8BCCA381CC084FF50A9EB4B595B13E685D411",
+    "Bytes": 11397
   },
   {
     "Path": "crates/meeting-notes/src/transport.rs",
-    "SHA256": "1EE380CC68742BEE1108640B0C7BDB99AD12216B267568D1D5D828ABE705EA99",
-    "Bytes": 10532
+    "SHA256": "C767F5226EFA131813C25A159541AAF038C63A332354F7656817ABD92C8BC12B",
+    "Bytes": 11185
   },
   {
     "Path": "crates/meeting-notes/src/validation.rs",
@@ -12236,8 +12976,8 @@
   },
   {
     "Path": "crates/meeting-notes/tests/transport_resume.rs",
-    "SHA256": "ED42DFBD714A362D1D5E4F125E13582E750ADDDBA2E7214AB6EBBD286BE834D4",
-    "Bytes": 24943
+    "SHA256": "023E3A1E8C07E746AE520CEC510FFF3F32AB92401707E6A108C39A6BD49C5BBB",
+    "Bytes": 25921
   },
   {
     "Path": "apps/desktop/.gitignore",
@@ -12256,12 +12996,12 @@
   },
   {
     "Path": "apps/desktop/package-lock.json",
-    "SHA256": "0AC521B1C89E6E95BBAA1749A810D8FC9807F36F80E4A6747D59BCE63E543E83",
+    "SHA256": "D111112362639A665D760F4843AF3E6D318091C0351817E747DA69C54FFE850E",
     "Bytes": 100402
   },
   {
     "Path": "apps/desktop/package.json",
-    "SHA256": "9EA5B0EE1F66AB6FDDC6E0C524C4F1018D5F52D138EF9EF47980A30BB2E9FF2F",
+    "SHA256": "BEC010A2ABCE9DCCE729A53AC505872FA5F1B0B73C00381BFB708B1AA2FBDBC6",
     "Bytes": 744
   },
   {
@@ -12285,29 +13025,39 @@
     "Bytes": 443
   },
   {
+    "Path": "apps/desktop/src/AccessControls.test.tsx",
+    "SHA256": "437E149D6D319D6D263AC34F694C0121194A9C7CCED7AEBBA47964B21D85796B",
+    "Bytes": 8084
+  },
+  {
     "Path": "apps/desktop/src/api.ts",
-    "SHA256": "A6F64A3701F85F49DE092FE31B4FD81660293BF3F4B81FABA916C5411A03DA9C",
-    "Bytes": 1880
+    "SHA256": "4B737CCE61344CE5AB1D8BB79DB6573AA2D267E1A0A425253A776CE449DDFFC8",
+    "Bytes": 2583
   },
   {
     "Path": "apps/desktop/src/App.test.tsx",
-    "SHA256": "2E5311EE48A4F6B92BC86CD40020493DA04E188C1E9978162E77E4C75F8CAA9F",
-    "Bytes": 24150
+    "SHA256": "18C0E7D772DA6BB23BE052DB2B25326D947DF867C8EDEADA8FD1F7C3FA9C30E1",
+    "Bytes": 24374
   },
   {
     "Path": "apps/desktop/src/App.tsx",
-    "SHA256": "D7F9AEA5CAC4468EEDC430D7B992EB5C57DE2730F54DE5737F7C308E9DE45A65",
-    "Bytes": 44945
+    "SHA256": "F73FD8DBA0423C0E63A682BD29F75D7D2481879FDEB886FE441EB0950DE7B5DB",
+    "Bytes": 48047
   },
   {
     "Path": "apps/desktop/src/Beta2.test.tsx",
-    "SHA256": "90FDE92C5F1775A608D55BDA6E55D3EBFB479CA96DF76A5639826702277DFA1B",
-    "Bytes": 22453
+    "SHA256": "A376AAD593E825726E422388B0BAABC701E89A0DEE9F496EA9E38D291A6CA6C7",
+    "Bytes": 22511
   },
   {
     "Path": "apps/desktop/src/domain.ts",
-    "SHA256": "27CDFC956010222DBA8381C83C866F1E0D87FC28812D4866F60339281039830B",
-    "Bytes": 5071
+    "SHA256": "AB2D89354BE41A383DC862CA1ED0DF63CBA508A49B71C2BE1F694450E5F89B1C",
+    "Bytes": 5779
+  },
+  {
+    "Path": "apps/desktop/src/FeatureParity.test.tsx",
+    "SHA256": "A62748D6FF180B28E55F235C222FBEC0E83CEF8084921CAA2612A0A1DE9CD643",
+    "Bytes": 14893
   },
   {
     "Path": "apps/desktop/src/handy-theme.css",
@@ -12316,8 +13066,8 @@
   },
   {
     "Path": "apps/desktop/src/i18n.ts",
-    "SHA256": "E74F0D8F8399100AA4BC5B2FAF6B3827F18A316AFE8322651B150E63588EB445",
-    "Bytes": 18299
+    "SHA256": "DF8D4805D45D3380099CF4931F404AD2024039882515950959826C418B8477C6",
+    "Bytes": 28163
   },
   {
     "Path": "apps/desktop/src/main.tsx",
@@ -12326,8 +13076,13 @@
   },
   {
     "Path": "apps/desktop/src/styles.css",
-    "SHA256": "160060FACFEEB63A8E3D90C918C55447D0C08B34DBF73D419AB954581466DAB9",
-    "Bytes": 19822
+    "SHA256": "EF2952E6C83C9409EC8255DC19C515D014C83924ADF6069DB0197BBA3772DC5E",
+    "Bytes": 21071
+  },
+  {
+    "Path": "apps/desktop/src/test-services.ts",
+    "SHA256": "41AEF2647ED62EEECD59754BB9BDAF109BF1402A51CDC777B1F8745334CA083A",
+    "Bytes": 1450
   },
   {
     "Path": "apps/desktop/src/test-setup.ts",
@@ -12336,8 +13091,8 @@
   },
   {
     "Path": "apps/desktop/src/types.ts",
-    "SHA256": "3C267A9AF7A85D7FFA3BBA7C0D40678E7139BB85DA6D231F54EDD2AEAD707DD0",
-    "Bytes": 3947
+    "SHA256": "F7707D2C5DEFF4AC6F5C13D729B3A3570A6701A966CAEC5E834986EB9751F6CB",
+    "Bytes": 5353
   },
   {
     "Path": "apps/desktop/src/useLocalTextModels.ts",
@@ -12350,14 +13105,29 @@
     "Bytes": 8433
   },
   {
+    "Path": "apps/desktop/src/useTemplateLibrary.ts",
+    "SHA256": "0668D10452B45C95CF041C552072268F625900F167B2DB9D56225E2400E2E9F9",
+    "Bytes": 5235
+  },
+  {
+    "Path": "apps/desktop/src/views/AgentPanel.tsx",
+    "SHA256": "EEFE6FB1ED6632B8496D7A68380747ECA9081F9AD5A165C7F560CA873B94AD63",
+    "Bytes": 3891
+  },
+  {
+    "Path": "apps/desktop/src/views/CredentialPanel.tsx",
+    "SHA256": "599B9B89608A74AF9CF79151DBDA4BACAC86477E65C7804569A0A43C6385CA31",
+    "Bytes": 5313
+  },
+  {
     "Path": "apps/desktop/src/views/MeetingDetail.tsx",
     "SHA256": "586BACDF835E06AC586B06E59FB8A51F320FB007FF77DFB243B3301F400031AE",
     "Bytes": 2088
   },
   {
     "Path": "apps/desktop/src/views/MeetingView.tsx",
-    "SHA256": "F530833FB83F9D7E35781182AA1D6F9C537F4DD368D2FA3B82F36FA3D827DC21",
-    "Bytes": 9195
+    "SHA256": "42CEB6467791DE1EDB9ECE2EA693170AA2C911AC2A7DFC856C7E626108F35164",
+    "Bytes": 9603
   },
   {
     "Path": "apps/desktop/src/views/NotesProgressPanel.tsx",
@@ -12366,13 +13136,23 @@
   },
   {
     "Path": "apps/desktop/src/views/NotesView.tsx",
-    "SHA256": "B6B343A9F7FD7A10CA1CB57CEC31D9FCC3B6F7CAC753767365D37D65971A6713",
-    "Bytes": 17266
+    "SHA256": "CD5930E09D358827C2E2B79DF5E1611843F08E7DB4FFF31C2A1ED832CC1578FD",
+    "Bytes": 21835
   },
   {
     "Path": "apps/desktop/src/views/Sidebar.tsx",
-    "SHA256": "907705000F140AE675C12F581E3F06AEE3B87D949ABA57A2EC227827D55E19D5",
-    "Bytes": 2778
+    "SHA256": "41DB1370D7C73D6D045643117D340B5202B70553E2CEB08CB49C57B71230F93E",
+    "Bytes": 2777
+  },
+  {
+    "Path": "apps/desktop/src/views/SourceDialog.tsx",
+    "SHA256": "C9064AC76CBAE63F1787BB5306880F83998FCE8C443ADC177246095DFEB4CF31",
+    "Bytes": 2890
+  },
+  {
+    "Path": "apps/desktop/src/views/TemplateDialog.tsx",
+    "SHA256": "8BB192691AC11DC4DAD9EFA1EE8E8C31AF3A06F35DA90B65A1E86B7D62D13FDE",
+    "Bytes": 2810
   },
   {
     "Path": "apps/desktop/src/views/TranscriptBody.tsx",
@@ -12386,12 +13166,12 @@
   },
   {
     "Path": "apps/desktop/src-tauri/Cargo.toml",
-    "SHA256": "75094D81BD1929D6D5561F2302CBAC37F0603DAACBC8D7ED869F2CF7A1A9918E",
-    "Bytes": 907
+    "SHA256": "BC5F8B05158B6E749272251F4BCC21CEBDDD5983D6A395D945CB0B4B2E0B113E",
+    "Bytes": 1019
   },
   {
     "Path": "apps/desktop/src-tauri/tauri.conf.json",
-    "SHA256": "01174DA7A73988FBA01A898ED16556057F0570CEC3DA1E782FE6D1F41D5E8F3B",
+    "SHA256": "050499C6A7499959DD23F089583AC475861535A03B0C67F23591AF6FB95E0FE0",
     "Bytes": 959
   },
   {
@@ -12400,14 +13180,29 @@
     "Bytes": 207
   },
   {
+    "Path": "apps/desktop/src-tauri/src/agent.rs",
+    "SHA256": "F552B24C3CF9349291E13210F79864CA2AA280D8191A16E63EC5BE8C2C47527D",
+    "Bytes": 37522
+  },
+  {
     "Path": "apps/desktop/src-tauri/src/asr.rs",
     "SHA256": "B74779ADCABC1246EF9CA0C4437B3BC15A13F4EAD6141E5E96D3C97F80A1648E",
     "Bytes": 38708
   },
   {
+    "Path": "apps/desktop/src-tauri/src/credential_commands.rs",
+    "SHA256": "54A644A9A16342AD40AC88C5016D740E41F1620B6EAE941D31595202B3337A88",
+    "Bytes": 766
+  },
+  {
+    "Path": "apps/desktop/src-tauri/src/credential_service.rs",
+    "SHA256": "B32725FEF074895C7074FEAC568E30B88328767C3A890105415AC17D8F316327",
+    "Bytes": 17819
+  },
+  {
     "Path": "apps/desktop/src-tauri/src/lib.rs",
-    "SHA256": "5FDFEFF7689FC44EEEC4909105C86C101482E85760B7CBCFF57906027694DE8F",
-    "Bytes": 47871
+    "SHA256": "DAA6F90C39017C895E10F483089E37A1D17A1BD04606168BF42CA1136100FAA3",
+    "Bytes": 52458
   },
   {
     "Path": "apps/desktop/src-tauri/src/main.rs",
@@ -12421,8 +13216,18 @@
   },
   {
     "Path": "apps/desktop/src-tauri/src/notes_service.rs",
-    "SHA256": "673858405A5B552234D89D5642DB91809A2886F91A67256BC6EFF91B20C9B544",
-    "Bytes": 11512
+    "SHA256": "36F0128C01E94BED00F99A5BF974A85051530EF063B869AED830F45AE23FCE67",
+    "Bytes": 12067
+  },
+  {
+    "Path": "apps/desktop/src-tauri/src/template_commands.rs",
+    "SHA256": "0B70625C7362C3237A9D297C905332029C43428A61ED6F9C31989384C688C512",
+    "Bytes": 1204
+  },
+  {
+    "Path": "apps/desktop/src-tauri/tests/agent_protocol.rs",
+    "SHA256": "4163331BBAC8418C80C7F552B425CD7E04455088AAC75A102BB8F484FD7B2153",
+    "Bytes": 4321
   },
   {
     "Path": "docs/HANDY_COMPATIBILITY.md",
@@ -12430,14 +13235,34 @@
     "Bytes": 9987
   },
   {
+    "Path": "docs/HANDY_UPSTREAM_PROPOSAL.md",
+    "SHA256": "787E4D519540E0E3F05AC006AE35E0FA4661CA22D3DFF3C05C1ED5AD1C88BBAF",
+    "Bytes": 3805
+  },
+  {
+    "Path": "docs/NATIVE_VALIDATION.md",
+    "SHA256": "3BDAE22FC1D9C64D3CD69D9888CAFC4F34B2AA8B3BEAB565763B71736F403017",
+    "Bytes": 6059
+  },
+  {
+    "Path": "docs/RUST_AGENT_PROTOCOL.md",
+    "SHA256": "B23CF08D924215145532747DBCCAB927904E1368596BE83F7E29E02CE8912D1B",
+    "Bytes": 7239
+  },
+  {
     "Path": "docs/RUST_BUILD.md",
     "SHA256": "9BE816B2C4EF7023B27913C07AC0073CDDF1B1B6A894593F9B868AEF5C14A9FD",
     "Bytes": 9178
   },
   {
+    "Path": "docs/RUST_CREDENTIALS.md",
+    "SHA256": "5C6161574F6833887942B17ACBAE8F5CDFD4612AF2B98A3BA1CAF0D18F90F587",
+    "Bytes": 6279
+  },
+  {
     "Path": "docs/RUST_DEPENDENCIES.md",
-    "SHA256": "15F12CD2B4006BE9C4319A1F4015C601C9F9015C2F233B65CD1F4A485C56A6F3",
-    "Bytes": 13717
+    "SHA256": "9D8321582AB3A7A0119A4D8F2EA35907A9AD036E6E1209CB139D9378CB2D5652",
+    "Bytes": 15625
   },
   {
     "Path": "docs/RUST_LEGACY_CHECKS.md",

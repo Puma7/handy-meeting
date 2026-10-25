@@ -40,7 +40,7 @@ export default function Sidebar({
         <img src="/handymeeting.svg" width="34" height="34" alt="" />
         <div>
           <strong>HandyMeeting</strong>
-          <small>{app?.version ?? "1.0.0-beta.2"}</small>
+          {app?.version && <small>{app.version}</small>}
         </div>
       </div>
       <nav aria-label={locale === "de" ? "Hauptnavigation" : "Main navigation"}>

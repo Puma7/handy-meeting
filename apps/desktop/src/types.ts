@@ -56,6 +56,24 @@ export interface AppState {
   error?: string | null;
   dataDirectory?: string;
   notesRunning?: boolean;
+  agent?: AgentState | null;
+}
+export interface AgentState {
+  connected: boolean;
+  label: string;
+  ownerId: string;
+  revoked: boolean;
+  pending: {
+    requestId: string;
+    title: string;
+    includeMicrophone: boolean;
+    maxDurationSeconds: number;
+    status: "pending" | "starting";
+  } | null;
+  ownedSessionId: string | null;
+  expiresAtUnixMs: number | null;
+  activeCapture?: boolean;
+  lastOutcome?: string | null;
 }
 export type AnalysisKind = "summary" | "decisions" | "tasks" | "analysis";
 export interface AnalysisStep {
@@ -68,6 +86,10 @@ export interface AnalysisTemplate {
   id: string;
   name: string;
   steps: AnalysisStep[];
+}
+export interface TemplateLibrary {
+  revision: number;
+  templates: AnalysisTemplate[];
 }
 export interface Evidence {
   sourceId: string;
@@ -116,6 +138,12 @@ export interface NotesRequest {
   mode: "local" | "cloud";
   cloudConsent: boolean;
   apiKey: string;
+  useSavedKey?: boolean;
+}
+export interface CredentialStatus {
+  state: "missing" | "stored" | "unavailable";
+  provider: string;
+  message: string | null;
 }
 export interface NotesProgress {
   jobId: string;
@@ -151,4 +179,28 @@ export interface DesktopApi {
   cancelNotes(jobId: string): Promise<boolean>;
   notesMarkdown(meetingId: string, analysisId: string): Promise<string>;
   copyText(text: string): Promise<void>;
+  listTemplates(): Promise<TemplateLibrary>;
+  saveTemplates(library: TemplateLibrary): Promise<TemplateLibrary>;
+  importTemplates(templates: AnalysisTemplate[]): Promise<TemplateLibrary>;
+  credentialStatus(
+    endpoint: string,
+    mode: "local" | "cloud",
+  ): Promise<CredentialStatus>;
+  saveCredential(request: {
+    endpoint: string;
+    mode: "local" | "cloud";
+    apiKey: string;
+    replaceExisting: boolean;
+  }): Promise<CredentialStatus>;
+  removeCredential(
+    endpoint: string,
+    mode: "local" | "cloud",
+    confirm: boolean,
+  ): Promise<CredentialStatus>;
+  agentDecideRecording(
+    requestId: string,
+    approve: boolean,
+    request?: StartRequest,
+  ): Promise<void>;
+  agentRevoke(): Promise<void>;
 }

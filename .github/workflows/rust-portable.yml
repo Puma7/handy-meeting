@@ -44,7 +44,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libvulkan1 pulseaudio-utils
+          sudo apt-get install -y build-essential pkg-config libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libvulkan1 pulseaudio-utils dbus gnome-keyring
       - name: Install pinned Rust tooling
         run: |
           set -euo pipefail
@@ -80,7 +80,9 @@ jobs:
           node scripts/rust-artifacts.mjs source-fingerprint > .build/portable-source-before.json
           python3 -m py_compile scripts/prepare-rust-portable.py scripts/rust-portable-artifacts.py
           python3 -m unittest discover -s scripts -p test_rust_portable.py
+          python3 -m unittest discover -s scripts -p test_worker_memory.py
           bash -n scripts/package-rust-portable.sh
+          bash -n scripts/check-native-credentials.sh
       - name: Verify frontend and bounded portable audio transport
         run: |
           set -euo pipefail
@@ -101,7 +103,7 @@ jobs:
           .build/rust-target/${{ matrix.target }}/release/HandyMeeting --release-checks .build/portable-release-checks
           node scripts/rust-artifacts.mjs source-fingerprint > .build/portable-source-after.json
           python3 -c 'import json; assert json.load(open(".build/portable-source-before.json"))==json.load(open(".build/portable-source-after.json")), "Source changed during portable checks"'
-      - name: Package the independently checked desktop and prove relocation
+      - name: Package the checked desktop, prove relocation and verify isolated native credentials
         run: |
           set -euo pipefail
           bash scripts/package-rust-portable.sh '${{ matrix.rid }}' .build/portable-source-after.json .build/portable-release-checks
@@ -126,8 +128,8 @@ jobs:
           name: rust-desktop-${{ matrix.rid }}
           retention-days: 14
           path: |
-            packages/HandyMeeting-1.0.0-beta.2-*.dmg*
-            packages/HandyMeeting-1.0.0-beta.2-linux-amd64.deb*
+            packages/HandyMeeting-1.0.0-beta.3-*.dmg*
+            packages/HandyMeeting-1.0.0-beta.3-linux-amd64.deb*
       - name: Collect only explicit regular model-free proof files
         if: always()
         run: |

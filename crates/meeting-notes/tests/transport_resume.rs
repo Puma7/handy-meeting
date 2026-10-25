@@ -558,6 +558,32 @@ fn local_discovery_is_get_only_without_keys_sources_or_cloud_detection() {
 }
 
 #[test]
+fn credential_identity_is_bound_to_validated_route_port_and_base_path() {
+    let scope = meeting_notes::credential_account("http://localhost:1234/v1", "local").unwrap();
+    assert_eq!(
+        scope,
+        meeting_notes::credential_account("http://127.0.0.1:1234/v1/", "local").unwrap()
+    );
+    for (url, mode) in [
+        ("http://127.0.0.1:1235/v1/", "local"),
+        ("http://127.0.0.1:1234/other/", "local"),
+        ("https://127.0.0.1:1234/v1/", "cloud"),
+    ] {
+        assert_ne!(scope, meeting_notes::credential_account(url, mode).unwrap());
+    }
+    for (url, mode) in [
+        ("https://provider.example/v1/", "local"),
+        ("http://provider.example/v1/", "cloud"),
+        ("https://key@provider.example/v1/", "cloud"),
+        ("https://provider.example/v1/?key=secret", "cloud"),
+    ] {
+        assert!(meeting_notes::credential_account(url, mode).is_err());
+    }
+    assert!(!scope.contains("1234"));
+    assert_eq!(scope.len(), 64);
+}
+
+#[test]
 fn cancellation_interrupts_partial_http_body_and_resume_preserves_confirmed_work() {
     let root = tempfile::tempdir().unwrap();
     let mut slow = Reply::successful(true);

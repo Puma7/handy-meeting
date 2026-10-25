@@ -92,6 +92,29 @@ fn chunk_seconds() -> u32 {
     30
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TranscriptSlice {
+    pub source: String,
+    pub start_sample: u64,
+    pub end_sample: u64,
+    pub sequence: u64,
+    pub status: String,
+    pub text: String,
+    pub offset: usize,
+    pub next_offset: usize,
+    pub total_bytes: usize,
+    pub committed_bytes: usize,
+}
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TranscriptPage {
+    pub next_sequence: u64,
+    pub more: bool,
+    pub updates: Vec<TranscriptSlice>,
+    pub untrusted_data: bool,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptCheckpoint {

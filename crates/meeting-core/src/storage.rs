@@ -25,6 +25,69 @@ pub struct SessionStore {
 }
 
 impl SessionStore {
+    /// Bounded latest text revisions; no full-meeting clone or audio access.
+    pub fn transcript_page(&self, after: u64, limit: usize) -> Result<crate::TranscriptPage> {
+        if !(1..=8).contains(&limit) {
+            return Err("Use a text page limit from 1 to 8".into());
+        }
+        let guard = self.inner.lock().map_err(|_| "Session lock was poisoned")?;
+        if after > guard.data.snapshot_sequence {
+            return Err("Transcript cursor is ahead of this session".into());
+        }
+        let mut selected: Vec<&AudioPart> = Vec::with_capacity(limit + 1);
+        let mut count = 0;
+        for part in &guard.data.parts {
+            if part.transcript_sequence <= after {
+                continue;
+            }
+            count += 1;
+            let index =
+                selected.partition_point(|old| old.transcript_sequence < part.transcript_sequence);
+            selected.insert(index, part);
+            if selected.len() > limit {
+                selected.pop();
+            }
+        }
+        let next_sequence = selected
+            .last()
+            .map_or(after, |part| part.transcript_sequence);
+        Ok(crate::TranscriptPage {
+            next_sequence,
+            more: count > limit,
+            updates: selected
+                .into_iter()
+                .map(|part| text_slice(part, 0, 1024))
+                .collect(),
+            untrusted_data: true,
+        })
+    }
+    pub fn transcript_slice(
+        &self,
+        source: &str,
+        start: u64,
+        sequence: u64,
+        offset: usize,
+        limit: usize,
+    ) -> Result<crate::TranscriptSlice> {
+        if !["system", "microphone"].contains(&source) || !(4..=4096).contains(&limit) {
+            return Err("Invalid text slice range".into());
+        }
+        let guard = self.inner.lock().map_err(|_| "Session lock was poisoned")?;
+        let part = guard
+            .data
+            .parts
+            .iter()
+            .find(|part| part.source == source && part.start_sample == start)
+            .ok_or("Unknown transcript section")?;
+        if part.transcript_sequence != sequence {
+            return Err("Transcript changed; request its latest revision before continuing".into());
+        }
+        let text = part.text.as_deref().unwrap_or("");
+        if offset > text.len() || !text.is_char_boundary(offset) {
+            return Err("Text offset must be a UTF-8 byte boundary".into());
+        }
+        Ok(text_slice(part, offset, limit))
+    }
     pub fn create(
         root: &Path,
         title: &str,
@@ -418,6 +481,26 @@ impl SessionStore {
 
     pub fn transcript_text(&self) -> Result<String> {
         Ok(render_transcript(&self.snapshot()?))
+    }
+}
+
+fn text_slice(part: &AudioPart, offset: usize, limit: usize) -> crate::TranscriptSlice {
+    let text = part.text.as_deref().unwrap_or("");
+    let mut end = text.len().min(offset.saturating_add(limit));
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    crate::TranscriptSlice {
+        source: part.source.clone(),
+        start_sample: part.start_sample,
+        end_sample: part.start_sample + part.confirmed_sample_count,
+        sequence: part.transcript_sequence,
+        status: part.status.clone(),
+        text: text[offset..end].into(),
+        offset,
+        next_offset: end,
+        total_bytes: text.len(),
+        committed_bytes: part.committed_text.len(),
     }
 }
 

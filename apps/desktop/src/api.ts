@@ -29,6 +29,18 @@ export const desktopApi: DesktopApi = {
   notesMarkdown: (meetingId, analysisId) =>
     desktopInvoke("notes_markdown", { meetingId, analysisId }),
   copyText: (text) => desktopInvoke("copy_text", { text }),
+  listTemplates: () => desktopInvoke("list_templates"),
+  saveTemplates: (library) => desktopInvoke("save_templates", { library }),
+  importTemplates: (templates) =>
+    desktopInvoke("import_templates", { templates }),
+  credentialStatus: (endpoint, mode) =>
+    desktopInvoke("credential_status", { endpoint, mode }),
+  saveCredential: (request) => desktopInvoke("save_credential", { request }),
+  removeCredential: (endpoint, mode, confirm) =>
+    desktopInvoke("remove_credential", { endpoint, mode, confirm }),
+  agentDecideRecording: (requestId, approve, request) =>
+    desktopInvoke("agent_decide_recording", { requestId, approve, request }),
+  agentRevoke: () => desktopInvoke("agent_revoke"),
 };
 export function errorMessage(error: unknown): string {
   return error instanceof Error

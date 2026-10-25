@@ -9,6 +9,7 @@ mod storage;
 pub use capture::{list_devices, CaptureController, CaptureOptions};
 pub use model::{
     AudioDevice, AudioPart, CaptureSnapshot, SessionData, SessionProgress, TranscriptCheckpoint,
+    TranscriptPage, TranscriptSlice,
 };
 pub use pcm::{read_pcm_samples, PcmWriter, SAMPLE_RATE};
 pub use storage::{list_sessions, read_legacy, SessionStore};

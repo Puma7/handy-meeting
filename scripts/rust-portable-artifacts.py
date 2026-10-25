@@ -219,6 +219,7 @@ def collect_proofs(rid, work=None):
         "source-before.json": ROOT / ".build/portable-source-before.json",
         "source-after.json": ROOT / ".build/portable-source-after.json",
         "native-release-checks.json": ROOT / ".build/portable-release-checks/release-checks.json",
+        "credential-checks.json": ROOT / ".build/portable-credential-checks/credential-checks.json",
         "sdk-abi.json": ROOT / f".build/rust-native-beta2-0.4.1-{rid}/ABI_REPORT.json",
         "sdk-provenance.json": ROOT / f".build/rust-native-beta2-0.4.1-{rid}/SDK_PROVENANCE.json",
         "release-pending.json": ROOT / f".build/rust-portable-{rid}-pending.json",

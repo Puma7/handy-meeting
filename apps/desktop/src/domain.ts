@@ -48,37 +48,44 @@ export function clock(ms: number): string {
     String(s % 60).padStart(2, "0")
   );
 }
-export function defaultTemplate(): AnalysisTemplate {
+export function defaultTemplate(locale: Locale = "de"): AnalysisTemplate {
   return {
     id: uid(),
-    name: "Standard",
+    name: locale === "de" ? "Standard" : "Default",
     steps: [
       {
         id: uid(),
-        name: "Zusammenfassung",
+        name: locale === "de" ? "Zusammenfassung" : "Summary",
         kind: "summary",
         prompt:
-          "Fasse das Gespräch auf Deutsch knapp und verständlich zusammen. Hebe Themen und Ergebnisse hervor.",
+          locale === "de"
+            ? "Fasse das Gespräch auf Deutsch knapp und verständlich zusammen. Hebe Themen und Ergebnisse hervor."
+            : "Summarise the conversation concisely in English. Highlight topics and outcomes.",
       },
       {
         id: uid(),
-        name: "Entscheidungen",
+        name: locale === "de" ? "Entscheidungen" : "Decisions",
         kind: "decisions",
         prompt:
-          "Extrahiere ausschließlich ausdrücklich getroffene Entscheidungen. Wünsche, Vorschläge, Aufgabenübernahmen und Zustandsbeschreibungen sind keine Beschlüsse. Ohne ausdrücklichen Beschluss bleibt items leer.",
+          locale === "de"
+            ? "Extrahiere ausschließlich ausdrücklich getroffene Entscheidungen. Wünsche, Vorschläge, Aufgabenübernahmen und Zustandsbeschreibungen sind keine Beschlüsse. Ohne ausdrücklichen Beschluss bleibt items leer."
+            : "Extract only explicitly made decisions. Wishes, suggestions, task commitments and status descriptions are not decisions. Leave items empty if no explicit decision was made.",
       },
       {
         id: uid(),
         name: "To-dos",
         kind: "tasks",
         prompt:
-          "Extrahiere ausschließlich ausdrücklich zugesagte oder zugewiesene Aufgaben. Zuständige und Termine bleiben unbekannt, soweit sie nicht ausdrücklich genannt und wörtlich belegt sind.",
+          locale === "de"
+            ? "Extrahiere ausschließlich ausdrücklich zugesagte oder zugewiesene Aufgaben. Zuständige und Termine bleiben unbekannt, soweit sie nicht ausdrücklich genannt und wörtlich belegt sind."
+            : "Extract only explicitly committed or assigned tasks. Keep owners and due dates unknown unless explicitly stated and supported by verbatim evidence.",
       },
     ],
   };
 }
 export function validateLibrary(value: unknown): value is AnalysisTemplate[] {
-  if (!Array.isArray(value) || value.length === 0) return false;
+  if (!Array.isArray(value) || value.length === 0 || value.length > 100)
+    return false;
   const templateIds = new Set<string>();
   return value.every((t) => {
     if (
@@ -90,7 +97,8 @@ export function validateLibrary(value: unknown): value is AnalysisTemplate[] {
       !t.name.trim() ||
       t.name.length > 100 ||
       !Array.isArray(t.steps) ||
-      t.steps.length === 0
+      t.steps.length === 0 ||
+      t.steps.length > 100
     )
       return false;
     templateIds.add(t.id);

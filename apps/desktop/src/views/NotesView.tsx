@@ -20,8 +20,14 @@ import type {
   Locale,
 } from "../types";
 import type { MessageKey } from "../i18n";
+import type { TemplateAction } from "./TemplateDialog";
+import CredentialPanel from "./CredentialPanel";
+import type { DesktopApi } from "../types";
 type Props = {
   t: Record<MessageKey, string>;
+  api: DesktopApi;
+  useSavedKey: boolean;
+  setUseSavedKey: (value: boolean) => void;
   meeting: Meeting | null;
   meetingId: string;
   meetings: MeetingSummary[];
@@ -36,6 +42,11 @@ type Props = {
   setManualModel: (manual: boolean) => void;
   modelReady: boolean;
   libraryInvalid: boolean;
+  libraryPending: boolean;
+  libraryError: string | null;
+  browserInvalid: boolean;
+  refreshTemplates: () => void;
+  importBrowser: (() => void) | null;
   templates: AnalysisTemplate[];
   notesBusy: boolean;
   mode: "local" | "cloud";
@@ -52,8 +63,10 @@ type Props = {
   setTemplateId: (v: string) => void;
   setStepId: (v: string) => void;
   setResultId: (v: string) => void;
-  setTemplateName: (v: { id: string | null; name: string } | null) => void;
-  setTemplates: (v: AnalysisTemplate[]) => void;
+  openTemplateAction: (
+    kind: TemplateAction["kind"],
+    original?: AnalysisTemplate,
+  ) => void;
   connected: boolean;
   recording: boolean;
   busy: boolean;
@@ -62,9 +75,10 @@ type Props = {
   resultSection: AnalysisResult["sections"][number] | undefined;
   selectedStep: AnalysisStep;
   setEditing: (v: AnalysisStep | null) => void;
+  inspectStep: (v: AnalysisStep) => void;
   setEditingNew: (v: boolean) => void;
   moveStep: (delta: number) => void;
-  updateTemplate: (v: AnalysisTemplate) => void;
+  updateTemplate: (v: AnalysisTemplate) => Promise<boolean>;
   copied: boolean;
   copyResults: () => Promise<void>;
   showEvidence: (evidence: Evidence) => void;
@@ -72,6 +86,9 @@ type Props = {
 };
 export default function NotesView({
   t,
+  api,
+  useSavedKey,
+  setUseSavedKey,
   meeting,
   meetingId,
   meetings,
@@ -86,6 +103,11 @@ export default function NotesView({
   setManualModel,
   modelReady,
   libraryInvalid,
+  libraryPending,
+  libraryError,
+  browserInvalid,
+  refreshTemplates,
+  importBrowser,
   templates,
   notesBusy,
   mode,
@@ -102,8 +124,7 @@ export default function NotesView({
   setTemplateId,
   setStepId,
   setResultId,
-  setTemplateName,
-  setTemplates,
+  openTemplateAction,
   connected,
   recording,
   busy,
@@ -112,6 +133,7 @@ export default function NotesView({
   resultSection,
   selectedStep,
   setEditing,
+  inspectStep,
   setEditingNew,
   moveStep,
   updateTemplate,
@@ -120,6 +142,12 @@ export default function NotesView({
   showEvidence,
   locale,
 }: Props) {
+  const templateLocked =
+    notesBusy || libraryInvalid || libraryPending || !connected;
+  const visibleSteps = result ? result.sections : template.steps;
+  const activeId =
+    (result ? resultSection?.id : selectedStep.id) ?? visibleSteps[0].id;
+  const tabId = (id: string) => "analysis-tab-" + encodeURIComponent(id);
   return (
     <>
       <section className="notes-meeting-picker">
@@ -149,9 +177,24 @@ export default function NotesView({
       {meeting && meeting.status !== "complete" && (
         <div className="notice warning">{t.pendingNotes}</div>
       )}
-      {libraryInvalid && (
+      {browserInvalid && (
         <div role="alert" className="notice error">
           {t.templateError}
+        </div>
+      )}
+      {libraryError && (
+        <div role="alert" className="notice error">
+          <div>
+            <strong>{t.templateLoadFailed}</strong>
+            <p>{libraryError}</p>
+          </div>
+          <button
+            className="secondary"
+            disabled={libraryPending}
+            onClick={refreshTemplates}
+          >
+            {t.refreshTemplates}
+          </button>
         </div>
       )}
       <section className="notes-config">
@@ -268,26 +311,24 @@ export default function NotesView({
             autoComplete="off"
           />
         </label>
-        <details>
-          <summary>{t.apiKey}</summary>
-          <label>
-            {t.apiKey}
-            <input
-              type="password"
-              value={apiKey}
-              disabled={notesBusy}
-              onChange={(event) => setApiKey(event.target.value)}
-              autoComplete="new-password"
-            />
-          </label>
-          <p>{t.apiKeyHelp}</p>
-        </details>
+        <CredentialPanel
+          api={api}
+          endpoint={endpoint}
+          mode={mode}
+          connected={connected}
+          disabled={notesBusy}
+          apiKey={apiKey}
+          setApiKey={setApiKey}
+          useSavedKey={useSavedKey}
+          setUseSavedKey={setUseSavedKey}
+          t={t}
+        />
         <div className="template-selector">
           <label>
             {t.template}
             <select
               value={template.id}
-              disabled={notesBusy || libraryInvalid}
+              disabled={templateLocked}
               onChange={(event) => {
                 const next = templates.find(
                   (item) => item.id === event.target.value,
@@ -304,44 +345,69 @@ export default function NotesView({
               ))}
             </select>
           </label>
+        </div>
+        <div className="template-actions" aria-label={t.template}>
           <button
-            className="icon-button bordered"
-            disabled={notesBusy || libraryInvalid}
-            title={t.newTemplate}
-            aria-label={t.newTemplate}
-            onClick={() => setTemplateName({ id: null, name: "" })}
+            className="secondary"
+            disabled={templateLocked || templates.length >= 100}
+            onClick={() => openTemplateAction("new")}
           >
-            <Plus size={17} />
+            <Plus size={15} />
+            {t.newTemplate}
           </button>
           <button
-            className="icon-button bordered"
-            disabled={notesBusy || libraryInvalid}
-            title={t.renameTemplate}
-            aria-label={t.renameTemplate}
+            className="secondary"
+            disabled={templateLocked || templates.length >= 100}
             onClick={() =>
-              setTemplateName({ id: template.id, name: template.name })
+              openTemplateAction("duplicate", result?.template ?? template)
             }
           >
-            <Pencil size={16} />
+            <Copy size={15} />
+            {t.duplicateTemplate}
           </button>
           <button
-            className="icon-button bordered"
-            disabled={notesBusy || libraryInvalid || templates.length < 2}
-            title={t.removeTemplate}
-            aria-label={t.removeTemplate}
-            onClick={() => {
-              const remaining = templates.filter(
-                (item) => item.id !== template.id,
-              );
-              setTemplates(remaining);
-              setTemplateId(remaining[0].id);
-              setStepId(remaining[0].steps[0].id);
-              setResultId("");
-            }}
+            className="text-button"
+            disabled={templateLocked}
+            onClick={() => openTemplateAction("rename")}
           >
-            <Trash2 size={16} />
+            <Pencil size={14} />
+            {t.renameTemplate}
+          </button>
+          <button
+            className="text-button"
+            disabled={templateLocked || templates.length < 2}
+            title={templates.length < 2 ? t.lastTemplate : t.removeTemplate}
+            onClick={() => openTemplateAction("delete")}
+          >
+            <Trash2 size={14} />
+            {t.removeTemplate}
+          </button>
+          <button
+            className="text-button"
+            disabled={notesBusy || libraryPending || !connected}
+            onClick={refreshTemplates}
+          >
+            <RefreshCw
+              size={14}
+              className={libraryPending ? "spinning" : undefined}
+            />
+            {t.refreshTemplates}
           </button>
         </div>
+        <p className="muted">{t.templatesPortable}</p>
+        {importBrowser && (
+          <details>
+            <summary>{t.importBrowserTemplates}</summary>
+            <p>{t.browserTemplatesHelp}</p>
+            <button
+              className="secondary"
+              disabled={templateLocked}
+              onClick={importBrowser}
+            >
+              {t.importBrowserTemplates}
+            </button>
+          </details>
+        )}
         {analyses.length > 0 && (
           <label>
             {t.earlier}
@@ -382,7 +448,8 @@ export default function NotesView({
               !textModel.trim() ||
               !modelReady ||
               !endpoint.trim() ||
-              libraryInvalid
+              libraryInvalid ||
+              libraryPending
             }
             onClick={beginNotes}
           >
@@ -392,12 +459,29 @@ export default function NotesView({
         </div>
       </section>
       <section className="analysis-panel">
+        {result && (
+          <div className="saved-template-notice">
+            <p>{t.historicalTemplateHelp}</p>
+            <button
+              className="secondary"
+              onClick={() => {
+                setResultId("");
+                setStepId(template.steps[0].id);
+              }}
+            >
+              {t.editCurrentTemplate}
+            </button>
+          </div>
+        )}
         <div className="tabs-toolbar">
           <div className="analysis-tabs" role="tablist" aria-label={t.notes}>
-            {(result ? result.sections : template.steps).map((item) => (
+            {visibleSteps.map((item, position) => (
               <button
                 role="tab"
                 key={item.id}
+                id={tabId(item.id)}
+                aria-controls="analysis-step-panel"
+                tabIndex={activeId === item.id ? 0 : -1}
                 aria-selected={
                   (result ? resultSection?.id : selectedStep.id) === item.id
                 }
@@ -407,8 +491,42 @@ export default function NotesView({
                     : "analysis-tab"
                 }
                 onClick={() => setStepId(item.id)}
+                onKeyDown={(event) => {
+                  if (
+                    ["ArrowLeft", "ArrowRight", "Home", "End"].includes(
+                      event.key,
+                    )
+                  ) {
+                    event.preventDefault();
+                    const next =
+                      event.key === "Home"
+                        ? 0
+                        : event.key === "End"
+                          ? visibleSteps.length - 1
+                          : (position +
+                              (event.key === "ArrowLeft" ? -1 : 1) +
+                              visibleSteps.length) %
+                            visibleSteps.length;
+                    setStepId(visibleSteps[next].id);
+                    event.currentTarget
+                      .closest('[role="tablist"]')
+                      ?.querySelectorAll<HTMLElement>('[role="tab"]')
+                      [next]?.focus();
+                  } else if (event.key === "F2") {
+                    event.preventDefault();
+                    if (result) {
+                      const saved = result.template.steps.find(
+                        (step) => step.id === item.id,
+                      );
+                      if (saved) inspectStep(saved);
+                    } else if (!templateLocked) {
+                      setEditing({ ...(item as AnalysisStep) });
+                      setEditingNew(false);
+                    }
+                  }
+                }}
                 onContextMenu={(event) => {
-                  if (result || libraryInvalid) return;
+                  if (result || templateLocked) return;
                   event.preventDefault();
                   setEditing({ ...(item as AnalysisStep) });
                   setEditingNew(false);
@@ -421,7 +539,7 @@ export default function NotesView({
           {!result && (
             <button
               className="icon-button"
-              disabled={notesBusy || libraryInvalid}
+              disabled={templateLocked || template.steps.length >= 100}
               title={t.addTab}
               aria-label={t.addTab}
               onClick={() => {
@@ -438,11 +556,28 @@ export default function NotesView({
             </button>
           )}
         </div>
+        <p className="tab-help muted">{t.tabKeyboardHelp}</p>
+        {result && (
+          <div className="step-actions">
+            <button
+              className="text-button"
+              onClick={() => {
+                const saved = result.template.steps.find(
+                  (item) => item.id === resultSection?.id,
+                );
+                if (saved) inspectStep(saved);
+              }}
+            >
+              <Pencil size={14} />
+              {t.inspectInstructions}
+            </button>
+          </div>
+        )}
         {!result && (
           <div className="step-actions">
             <button
               className="text-button"
-              disabled={libraryInvalid || notesBusy}
+              disabled={templateLocked}
               onClick={() => {
                 setEditing({ ...selectedStep });
                 setEditingNew(false);
@@ -457,9 +592,7 @@ export default function NotesView({
                 title={t.moveLeft}
                 aria-label={t.moveLeft}
                 disabled={
-                  libraryInvalid ||
-                  notesBusy ||
-                  template.steps[0].id === selectedStep.id
+                  templateLocked || template.steps[0].id === selectedStep.id
                 }
                 onClick={() => moveStep(-1)}
               >
@@ -470,8 +603,7 @@ export default function NotesView({
                 title={t.moveRight}
                 aria-label={t.moveRight}
                 disabled={
-                  libraryInvalid ||
-                  notesBusy ||
+                  templateLocked ||
                   template.steps.at(-1)?.id === selectedStep.id
                 }
                 onClick={() => moveStep(1)}
@@ -482,15 +614,13 @@ export default function NotesView({
                 className="icon-button"
                 title={t.removeTab}
                 aria-label={t.removeTab}
-                disabled={
-                  libraryInvalid || notesBusy || template.steps.length < 2
-                }
-                onClick={() => {
+                disabled={templateLocked || template.steps.length < 2}
+                onClick={async () => {
                   const steps = template.steps.filter(
                     (item) => item.id !== selectedStep.id,
                   );
-                  updateTemplate({ ...template, steps });
-                  setStepId(steps[0].id);
+                  if (await updateTemplate({ ...template, steps }))
+                    setStepId(steps[0].id);
                 }}
               >
                 <Trash2 size={15} />
@@ -498,7 +628,13 @@ export default function NotesView({
             </div>
           </div>
         )}
-        <div className="analysis-body" role="tabpanel">
+        <div
+          className="analysis-body"
+          role="tabpanel"
+          id="analysis-step-panel"
+          aria-labelledby={tabId(activeId)}
+          tabIndex={0}
+        >
           {resultSection ? (
             resultSection.items.length ? (
               <ul className="fact-list">

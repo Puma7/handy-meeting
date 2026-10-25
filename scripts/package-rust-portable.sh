@@ -41,6 +41,11 @@ if [[ "$rid" != linux-x64 ]]; then
 fi
 # Prove relocation resolves bundled native libraries without a build-host loader path.
 env -u LD_LIBRARY_PATH -u DYLD_LIBRARY_PATH -u TRANSCRIBE_DIR "$program/HandyMeeting" --release-checks "$work/relocated-checks"
+if [[ "${GITHUB_ACTIONS:-}" = true ]]; then
+  # Only the isolated GitHub-runner wrapper may change a disposable native store.
+  # Check the relocated (on macOS already signed) payload, never a user's keychain.
+  env -u LD_LIBRARY_PATH -u DYLD_LIBRARY_PATH -u TRANSCRIBE_DIR bash scripts/check-native-credentials.sh "$program/HandyMeeting" .build/portable-credential-checks
+fi
 node scripts/rust-artifacts.mjs source-fingerprint > "$work/source-after-package.json"
 python3 scripts/rust-portable-artifacts.py finalize "$work" "$work/source-after-package.json" "$work/relocated-checks"
 mkdir -p packages

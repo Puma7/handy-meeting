@@ -129,8 +129,8 @@ pub fn analyze_controlled(
         sections: Vec::new(),
         sources,
         created_at: chrono::Utc::now().to_rfc3339(),
-        model: connection.model,
-        mode: connection.mode,
+        model: connection.model.clone(),
+        mode: connection.mode.clone(),
         endpoint: client.base.to_string(),
         prompt_version: PROMPT_VERSION.to_string(),
     };

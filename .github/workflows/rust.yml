@@ -151,6 +151,12 @@ jobs:
       - name: Stage only checked payload files
         shell: pwsh
         run: node scripts/rust-artifacts.mjs stage
+      - name: Verify actual Windows Credential Manager using only owned synthetic entries
+        shell: pwsh
+        run: |
+          $env:PATH = (Join-Path $PWD '.build/rust-native-0.4.1/bin') + ';' + $env:PATH
+          & ./.build/rust-target/x86_64-pc-windows-msvc/release/HandyMeeting.exe --credential-checks .build/windows-credential-checks | Out-Host
+          if ($LASTEXITCODE -ne 0) { throw 'Native credential checks failed.' }
       - name: Create candidate ZIP using filesystem operations only
         shell: pwsh
         run: ./scripts/package-rust-windows.ps1
@@ -168,11 +174,12 @@ jobs:
             .build/rust-release-check-current.json
             .build/rust-release-checks-*/release-verification.json
             .build/rust-release-checks-*/release-checks.json
+            .build/windows-credential-checks/credential-checks.json
       - name: Keep candidate package without publishing a release
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: rust-windows-beta-candidate
-          path: packages/HandyMeeting-1.0.0-beta.2-windows-x64.zip*
+          path: packages/HandyMeeting-1.0.0-beta.3-windows-x64.zip*
           retention-days: 14
   portable-core:
     name: Portable core (${{ matrix.runner }})

@@ -142,6 +142,14 @@ class PortableArtifactGuards(unittest.TestCase):
         self.put(str(work.relative_to(self.root) / "image/Applications/unrelated-proof.json"), {"never": "upload this"})
         self.assert_flat_proof_scope(work)
 
+    def test_isolated_credential_proof_is_an_explicit_regular_file_only(self):
+        work = self.proof_fixture()
+        expected = {"actualNativeStore": True, "simulated": False, "usesUserEntries": False}
+        self.put(".build/portable-credential-checks/credential-checks.json", expected)
+        artifacts.collect_proofs("osx-arm64", work)
+        output = self.root / ".build/rust-portable-proofs/osx-arm64/credential-checks.json"
+        self.assertEqual(json.loads(output.read_text()), expected)
+
     def test_applications_symlink_cannot_expand_proof_scope(self):
         work = self.proof_fixture()
         image = work / "image"

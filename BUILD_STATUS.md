@@ -2,7 +2,24 @@
 
 Repository: [Puma7/handy-meeting](https://github.com/Puma7/handy-meeting), publicly shared with the owner's approval on 25 October 2026. This is an independent prototype.
 
-## Confirmed GitHub runs
+## Current Rust/Tauri beta 2
+
+The guided analysis, local-model discovery, meeting-detail history, truthful task progress/elapsed time/cancellation and validated Markdown copy are implemented in `1.0.0-beta.2`. [Draft PR #8](https://github.com/Puma7/handy-meeting/pull/8) remains open; no stable Rust release or merge is implied.
+
+Source commit `9887a875a68e99530b34e834bf93194df65bb790` passed the actual [Windows Rust checks and packaging](https://github.com/Puma7/handy-meeting/actions/runs/40234784590), [Linux/Apple Silicon/Intel GUI builds and packages](https://github.com/Puma7/handy-meeting/actions/runs/40234784600), and [preserved C# checks](https://github.com/Puma7/handy-meeting/actions/runs/40234784610). Local verification passed 77 Rust, 33 frontend, nine artifact and 89 preserved C# cases, plus monitor checks; eight portable filesystem cases also passed. A real local Gemma analysis passed positive and nonbinding reference cases.
+
+Locally downloaded candidates with verified SHA-256 and matching source fingerprints:
+
+| Target | Candidate |
+| --- | --- |
+| Windows x64 | [ZIP](packages/rust-beta2-ci-9887a87/windows-x64/HandyMeeting-1.0.0-beta.2-windows-x64.zip) |
+| Ubuntu/Debian x64 | [DEB](packages/rust-beta2-ci-9887a87/linux-x64/HandyMeeting-1.0.0-beta.2-linux-amd64.deb) |
+| macOS 13+ Apple Silicon | [DMG](packages/rust-beta2-ci-9887a87/osx-arm64/HandyMeeting-1.0.0-beta.2-osx-arm64.dmg) |
+| macOS 13+ Intel | [DMG](packages/rust-beta2-ci-9887a87/osx-x64/HandyMeeting-1.0.0-beta.2-osx-x64.dmg) |
+
+These candidates are separate from existing local distributions and the older public releases below. Debian 12/13 installation and native headless checks passed; the Mac signatures and DMGs passed integrity checks. macOS packages are ad-hoc signed, not notarized. No CI job captured real devices or exercised a visible desktop. Windows driver discontinuities remain, and a new Rust two-hour run plus real Mac/Linux device tests are still required. See [TEST_REPORT.md](TEST_REPORT.md) for exact evidence and limits.
+
+## Historical C# GitHub runs
 
 | Check | Result | Evidence |
 | --- | --- | --- |

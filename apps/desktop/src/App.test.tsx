@@ -9,6 +9,7 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "./App";
+import { testServices } from "./test-services";
 import { defaultTemplate, renderTranscript, validateLibrary } from "./domain";
 import type { AnalysisResult, AppState, DesktopApi, Meeting } from "./types";
 
@@ -53,6 +54,7 @@ function state(active: Meeting | null = null): AppState {
 }
 function fakeApi(active: Meeting | null = null): DesktopApi {
   return {
+    ...testServices(),
     getAppState: vi.fn().mockResolvedValue(state(active)),
     refreshHandy: vi.fn().mockResolvedValue(state().handy),
     listDevices: vi.fn().mockResolvedValue([
@@ -538,7 +540,11 @@ describe("migration frontend boundaries (synthetic IPC)", () => {
   it("preserves unreadable saved templates instead of silently replacing them", async () => {
     const broken = '{"privateOriginal":"keep me"}';
     localStorage.setItem("handymeeting.rust.beta.templates.v1", broken);
-    render(<App api={fakeApi(meeting)} />);
+    const api = fakeApi(meeting);
+    vi.mocked(api.listTemplates).mockRejectedValue(
+      "Synthetic corrupt native library",
+    );
+    render(<App api={api} />);
     await ready();
     await userEvent.click(
       screen.getByRole("button", { name: "Nachbearbeitung" }),
@@ -576,7 +582,7 @@ describe("migration frontend boundaries (synthetic IPC)", () => {
       "synthetic-text-model",
     );
     fireEvent.change(
-      screen.getByLabelText("API-Schlüssel (nur für diese App-Sitzung)"),
+      screen.getByLabelText("Schlüssel nur für diese App-Sitzung"),
       { target: { value: "synthetic-secret-do-not-save" } },
     );
     await userEvent.click(
@@ -665,7 +671,8 @@ describe("migration frontend boundaries (synthetic IPC)", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
   it("adds and edits a custom analysis without modifying saved-result instructions", async () => {
-    render(<App api={fakeApi(meeting)} />);
+    const api = fakeApi(meeting);
+    render(<App api={api} />);
     await ready();
     await userEvent.click(
       screen.getByRole("button", { name: "Nachbearbeitung" }),
@@ -679,14 +686,14 @@ describe("migration frontend boundaries (synthetic IPC)", () => {
       "Extrahiere ausdrücklich genannte Risiken mit Originalzitaten.",
     );
     await userEvent.click(screen.getByRole("button", { name: "Speichern" }));
-    expect(
-      screen
-        .getByRole("tab", { name: "Risiken" })
-        .getAttribute("aria-selected"),
-    ).toBe("true");
-    const saved = JSON.parse(
-      localStorage.getItem("handymeeting.rust.beta.templates.v1")!,
+    await waitFor(() =>
+      expect(
+        screen
+          .getByRole("tab", { name: "Risiken" })
+          .getAttribute("aria-selected"),
+      ).toBe("true"),
     );
+    const saved = vi.mocked(api.saveTemplates).mock.calls.at(-1)![0].templates;
     expect(saved[0].steps).toHaveLength(4);
     expect(saved[0].steps[3].prompt).toContain("Originalzitaten");
   });

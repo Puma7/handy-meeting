@@ -73,7 +73,7 @@ The GLib entry belongs to the cross-platform lock's Linux stack and is **absent 
 
 The frontend's full npm audit initially found development-tool advisories. Exact Vite `6.4.5` and Vitest `4.1.12` updates removed those reports while preserving the existing React/Tauri API compatibility. The final **full audit, including development dependencies**, reported zero known npm advisories; local evidence is `.build/frontend-audit-patched.json`. The updated frontend build and twenty-one synthetic frontend regressions passed, including completed-history preservation during bounded polling, an asynchronous ending state, guarded focus-refresh of Handy models and explicit reselection when a chosen model disappears. Audit results do not replace device, recovery, privacy-boundary or long-session checks.
 
-## Beta.2 Unix notice collection
+## Beta.2 Unix notice collection before credential persistence
 
 The collections below were generated on 25 October 2026 from unchanged Cargo lock SHA-256 `d7b93ad3cb55700c3b0466adc0350fff5071c13e86155b1ed38a068c41f8ab5b`. These are target-filtered dependency/license records, produced on Windows using locked Cargo metadata. They do not establish that a Mac or Linux binary was built, signed, run or validated on hardware. The earlier beta.1 collection counts and lock hash above describe the earlier evidence, not this current lock.
 
@@ -100,3 +100,18 @@ Additional exact upstream sources were reviewed as follows:
 - Upstream's [licensing clarification commit](https://github.com/madsmtm/objc2/commit/cfb199226661ec6e4939fcd7cd7531b3c5453076) replaced the prior `LICENSE.txt` with `LICENSE.md`. The unmodified [historical MIT original](https://raw.githubusercontent.com/madsmtm/objc2/757cd841d0293341dbefd9b99d7548dec244ffde/LICENSE.txt), including `Copyright (c) Steven Sheldon`, is additionally retained with SHA-256 `e353f37b12aefbb9f9b29490e837cfee05d9bda70804b3562839a3285c1df1e5`. Every such manifest entry explicitly identifies this as a historical notice; it is not presented as a file supplied by the current crate archive. No copyright holder or legal text was invented.
 
 All new remote sources are fixed by source revision and reviewed SHA-256 in the collector. The five current objc2 `LICENSE.md` copies are identical, SHA-256 `7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54`. No Apple SDK files, frameworks, model weights or user recordings are included in this collection. The upstream Apple SDK/Xcode boundary remains visible; collecting these notices is not a blanket legal assurance or a completed Mac packaging/signing review.
+
+## Native credential dependency expansion
+
+The explicitly approved native key-store addition pins `keyring = 4.2.0` with only `v1`, reuses existing `zeroize = 1.8.2` and `fs2 = 0.4.3`, and adds 63 package versions to the cross-platform lock. Every package name/version from the preceding lock remains present; existing pins were not upgraded. New package metadata declares no minimum Rust version above the pinned compiler 1.91.1. The earlier Unix collection table remains historical evidence for its recorded lock; this table records the expanded graph.
+
+Current Cargo lock SHA-256: `e6a7aa95fc3e550f62a0154a882e2eec1afab4cc86fa1ec131009c7336114fbb`.
+
+| Target | Active third-party packages | Referenced original texts | Manifest SHA-256 |
+| --- | ---: | ---: | --- |
+| [Windows x64](../licenses/rust/x86_64-pc-windows-msvc/manifest.json) | 316 | 563 | `f4cff4ac219a405f4d2a72f866482f3be8ab408b9c9f32ca9b332d73c955d3ed` |
+| [Linux x64](../licenses/rust/x86_64-unknown-linux-gnu/manifest.json) | 399 | 707 | `246bbb4c882ec55b2efbf2c676034abb40f6d3a2ba7ef53518b18955621cb97e` |
+| [Mac Apple Silicon](../licenses/rust/aarch64-apple-darwin/manifest.json) | 304 | 551 | `9545f690e6aa3a715f524a26869e6b7db831bb10af6c8e260c8a3fc477da49bd` |
+| [Mac Intel](../licenses/rust/x86_64-apple-darwin/manifest.json) | 305 | 553 | `965c00309008bad80efb3b0ad5a0b00b3672bb2fc5f7c35e4d8fb0c96edbe1e4` |
+
+All 2,374 referenced files were rehashed after regeneration. Newly active keyring, native-store, Secret Service, asynchronous-runtime and cryptographic dependencies retain their supplied license texts; no new remote fallback was needed. The credential architecture, native Windows evidence and pending Mac/Linux execution are described in [RUST_CREDENTIALS.md](RUST_CREDENTIALS.md). Library versions and licenses do not establish that a native keychain test or target build has actually run.

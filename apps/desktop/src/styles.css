@@ -713,6 +713,76 @@ main {
 .template-selector > label {
   flex: 1;
 }
+.template-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.template-actions button {
+  min-height: 36px;
+}
+.tab-help {
+  margin: 9px 0;
+  font-size: 11px;
+}
+.saved-template-notice {
+  padding: 14px;
+  margin-bottom: 15px;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+}
+.saved-template-notice p {
+  font-size: 12px;
+  margin-bottom: 10px;
+  color: var(--color-ink-2);
+}
+.source-navigation {
+  display: flex;
+  gap: 9px;
+  align-items: flex-end;
+}
+.source-navigation label {
+  flex: 1;
+  min-width: 0;
+}
+.source-navigation button {
+  flex-shrink: 0;
+  min-height: 40px;
+}
+.credential-panel > button {
+  margin: 10px 9px 0 0;
+}
+.credential-panel > label {
+  margin-top: 12px;
+}
+.agent-panel {
+  padding: 18px;
+  border: 1px solid var(--color-line-strong);
+  border-radius: 10px;
+  margin-bottom: 20px;
+  background: var(--color-wash);
+}
+.agent-panel h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+}
+.agent-panel p {
+  margin: 10px 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.agent-panel .section-heading > span {
+  font-size: 11px;
+  color: var(--color-ink-2);
+}
+.agent-request {
+  padding: 14px 0;
+  border-top: 1px solid var(--color-line);
+  margin-top: 15px;
+}
 .notes-run {
   display: flex;
   justify-content: space-between;
