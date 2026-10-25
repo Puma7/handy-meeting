@@ -2,6 +2,12 @@
 
 Stand: 25. Oktober 2026. Native Erkennung: transcribe.cpp 0.4.1, vorhandenes Nemotron Streaming 3.5. Windows x64, .NET 10.
 
+## Tatsächliche GitHub-Prüfungen vom 25.10.2026
+
+Windows mit 86 benannten Prüffällen und zusätzlichen Monitor-Dateiprüfungen: [erfolgreicher Lauf](https://github.com/Puma7/handy-meeting/actions/runs/40210563368). Die portablen Ziele wurden auf Ubuntu 24.04, macOS 15 Apple Silicon und macOS 15 Intel gebaut; die jeweiligen synthetischen Kern-/Agentenprüfungen bestanden ebenfalls. Auf beiden Macs wurden Swift-Helfer, App-Signatur und DMG-Integrität geprüft: [erfolgreicher portabler Lauf](https://github.com/Puma7/handy-meeting/actions/runs/40210637828). Nachweisstand ist Commit `60335cd0c26aca341a4013dac21bcf5423f95ffe`; nachfolgende Paketverfeinerungen werden vor Veröffentlichung erneut gebaut. Aktueller Überblick: [BUILD_STATUS.md](BUILD_STATUS.md).
+
+Der erste private Lauf wurde wegen des Actions-Budgets gar nicht gestartet. Der erste Mac-Paketlauf erkannte eine unsignierte verwaltete .NET-Assembly; nach der gezielten Korrektur und einer expliziten Signatur-Regressionsprüfung bestanden beide Architekturen. Diese CI-Läufe bestätigen keine echte Geräteaufnahme, native Fensterbedienung oder portablen Zweistundenlauf. Frühere Abschnitte unten bleiben historische lokale Messprotokolle und beschreiben den Stand vor diesen GitHub-Läufen.
+
 ## Windows 0.4.1 und portable Vorschau 0.5.0-preview.1
 
 **Windows: 86 Prüffälle bestanden** (18 PCM/Grundlagen, 35 Nachbearbeitung, 25 Vorlagen, acht Agentenfälle), zusätzlich die Statusdateiprüfung des Testwächters. Letzter vollständiger Lauf: `.build/verification-20261025-161437-0231f5`. Die sichtbare Bearbeiten-Aktion wurde in Deutsch und Englisch aus echten WPF-Steuerelementen gerendert; der Editor erklärt Arbeitsauftrag und Ausgabeform. Logo und App-Icon sind eingebunden. Die neue Agentenschnittstelle wurde über eigene echte Kindprozesse und stdin/stdout geprüft: ausdrückliche Textfreigabe, wörtlicher Quelltext, begrenzte Seiten, ungültige Sitzungskennungen, doppelte/zu große Anfragen mit anschließender Wiederaufnahme des Protokolls, abgelehnte Cloud- und Aufnahmebefehle. Ein vorbereiteter GitHub-Workflow ist weiterhin kein ausgeführter CI-Nachweis.

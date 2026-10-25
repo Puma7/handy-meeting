@@ -6,10 +6,10 @@ Stand: 25.10.2026. Windows und portable Vorschau werden getrennt bereitgestellt.
 | --- | --- | --- |
 | Windows x64 | Bestehende WPF-App; 0.4.1 mit verständlicherem Editor, Logo und lokaler Agentenschnittstelle | `verify.ps1` und gezielte native Regression |
 | Ubuntu/Debian x64 | Selbstständiger Avalonia-Build und `.deb` als technische Vorschau | Echte Desktop-, PulseAudio-/PipeWire-, Gerätewechsel- und Langzeittests auf beiden Distributionen |
-| Mac Apple Silicon | .NET-Programm und passende Metal-Bibliotheken von Windows aus kompiliert; nativer Aufnahmehelfer als Swift-Quelle vorhanden | Helfer auf einem echten Mac bauen, Berechtigungen und Audio testen, DMG prüfen |
-| Mac Intel | .NET-Programm und CPU-Bibliotheken von Windows aus kompiliert | Dieselben Prüfungen auf Intel-Mac |
+| Mac Apple Silicon | .NET-Programm, Swift-Helfer und DMG auf einem echten Mac-Runner gebaut; Signaturen und synthetische Kernprüfungen bestanden | Berechtigungen, echte Audiogeräte, native GUI und lange Sessions auf Hardware testen |
+| Mac Intel | Dasselbe auf einem Intel-Mac-Runner bestanden | Dieselben Hardwareprüfungen auf Intel-Mac |
 
-**Es gibt noch keine auf macOS gebaute und geprüfte DMG.** Die Skripte dafür sind vorbereitet. Ein plattformübergreifender .NET-Build allein belegt weder einen erfolgreichen Swift-Build noch funktionierende macOS-Aufnahme. Hier steht kein Mac-Buildhost zur Verfügung. Der manuell gestartete Workflow `.github/workflows/portable.yml` sieht echte Mac-Runner beider Architekturen vor; er wurde noch nicht auf GitHub ausgeführt.
+**Mac-DMGs wurden inzwischen auf GitHub gebaut und geprüft.** Der erfolgreiche Workflow lief auf echten Mac-Runnern beider Architekturen. Das belegt den Swift-Build, Paket-/Signaturprüfungen und synthetische Kernprüfungen, aber keine funktionierende Aufnahme realer Meetings. Der aktuelle Prüfumfang steht in [BUILD_STATUS.md](BUILD_STATUS.md).
 
 ## Architektur und Größe
 
@@ -46,7 +46,7 @@ bash scripts/package-macos.sh arm64
 bash scripts/package-macos.sh x64
 ```
 
-Das Skript erstellt die App-Struktur, kompiliert den ScreenCaptureKit-/AVAudioEngine-Helfer, prüft die Struktur, signiert Testpakete ad hoc und erzeugt/prüft die DMG mit `hdiutil`. Ziel ist macOS 13 oder neuer; die tatsächliche Plattformfreigabe steht aus. Für einfache öffentliche Installation fehlen zusätzlich ein geprüfter Developer-ID-/Hardened-Runtime-/Notarisierungsablauf und reale Tests. Ad-hoc-Signierung ist keine Apple-Notarisierung. Keine Anleitung verlangt das pauschale Abschalten von Gatekeeper.
+Das Skript erstellt die App-Struktur, kompiliert den ScreenCaptureKit-/AVAudioEngine-Helfer, prüft die Struktur, signiert Testpakete ad hoc und erzeugt/prüft die DMG mit `hdiutil`. Das Paket verlangt macOS 15 oder neuer; ältere Zielangaben des frühen Helferentwurfs waren keine Runtime-Freigabe. Die Mindestversion richtet sich nach den [aktuell unterstützten .NET-10-Plattformen](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md). Für einfache öffentliche Installation fehlen weiterhin ein geprüfter Developer-ID-/Hardened-Runtime-/Notarisierungsablauf und reale Tests. Ad-hoc-Signierung ist keine Apple-Notarisierung. Keine Anleitung verlangt das pauschale Abschalten von Gatekeeper.
 
 ## Daten und Upgrade
 

@@ -4,9 +4,12 @@
 
 **Local meeting audio, live transcripts, and notes you can trace back to the original.**
 
+[![Windows checks](https://github.com/Puma7/handy-meeting/actions/workflows/windows.yml/badge.svg)](https://github.com/Puma7/handy-meeting/actions/workflows/windows.yml)
+[![Portable package checks](https://github.com/Puma7/handy-meeting/actions/workflows/portable.yml/badge.svg)](https://github.com/Puma7/handy-meeting/actions/workflows/portable.yml)
+
 An independent companion prototype for the [Handy](https://github.com/cjpais/Handy) ecosystem. Capture system audio and an optional microphone separately, transcribe locally while the meeting runs, and create source-linked summaries, decisions and tasks afterward.
 
-[Deutsche Anleitung](README.de.md) · [Platform status](PORTABILITY.md) · [Agent API](AGENT_API.md) · [Test evidence](TEST_REPORT.md) · [Contributing](CONTRIBUTING.md)
+[Deutsche Anleitung](README.de.md) · [Build status](BUILD_STATUS.md) · [Platform status](PORTABILITY.md) · [Agent API](AGENT_API.md) · [Test evidence](TEST_REPORT.md) · [Contributing](CONTRIBUTING.md)
 
 ## Why a companion app?
 
@@ -30,8 +33,8 @@ HandyMeeting detects a compatible Handy installation, reads its installed-model 
 | --- | --- | --- |
 | Windows x64 | Working WPF prototype, version 0.4.1 | Requires .NET Desktop Runtime 10 and compatible Handy/model installation |
 | Ubuntu / Debian x64 | Portable Avalonia preview, version 0.5.0-preview.1 | Synthetic process/recovery tests; real desktop, audio-device and long-session tests still required |
-| macOS Apple Silicon | Experimental portable target and native capture helper | CI status and test artifacts will establish build results; real-device capture is not validated |
-| macOS Intel | Experimental portable target and native capture helper | Same limitations; separate architecture-specific package |
+| macOS Apple Silicon | Experimental DMG built on an actual arm64 Mac runner | macOS 15+; ad-hoc signed; real-device capture is not validated |
+| macOS Intel | Experimental DMG built on an actual Intel Mac runner | macOS 15+; same limitations; separate architecture-specific package |
 
 This is a prototype. Speaker diarization, exact word timestamps and reliable words-per-person statistics are not implemented. Two audio tracks do not establish speaker identity. AI notes remain reviewable drafts: checking a verbatim quote does not prove that its interpretation is correct.
 

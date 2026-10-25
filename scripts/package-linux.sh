@@ -38,5 +38,5 @@ EOF
 cp "$root/assets/handymeeting.svg" "$stage/usr/share/icons/hicolor/scalable/apps/handymeeting.svg"
 dpkg-deb --root-owner-group --build "$stage" "$out/HandyMeeting-0.5.0-preview.1-linux-amd64.deb"
 dpkg-deb --info "$out/HandyMeeting-0.5.0-preview.1-linux-amd64.deb"
-sha256sum "$out/HandyMeeting-0.5.0-preview.1-linux-amd64.deb" > "$out/HandyMeeting-0.5.0-preview.1-linux-amd64.deb.sha256"
+(cd "$out" && sha256sum 'HandyMeeting-0.5.0-preview.1-linux-amd64.deb') > "$out/HandyMeeting-0.5.0-preview.1-linux-amd64.deb.sha256"
 echo 'Built a preview package. This does not establish real-device compatibility.'
