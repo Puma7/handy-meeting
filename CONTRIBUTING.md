@@ -1,13 +1,13 @@
 # Contributing
 
-Thanks for helping test an independent Handy companion prototype. Reliability, privacy and inspectable evidence take priority over feature count.
+Thanks for helping build an independent Handy companion application. Reliability, privacy and inspectable evidence take priority over feature count.
 
 Rust/Tauri work follows [RUST_MIGRATION.md](docs/RUST_MIGRATION.md) and [RUST_BUILD.md](docs/RUST_BUILD.md). Preserve original prototypes and data while moving reviewed behavior into Rust crates. Handy is authoritative for model lists; do not add a second catalogue, downloader or recognition engine. Changed model/runtime identity requires explicit version handling, never silent reuse of old transcript checkpoints.
 
 1. Read [AGENTS.md](AGENTS.md), [PORTABILITY.md](PORTABILITY.md) and [TEST_REPORT.md](TEST_REPORT.md).
 2. Explain the user-visible problem and intended behavior in an issue or pull request.
 3. Keep data models, validation, transport, orchestration and UI separate. Reuse the existing recognition libraries rather than implementing another engine.
-4. Run `./verify.ps1` before distributing a Windows build. Preserve package locks; treat compiler warnings as errors.
+4. Follow the complete [Rust build checks](docs/RUST_BUILD.md), including `./verify.ps1`, before distributing a Windows build. Preserve package locks; treat compiler warnings as errors. [Release checks](docs/RELEASING.md) also require exact-source platform packages and actual isolated installer/credential tests.
 5. Add a reproducible regression check for data loss, source integrity, privacy or recovery defects. Capture changes also need appropriate device, crash and long-session evidence. Label synthetic tests honestly.
 6. Text-model transport or instruction changes need real local positive and nonbinding reference cases. Fake HTTP tests do not establish compatibility with a real cloud provider.
 

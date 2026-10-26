@@ -6,6 +6,7 @@ on:
   pull_request:
     paths: ['Cargo.toml', 'Cargo.lock', '.gitattributes', 'rust-toolchain.toml', '.cargo/**', 'crates/**', 'apps/desktop/**', 'platform/**', 'scripts/**', 'licenses/**', 'assets/**', 'LICENSE', 'THIRD_PARTY_NOTICES.txt', '.github/workflows/rust-portable.yml']
   workflow_dispatch:
+  workflow_call:
 permissions:
   contents: read
 concurrency:
@@ -115,9 +116,9 @@ jobs:
             docker run --rm -v "$PWD/packages:/candidate:ro" "debian:$distribution" sh -eu -c '
               apt-get update >/dev/null
               apt-get install -y /candidate/*.deb >/dev/null
-              version=$(dpkg-query -W handymeeting-rust-beta)
+              version=$(dpkg-query -W handymeeting)
               test -n "$version"
-              executable=$(dpkg-query -L handymeeting-rust-beta | sed -n "/\/HandyMeeting$/p")
+              executable=$(dpkg-query -L handymeeting | sed -n "/\/HandyMeeting$/p")
               "$executable" --release-checks /tmp/handymeeting-release-checks
               cat /tmp/handymeeting-release-checks/release-checks.json
             '
@@ -128,8 +129,9 @@ jobs:
           name: rust-desktop-${{ matrix.rid }}
           retention-days: 14
           path: |
-            packages/HandyMeeting-1.0.0-beta.4-*.dmg*
-            packages/HandyMeeting-1.0.0-beta.4-linux-amd64.deb*
+            packages/HandyMeeting-*-osx-*.dmg*
+            packages/HandyMeeting-*-linux-amd64.deb*
+          if-no-files-found: error
       - name: Collect only explicit regular model-free proof files
         if: always()
         run: |

@@ -1,12 +1,12 @@
-# Building the Rust/Tauri beta
+# Building HandyMeeting with Rust/Tauri
 
-The Windows candidate is version `1.0.0-beta.2`. The output is a checked ZIP, not a validated NSIS installer or stable release. Existing C# programs, their launcher, recordings and settings are preserved. Nothing in this workflow publishes a GitHub release or pushes Git history.
+Release preparation targets `1.0.0`. Windows produces a checked ZIP and an NSIS Setup EXE; Linux and Mac packages are built on their target hosts. Actual installer execution checks run in the disposable CI account, never against a developer's existing installation. Existing programs, recordings and settings are preserved. Local build commands do not publish GitHub releases; the separate [release workflow](RELEASING.md) controls that step.
 
 ## Separate tools and filesystem bookkeeping
 
 Verification uses separate standard tool invocations. `scripts/rust-artifacts.mjs` uses only filesystem, path and cryptographic operations: it never starts processes, runs shell commands, downloads packages or changes security settings. Its receipts record exit codes reported by those separate tools; actual CI logs remain evidence that the commands ran.
 
-The blocked combined verification script is not used, restored or executed from an alternate location. Build and package scripts contain no reference to it. Native SDK preparation and ordinary package-manager setup are separate steps. Use normal foreground developer commands; no antivirus exception or global tool update is required by this design.
+Native SDK preparation, installer-tool preparation and package-manager setup are separate from source-bound verification. The tooling uses normal developer commands; it does not modify machine security settings or global package-manager versions.
 
 ## Prerequisites and preparation
 
@@ -16,6 +16,7 @@ Prepare the pinned native SDK separately:
 
 ```powershell
 ./scripts/prepare-rust-native.ps1
+./scripts/prepare-installer.ps1
 ```
 
 Use npm **12.2.1** through its local `bin/npm-cli.js`, without changing global npm. Set `HANDYMEETING_NPM_CLI` to a working exact-version CLI. Existing reviewed project-local tools can be reused. For a clean machine, the Windows CI preparation step shows ordinary `npm pack npm@12.2.1`, a fixed archive SHA-512 comparison, and `npm install` of that verified local archive under `.build/tools/npm-bootstrap`, with lifecycle scripts disabled.
@@ -40,6 +41,9 @@ Start the source-bound check run, then execute each standard tool separately and
 
 ```powershell
 node scripts/rust-artifacts.mjs begin-check
+
+python -m unittest discover -s scripts -p test_release_packages.py
+node scripts/rust-artifacts.mjs record-check distribution-guards $LASTEXITCODE
 
 ./verify.ps1
 # Only after successful completion of the throwing legacy verification script:
@@ -95,11 +99,12 @@ $pending = node scripts/rust-artifacts.mjs begin-release-check | ConvertFrom-Jso
 # Stop if the executable failed.
 node scripts/rust-artifacts.mjs stage
 ./scripts/package-rust-windows.ps1
+./scripts/package-rust-installer.ps1
 ```
 
 Keep the native SDK's `bin` directory in the current process PATH for the direct release check. The release-check mode opens no GUI, microphone, Handy installation or model. Staging requires its fresh successful versioned JSON, the exact unchanged executable SHA-256, and the original checked source fingerprint.
 
-The only program destination is `dist-rust-1.0.0-beta.2`. Its payload contains the checked executable, known native DLLs and original native licenses, Rust/frontend notices, project license, and Handy palette attribution. A manifest hashes every retained file. Existing different bytes are rejected before publishing any new payload. The separate launcher is **HandyMeeting 1.0.0-beta.2 starten.cmd**. The original **HandyMeeting starten.cmd** remains untouched.
+The versioned program destination is `dist-rust-1.0.0` for version 1.0.0. Its payload contains the checked executable, known native DLLs and original native licenses, Rust/frontend/installer notices, project license, and Handy palette attribution. A manifest hashes every retained file. Existing different bytes are rejected before publishing any new payload. The separate launcher is **HandyMeeting 1.0.0 starten.cmd**. Earlier launchers and programs remain intact.
 
 Rust user data lives outside this directory under local `HandyMeeting/RustBeta` application data. No model weights, recordings, settings or API keys are staged.
 
@@ -113,9 +118,9 @@ An existing ZIP is preserved. Use a new version or a fresh `-OutputDirectory` in
 
 ## CI scope and manual evidence
 
-`.github/workflows/rust.yml` is configured to run the independent legacy, frontend, Rust and artifact checks on Windows, build/check the exact release executable, stage it, and retain a ZIP Actions artifact. It does not publish a release. Third-party Actions are pinned to immutable commits. A prepared workflow is not a successful CI run.
+`.github/workflows/rust.yml` runs the independent legacy, frontend, Rust and artifact checks on Windows, builds/checks the exact release executable and retains ZIP/Setup artifacts. Its disposable CI account installs the actual Setup, checks every installed payload hash, executes the installed program's headless checks, and verifies uninstall preserves an unknown user file. These installation checks are deliberately unavailable in a normal developer account. Third-party Actions are pinned to immutable commits. A prepared workflow is not a successful CI run.
 
-Ubuntu and both Mac architectures run only the three portable Rust crates with default ASR features disabled, including synthetic persistence/transport tests and strict warnings. They do not validate a native GUI, real capture, speech inference or portable recording reliability.
+The additional core jobs exercise the portable crates without ASR. Separately, `.github/workflows/rust-portable.yml` builds the complete native desktop application and DEB/DMGs on Linux and both Mac architectures. `.github/workflows/rust-release.yml` calls both workflows, requires matching source fingerprints and actual credential/installer checks, and assembles the five downloads. See [release instructions](RELEASING.md). These jobs do not capture physical audio or validate a visible desktop session.
 
 Real local text-model references, the native two-track speech/restart smoke test, actual audio devices/disconnects, and a new two-hour Rust memory/recovery run are separate release gates. Fixtures and raw reports stay outside public source export. The earlier C# two-hour result does not certify this beta. Process termination is not a power-loss test. See `TEST_REPORT.md` and `RUST_STORAGE.md` for actual measurements and outstanding checks.
 

@@ -1,99 +1,90 @@
-<img src="assets/handymeeting.svg" width="80" height="80" alt="HandyMeeting logo">
+<p align="center"><img src="assets/handymeeting.svg" width="76" alt="HandyMeeting logo"></p>
+<h1 align="center">HandyMeeting</h1>
+<p align="center"><strong>Your meeting. Your computer. Your transcript.</strong></p>
+<p align="center">Local recording, streaming transcripts and meeting notes with original quotes.</p>
 
-# HandyMeeting
+<p align="center">
+<a href="https://github.com/Puma7/handy-meeting/releases">Downloads</a> ·
+<a href="README.de.md">Deutsch</a> ·
+<a href="docs/RELEASING.md">Releasing</a> ·
+<a href="https://github.com/Puma7/handy-meeting/issues">Feedback</a>
+</p>
 
-**Local meeting audio, live transcripts, and notes you can trace back to the original.**
+[![Rust checks](https://github.com/Puma7/handy-meeting/actions/workflows/rust.yml/badge.svg)](https://github.com/Puma7/handy-meeting/actions/workflows/rust.yml)
+[![Linux and Mac packages](https://github.com/Puma7/handy-meeting/actions/workflows/rust-portable.yml/badge.svg)](https://github.com/Puma7/handy-meeting/actions/workflows/rust-portable.yml)
+[![Release packages](https://github.com/Puma7/handy-meeting/actions/workflows/rust-release.yml/badge.svg)](https://github.com/Puma7/handy-meeting/actions/workflows/rust-release.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-[![Windows checks](https://github.com/Puma7/handy-meeting/actions/workflows/windows.yml/badge.svg)](https://github.com/Puma7/handy-meeting/actions/workflows/windows.yml)
-[![Portable package checks](https://github.com/Puma7/handy-meeting/actions/workflows/portable.yml/badge.svg)](https://github.com/Puma7/handy-meeting/actions/workflows/portable.yml)
+An independent **Rust + Tauri companion for [Handy](https://github.com/cjpais/Handy)**. Record the audio from Zoom, Teams or another desktop meeting, optionally record your microphone as a separate track, and transcribe it locally while the meeting runs. Turn the transcript into summaries, decisions and tasks without sending the audio to a cloud service.
 
-An independent companion prototype for the [Handy](https://github.com/cjpais/Handy) ecosystem. Capture system audio and an optional microphone separately, transcribe locally while the meeting runs, and create source-linked summaries, decisions and tasks afterward.
+## Download
 
-[Deutsche Anleitung](README.de.md) · [Build status](BUILD_STATUS.md) · [Platform status](PORTABILITY.md) · [Agent API](AGENT_API.md) · [Test evidence](TEST_REPORT.md) · [Contributing](CONTRIBUTING.md)
-
-**Rust/Tauri migration:** `1.0.0-beta.4` adds revisioned template management, optional native operating-system credential storage and visible, session-owned agent recording consent. Local model discovery, history and source-linked analysis remain available. See the [Handy boundary](docs/HANDY_UPSTREAM_PROPOSAL.md), [agent protocol](docs/RUST_AGENT_PROTOCOL.md), [credential contract](docs/RUST_CREDENTIALS.md), [actual evidence and remaining gates](TEST_REPORT.md) and [native validation checklist](docs/NATIVE_VALIDATION.md). Rust packages do not require .NET; the older published C# previews below do. This remains a migration beta, not a release candidate.
-
-Beta.4 adds compact setup panels, a sticky analysis status, readable recording warnings and complete local TXT snapshots. [Meeting files and long-session workflow](docs/MEETING_FILES.md).
-
-## Why a companion app?
-
-In [Handy discussion #1923](https://github.com/cjpais/Handy/discussions/1923), the maintainer put meeting mode outside Handy's scope and mentioned a separate companion application. This project explores that direction. It is independently developed, uses its own name and logo, and has no official integration agreement or endorsement.
-
-HandyMeeting detects a compatible Handy installation, reads its installed-model metadata, and reuses existing local model weights. The companion includes a pinned transcribe.cpp runtime and runs inference in its **own process**. It does not inject into Handy or share an already-loaded model process. A stable shared model-discovery or service contract is an open discussion topic.
-
-## What works today
-
-This feature list describes the existing prototypes. The Rust beta's migrated scope and remaining differences are listed in [RUST_MIGRATION.md](docs/RUST_MIGRATION.md).
-
-- Separate local system-audio and optional microphone tracks.
-- Streaming transcription using a compatible model already installed through Handy; tested with Nemotron Streaming 3.5.
-- Audio capture stays independent of inference. Existing audio and transcript checkpoints are retained when recognition fails.
-- Local session history, interrupted-session recovery, and full-transcript copying.
-- Local-first post-processing with original quotes and source references. Optional cloud processing requires explicit text consent for each run and sends no audio.
-- Named templates with editable instructions and ordered analysis tabs; copy all results together.
-- A local, documented agent protocol for capability discovery, approved transcript reads and local analysis. Recording control is not exposed by protocol v1.
-
-## Platform status
-
-| Platform | Status | Important limits |
+| Your computer | Version 1.0.0 package | Requirements |
 | --- | --- | --- |
-| Windows x64 | Working WPF prototype, version 0.4.1 | Requires .NET Desktop Runtime 10 and compatible Handy/model installation |
-| Ubuntu / Debian x64 | Portable Avalonia preview, version 0.5.0-preview.1 | Synthetic process/recovery tests; real desktop, audio-device and long-session tests still required |
-| macOS Apple Silicon | Experimental DMG built on an actual arm64 Mac runner | macOS 15+; ad-hoc signed; real-device capture is not validated |
-| macOS Intel | Experimental DMG built on an actual Intel Mac runner | macOS 15+; same limitations; separate architecture-specific package |
+| Windows 10/11 · x64 | [Setup EXE](https://github.com/Puma7/handy-meeting/releases/download/v1.0.0/HandyMeeting-1.0.0-windows-x64-setup.exe) · [portable ZIP](https://github.com/Puma7/handy-meeting/releases/download/v1.0.0/HandyMeeting-1.0.0-windows-x64.zip) | WebView2 and Microsoft Visual C++ x64 runtime; no .NET needed |
+| Ubuntu 22.04+ / Debian 12–13 · x64 | [DEB](https://github.com/Puma7/handy-meeting/releases/download/v1.0.0/HandyMeeting-1.0.0-linux-amd64.deb) | PulseAudio or PipeWire-Pulse; package manager resolves declared libraries |
+| Mac · Apple Silicon / M-series | [Apple Silicon DMG](https://github.com/Puma7/handy-meeting/releases/download/v1.0.0/HandyMeeting-1.0.0-osx-arm64.dmg) | macOS 13+; recording permissions |
+| Mac · Intel | [Intel DMG](https://github.com/Puma7/handy-meeting/releases/download/v1.0.0/HandyMeeting-1.0.0-osx-x64.dmg) | macOS 13+; recording permissions |
 
-This is a prototype. Speaker diarization, exact word timestamps and reliable words-per-person statistics are not implemented. Two audio tracks do not establish speaker identity. AI notes remain reviewable drafts: checking a verbatim quote does not prove that its interpretation is correct.
+**Release status:** these links become public when the `v1.0.0` release is published. A draft is visible only to repository collaborators. Every complete release includes checksums and a source-bound `RELEASE_MANIFEST.json`. [All releases and current status](https://github.com/Puma7/handy-meeting/releases).
 
-## Downloads and first run
+**Validation limits:** Mac/Linux device capture and a new full-app Rust two-hour run still require hardware validation. Mac builds are ad-hoc signed and not Apple-notarized; Windows setup is unsigned. Operating-system trust checks may block them. Do not disable system protection to install a build. Use independently backed-up test meetings first. [Measured evidence and open gates](TEST_REPORT.md).
 
-Published prototype packages: [Windows 0.4.1](https://github.com/Puma7/handy-meeting/releases/tag/v0.4.1) and [Mac/Linux 0.5.0-preview.1](https://github.com/Puma7/handy-meeting/releases/tag/v0.5.0-preview.1). The portable release contains separate Apple Silicon and Intel DMGs and an Ubuntu/Debian x64 DEB. SHA-256 manifests accompany the downloads; exact build evidence is in [BUILD_STATUS.md](BUILD_STATUS.md).
+## A meeting workflow, kept together
 
-**Windows:** extract the complete Windows package, install .NET Desktop Runtime 10, then run the included start file. Install Handy and a compatible streaming model first. Select the same audio output used by your meeting app, optionally enable your microphone, and start recording. Keep the extracted directory together.
+| Capture | Understand | Keep control |
+| --- | --- | --- |
+| Separate system and optional microphone tracks | Local streaming speech recognition from compatible Handy models | Audio capture continues independently of recognition failures |
+| Live transcript, saved-audio counters and recording warnings | Summaries, decisions and tasks with verbatim source quotes | Local session history, original snapshots and retained analysis versions |
+| Complete TXT export and one-click session folder | Editable named templates and ordered analysis tabs | Visible progress, elapsed time, targeted cancellation and resumable work |
 
-**Linux preview:** install the `.deb` using your package manager so dependencies are resolved. A local PulseAudio-compatible server, including PipeWire-Pulse, is required. The preview does not start or replace your system audio service. Read [PORTABILITY.md](PORTABILITY.md) before recording an important meeting.
+![HandyMeeting transcript and local file controls](assets/screenshots/transcript-light.png)
+*Actual app components, rendered with synthetic demo data. The displayed two-hour timeline is a UI fixture, not a hardware endurance result. English and German interfaces are included.*
 
-**Mac preview:** use the package matching Apple Silicon or Intel, on macOS 15 or newer. Microphone and system-audio permissions are required. These preview builds are ad-hoc signed and are not Apple-notarized releases. Real hardware testing remains necessary after a successful package build.
+### Notes you can check
 
-For local notes, run a compatible local text-model service such as LM Studio or Ollama. The default endpoint is `http://127.0.0.1:1234/v1/`; select a locally executed instruct model with structured-output support. Speech recognition and text analysis use separate model types. The companion does not download either model's weights.
+Choose a local text model, select a template and run the analysis. Every result links to an existing source section and a verbatim quote. Unknown owners and deadlines remain unknown. Each saved analysis keeps the transcript and instructions that produced it.
 
-## Privacy and recovery boundaries
+![HandyMeeting source-linked analysis in light mode](assets/screenshots/analysis-light.png)
 
-Audio, transcript journals and original snapshots are stored locally. Audio is written in short PCM files, independently of the recognizer. Confirmed transcript steps are persisted before progress is acknowledged. Recovery tests cover confirmed data after process termination; an unconfirmed tail can still be missing. Process termination is not a power-loss test.
+Add processing tabs, edit their instructions and save templates for different kinds of meeting. Original saved results remain unchanged when a reusable template changes. Copy all tabs together as Markdown, including evidence and the original transcript.
 
-The optional cloud text path requires explicit per-run consent. It receives transcript text, processing instructions and source IDs, without audio or local file paths. There is no automatic cloud fallback or provider switch. Local transport permits loopback endpoints only and disables proxies and redirects. A separately configured local service is responsible for its own upstream behavior.
+![HandyMeeting analysis in dark mode](assets/screenshots/analysis-dark.png)
+*Light, dark and system themes. Demo results are illustrative; source verification does not prove the model interpreted a statement correctly.*
 
-Windows keys use current-user encryption. Portable-preview keys stay in memory for the session; native keychain integration is unfinished. Original recordings and derived versions are never automatically deleted. Sessions are ordinary local files; a folder-sync service can independently transmit them.
+## First meeting
 
-## Build and verify
+1. Install **Handy** and download a compatible **streaming speech model** there. HandyMeeting detects the installation and reads its current model list; model weights are not included in our downloads.
+2. Install the package for your computer. With the Windows ZIP, extract the complete archive and use its start file. Keep the program folder and its libraries together. On Linux, install the DEB with your package manager; on Mac, copy the app from the matching DMG into Applications.
+3. Open **Meeting → Recording setup**. Name the meeting and select a model and the audio output used by the meeting app. Enable your microphone if you want that separate track.
+4. Start a short test and check both sources. The selected output can contain other apps' sounds, not just the meeting. On Mac, the current adapter uses the default audio devices.
+5. End the meeting, inspect its transcript, then open **Analyse this meeting**. **Open session folder** gives you the audio, journals, exports and saved analyses directly.
 
-For the Rust/Tauri beta, use the [dedicated build and verification instructions](docs/RUST_BUILD.md). The commands below remain the C# prototype build paths.
+For a local summary, run a local text-model service such as LM Studio, load an appropriate text model and start its local server. The default address is `http://127.0.0.1:1234/v1/`. HandyMeeting discovers the model IDs offered by that service and asks you to choose one. Speech models and text models serve different purposes; a speech model alone does not generate meeting notes.
 
-Use .NET SDK 10 as pinned in `global.json`. Dependencies and native-runtime downloads are version-locked; native downloads are checked against fixed SHA-256 values.
+## Privacy, recovery and honest limits
 
-```powershell
-# Windows
-./verify.ps1
-./build.ps1
+- **Audio stays local.** Speech recognition runs in the companion's own local worker processes. Handy's existing model files are reused; a running Handy inference process is not shared.
+- **Local notes are the default.** Cloud text processing is optional and requires explicit approval for every run. It receives text, source IDs and instructions, without audio or local file paths. There is no automatic cloud fallback. A separately configured local server must itself execute models locally.
+- **Keys are session-only by default.** Optional storage uses Windows Credential Manager, macOS Keychain or Linux Secret Service. Unreadable entries are preserved; there is no plaintext fallback.
+- **Saved checkpoints are recoverable after tested process crashes.** Unconfirmed audio at the end can still be missing. This is not a power-loss or hardware-failure guarantee. Existing recordings, transcript journals and analysis versions are not automatically deleted.
+- **Two tracks are not speaker identification.** Diarization, exact word timestamps and reliable words-per-person statistics are not implemented. Times identify recording sections. Notes remain reviewable AI drafts.
+- **No hidden recording authority.** Local agents use private stdio with visible approval for each owned recording and separate microphone consent. Disconnect, revocation and limits stop only that agent's recording. This is not an MCP server.
 
-# Portable Linux build including its .NET runtime
-./scripts/build-portable.ps1 -Runtime linux-x64
-```
+Files live in the existing local `HandyMeeting/RustBeta` application-data folder for compatibility with earlier Rust builds. The name is retained to avoid moving or losing user data. The Windows uninstaller removes its listed program files; it does not recursively delete session storage. Files themselves are not encrypted; a folder-sync service can independently upload them.
 
-```sh
-# Package the published Linux application on Linux
-bash scripts/package-linux.sh
+## Built alongside Handy
 
-# Build the native helper and preview DMG on macOS with Xcode Command Line Tools
-bash scripts/package-macos.sh arm64
-bash scripts/package-macos.sh x64
-```
+The [original discussion](https://github.com/cjpais/Handy/discussions/1923) places meeting features outside Handy's own scope. HandyMeeting explores that companion direction with its own lifecycle. It reads installed model metadata and uses the maintained transcribe.cpp bindings and a pinned native runtime. It does not modify Handy's settings, credentials or model weights. New model formats can require a compatible runtime update.
 
-See [PORTABILITY.md](PORTABILITY.md) for prerequisites and outstanding platform checks. Successful CI packaging is not evidence of real audio-device reliability. [TEST_REPORT.md](TEST_REPORT.md) distinguishes local measurements, synthetic checks and untested conditions. Some raw evidence links are intentionally local and excluded from source control; new CI reports are retained as workflow artifacts.
+This is **an independent project**, not an official Handy product or an endorsed integration. A supported upstream companion contract is still being discussed. [Integration boundary](docs/HANDY_UPSTREAM_PROPOSAL.md).
 
-## Roadmap and collaboration
+## Developers and contributors
 
-Immediate priorities are real-device Mac/Linux capture and recovery tests, longer portable runs, packaging/signing, portable feature parity, and agreement on how a companion should discover and reuse Handy models without depending on private internals.
+[Rust build and verification](docs/RUST_BUILD.md) · [Release workflow](docs/RELEASING.md) · [Native device checklist](docs/NATIVE_VALIDATION.md) · [Agent protocol](docs/RUST_AGENT_PROTOCOL.md) · [Local files](docs/MEETING_FILES.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
-Feedback on the integration boundary is welcome. Meeting UI, recordings, history and notes should stay in the companion; speech recognition should reuse maintained libraries and models. See [MASTERPLAN.md](MASTERPLAN.md) and [Issues](https://github.com/Puma7/handy-meeting/issues).
+Dependencies and native downloads are pinned. CI checks Rust, frontend behavior, original-data recovery, source validation, native credential stores, relocated packages and Windows installer/uninstaller preservation. Build results and real device evidence are reported separately in [TEST_REPORT.md](TEST_REPORT.md). Some raw local evidence is intentionally excluded from the repository.
 
-MIT licensed. Dependency and runtime notices are in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) and `licenses/`. Model weights, recordings, transcripts, settings and API keys are excluded from the source repository.
+The previous C# prototypes and their recordings remain preserved. Their published packages and historical checks are documented in [BUILD_STATUS.md](BUILD_STATUS.md); they are not the Rust 1.0 packages above.
+
+MIT licensed. Thanks to Handy, transcribe.cpp, Tauri and the maintained libraries this project builds on. Original dependency notices are included in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) and `licenses/`. No model weights, recordings, settings or API keys are included in the source repository or download packages.

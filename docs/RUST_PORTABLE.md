@@ -1,7 +1,7 @@
-# Rust portable beta candidates
+# Rust portable packages
 
 The Rust/Tauri desktop now has target-specific capture adapters and package builders for
-Linux x86-64 and macOS Apple Silicon/Intel. This is a staged beta migration. A source
+Linux x86-64 and macOS Apple Silicon/Intel. Version 1.0.0 packaging is being prepared. A source
 implementation, cross-target compilation, a successful CI package build, and an actual
 device recording are different evidence. See `TEST_REPORT.md` for completed checks.
 
@@ -9,16 +9,18 @@ device recording are different evidence. See `TEST_REPORT.md` for completed chec
 
 | Target | Build baseline | Intended runtime | Package |
 | --- | --- | --- | --- |
-| Linux x86-64 | Ubuntu22.04, Rust1.91.1, WebKitGTK4.1 | Ubuntu22.04/24.04; Debian12/13 | `HandyMeeting-1.0.0-beta.2-linux-amd64.deb` |
-| Apple Silicon | macOS runner, Rust1.91.1, deployment target13.0 | macOS13 or newer, M-series | `HandyMeeting-1.0.0-beta.2-osx-arm64.dmg` |
-| Intel Mac | macOS runner, Rust1.91.1, deployment target13.0 | macOS13 or newer, Intel x86-64 | `HandyMeeting-1.0.0-beta.2-osx-x64.dmg` |
+| Linux x86-64 | Ubuntu22.04, Rust1.91.1, WebKitGTK4.1 | Ubuntu22.04/24.04; Debian12/13 | `HandyMeeting-1.0.0-linux-amd64.deb` |
+| Apple Silicon | macOS runner, Rust1.91.1, deployment target13.0 | macOS13 or newer, M-series | `HandyMeeting-1.0.0-osx-arm64.dmg` |
+| Intel Mac | macOS runner, Rust1.91.1, deployment target13.0 | macOS13 or newer, Intel x86-64 | `HandyMeeting-1.0.0-osx-x64.dmg` |
 
 These are intended targets, subject to each build and hardware test. Linux ARM, ALSA-only
 systems without a PulseAudio-compatible service, macOS12 and universal Mac binaries are
-not provided by this beta. A Wayland/X11 desktop and the listed GTK/WebKit dependencies
-are required for the Linux GUI. The separate package name `handymeeting-rust-beta` avoids
-replacing the old C# preview's `handymeeting` package. Program files use a versioned
-`/opt/handymeeting-rust-beta/<version>` directory; recordings remain outside the package.
+not provided. A Wayland/X11 desktop and the listed GTK/WebKit dependencies
+are required for the Linux GUI. The release package is named `handymeeting`, with program files in
+`/opt/handymeeting/<version>`; recordings remain outside the package. Earlier Rust beta
+packages retain their separate `handymeeting-rust-beta` name and directories. Installing
+the release does not delete their data. The application bundle ID and existing RustBeta
+data location remain stable to preserve user settings and permission continuity.
 
 ## Capture and timing
 

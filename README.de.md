@@ -1,163 +1,74 @@
-# HandyMeeting · lokale Meetings im Handy-Ökosystem
+<p align="center"><img src="assets/handymeeting.svg" width="76" alt="HandyMeeting-Logo"></p>
+<h1 align="center">HandyMeeting</h1>
+<p align="center"><strong>Dein Meeting. Dein Computer. Dein Transkript.</strong></p>
 
-**Nächste Hauptversion:** `1.0.0-beta.4` ergänzt versionierte Vorlagenverwaltung, freiwillige sichere Schlüsselablage im Betriebssystem und sichtbare Agentenfreigabe pro Sitzung. Lokale Modellerkennung, Historie und belegte Auswertungen bleiben erhalten. [Handy-Anbindung](docs/HANDY_UPSTREAM_PROPOSAL.md), [Agentenprotokoll](docs/RUST_AGENT_PROTOCOL.md), [Schlüsselablage](docs/RUST_CREDENTIALS.md), [Prüfbericht](TEST_REPORT.md) und [Geräteprüfplan](docs/NATIVE_VALIDATION.md) erklären Stand und Grenzen. Die Rust-Pakete benötigen kein .NET; die älteren veröffentlichten C#-Vorschauen unten benötigen es weiterhin. Dies ist eine Migrationsbeta, kein Release Candidate.
+[Downloads](https://github.com/Puma7/handy-meeting/releases) · [English](README.md) · [Veröffentlichen](docs/RELEASING.md) · [Feedback](https://github.com/Puma7/handy-meeting/issues)
 
-Beta.4 ergänzt einklappbare Einstellungen, sichtbaren Auswertungsfortschritt, verständliche Aufnahmehinweise sowie vollständige lokale TXT-Exporte. [Dateien und lange Meetings](docs/MEETING_FILES.md).
+HandyMeeting ist eine eigenständige **Rust-/Tauri-Companion-App für [Handy](https://github.com/cjpais/Handy)**. Sie nimmt Computerton und auf Wunsch dein Mikrofon getrennt auf, transkribiert lokal während des Meetings und erstellt anschließend belegte Zusammenfassungen, Entscheidungen und To-dos. Audiodateien werden dafür nicht in die Cloud geschickt.
 
-HandyMeeting nimmt Computerton und optional Mikrofon getrennt auf und transkribiert **während des Meetings**. Die Erkennung verwendet eine lokale transcribe.cpp-Engine und ein bereits in Handy installiertes Streaming-Modell. Das Modell bleibt für die Sitzung geladen.
+## Pakete für deinen Computer
 
-**Plattformstand:** Windows 0.4.1; technische Linux-Vorschau 0.5.0-preview.1 für Ubuntu/Debian x64; Mac-DMGs für Apple Silicon und Intel wurden auf echten Mac-Runnern gebaut und geprüft. Echte Mac-/Linux-Audiogeräte und lange Meetings sind damit noch nicht validiert. Die Mac-Vorschau zielt auf macOS 15 oder neuer und ist ad hoc signiert, nicht Apple-notarisiert. Downloads und aktuelle Build-Nachweise: [BUILD_STATUS.md](BUILD_STATUS.md). Weitere Grenzen: [PORTABILITY.md](PORTABILITY.md). Eigenes Logo, App-Icon und Favicon liegen unter `assets/`. Dies ist eine eigenständige Companion App und kein offizielles Handy-Produkt.
+| System | Version 1.0.0 | Voraussetzung |
+| --- | --- | --- |
+| Windows 10/11 · x64 | [Setup-EXE](https://github.com/Puma7/handy-meeting/releases/download/v1.0.0/HandyMeeting-1.0.0-windows-x64-setup.exe) · [ZIP ohne Installation](https://github.com/Puma7/handy-meeting/releases/download/v1.0.0/HandyMeeting-1.0.0-windows-x64.zip) | WebView2 und Microsoft Visual C++ x64; kein .NET erforderlich |
+| Ubuntu 22.04+ / Debian 12–13 · x64 | [DEB](https://github.com/Puma7/handy-meeting/releases/download/v1.0.0/HandyMeeting-1.0.0-linux-amd64.deb) | PulseAudio oder PipeWire-Pulse; Bibliotheken über den Paketmanager |
+| Mac · Apple Silicon / M-Serie | [Apple-Silicon-DMG](https://github.com/Puma7/handy-meeting/releases/download/v1.0.0/HandyMeeting-1.0.0-osx-arm64.dmg) | macOS 13+ und Aufnahmeberechtigungen |
+| Mac · Intel | [Intel-DMG](https://github.com/Puma7/handy-meeting/releases/download/v1.0.0/HandyMeeting-1.0.0-osx-x64.dmg) | macOS 13+ und Aufnahmeberechtigungen |
 
-## Starten
+**Die Links werden mit der Veröffentlichung von `v1.0.0` öffentlich verfügbar.** Einen Entwurf sehen nur Mitwirkende des Repositories. Prüfsummen und `RELEASE_MANIFEST.json` gehören zum vollständigen Release. [Release-Stand ansehen](https://github.com/Puma7/handy-meeting/releases).
 
-Downloads: [Windows-ZIP 0.4.1](https://github.com/Puma7/handy-meeting/releases/tag/v0.4.1), [Mac-DMGs und Linux-DEB 0.5.0-preview.1](https://github.com/Puma7/handy-meeting/releases/tag/v0.5.0-preview.1). Beide Vorschau-Releases enthalten Prüfsummen. Mac und Linux benötigen noch reale Geräte- und Langzeitprüfungen.
+**Noch offene Freigaben:** Echte Mac-/Linux-Geräteaufnahmen und ein vollständiger neuer Rust-Zweistundentest stehen aus. Mac-Pakete sind ad hoc signiert und nicht von Apple notarisiert; die Windows-Setup-Datei ist unsigniert. Schutzprüfungen des Betriebssystems können diese Pakete blockieren. Schutzfunktionen nicht abschalten, um einen Build auszuführen. Wichtige Meetings zunächst unabhängig zusätzlich sichern. [Nachweise und Grenzen](TEST_REPORT.md).
 
-Das Windows-ZIP vollständig entpacken und **Start HandyMeeting.cmd** doppelklicken. Im Quellprojekt heißt diese Datei **HandyMeeting starten.cmd**; alternativ **dist-0.4.1\HandyMeeting.exe** öffnen. Eine noch laufende ältere Fassung vorher regulär schließen. Windows x64, .NET Desktop Runtime 10 und Handy mit einem installierten Streaming-Modell werden benötigt.
+## Vom Gespräch zur überprüfbaren Arbeitsgrundlage
 
-Neue Versionen werden in einem eigenen Programmordner bereitgestellt. Die Startdatei verweist nach einem erfolgreichen Build auf die neue Fassung. **Sessions** und **data** bleiben gemeinsam im Projektordner; vorhandene Aufnahmen, Textstände und Einstellungen werden weiterverwendet.
+- **Währenddessen mitlesen:** getrennte Spuren, lokales Streaming, gesichertes Audio und Erkennungsrückstand sichtbar.
+- **Alles an einem Ort:** Historie, Sitzungsdetails, Originaltranskript, versionierte Auswertungen und der direkte Weg zum Sitzungsordner.
+- **Vollständige Textdateien:** beide Transkriptspuren als neue TXT-Momentaufnahme speichern; frühere Exporte bleiben erhalten.
+- **Eigene Vorlagen:** Tabs für Zusammenfassung, Entscheidungen, To-dos und weitere Arbeitsaufträge hinzufügen, bearbeiten und anordnen.
+- **Nachvollziehbare Ergebnisse:** vorhandene Originalstellen und wörtliche Zitate, unbekannte Zuständige und Termine bleiben unbekannt.
+- **Sichtbarer Fortschritt:** bestätigte Teilaufgaben, Laufzeit, Abbruch und Wiederaufnahme; heller und dunkler Modus sowie Deutsch und Englisch.
 
-1. Dieselbe Audioausgabe auswählen, die Teams, Zoom oder der Browser verwendet.
-2. Bei Bedarf das Mikrofon zusätzlich aktivieren und das gewünschte Gerät wählen.
-3. Ein installiertes Streaming-Modell auswählen; geprüft ist **Nemotron Streaming 3.5**.
-4. **Aufnahme starten** wählen. Audio wird sofort lokal geschrieben; während das Modell lädt, wächst die gesicherte Aufnahme bereits weiter.
-5. Den Live-Text und den Status „Audio gesichert bis …“ beobachten.
-6. **Meeting beenden** schließt die Audiospuren ab und verarbeitet noch offene Pakete mit dem bereits geladenen Modell.
+![Transkript und lokale Dateien in HandyMeeting](assets/screenshots/transcript-light.png)
+*Echte App-Komponenten mit künstlichen Demo-Inhalten. Die dargestellten zwei Stunden sind eine Oberflächenprüfung und kein Geräte-Dauertest.*
 
-Es werden nur Modelle angeboten, die Handy als streamingfähig meldet. Die Engine prüft diese Fähigkeit zusätzlich beim Laden. Es gibt keine automatische Umstellung auf eine große nachträgliche Dateitranskription.
+![Nachbearbeitung mit Originalbelegen](assets/screenshots/analysis-light.png)
 
-**Transkript kopieren** kopiert den vollständigen bisherigen Verlauf beider Spuren auf einen Schlag, einschließlich des aktuellen Live-Textes. Die Anzeige selbst bleibt auf die jüngsten 16 Abschnitte begrenzt. Noch laufender Text kann sich verändern; unvollständige Sitzungen werden im kopierten Text gekennzeichnet.
+Die Vorlage ist wiederverwendbar, eine gespeicherte Auswertung behält dagegen ihren eigenen Originalstand und ihre Arbeitsaufträge. **Alle Ergebnisse als Markdown kopieren** enthält sämtliche Ergebnis-Tabs, Belege und das zugehörige Originaltranskript. Technisch vorhandene Zitate beweisen noch keine richtige inhaltliche Deutung.
 
-Oben lassen sich **Deutsch / English** und **Hell / Dunkel** einstellen. Die Auswahl wird lokal gespeichert und gilt auch für die Nachbearbeitung. Die Sprache eigener Vorlagen, Prompts und Originaltranskripte wird dadurch nicht geändert. System- und Treibermeldungen können in ihrer ursprünglichen Sprache erscheinen. Buttons und Statusmeldungen bieten nach kurzem Verweilen zusätzliche Hinweise; insbesondere pausiert **Streaming pausieren** nur die Erkennung und lässt die Audioaufnahme weiterlaufen.
+![HandyMeeting im dunklen Modus](assets/screenshots/analysis-dark.png)
 
-Die Mikrofon-Stummschaltung in Teams/Zoom gilt nicht für HandyMeeting. Die App hat eine eigene Mikrofon-Stummschaltung. Mit Kopfhörern vermeidest du doppelte Stimmen durch Lautsprecher-Echo. Computerton umfasst alle Apps auf der gewählten Ausgabe, einschließlich Benachrichtigungen.
+## Das erste Meeting
 
-## Wie Audio und Text gesichert werden
+1. Handy installieren und dort ein kompatibles **Streaming-Sprachmodell** herunterladen. HandyMeeting erkennt die Installation und liest deren Modellliste. Gewichte sind nicht im Download enthalten.
+2. Das passende Paket installieren. Das Windows-ZIP vollständig entpacken und über die enthaltene Startdatei öffnen. Unter Linux das DEB mit dem Paketmanager installieren; auf dem Mac die App aus der passenden DMG in „Programme“ ziehen.
+3. **Meeting → Aufnahme einrichten:** Namen, Modell und die von der Meeting-App verwendete Tonausgabe auswählen. Das Mikrofon nur bei Bedarf zusätzlich aktivieren. Auf Mac werden derzeit die Standardgeräte verwendet.
+4. Kurz testen, ob beide gewünschten Seiten ankommen. Die gewählte Tonausgabe kann auch andere Programme und Benachrichtigungen enthalten.
+5. Meeting beenden, Transkript kontrollieren und **Dieses Meeting auswerten** wählen. **Sitzungsordner öffnen** zeigt Audio, Journale und gespeicherte Fassungen direkt im Dateimanager.
 
-Die Audioaufnahme und die Spracherkennung laufen unabhängig voneinander:
+Für die lokale Nachbearbeitung wird zusätzlich ein lokaler Textmodelldienst benötigt, beispielsweise LM Studio. Dort ein Textmodell laden und den lokalen Server starten. Die Standardadresse lautet `http://127.0.0.1:1234/v1/`. HandyMeeting fragt dessen verfügbare Modellkennungen ab; das Modell wird ausdrücklich ausgewählt. Ein Sprachmodell für die Audioerkennung ersetzt kein Textmodell für Zusammenfassungen.
 
-- PCM-Audio wird fortlaufend in **30-Sekunden-Dateien** geschrieben. Auch die gerade offene Datei wird etwa alle 0,5 Sekunden mit Dateikopf und Daten auf den Datenträger durchgeschrieben.
-- Die Erkennung liest ausschließlich bereits bestätigte Audiobereiche von der Platte und verarbeitet kleine Pakete. Das Meeting muss nicht vollständig im Arbeitsspeicher liegen.
-- Neue Textstände werden vor der Anzeige in ein **fortlaufendes Textjournal** geschrieben und durchgeschrieben. Bestätigter Text und noch vorläufiger Text werden darin getrennt erhalten.
-- Das Modell bleibt geladen. Die kurzen Erkennungsfenster werden abgeschlossen und zurückgesetzt, sodass kein zwei Stunden langer Erkennungskontext aufgebaut werden muss.
-- Sitzungsübersichten und Exporte werden über temporäre Dateien ersetzt; die vorherige gültige Datei bleibt zusätzlich als .bak erhalten.
-- Originalaudio und Textjournal werden von der App **nicht automatisch gelöscht**.
+## Datenschutz und Wiederherstellung
 
-Ein abgestürzter oder langsamer Erkennungsprozess beendet die Audioaufnahme nicht. Die App zeigt Rückstand und Fehler an, startet den Erkennungsprozess erneut und liest offene Abschnitte aus dem gesicherten Audio. Nach wiederholten Fehlern wird Streaming pausiert; die Aufnahme läuft weiter. Der Prozessor kann als Ersatz für einen fehlerhaften GPU-Betrieb verwendet werden.
+Audio und Textjournale werden lokal gesichert, unabhängig von der Erkennung. Bestätigte Schreibpunkte wurden nach Prozessabbrüchen wiederhergestellt; ein unbestätigtes Endstück kann trotzdem fehlen. Das ist kein Stromausfall- oder Hardwaredefektnachweis. Vorhandene Aufnahmen und Auswertungsfassungen werden nicht automatisch gelöscht.
 
-**Streaming pausieren** hält nur die Erkennung an. Die Audioaufnahme läuft weiter. **Streaming fortsetzen** holt die gespeicherten Abschnitte nach. Ein pausierter Nachlauf lässt sich später über die Historie fortsetzen.
+Die Nachbearbeitung beginnt lokal. **Cloud · nur Text** verlangt für jede Auswertung eine ausdrückliche Freigabe. Übertragen werden Text, Quellenkennungen und Arbeitsaufträge, keine Audiodateien oder lokalen Pfade. Es gibt keinen automatischen Cloud-Ersatz. Ein separat betriebener lokaler Dienst muss seinerseits lokal rechnen.
 
-Eine absolute Zusage gegen jeden Datenverlust ist technisch nicht möglich: Stromausfall, defekte Datenträger oder ein voller Datenträger können auch lokale Dateien betreffen. Der noch nicht durchgeschriebene Schluss hat ein kleines Zeitfenster. Ein Fehler beim Schreiben von Audio hält die Aufnahme sichtbar an. Der Sicherungsstatus zeigt erfolgreich gespeicherte Audiobereiche und keine pauschale Garantie für die Hardware.
+Schlüssel bleiben standardmäßig nur für die App-Sitzung im Speicher. Freiwillige dauerhafte Ablage nutzt Credential Manager, Keychain beziehungsweise Secret Service. Unlesbare Einträge werden erhalten; Klartext ist kein Ersatzweg. Dateien selbst liegen unverschlüsselt lokal. Eine zusätzlich eingerichtete Ordnersynchronisierung kann sie unabhängig von der App übertragen.
 
-## Historie und Wiederaufnahme
+Der bestehende lokale Anwendungsdatenpfad `HandyMeeting/RustBeta` bleibt aus Kompatibilitätsgründen erhalten. Die Windows-Deinstallation entfernt nur ihre aufgeführten Programmdateien und löscht Sitzungsordner nicht rekursiv. Alte Prototypen bleiben erhalten.
 
-Unter **Historie** stehen die Sitzungen mit Datum, Titel, Dauer und Status. **Anzeigen** öffnet das gespeicherte Transkript. **Offene Abschnitte nachholen** verarbeitet noch ausstehendes Audio mit einem Streaming-Modell.
+Zwei Audiospuren sind keine Personenerkennung. Automatische Sprecherzuordnung, exakte Wortzeiten und belastbare Wörter-pro-Person-Statistiken sind nicht implementiert. KI-Ergebnisse bleiben überprüfbare Entwürfe. Lokale Agenten erhalten nur nach sichtbarer Freigabe Zugriff auf ihre eigene neue Aufnahme; Mikrofonfreigabe ist getrennt. Die Schnittstelle ist kein MCP-Server.
 
-Nach einem Prozessabbruch prüft das Öffnen der Sitzung:
+## Im Handy-Ökosystem
 
-1. Sitzungsübersicht und gegebenenfalls deren Sicherung.
-2. Vorhandene Audiodateien einschließlich nicht fertig geschriebener WAV-Dateiköpfe.
-3. Das Textjournal mit den schon gespeicherten Textständen.
-4. Welche Abschnitte vollständig erkannt wurden und welche erneut verarbeitet werden müssen.
+Die Companion-Richtung entstand aus [Handy Discussion #1923](https://github.com/cjpais/Handy/discussions/1923). HandyMeeting liest installierte Modelle und verwendet gepflegte transcribe.cpp-Bindings mit festgelegter nativer Laufzeit. Handy-Einstellungen, Schlüssel und Gewichte werden nicht geändert. Die Erkennung läuft in eigenen Prozessen; eine bereits geladene Handy-Modellinstanz wird nicht geteilt. Neue Modellformate können ein Laufzeitupdate erfordern.
 
-Eine am Ende abgerissene Journalzeile verhindert die Wiederherstellung älterer Einträge nicht. Ein späterer Modellwechsel archiviert die vorherige Textfassung zusätzlich. Eine noch aktive Sitzung wird gegen parallele Reparatur beziehungsweise Verarbeitung gesperrt.
+HandyMeeting ist **kein offizielles Handy-Produkt** und hat keine bestätigte Integrationsvereinbarung. [Vorschlag für eine unterstützte Companion-Schnittstelle](docs/HANDY_UPSTREAM_PROPOSAL.md).
 
-Sitzungen aus Version 0.1 bleiben in derselben Historie sichtbar. Die bisherigen Aufnahmen und Transkripte werden übernommen.
+## Mitwirken
 
-## Dateien und Speicherplatz
+[Rust-Build und Prüfungen](docs/RUST_BUILD.md) · [Release-Ablauf](docs/RELEASING.md) · [Geräteprüfplan](docs/NATIVE_VALIDATION.md) · [Agentenprotokoll](docs/RUST_AGENT_PROTOCOL.md) · [Lokale Dateien](docs/MEETING_FILES.md) · [Contributing](CONTRIBUTING.md) · [Prüfbericht](TEST_REPORT.md)
 
-Jede Sitzung hat einen eigenen Ordner unter **Sessions** neben diesem Dokument:
+Paket- und Bibliotheksversionen sind gesperrt. GitHub prüft Quellstandbindung, Sicherung, Wiederaufnahme, Quellen, Oberflächenabläufe, native Schlüsselablage, verschobene Programmpakete sowie Windows-Installation und Datenerhalt bei der Deinstallation. Erfolgreiche Builds und echte Gerätenachweise werden getrennt ausgewiesen. Ältere C#-Downloads und ihre Anleitung bleiben über [BUILD_STATUS.md](BUILD_STATUS.md) und die früheren Release-Tags zugänglich.
 
-| Datei | Inhalt |
-| --- | --- |
-| audio/system-….wav | Getrennter Computerton, 16 kHz mono, 16-Bit-PCM |
-| audio/microphone-….wav | Optionales Mikrofon im selben Format |
-| transcript-journal.jsonl | Fortlaufende Textstände mit bestätigtem und vorläufigem Text |
-| session.json und session.json.bak | Sitzungsübersicht, Audioabschnitte, Modell und Status |
-| transcript.md, transcript.txt, transcript.json | Lesbare beziehungsweise strukturierte Exporte |
-| text-history | Gesicherte frühere Textfassungen bei Modellwechseln |
-
-Die Exporte werden beim Abschluss von Erkennungsfenstern und beim Beenden aktualisiert. Das Journal wird bereits bei neuen Live-Textständen geschrieben. Beim Öffnen einer wiederhergestellten Sitzung werden die Exporte aus den gespeicherten Daten neu erstellt.
-
-Rechne mit ungefähr **115 MB pro Stunde und Spur**, also rund **461 MB für zwei Stunden mit Computerton und Mikrofon** zuzüglich Text und Metadaten. Die Anzeige des Live-Texts begrenzt sich aus Leistungsgründen auf die jüngsten Abschnitte. Der gesamte Verlauf bleibt gespeichert und ist nach dem Öffnen der Sitzung beziehungsweise im Export verfügbar.
-
-## Arbeitsspeicher
-
-Audio wird fortlaufend auf den Datenträger geschrieben. Der Erkennungsprozess liest jeweils höchstens eine Sekunde PCM in wiederverwendete Puffer ein; gewöhnlich verarbeitet er eine halbe Sekunde. Das Modell bleibt geladen. Statusabfragen kopieren seit 0.2.1 nicht mehr alle Aufnahmeabschnitte. Die Live-Ansicht kopiert höchstens die jüngsten 16 Textabschnitte und wird über einen gemeinsamen Takt aktualisiert.
-
-Im synthetischen Vergleich mit zwei Stunden Sitzungsmetadaten erzeugten 1.000 Abfragezyklen ungefähr **2,8 statt 310 MB temporäre Speicherzuweisungen**. Diese Zahlen sind keine Messung des dauerhaft belegten Arbeitsspeichers. Den größten Speicherbedarf bestimmt weiterhin die native Modellausführung. Die tatsächlichen Messwerte und Grenzen stehen im [Prüfbericht](TEST_REPORT.md).
-
-## Zusammenfassung Entscheidungen und To-dos
-
-Nach einer vollständig transkribierten Aufnahme **Nachbearbeitung** wählen. Bei älteren Meetings zuerst in der Historie **Anzeigen** wählen. Jeder Ergebnisbereich enthält Quellenverweise. Ein Klick öffnet die unveränderte Originalstelle und markiert das wörtliche Zitat. Zeitangaben bezeichnen Aufnahmeabschnitte.
-
-Unter **Vorlage** lassen sich benannte Vorlagen erstellen, duplizieren, umbenennen und entfernen, beispielsweise „Englisches Arbeitsmeeting“. Jede enthält ihre eigenen Tabs und Prompts. Das **Plus neben den Tabs** fügt einen Verarbeitungsschritt hinzu. **Rechtsklick → Bearbeiten** öffnet Name, Prompt und Ergebnisart. Derselbe Kontext erlaubt das Verschieben und Entfernen von Tabs. Es gibt keine Begrenzung auf drei oder vier Tabs; 20 wurden geprüft. Mindestens ein Schritt und eine Vorlage bleiben erhalten.
-
-Der sichtbare Button **Auftrag bearbeiten** öffnet denselben Editor. **Was soll die KI aus dem Gespräch herausarbeiten?** ist der Arbeitsauftrag, oft auch Prompt genannt. **Wie soll das Ergebnis aussehen?** wählt zwischen eigener Auswertung, kurzem Überblick, beschlossenen Entscheidungen und Aufgaben. Ein erklärender Text nennt bei jeder Auswahl Bedeutung und Grenzen.
-
-Die Ergebnisarten sind freie Analyse, Zusammenfassung, Entscheidungen und Aufgaben mit Zuständigen/Terminen. Der Prompt legt Thema und Ausgabesprache fest. Beispielsweise: „Schreibe auf Englisch. Arbeite ausdrücklich geäußerte Risiken und offene Fragen heraus.“ Originalbelege bleiben in jeder Art Pflicht. Jeder Schritt liest begrenzte Teile des Originaltranskripts unabhängig von den anderen Schritten; eigene Analysen sind keine Kette, die automatisch Ergebnisse anderer Tabs verwendet. Zusammenfassungen werden bei Bedarf weiter verdichtet. Entscheidungen, Aufgaben und freie Analysen behalten alle geprüften Einträge; exakt gleiche Einträge werden zusammengeführt.
-
-Vor dem Start zeigt die App die Anzahl der ersten Modellanfragen an: Schritte × Textabschnitte. Viele Tabs benötigen entsprechend mehr Rechenzeit beziehungsweise optionale Cloud-Anfragen. **Ergebnisse kopieren** kopiert sämtliche Tabs der angezeigten Auswertungsfassung in ihrer Reihenfolge als lesbaren Klartext mit Quellenkennungen und Originalzitaten. Für Dateien bleiben sichere Markdown- und HTML-Exporte verfügbar.
-
-Vorlagen stehen getrennt von **gespeicherten Auswertungen**. Jede Auswertung sichert ihre vollständige Vorlage und deren Prüfsumme. Änderungen an einer historischen Vorlage erzeugen eine eigene Vorlagenkopie; die historische Auswertung bleibt unverändert. Schon geprüfte Arbeitsschritte lassen sich nur mit identischem Transkript, Anbieter, Modell, Prompts und gleicher Schrittfolge fortsetzen. Fertige Auswertungen aus 0.3 bleiben lesbar.
-
-**Sprecherstatistiken:** Computerton und Mikrofon sind Audiospuren, keine verlässlichen Personenkennungen. Ohne vorhandene Sprecherzuordnung kann ein eigener Prompt weder die genaue Personenzahl noch Wörter pro Person zuverlässig bestimmen. Die App erklärt diese Grenze im Prompteditor und weist das Modell an, solche Zahlen nicht zu erfinden. Exakte Statistik über das gesamte Meeting wird durch die abschnittsweise freie KI-Analyse nicht bereitgestellt.
-
-**Lokal ist bei jedem Öffnen der Standard.** Vorgesehen ist LM Studio auf `http://127.0.0.1:1234/v1/`; auch Ollama oder ein anderer kompatibler lokaler Dienst kann verwendet werden. Server starten, **Modelle prüfen**, ein Instruct-Textmodell mit JSON-Schema-Unterstützung und ausreichend Kontext wählen und **Neue Auswertung erstellen** drücken. Für längere Texte mindestens 8.192 Kontexttokens vorsehen. Das Textmodell ist zusätzlich zum Handy-Spracherkennungsmodell nötig. Die App lädt keine Textmodellgewichte herunter und bringt keinen eigenen großen LLM-Stack mit.
-
-Geprüft wurden das vorhandene **google/gemma-4-e4b** und LM Studio mit 8.192 Kontexttokens. Die Vorlagenprüfung in 0.4 umfasst ein deutsches Referenzmeeting, eine eigene englische Audioanalyse und unverbindliche deutsch-englische Vorschläge ohne Entscheidungen oder Aufgaben. Die frühere 0.3-Prüfung lief ausdrücklich auf CPU; der 0.4-Test nutzt das bereits im Dienst geladene Modell. Laden, Beschleunigung und Speicherbedarf steuert der lokale Dienst. Details und Grenzen stehen in TEST_REPORT.md.
-
-**Cloud bleibt optional:** Auf **Cloud · nur Text** umstellen, kompatible HTTPS-API-Adresse, Modell und Schlüssel eintragen und die Textübertragung für diese Auswertung ausdrücklich erlauben. Basisadressen sind beispielsweise `https://openrouter.ai/api/v1/` und `https://api.openai.com/v1/`. Der Anbieter muss das JSON-Schema unterstützen. Gesendet werden nur Transkripttext, Belegkennungen und Verarbeitungsanweisungen. Audio, lokale Dateipfade und Sitzungsdateien gehören nicht zur Anfrage. Es gibt keine automatische Weiterleitung und keinen Cloud-Ersatz bei lokalen Fehlern. Schlüssel werden kontogebunden mit Windows DPAPI verschlüsselt gespeichert. Echte Cloud-Provider und ihre Abrechnung wurden ohne Zugangsdaten nicht aufgerufen; Anfrageformat und Datenschutzgrenzen wurden simuliert geprüft.
-
-Lokal sind nur Loopback-Adressen dieses Computers erlaubt. Den lokalen Dienst selbst mit lokal ausgeführten Modellen betreiben; eine dort separat konfigurierte Cloud-Weiterleitung kann die Companion App nicht kontrollieren. Bekannte Cloud-Modellkennzeichnungen werden lokal abgelehnt.
-
-Lange Transkripte werden in begrenzten Anfragen verarbeitet. Jeder geprüfte Abschnitt wird vor der Fortschrittsbestätigung gespeichert. **Pausieren und sichern** oder Schließen erhält bestätigte Arbeitsschritte. Derselbe Stand kann mit unverändertem Transkript, Modell und Anbieter fortgesetzt werden. Änderungen daran erfordern eine neue Auswertung. Fertige Fassungen bleiben erhalten und lassen sich ohne laufenden KI-Dienst öffnen.
-
-Unter **notes/AUSWERTUNG** im Sitzungsordner liegen `run.json` mit Modell, Promptversion und eingefrorener Vorlage, `source.json` mit Originalstand und Prüfsumme, Zwischenstände je Schritt und Abschnitt, `sections.json`, `notes.md`, `source.md` und `notes.html`. Auswertungen aus 0.3 verwenden weiterhin `result.json`. Wiederverwendbare Vorlagen stehen unter `data/analysis-templates.json`. Die eigenständig lesbare HTML-Datei enthält das Originaltranskript für ihre Quellenverweise. Relative Termine bleiben im Wortlaut erhalten und werden zusammen mit dem Meetingdatum angezeigt.
-
-Ergebnisse sind **KI-Entwürfe**. Vorhandene Quellen, wörtliche Zitate sowie genannte Zuständige und Termine werden technisch geprüft. Das beweist nicht die richtige inhaltliche Deutung. Unbekannte Zuständige und Termine bleiben leer. Aufgaben werden nicht automatisch ausgeführt.
-
-API-Grundlagen: [LM Studio](https://lmstudio.ai/docs/developer/openai-compat/structured-output), [Ollama-Kompatibilität](https://docs.ollama.com/api/openai-compatibility), [OpenRouter](https://openrouter.ai/docs/guides/features/structured-outputs).
-
-## Lokaler Betrieb und Grenzen
-
-- Audio, Erkennung und Textjournal bleiben lokal. Die App hat keinen Cloud-Transkriptionsdienst und keinen Cloud-Ersatzpfad.
-- Die großen Modelldateien werden aus Handys vorhandenem Cache gelesen. Es wird keine zweite Modellkopie angelegt.
-- Die native Streaming-Laufzeit liegt bei der App. Handy selbst bleibt unabhängig und kann weiter für Diktate verwendet werden.
-- Erste Initialisierung und GPU-Vorbereitung können einige Sekunden dauern. Die Audioaufnahme läuft dabei bereits.
-- Zeitangaben zeigen Aufnahmebereiche; bei fehlenden Treiberzeitmarken sind sie als angenähert gekennzeichnet. Es sind keine exakten Wortzeitmarken.
-- Keine automatische Sprechertrennung oder Echounterdrückung. Die Nachbearbeitung wird vom Nutzer ausgelöst.
-- Geräteverlust, Ruhezustand und voller Datenträger werden nicht als nahtlos fortgesetzte Aufnahme ausgegeben.
-- Sitzungen sind unverschlüsselte lokale Dateien. Ein automatisch synchronisierter Projektordner wäre eine gesonderte Datenweitergabe durch die Synchronisationssoftware.
-
-## Entwickeln und prüfen
-
-Mit .NET SDK 10 im Projektordner ausführen:
-
-~~~powershell
-./build.ps1
-~~~
-
-Beim ersten Build bezieht setup-native.ps1 die offizielle transcribe.cpp-Laufzeit **0.4.1** mit festgelegter SHA-256-Prüfsumme. NuGet bezieht NAudio.Wasapi **3.3.0**. Das sind Programm- und Bibliotheksdownloads, keine Modelldownloads oder Übertragung von Aufnahmen. Versionen und Lizenzen liegen im Projekt beziehungsweise in der Ausgabe.
-
-Diagnosemodi der EXE:
-
-| Modus | Prüfung |
-| --- | --- |
-| --self-test AUSGABEORDNER | PCM-Zeitachse, Grenzen, Stille, leise Signale und Fehlerfälle |
-| --streaming-checks AUSGABEORDNER | Textjournal, beschädigte Metadaten und erzeugte Zwei-Stunden-Zeitachse |
-| --streaming-smoke AUSGABEORDNER optionalGERÄTEID | Echte Systemaudioaufnahme mit Live-Text vor Aufnahmeende |
-| --streaming-recovery AUSGABEORDNER | Gezielt beendeter eigener Testprozess, Wiederherstellung und ASR-Neustart |
-| --stream-probe-cpu AUSGABEORDNER PCM-WAV | Streaming im Prozessor-Ersatzbetrieb |
-| --memory-profile AUSGABEORDNER vulkan\|cpu optionalFENSTERZAHL | Temporäre Speicherzuweisungen und Speicherwerte beider Prozesse; lokale Teststimme, zwei Spuren, 30 Sekunden je Fenster; Standard 12, maximal 240 Fenster |
-| --soak-test NEUER_AUSGABEORDNER optionalSEKUNDEN | Echtzeit-Dauertest mit zwei synthetischen Spuren, Speicherprotokoll und kontrollierten Prozessabbrüchen; Standard 7.207 Sekunden, keine Aufnahme realer Geräte |
-| --notes-checks AUSGABEORDNER | Quellen, Datenschutz, Verschlüsselung, Wiederaufnahme, Prozessabbruch und UI mit simulierten Modellantworten |
-| --notes-local-smoke AUSGABEORDNER MODELLKENNUNG | Echter lokaler Modelltest mit Referenzauftrag und unverbindlichen Vorschlägen |
-| --diagnose AUSGABEORDNER | Geräte und installierte Modelle |
-
-Die Audiotests verwenden eine lokal erzeugte Teststimme. Der automatische Hardwaretest öffnet kein Mikrofon. Der Zwei-Stunden-Dateitest erzeugt rund 461 MB synthetisches PCM; er ersetzt keinen zweistündigen Praxistest. Ergebnisse und Grenzen stehen im [Prüfbericht](TEST_REPORT.md).
-
-HandyMeeting ist ein unabhängiger Arbeitsname und kein offizielles Handy-Produkt.
-
-Externe Agenten können über die dokumentierte [lokale Agentenschnittstelle](AGENT_API.md) Fähigkeiten und Vorlagen lesen sowie nach ausdrücklicher Textfreigabe abgeschlossene Transkripte lesen und lokale Auswertungen erzeugen. Eine vollständige Fernsteuerung von Aufnahme und Oberfläche wird damit noch nicht angeboten. Cloud-Aufrufe sind in dieser Schnittstelle nicht verfügbar. Repository-Vorbereitung und sicherer Quelltext-Export: [REPOSITORY_READY.md](REPOSITORY_READY.md).
-
-Der wiederholbare Ablauf **./verify.ps1** baut mit gesperrten Paketversionen, behandelt Compilerwarnungen als Fehler und prüft Audiosicherung, Nachbearbeitung und Testwächter ohne große Modelle oder Cloud-Zugangsdaten. Ein GitHub-Workflow ist unter `.github/workflows/windows.yml` vorbereitet; ein tatsächlicher CI-Lauf erfolgt erst im veröffentlichten Repository. Projektregeln stehen in [AGENTS.md](AGENTS.md), Produktziele und Freigabekriterien in [MASTERPLAN.md](MASTERPLAN.md).
+MIT-Lizenz; Originalhinweise unter [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) und `licenses/`. Modelle, Aufnahmen, Einstellungen und Zugangsschlüssel gehören weder zum Quellpaket noch zu den Downloads.

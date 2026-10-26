@@ -38,10 +38,11 @@ on:
       - 'THIRD_PARTY_NOTICES.txt'
       - '.github/workflows/rust.yml'
   workflow_dispatch:
+  workflow_call:
 permissions:
   contents: read
 concurrency:
-  group: rust-beta-${{ github.event.pull_request.number || github.ref }}
+  group: rust-beta-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 env:
   CARGO_TERM_COLOR: never
@@ -82,9 +83,17 @@ jobs:
       - name: Prepare reviewed native SDK separately
         shell: pwsh
         run: ./scripts/prepare-rust-native.ps1
+      - name: Prepare hash-pinned installer compiler
+        shell: pwsh
+        run: ./scripts/prepare-installer.ps1
       - name: Bind separate checks to this source tree
         shell: pwsh
         run: node scripts/rust-artifacts.mjs begin-check
+      - name: Verify installer and release publication guards
+        shell: pwsh
+        run: |
+          python -m unittest discover -s scripts -p test_release_packages.py
+          node scripts/rust-artifacts.mjs record-check distribution-guards $LASTEXITCODE
       - name: Verify the preserved C sharp prototype
         shell: pwsh
         run: |
@@ -160,6 +169,9 @@ jobs:
       - name: Create candidate ZIP using filesystem operations only
         shell: pwsh
         run: ./scripts/package-rust-windows.ps1
+      - name: Build and actually verify the per-user installer and nonrecursive uninstall
+        shell: pwsh
+        run: ./scripts/package-rust-installer.ps1 -RunChecks
       - name: Keep model-free verification records
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -179,7 +191,10 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: rust-windows-beta-candidate
-          path: packages/HandyMeeting-1.0.0-beta.4-windows-x64.zip*
+          path: |
+            packages/HandyMeeting-*-windows-x64.zip*
+            packages/HandyMeeting-*-windows-x64-setup.exe*
+          if-no-files-found: error
           retention-days: 14
   portable-core:
     name: Portable core (${{ matrix.runner }})

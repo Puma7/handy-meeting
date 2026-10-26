@@ -1,6 +1,12 @@
-# Build and prototype status
+# Build and release status
 
-Repository: [Puma7/handy-meeting](https://github.com/Puma7/handy-meeting), publicly shared with the owner's approval on 25 October 2026. This is an independent prototype.
+Repository: [Puma7/handy-meeting](https://github.com/Puma7/handy-meeting), publicly shared with the owner's approval on 25 October 2026. This is an independent Handy companion application.
+
+## Current 1.0.0 release preparation
+
+Version metadata, bilingual README, demonstration screenshots and the exact-source release workflow are prepared for 1.0.0. The workflow builds Windows Setup/ZIP, an Ubuntu/Debian DEB and two Mac DMGs. A tag creates a complete draft after successful checks; publishing that verified draft selects Latest. See [RELEASING.md](docs/RELEASING.md). Preparation alone does not establish a successful build, published download or stable hardware support.
+
+The previous beta.4 Windows CI found an unsynchronized synthetic test helper: process existence was mistaken for fixture readiness. The test now waits for the helper's actual readiness marker, with a separate startup deadline and unchanged complete-PCM requirement. Production recording logic was not changed. Real Mac/Linux capture, a complete Rust two-hour capture/recovery run, the original GPU-memory warning, trusted Windows signing and Mac notarization remain open. Actual evidence is maintained in [TEST_REPORT.md](TEST_REPORT.md).
 
 ## Current Rust/Tauri beta 3
 

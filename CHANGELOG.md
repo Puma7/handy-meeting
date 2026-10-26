@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0 — release preparation
+
+- Present the Rust/Tauri application with bilingual guides and screenshots rendered from synthetic demonstration data.
+- Build Windows Setup EXE and ZIP, Ubuntu/Debian DEB, and separate Apple Silicon/Intel DMGs from the same checked source.
+- Verify actual isolated Windows installation/uninstallation and native credential stores before assembling a complete release draft. Publishing the verified draft marks a stable version Latest.
+- Preserve earlier program versions and user data; refuse mismatched source proofs, changed assets and recursive uninstall deletion.
+- Synchronize synthetic pipe tests with actual helper readiness rather than process existence. Hardware recording, full-app two-hour validation and signing remain separately documented release gates.
+
 ## 1.0.0-beta.4 — clearer meeting workflow and local text exports
 
 - Collapse recording setup during capture and analysis setup during processing or result review. Keep the recording controls available and long transcripts in a keyboard-scrollable region.

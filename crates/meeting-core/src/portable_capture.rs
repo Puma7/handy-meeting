@@ -358,12 +358,13 @@ mod tests {
             let (tx, rx) = mpsc::sync_channel(1);
             tracks.push(thread::spawn(move || {
                 let mut cmd = python();
-                // Startup acknowledgement is deliberately earlier than all PCM.
-                // The parent releases this barrier only after both helpers are ready.
-                cmd.args(["-c", &format!("import pathlib,sys,time\ngate=pathlib.Path(sys.argv[1])\nwhile not gate.exists(): time.sleep(0.01)\nsys.stdout.buffer.write(bytes.fromhex('{hex}')*16000)\nsys.stdout.buffer.flush()\ntime.sleep(30)")]).arg(gate);
-                record(store, source, flag, tx, HelperSpec { command: cmd, readiness_marker: false, graceful_stdin: false })
+                // An alive process is not proof that Python executed the fixture.
+                // Mark readiness after interpreter startup, before the PCM barrier.
+                cmd.args(["-c", &format!("import pathlib,sys,time\ngate=pathlib.Path(sys.argv[1])\nsys.stderr.write('HANDYMEETING_AUDIO_READY\\n')\nsys.stderr.flush()\nwhile not gate.exists(): time.sleep(0.01)\nsys.stdout.buffer.write(bytes.fromhex('{hex}')*16000)\nsys.stdout.buffer.flush()\ntime.sleep(30)")]).arg(gate);
+                record(store, source, flag, tx, HelperSpec { command: cmd, readiness_marker: true, graceful_stdin: false })
             }));
-            rx.recv_timeout(Duration::from_secs(5)).unwrap().unwrap();
+            // Startup budget is separate from the unchanged ten-second PCM proof.
+            rx.recv_timeout(Duration::from_secs(30)).unwrap().unwrap();
         }
         assert!(store.snapshot().unwrap().parts.is_empty());
         std::fs::write(&gate, b"release synthetic PCM").unwrap();
@@ -458,6 +459,58 @@ mod tests {
             .parts
             .iter()
             .all(|p| p.audio_closed && p.confirmed_sample_count >= 16000));
+    }
+    #[test]
+    fn alive_helper_cannot_acknowledge_a_marker_before_executing_it() {
+        let root = tempfile::tempdir().unwrap();
+        let store = SessionStore::create(
+            root.path(),
+            "Synthetic readiness",
+            "synthetic",
+            "fake",
+            None,
+        )
+        .unwrap();
+        let started = root.path().join("fixture-started");
+        let release = root.path().join("allow-ready-marker");
+        let stop = Arc::new(AtomicBool::new(false));
+        let _stop_on_exit = StopOnExit(Arc::clone(&stop));
+        let (tx, rx) = mpsc::sync_channel(1);
+        let flag = Arc::clone(&stop);
+        let mut command = python();
+        command.args(["-c", "import pathlib,sys,time\nstarted,release=map(pathlib.Path,sys.argv[1:])\nstarted.write_text('fixture executing')\nwhile not release.exists(): time.sleep(0.01)\nsys.stderr.write('HANDYMEETING_AUDIO_READY\\n')\nsys.stderr.flush()\ntime.sleep(30)"]).arg(&started).arg(&release);
+        let worker = thread::spawn(move || {
+            record(
+                store,
+                "system",
+                flag,
+                tx,
+                HelperSpec {
+                    command,
+                    readiness_marker: true,
+                    graceful_stdin: false,
+                },
+            )
+        });
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while !started.exists() {
+            assert!(
+                Instant::now() < deadline,
+                "Fixture interpreter did not start"
+            );
+            thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            matches!(
+                rx.recv_timeout(Duration::from_millis(400)),
+                Err(mpsc::RecvTimeoutError::Timeout)
+            ),
+            "An alive helper must not authorize PCM timing before its explicit ready marker"
+        );
+        std::fs::write(release, b"emit ready marker").unwrap();
+        rx.recv_timeout(Duration::from_secs(10)).unwrap().unwrap();
+        stop.store(true, Ordering::Release);
+        worker.join().unwrap().unwrap();
     }
     #[test]
     fn helper_crash_finalizes_received_pcm_and_survives_reopen() {

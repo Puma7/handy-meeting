@@ -46,3 +46,6 @@ and apps/desktop/HANDY_STYLE_NOTICE.md in source. No endorsement is implied.
 The official native runtime retains its supplied notices in native-licenses
 in the Rust distribution. Model weights remain excluded. See
 docs/RUST_DEPENDENCIES.md for reviewed scope and remaining warnings.
+
+Windows setup uses NSIS 3.13 from the hash-pinned Tauri binary distribution.
+The original compiler/stub notices are retained in licenses/installer/NSIS-3.13-COPYING.txt.
