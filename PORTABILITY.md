@@ -1,6 +1,10 @@
 # Plattformstand und Testpakete
 
-Stand: 25.10.2026. Windows und portable Vorschau werden getrennt bereitgestellt. Keine Installation beendet fremde Handy-Prozesse oder laufende Nutzeraufnahmen.
+Stand: 26.10.2026. Rust/Tauri 1.0.0 wird mit Windows-Setup/ZIP, Ubuntu-/Debian-DEB sowie getrennten Apple-Silicon-/Intel-DMGs vorbereitet. [Aktueller Buildstand](BUILD_STATUS.md), [Paketierung](docs/RUST_PORTABLE.md), [Veröffentlichung](docs/RELEASING.md). Erfolgreiche Paketbauten und echte Geräte-/Langzeitprüfungen bleiben getrennte Nachweise. Keine Installation beendet fremde Handy-Prozesse oder laufende Nutzeraufnahmen.
+
+## Historische Vorschauen
+
+**Rust/Tauri 1.0.0-beta.2 ist eine zusätzliche Migrationsbeta.** Linux-/Mac-Aufnahmeadapter und native DEB-/DMG-Builds sind angelegt; erreichte CI-Ergebnisse sind im [Prüfbericht](TEST_REPORT.md) getrennt von echten Geräte- und Langzeitnachweisen dokumentiert. Zielversionen: Ubuntu 22.04/24.04, Debian 12/13 x64 und macOS 13+ auf Apple Silicon/Intel. [Details und Grenzen](docs/RUST_PORTABLE.md). Die nachfolgenden älteren Download-/Hardwareangaben gelten für WPF/Avalonia 0.4.1 beziehungsweise 0.5.0-preview.1.
 
 | Ziel | Stand | Nächste Freigabeprüfung |
 | --- | --- | --- |

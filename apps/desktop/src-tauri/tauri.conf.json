@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "HandyMeeting",
+  "version": "1.0.0",
+  "identifier": "org.handymeeting.beta",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [{ "title": "HandyMeeting · 1.0.0", "width": 1180, "height": 820, "minWidth": 800, "minHeight": 600 }],
+    "security": { "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'" }
+  },
+  "bundle": { "active": true, "targets": ["nsis"], "icon": ["../../../assets/handymeeting.ico", "../../../assets/handymeeting.png"], "copyright": "HandyMeeting contributors", "shortDescription": "Independent local meeting companion for Handy" }
+}

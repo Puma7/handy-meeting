@@ -116,6 +116,7 @@ public static class TemplateVerification
         data.Parts[^1].Status = "transcribing";
         var store = new SessionStore(Path.Combine(root, "copy-fixture"), data); var transcript = store.CopyTranscriptSnapshot();
         Check(Enumerable.Range(0, 24).All(i => transcript.Contains($"UNIQUE_SECTION_{i:D2}")) && !Transcription.RenderLive(store).Contains("UNIQUE_SECTION_00"), "Whole-transcript copy includes both tracks, current text and all history beyond the sixteen-part live view");
+        await LeaseWaitChecksAsync(Path.Combine(root, "lease-release"), checks);
         await CrashAsync(Path.Combine(root, "hard-crash")); checks.Add("Hard process termination preserves dynamic-step checkpoints and resumption");
         await RenderAsync(root, snapshot, result); checks.Add("German light and English dark interfaces render with all twenty tabs and exact source navigation");
         JsonData.Save(Path.Combine(root, "template-checks.json"), new { Passed = checks.Count, Checks = checks, CloudTrafficSent = false, SyntheticText = true });
@@ -132,10 +133,71 @@ public static class TemplateVerification
         using var child = Process.Start(info)!; using var job = new WorkerJob(child); var clock = Stopwatch.StartNew();
         while (!File.Exists(Path.Combine(root, "ready.json"))) { Require(!child.HasExited && clock.Elapsed.TotalSeconds < 30, "Crash fixture did not checkpoint"); await Task.Delay(50); }
         child.Kill(true); await child.WaitForExitAsync();
+        Require(child.HasExited, "Owned crash fixture process must exit before testing lease release");
+        var leaseWait = Stopwatch.StartNew();
+        await WaitForReleasedTestLeaseAsync(Path.Combine(root, "notes", "processing.lock"), TimeSpan.FromSeconds(5));
+        JsonData.Save(Path.Combine(root, "lease-release.json"), new { OwnChildExited = child.HasExited, ChildId = child.Id, WaitMilliseconds = leaseWait.Elapsed.TotalMilliseconds, DeadlineMilliseconds = 5000, LockDeleted = false });
         var template = JsonData.Read<AnalysisTemplate>(Path.Combine(root, "template.json"))!; var run = MeetingNotesService.Runs(root).Single();
         var path = Path.Combine(root, "notes", run.Id, $"step-{template.Steps[0].Id}-00000.json"); var before = File.ReadAllBytes(path);
         var handler = new Handler(); var result = await TemplateNotesService.GenerateAsync(root, Fixture(), template, Local, false, run.Id, null, CancellationToken.None, handler);
         Require(result.Run.Status == "complete" && handler.Calls == 2 && before.SequenceEqual(File.ReadAllBytes(path)), "Crash lost a confirmed dynamic step");
+    }
+    private static bool IsLeaseContention(IOException error) => error.HResult == unchecked((int)0x80070020) || error.HResult == unchecked((int)0x80070021);
+    // Test harness only: the owned child has already exited. Probe the same lease
+    // semantics as production, without deleting the lock or retrying GenerateAsync.
+    private static async Task WaitForReleasedTestLeaseAsync(string path, TimeSpan deadline)
+    {
+        if (deadline <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(deadline));
+        var clock = Stopwatch.StartNew(); IOException? contention = null;
+        while (true)
+        {
+            if (clock.Elapsed >= deadline) throw new TimeoutException("The test lease remained held past its bounded release deadline.", contention);
+            try
+            {
+                using var probe = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+                return;
+            }
+            catch (IOException error) when (IsLeaseContention(error))
+            {
+                contention = error;
+                var remaining = deadline - clock.Elapsed;
+                if (remaining <= TimeSpan.Zero) throw new TimeoutException("The test lease remained held past its bounded release deadline.", error);
+                await Task.Delay(remaining < TimeSpan.FromMilliseconds(25) ? remaining : TimeSpan.FromMilliseconds(25));
+            }
+        }
+    }
+    private static async Task LeaseWaitChecksAsync(string root, List<string> checks)
+    {
+        Directory.CreateDirectory(root);
+        var releasedPath = Path.Combine(root, "released.lock");
+        var original = Encoding.UTF8.GetBytes("owned synthetic lease; retain these bytes");
+        Task wait;
+        using (var held = new FileStream(releasedPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
+        {
+            held.Write(original); held.Flush(true);
+            wait = WaitForReleasedTestLeaseAsync(releasedPath, TimeSpan.FromSeconds(2));
+            await Task.Delay(75);
+            Require(!wait.IsCompleted, "A currently held test lease must not be treated as released");
+        }
+        await wait;
+        Require(original.SequenceEqual(File.ReadAllBytes(releasedPath)), "Waiting for release must not alter the original lease file");
+        checks.Add("A temporarily held test lease is awaited until release without modifying its bytes");
+        var activePath = Path.Combine(root, "active.lock");
+        using (var held = new FileStream(activePath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
+        {
+            held.Write(original); held.Flush(true);
+            var timedOut = false;
+            try { await WaitForReleasedTestLeaseAsync(activePath, TimeSpan.FromMilliseconds(150)); }
+            catch (TimeoutException error) when (error.InnerException is IOException io && IsLeaseContention(io)) { timedOut = true; }
+            Require(timedOut && !held.SafeFileHandle.IsClosed, "An actively held lease must cause a deadline failure and remain owned by its holder");
+        }
+        Require(original.SequenceEqual(File.ReadAllBytes(activePath)), "An active lease deadline must not delete or rewrite its file");
+        checks.Add("An actively held test lease fails at its deadline and is never ignored or deleted");
+        var missingFailed = false;
+        try { await WaitForReleasedTestLeaseAsync(Path.Combine(root, "missing.lock"), TimeSpan.FromSeconds(2)); }
+        catch (FileNotFoundException) { missingFailed = true; }
+        Require(missingFailed, "Lease release waiting must not swallow missing-file or other unrelated I/O failures");
+        checks.Add("Lease release waiting retries only sharing and locking violations, preserving unrelated I/O failures");
     }
     private static async Task RenderAsync(string root, TranscriptSnapshot snapshot, NotesResult result)
     {
