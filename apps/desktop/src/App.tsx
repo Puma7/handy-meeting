@@ -495,6 +495,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
   }
   async function selectNotesMeeting(id: string) {
     const sequence = ++notesLoadSequence.current;
+    const isCurrentSelection = () =>
+      mounted.current &&
+      sequence === notesLoadSequence.current &&
+      notesSelectionRef.current === id;
     notesSelectionRef.current = id;
     setNotesMeetingId(id);
     setAnalyses([]);
@@ -519,24 +523,33 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       selectedRef.current = current.id;
       fullMeetingRef.current = current.id;
       setMeeting(current);
-      const [items, pending] = await Promise.all([
-        api.listAnalyses(id),
-        api.listUnfinishedAnalyses(id),
+      const failures: string[] = [];
+      const reportDiscoveryFailure = (failure: unknown) => {
+        if (!isCurrentSelection()) return;
+        failures.push(errorMessage(failure));
+        setError([...new Set(failures)].join("\n"));
+      };
+      await Promise.all([
+        api
+          .listAnalyses(id)
+          .then((items) => {
+            if (!isCurrentSelection()) return;
+            if (items.some((item) => item.meetingId !== id))
+              throw new Error(t.wrongMeeting);
+            setAnalyses(items);
+            setResultId(items[0]?.id ?? "");
+          })
+          .catch(reportDiscoveryFailure),
+        api
+          .listUnfinishedAnalyses(id)
+          .then((pending) => {
+            if (!isCurrentSelection()) return;
+            if (pending.some((item) => item.meetingId !== id))
+              throw new Error(t.wrongMeeting);
+            setPendingAnalyses(pending);
+          })
+          .catch(reportDiscoveryFailure),
       ]);
-      if (
-        !mounted.current ||
-        sequence !== notesLoadSequence.current ||
-        notesSelectionRef.current !== id
-      )
-        return;
-      if (
-        items.some((item) => item.meetingId !== id) ||
-        pending.some((item) => item.meetingId !== id)
-      )
-        throw new Error(t.wrongMeeting);
-      setAnalyses(items);
-      setResultId(items[0]?.id ?? "");
-      setPendingAnalyses(pending);
     } catch (failure) {
       if (mounted.current && sequence === notesLoadSequence.current)
         setError(errorMessage(failure));

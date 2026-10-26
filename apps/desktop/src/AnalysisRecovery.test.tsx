@@ -62,14 +62,12 @@ function fixture(mode: "local" | "cloud") {
   let finished = false;
   const api = {
     ...testServices(),
-    getAppState: vi
-      .fn()
-      .mockResolvedValue({
-        version: "synthetic",
-        handy: null,
-        recording: false,
-        activeMeeting: meeting,
-      }),
+    getAppState: vi.fn().mockResolvedValue({
+      version: "synthetic",
+      handy: null,
+      recording: false,
+      activeMeeting: meeting,
+    }),
     listDevices: vi.fn().mockResolvedValue([]),
     listMeetings: vi.fn().mockResolvedValue([meeting]),
     getMeeting: vi.fn().mockResolvedValue(meeting),
@@ -91,6 +89,49 @@ function fixture(mode: "local" | "cloud") {
   return { api, pending };
 }
 beforeEach(() => localStorage.clear());
+
+it("keeps valid completed results accessible when unfinished discovery reports damaged retained data", async () => {
+  const { api, pending } = fixture("local");
+  const completed: AnalysisResult = {
+    ...pending,
+    id: "2123456789abcdef0123456789abcdef",
+    template: { ...pending.template, name: "Completed safe output" },
+    sections: [{ ...pending.template.steps[0], items: [] }],
+    sources: [],
+  };
+  vi.mocked(api.listAnalyses).mockResolvedValue([completed]);
+  vi.mocked(api.listUnfinishedAnalyses).mockRejectedValue(
+    new Error("Synthetic damaged unfinished checkpoint retained"),
+  );
+  render(<App api={api} />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: de.analyzeMeeting }),
+  );
+  await screen.findByText("Synthetic damaged unfinished checkpoint retained");
+  const saved = await screen.findByRole("combobox", { name: de.earlier });
+  expect((saved as HTMLSelectElement).value).toBe(completed.id);
+  expect(
+    within(saved).getByRole("option", { name: /Completed safe output/ }),
+  ).toBeTruthy();
+  expect(api.generateNotes).not.toHaveBeenCalled();
+});
+
+it("keeps validated unfinished work available when completed-result discovery fails", async () => {
+  const { api } = fixture("local");
+  vi.mocked(api.listAnalyses).mockRejectedValue(
+    new Error("Synthetic completed-result discovery failure"),
+  );
+  render(<App api={api} />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: de.analyzeMeeting }),
+  );
+  await screen.findByText("Synthetic completed-result discovery failure");
+  const unfinished = await screen.findByRole("region", {
+    name: de.unfinishedAnalyses,
+  });
+  expect(within(unfinished).getByText("Original instructions")).toBeTruthy();
+  expect(api.generateNotes).not.toHaveBeenCalled();
+});
 
 for (const mode of ["local", "cloud"] as const) {
   it(`rediscovers a ${mode} run after remount and requires a fresh explicit resume with original settings`, async () => {
