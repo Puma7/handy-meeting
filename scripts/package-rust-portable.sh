@@ -100,7 +100,7 @@ else
   hdiutil verify "$package"
   (cd packages && shasum -a 256 "$(basename "$package")") > "$package.sha256"
 fi
-cp "$work/package-manifest.json" "$package.manifest.json"
+python3 scripts/rust-portable-artifacts.py bind-package "$work" "$package"
 # Only explicit regular JSON files enter the flat upload directory. The image's
 # Applications link must never be searched by a recursive artifact glob.
 python3 scripts/rust-portable-artifacts.py collect-proofs "$rid" "$work"

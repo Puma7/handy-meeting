@@ -86,6 +86,12 @@ DMGs/DEBs and manifests have accompanying package hashes and existing candidates
 overwritten. Models, session histories, settings, API keys and private recordings are not
 package inputs. No installer hooks or automatic cloud calls are included.
 
+After final DEB/DMG creation and verification, `bind-package` writes the exact archive
+filename, SHA-256 and byte length into its adjacent portable manifest. The earlier sealed
+payload proof remains unchanged. Release assembly requires that binding as well as the
+matching source and native/relocated checks. Replacing an archive and recomputing only its
+checksum sidecar cannot reuse a different package's manifest.
+
 ## CI and required target tests
 
 `.github/workflows/rust-portable.yml` builds the actual Tauri GUI for all three targets,

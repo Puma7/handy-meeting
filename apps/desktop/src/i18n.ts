@@ -57,6 +57,9 @@ export const de = {
   progressUnavailable: "Der Fortschritt ist vorübergehend nicht erreichbar.",
   openAnalysisMeeting: "Zugehöriges Meeting öffnen",
   resumeAnalysis: "Gesicherte Auswertung fortsetzen",
+  unfinishedAnalyses: "Unfertige Auswertungen",
+  resumeAnalysisHelp:
+    "Dieser Arbeitsstand verwendet seine ursprünglichen Quellen, Arbeitsaufträge, API-Adresse und sein ursprüngliches Modell. Bereits bestätigte Teilaufgaben werden wiederverwendet. Schlüssel und eine Cloud-Freigabe werden nicht aus der gespeicherten Sitzung übernommen.",
   resumeHelp:
     "Verwendet den ursprünglichen Transkriptstand, die Vorlage und das Modell dieses Laufs.",
   copyMarkdown: "Alle Ergebnisse als Markdown kopieren",
@@ -357,6 +360,9 @@ export const en: Record<MessageKey, string> = {
   progressUnavailable: "Progress is temporarily unavailable.",
   openAnalysisMeeting: "Open the associated meeting",
   resumeAnalysis: "Resume saved analysis",
+  unfinishedAnalyses: "Unfinished analyses",
+  resumeAnalysisHelp:
+    "This run keeps its original sources, instructions, API address and model. Already confirmed subtasks are reused. Credentials and cloud approval are not restored from the saved session.",
   resumeHelp:
     "Uses this run's original transcript snapshot, template and model.",
   copyMarkdown: "Copy all results as Markdown",

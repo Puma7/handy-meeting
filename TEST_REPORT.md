@@ -1,5 +1,14 @@
 # Prüfung von HandyMeeting
 
+## 1.0.1 – nachgewiesene Fehlerursachen und neue Regression
+
+Setup 1.0.0: Ein eigener NSIS-Diagnoselauf mit noch nicht vorhandenen verschachtelten Elternordnern reproduziert leeren Elternpfad und Win32-Fehler 3. Mit FileFunc GetParent bestehen drei native Fälle (neue Elternordner mit Leerzeichen/Umlaut, belegter Zielordner, Elternpfad als Datei); Originaldateien bleiben bytegleich. Derselbe neue Test schlägt mit wieder eingesetzter alter Pfadermittlung fehl. Der Test installiert kein Programm und schreibt keine Registrierung. Die vollständige Setup-Installation im CI verwendet künftig ebenfalls fehlende Elternordner; deren Nachweis wird vor Paketannahme verlangt.
+
+Intel-Mac: Lauf 40384230272, Job 121788125039, scheiterte an FeatureParity.test.tsx:154 nach 5.000 ms; 49 andere UI-Prüfungen bestanden. Der kombinierte Test wird in getrennte Erhaltungsabläufe aufgeteilt, mit unverändertem Zeitlimit und ohne Wiederholungsautomatik. Der Fehler beweist keinen fehlgeschlagenen Mac-Installationslauf und ist vom erfolgreichen 1.0.0-Tag-Build getrennt.
+
+Das bereits leere öffentliche Tag v1.0.1 zeigt noch auf Programmversion 1.0.0; sein neuer Lauf scheitert deshalb vor allen Paketen am Versionsschutz. Alle Workspace-Crates und Programm-/Sperrdateien der Korrektur verwenden jetzt 1.0.1. Externe Abhängigkeiten bleiben unverändert, Lizenzmanifeste wurden offline neu gebunden. Historische Hardware-/Dauertest-/GPU-/Signaturgrenzen bleiben erhalten. Noch keine bestandene Gesamtmatrix oder Veröffentlichung dieser Korrektur behauptet.
+
+
 ## Öffentliche Downloadpakete und PR #10 nachgeprüft
 
 Am 26.10.2026 wurde der inzwischen von `Puma7` um 11:27:41 UTC veröffentlichte [Release 1.0.0](https://github.com/Puma7/handy-meeting/releases/tag/v1.0.0) live geprüft. Der tatsächliche [Tag-Build 40315235014](https://github.com/Puma7/handy-meeting/actions/runs/40315235014) bestand alle Windows-/Linux-/Mac-Ziele sowie Installations-, native Schlüssel- und Veröffentlichungsprüfungen. Alle 17 öffentlichen Anhänge wurden vollständig erneut heruntergeladen: Größen und GitHub-SHA-256 stimmen, ebenso die 15 Dateizeilen des Manifests, alle fünf Paket-Hashes, die fünf Prüfsummendateien und Tag-Commit `cecb03c541ad1b442143f9112e658103d35ccc6b`. Lokaler Nachweis: `.build/published-v1-20261026-check/local-proof.json` (keine privaten Meetingdaten). Kein Anhang und kein Tag wurde ersetzt. Der parallel gestartete Release-Event-Lauf war abgebrochen; er wird nicht als bestandener Test gezählt.
@@ -312,3 +321,13 @@ Vollständige Auswertung und Grenzen: [DAUERTEST.md](DAUERTEST.md). [Speicherdia
 Nicht praktisch geprüft wurden ein zweistündiges reales Meeting mit echten WASAPI-Geräten, die Darstellung eines sichtbaren Fensters während eines solchen Meetings, Stromausfall, physischer Datenträgerdefekt und echter USB-Geräteverlust während eines langen Meetings. Der bestandene synthetische Zweistundenlauf ersetzt diese Hardware- und Meetingprüfungen nicht. Ein Prozessabbruch ist kein Stromausfall.
 
 Durchschreiben, Sicherungskopien, Textjournal und unabhängige Aufnahme begrenzen die Auswirkungen typischer Softwarefehler. Sie können keine absolute Zusage gegen jeden Hardware- oder Datenträgerfehler geben. Die App löscht Originalaufnahmen und das Textjournal nicht automatisch.
+
+## Abschluss der Download-Nacharbeit
+
+[PR #11](https://github.com/Puma7/handy-meeting/pull/11) ist nach zwei sauberen Codex-Codeprüfungen und abgeschlossener Security-Prüfung auf `cd4f9e8` sowie grüner erforderlicher CI als `1985750a0a1d39f44e92375469208fc27309a6e4` gemergt. Die 17 öffentlichen 1.0.0-Anhänge blieben bei der abschließenden Gegenprüfung unverändert. Lokaler Abschlussnachweis: `.build/release-download-docs/state.json`. Keine neue Version und kein Diskussionskommentar wurden durch diese Nacharbeit veröffentlicht.
+
+1.0.1 local verification completed: 114 Rust checks, 55 UI checks, 20 release guards, 11 portable guards, nine artifact guards, three actual Win32 reservation cases, 89 preserved C# checks and the monitor check passed. Warnings were denied. Actual local Gemma reference completed in 43.102 seconds: one explicit decision/task with literal Anna/Freitag, no decision/task for nonbinding statements, two confirmed steps reused after controlled interruption; no process crash or real cloud test. An initial local Rust invocation ran before frontend assets existed; its failed event is retained, and sequential compilation then passed. Target installer/package CI is still pending.
+
+Current locked dependency audit (26 October 2026): zero vulnerability findings, 9 maintenance warnings and 1 existing unsoundness warning. RustSec database a78282a1414d6c28cc228c4eae3570451affb0dc with 1378 advisories. This is not a vulnerability-free guarantee; the existing GLib warning is retained. [Exact current lock audit](docs/rust-1.0.1-dependency-audit.json).
+
+PR #12 first code-review round found a confirmed P2: failed unfinished-analysis discovery prevented valid completed analyses from loading. Two UI regressions reproduced both directions before the fix and passed after independent guarded result handlers were introduced. Discovery errors stay visible and retained files are not repaired/deleted. This change is being verified on a new source head; the initial 5248481 review is not a clean release approval.

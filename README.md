@@ -19,14 +19,16 @@ An independent **Rust + Tauri companion for [Handy](https://github.com/cjpais/Ha
 
 ## Download
 
-| Your computer | Version 1.0.0 package | Requirements |
-| --- | --- | --- |
-| Windows 10/11 · x64 | [Setup EXE](https://github.com/Puma7/handy-meeting/releases/download/v1.0.0/HandyMeeting-1.0.0-windows-x64-setup.exe) · [portable ZIP](https://github.com/Puma7/handy-meeting/releases/download/v1.0.0/HandyMeeting-1.0.0-windows-x64.zip) | WebView2 and Microsoft Visual C++ x64 runtime; no .NET needed |
-| Ubuntu 22.04+ / Debian 12–13 · x64 | [DEB](https://github.com/Puma7/handy-meeting/releases/download/v1.0.0/HandyMeeting-1.0.0-linux-amd64.deb) | PulseAudio or PipeWire-Pulse; package manager resolves declared libraries |
-| Mac · Apple Silicon / M-series | [Apple Silicon DMG](https://github.com/Puma7/handy-meeting/releases/download/v1.0.0/HandyMeeting-1.0.0-osx-arm64.dmg) | macOS 13+; recording permissions |
-| Mac · Intel | [Intel DMG](https://github.com/Puma7/handy-meeting/releases/download/v1.0.0/HandyMeeting-1.0.0-osx-x64.dmg) | macOS 13+; recording permissions |
+**[Open releases and download the matching package](https://github.com/Puma7/handy-meeting/releases)**. Open a complete release and expand Assets. The versioned package files are listed there together with their checksums.
 
-**Release status:** [Version 1.0.0 is public](https://github.com/Puma7/handy-meeting/releases/tag/v1.0.0) with all five packages, checksums and a source-bound `RELEASE_MANIFEST.json`. The links above refer to that published version. [All releases](https://github.com/Puma7/handy-meeting/releases).
+| Your computer | Package type | Requirements |
+| --- | --- | --- |
+| Windows 10/11 · x64 | Setup EXE · portable ZIP | WebView2 and Microsoft Visual C++ x64 runtime; no .NET needed |
+| Ubuntu 22.04+ / Debian 12–13 · x64 | DEB | PulseAudio or PipeWire-Pulse; package manager resolves declared libraries |
+| Mac · Apple Silicon / M-series | Apple Silicon DMG | macOS 13+; recording permissions |
+| Mac · Intel | Intel DMG | macOS 13+; recording permissions |
+
+**Patch status:** 1.0.1 corrects the first-install Windows folder failure found in 1.0.0. An empty release page or a tag alone does not establish a successful build: all five packages and `RELEASE_MANIFEST.json` must be present. Until a complete corrected release is available, 1.0.0 has this known installer limitation; the portable ZIP is separate.
 
 **Future releases:** a matching version tag automatically starts the full Windows/Linux/Mac build matrix. Successful checks produce all five packages and their proofs in a release draft. Publish the populated draft to make the downloads public; publishing a release directly also starts this workflow. [Release procedure](docs/RELEASING.md).
 

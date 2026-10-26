@@ -1,4 +1,4 @@
-HandyMeeting 1.0.0 - additional third-party notices
+HandyMeeting 1.0.1 - additional third-party notices
 
 Rust dependency records and verbatim license texts: licenses/rust/x86_64-apple-darwin/.
 Frontend production dependency records and verbatim license texts: licenses/frontend/.

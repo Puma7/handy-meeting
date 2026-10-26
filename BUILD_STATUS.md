@@ -1,5 +1,14 @@
 # Build and release status
 
+## 1.0.1 first-install correction in preparation
+
+The reported Windows 1.0.0 failure was reproduced in an owned synthetic directory: NSIS `GetFullPathName` returned an empty parent for a nonexistent nested default path; `CreateDirectoryW` failed with error 3. Parsing the parent with FileFunc GetParent succeeds without requiring existing folders. A native harness compiles the production reservation function and checks missing parents, occupied directories and a parent blocked by a file. Restoring the old parent lookup makes the new test fail; the correction passes all three cases. No user installation, registry entry or recording was touched by this local harness. Actual CI Setup installation now uses a pristine nested directory; release assembly requires its fresh-parent proof.
+
+The later main-branch Intel-Mac candidate run [40384230272](https://github.com/Puma7/handy-meeting/actions/runs/40384230272) failed one combined template UI workflow at its 5,000 ms deadline, before building the app. The same source had passed the prior PR build. The combined workflow is split into independent migration/create, duplicate/rename and confirmed-removal preservation checks without timeout increases or retries. This is separate from the successful earlier 1.0.0 tag build.
+
+An empty public v1.0.1 was created on `1985750` before application versions were raised, causing the explicit tag/version guard to reject its build. No files from that failed attempt exist. The corrected source consistently uses 1.0.1; publication must retain the existing 1.0.0 bytes and identify the final exact 1.0.1 commit. The previously reviewed PR #9 recovery fixes are included in this follow-up, rather than retroactively claimed for 1.0.0. Full verification and target CI results will be recorded after execution.
+
+
 ## Public downloads and PR #10 (26 October 2026)
 
 [Version 1.0.0](https://github.com/Puma7/handy-meeting/releases/tag/v1.0.0) was published by `Puma7` at 11:27:41 UTC on `cecb03c541ad1b442143f9112e658103d35ccc6b`. The actual [tag-triggered download workflow](https://github.com/Puma7/handy-meeting/actions/runs/40315235014) completed the Windows Setup/ZIP, Linux DEB and both Mac DMGs, native credential/installer checks, assembly and attachment. All 17 public assets were downloaded again and matched GitHub SHA-256 digests and sizes; all 15 manifest file rows, five package hashes/sidecars and the exact tag commit matched. Public download links now resolve. The simultaneous release-event run was cancelled; the successful tag run is the evidence, not the cancelled run. These are package checks, not device/endurance/notarization evidence. Published assets were not changed.
@@ -90,3 +99,13 @@ Mac packages are architecture-specific, require macOS 15+, and are ad-hoc signed
 CI does not open real microphones or capture a real meeting. Native GUI behavior, device loss and two-hour capture/recovery tests on the portable targets remain outstanding. Neither a successful package build nor synthetic recovery proves reliability on a tester's hardware. The old Windows GPU-memory trend warning is still open in [issue #7](https://github.com/Puma7/handy-meeting/issues/7).
 
 Use disposable test meetings and review AI notes against their original quotes. See [TEST_REPORT.md](TEST_REPORT.md) and [PORTABILITY.md](PORTABILITY.md) for the full scope and limits.
+
+## Download follow-up merged
+
+[PR #11](https://github.com/Puma7/handy-meeting/pull/11) was merged as `1985750a0a1d39f44e92375469208fc27309a6e4` after two clean completed Codex code reviews, a clean completed security review on exact head `cd4f9e8`, and successful required Windows/release-validation CI. Public 1.0.0 assets were read back unchanged after both merges. This local final ledger entry does not create a new release. The separate PR #9 recovery fixes and its unresolved current-head security receipt remain pending for a future version; the conditional Handy discussion announcement was not posted.
+
+1.0.1 local verification completed: 114 Rust checks, 55 UI checks, 20 release guards, 11 portable guards, nine artifact guards, three actual Win32 reservation cases, 89 preserved C# checks and the monitor check passed. Warnings were denied. Actual local Gemma reference completed in 43.102 seconds: one explicit decision/task with literal Anna/Freitag, no decision/task for nonbinding statements, two confirmed steps reused after controlled interruption; no process crash or real cloud test. An initial local Rust invocation ran before frontend assets existed; its failed event is retained, and sequential compilation then passed. Target installer/package CI is still pending.
+
+Current locked dependency audit (26 October 2026): zero vulnerability findings, 9 maintenance warnings and 1 existing unsoundness warning. RustSec database a78282a1414d6c28cc228c4eae3570451affb0dc with 1378 advisories. This is not a vulnerability-free guarantee; the existing GLib warning is retained. [Exact current lock audit](docs/rust-1.0.1-dependency-audit.json).
+
+PR #12 first code-review round found a confirmed P2: failed unfinished-analysis discovery prevented valid completed analyses from loading. Two UI regressions reproduced both directions before the fix and passed after independent guarded result handlers were introduced. Discovery errors stay visible and retained files are not repaired/deleted. This change is being verified on a new source head; the initial 5248481 review is not a clean release approval.

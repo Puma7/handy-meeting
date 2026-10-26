@@ -1,8 +1,8 @@
 //! Independent integration regressions with a synthetic loopback HTTP service.
 //! No real model, cloud credentials, TLS provider or recording is used here.
 use meeting_notes::{
-    analyze, analyze_controlled, is_cancelled, read_analysis, AnalysisControl, Connection, Kind,
-    Source, Step, Template, TextClient,
+    analyze, analyze_controlled, is_cancelled, read_analysis, read_pending_analysis, read_snapshot,
+    AnalysisControl, Connection, Kind, Source, Step, Template, TextClient,
 };
 use serde_json::{json, Value};
 use std::{
@@ -280,6 +280,19 @@ fn failed_second_step_preserves_first_checkpoint_and_resume_only_requests_missin
     let confirmed = fs::read(folder.join("step-0000-000000.json")).unwrap();
     assert!(!folder.join("step-0001-000000.json").exists());
     assert!(!folder.join("result.json").exists());
+    let pending = read_pending_analysis(&folder).unwrap().unwrap();
+    assert_eq!(pending.confirmed_tasks, 1);
+    assert_eq!(pending.total_tasks, 2);
+    assert_eq!(pending.model, "synthetic-model");
+    assert_eq!(
+        pending.source_hash,
+        meeting_notes::source_hash(&sources()).unwrap()
+    );
+    assert_eq!(
+        server.requests(),
+        2,
+        "discovery must not issue model requests"
+    );
     server.queue(Reply::successful(true));
     let result = analyze(
         root.path(),
@@ -296,6 +309,7 @@ fn failed_second_step_preserves_first_checkpoint_and_resume_only_requests_missin
         "The confirmed first step must not be regenerated"
     );
     assert_eq!(result.sections.len(), 2);
+    assert!(read_pending_analysis(&folder).unwrap().is_none());
     assert_eq!(result.sections[1].items[0].owner.as_deref(), Some("Anna"));
     assert_eq!(result.sections[1].items[0].due.as_deref(), Some("Freitag"));
     assert_eq!(fs::read(folder.join("snapshot.json")).unwrap(), snapshot);
@@ -343,6 +357,43 @@ fn failed_second_step_preserves_first_checkpoint_and_resume_only_requests_missin
         assert!(body.get("session").is_none());
         assert!(body.get("audio").is_none());
     }
+}
+
+#[test]
+fn pending_discovery_rejects_corrupted_checkpoints_and_snapshot_sources_without_repair() {
+    let root = tempfile::tempdir().unwrap();
+    let server = SyntheticHttp::new(vec![Reply::successful(false), Reply::failed()]);
+    assert!(analyze(
+        root.path(),
+        "synthetic-meeting",
+        sources(),
+        template(),
+        connection(&server.endpoint),
+        None
+    )
+    .is_err());
+    let folder = run_folder(root.path());
+    let snapshot = fs::read(folder.join("snapshot.json")).unwrap();
+    let checkpoint = folder.join("step-0000-000000.json");
+    let original_checkpoint = fs::read(&checkpoint).unwrap();
+    fs::write(&checkpoint, b"{unfinished synthetic checkpoint").unwrap();
+    let damaged = fs::read(&checkpoint).unwrap();
+    assert!(read_pending_analysis(&folder).is_err());
+    assert_eq!(fs::read(&checkpoint).unwrap(), damaged);
+    assert_eq!(fs::read(folder.join("snapshot.json")).unwrap(), snapshot);
+    fs::write(&checkpoint, original_checkpoint).unwrap();
+    let mut changed: Value = serde_json::from_slice(&snapshot).unwrap();
+    changed["sources"][0]["text"] = json!("A different original transcript.");
+    fs::write(
+        folder.join("snapshot.json"),
+        serde_json::to_vec(&changed).unwrap(),
+    )
+    .unwrap();
+    let changed = fs::read(folder.join("snapshot.json")).unwrap();
+    assert!(read_snapshot(&folder.join("snapshot.json")).is_err());
+    assert!(read_pending_analysis(&folder).is_err());
+    assert_eq!(fs::read(folder.join("snapshot.json")).unwrap(), changed);
+    assert_eq!(server.requests(), 2);
 }
 
 #[test]

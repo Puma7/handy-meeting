@@ -8,8 +8,13 @@ mod transport;
 mod validation;
 pub use control::{is_cancelled, new_job_id, AnalysisControl, AnalysisProgress};
 pub use markdown::render_markdown;
-pub use models::{Analysis, Connection, Evidence, Fact, Kind, Section, Source, Step, Template};
-pub use service::{analyze, analyze_controlled, read_analysis, render_text, source_hash};
+pub use models::{
+    Analysis, Connection, Evidence, Fact, Kind, PendingAnalysis, Section, Source, Step, Template,
+};
+pub use service::{
+    analyze, analyze_controlled, read_analysis, read_pending_analysis, read_snapshot, render_text,
+    source_hash,
+};
 pub use templates::{validate_library, TemplateLibrary, TemplateStore};
 pub use transport::{credential_account, local_model_ids, TextClient};
 pub use validation::{validate_answer, validate_template};

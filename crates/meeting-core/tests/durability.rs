@@ -138,6 +138,100 @@ fn corrupted_confirmed_audio_fails_without_rewriting_any_original_file() {
 }
 
 #[test]
+fn history_discovers_backup_recoverable_sessions_without_modifying_originals() {
+    for missing in [true, false] {
+        let root = tempfile::tempdir().unwrap();
+        let store = fixture(root.path());
+        let folder = store.folder().to_owned();
+        let snapshot = store.snapshot().unwrap();
+        let mut files = vec![
+            folder.join("session.json.bak"),
+            folder.join("audio-journal.jsonl"),
+            folder.join("transcript-journal.jsonl"),
+        ];
+        files.extend(
+            snapshot
+                .parts
+                .iter()
+                .map(|part| store.audio_path(part).unwrap()),
+        );
+        drop(store);
+        fs::copy(folder.join("session.json"), folder.join("session.json.bak")).unwrap();
+        if missing {
+            fs::rename(
+                folder.join("session.json"),
+                folder.join("session.original-test.json"),
+            )
+            .unwrap();
+            files.push(folder.join("session.original-test.json"));
+        } else {
+            fs::write(
+                folder.join("session.json"),
+                b"{unfinished synthetic manifest",
+            )
+            .unwrap();
+            files.push(folder.join("session.json"));
+        }
+        let before: Vec<_> = files.iter().map(|file| hash(file)).collect();
+        let listed = meeting_core::list_sessions(root.path()).unwrap();
+        assert_eq!(
+            listed.len(),
+            1,
+            "recoverable session must remain selectable"
+        );
+        assert_eq!(listed[0].id, snapshot.id);
+        assert_eq!(
+            before,
+            files.iter().map(|file| hash(file)).collect::<Vec<_>>()
+        );
+        let recovered = SessionStore::open(&folder).unwrap().snapshot().unwrap();
+        assert_eq!(recovered.parts.len(), 2);
+        assert!(recovered
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("backup")));
+        for part in recovered.parts {
+            assert_eq!(part.confirmed_sample_count, 16_000);
+            assert_eq!(part.text, Some(format!("Confirmed {}.", part.source)));
+        }
+        assert_eq!(
+            before,
+            files.iter().map(|file| hash(file)).collect::<Vec<_>>()
+        );
+    }
+}
+
+#[test]
+fn history_prefers_primary_and_omits_unreadable_backup_without_repairing_it() {
+    let root = tempfile::tempdir().unwrap();
+    let store = fixture(root.path());
+    let folder = store.folder().to_owned();
+    let mut old = store.snapshot().unwrap();
+    old.title = "Older backup title".into();
+    fs::write(
+        folder.join("session.json.bak"),
+        serde_json::to_vec(&old).unwrap(),
+    )
+    .unwrap();
+    drop(store);
+    assert_eq!(
+        meeting_core::list_sessions(root.path()).unwrap()[0].title,
+        "Synthetic fixture"
+    );
+    fs::write(folder.join("session.json"), b"broken primary").unwrap();
+    fs::write(folder.join("session.json.bak"), b"broken backup").unwrap();
+    assert!(meeting_core::list_sessions(root.path()).unwrap().is_empty());
+    assert_eq!(
+        fs::read(folder.join("session.json")).unwrap(),
+        b"broken primary"
+    );
+    assert_eq!(
+        fs::read(folder.join("session.json.bak")).unwrap(),
+        b"broken backup"
+    );
+}
+
+#[test]
 fn active_session_has_one_writer_lease() {
     let root = tempfile::tempdir().unwrap();
     let store = fixture(root.path());

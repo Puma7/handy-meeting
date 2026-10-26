@@ -1263,6 +1263,33 @@ mark {
 .recovery-actions {
   margin-top: 20px;
 }
+.pending-analyses {
+  margin-bottom: 16px;
+  padding: 16px 20px;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+}
+.pending-analyses h2 {
+  font-size: 16px;
+  margin: 0 0 8px;
+}
+.pending-analyses > p,
+.pending-analysis-row p {
+  color: var(--color-ink-2);
+  font-size: 12px;
+}
+.pending-analyses-list {
+  max-height: 14rem;
+  overflow-y: auto;
+}
+.pending-analysis-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+}
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

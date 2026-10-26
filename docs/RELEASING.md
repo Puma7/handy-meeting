@@ -1,16 +1,16 @@
 # Releases: version tag to downloadable packages
 
-The Rust distribution is versioned together in the workspace Cargo manifest, desktop package/lock and Tauri configuration. Existing native dependency versions and model weights are not changed by a release. **1.0.0 is public** with five packages. Future releases must use a new version: update the Cargo workspace, desktop package/lock and Tauri configuration together, then tag that exact reviewed commit. Existing published tags and asset bytes are preserved.
+The Rust distribution is versioned together in the workspace Cargo manifest, desktop package/lock and Tauri configuration. Existing native dependency versions and model weights are not changed by a release. **1.0.0 is public** with five packages. The 1.0.1 patch is being checked after a first-install failure; its existing empty release/tag currently precedes the version bump and is not evidence of usable packages. Future releases must use a new version: update the Cargo workspace, desktop package/lock and Tauri configuration together, then tag that exact reviewed commit. Existing published tags and asset bytes are preserved.
 
 ## What is attached
 
 | Target | Asset |
 | --- | --- |
-| Windows x64 installer | `HandyMeeting-1.0.0-windows-x64-setup.exe` |
-| Windows x64 portable | `HandyMeeting-1.0.0-windows-x64.zip` |
-| Ubuntu/Debian x64 | `HandyMeeting-1.0.0-linux-amd64.deb` |
-| macOS 13+ Apple Silicon | `HandyMeeting-1.0.0-osx-arm64.dmg` |
-| macOS 13+ Intel | `HandyMeeting-1.0.0-osx-x64.dmg` |
+| Windows x64 installer | `HandyMeeting-1.0.1-windows-x64-setup.exe` |
+| Windows x64 portable | `HandyMeeting-1.0.1-windows-x64.zip` |
+| Ubuntu/Debian x64 | `HandyMeeting-1.0.1-linux-amd64.deb` |
+| macOS 13+ Apple Silicon | `HandyMeeting-1.0.1-osx-arm64.dmg` |
+| macOS 13+ Intel | `HandyMeeting-1.0.1-osx-x64.dmg` |
 
 Each has a SHA-256 sidecar and package proof. `SHA256SUMS.txt` covers all five packages. `RELEASE_MANIFEST.json` binds their bytes to the application version, exact Git commit and common source fingerprint. No audio, model, session, setting or key is packaged. The workflow publishes no bare Windows EXE requiring users to reconstruct its native libraries: the Setup EXE and ZIP contain the complete checked payload.
 

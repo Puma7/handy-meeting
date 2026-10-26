@@ -3,7 +3,7 @@ members = ["crates/handy-bridge", "crates/meeting-core", "crates/meeting-notes",
 resolver = "2"
 
 [workspace.package]
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 license = "MIT"
 rust-version = "1.91"

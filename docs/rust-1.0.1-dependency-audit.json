@@ -1,0 +1,73 @@
+{
+  "reviewedAt": "2026-10-26",
+  "cargoLockSHA256": "ad629622642d3feef75597558f141a94d2d42e853ba5754c9a95f3dd18b6c229",
+  "database": {
+    "advisory-count": 1378,
+    "last-commit": "a78282a1414d6c28cc228c4eae3570451affb0dc",
+    "last-updated": "2026-10-26T14:45:01+01:00"
+  },
+  "vulnerabilities": 0,
+  "warnings": [
+    {
+      "kind": "unmaintained",
+      "package": "proc-macro-error",
+      "version": "1.0.4",
+      "advisory": "RUSTSEC-2024-0370"
+    },
+    {
+      "kind": "unmaintained",
+      "package": "unic-char-property",
+      "version": "0.9.0",
+      "advisory": "RUSTSEC-2025-0081"
+    },
+    {
+      "kind": "unmaintained",
+      "package": "unic-char-range",
+      "version": "0.9.0",
+      "advisory": "RUSTSEC-2025-0075"
+    },
+    {
+      "kind": "unmaintained",
+      "package": "unic-common",
+      "version": "0.9.0",
+      "advisory": "RUSTSEC-2025-0080"
+    },
+    {
+      "kind": "unmaintained",
+      "package": "unic-ucd-ident",
+      "version": "0.9.0",
+      "advisory": "RUSTSEC-2025-0100"
+    },
+    {
+      "kind": "unmaintained",
+      "package": "unic-ucd-version",
+      "version": "0.9.0",
+      "advisory": "RUSTSEC-2025-0098"
+    },
+    {
+      "kind": "unmaintained",
+      "package": "zbus_names",
+      "version": "4.3.5",
+      "advisory": "RUSTSEC-2026-0371"
+    },
+    {
+      "kind": "unmaintained",
+      "package": "zvariant",
+      "version": "5.15.1",
+      "advisory": "RUSTSEC-2026-0370"
+    },
+    {
+      "kind": "unmaintained",
+      "package": "zvariant_derive",
+      "version": "5.15.1",
+      "advisory": "RUSTSEC-2026-0372"
+    },
+    {
+      "kind": "unsound",
+      "package": "glib",
+      "version": "0.18.5",
+      "advisory": "RUSTSEC-2024-0429"
+    }
+  ],
+  "dependencyUpdates": false
+}

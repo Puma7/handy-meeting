@@ -10,7 +10,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-fn directory(path: &Path) -> AppResult<PathBuf> {
+pub(super) fn directory(path: &Path) -> AppResult<PathBuf> {
     let meta = fs::symlink_metadata(path)
         .map_err(|_| "Sitzungsordner nicht gefunden. / Session folder not found.")?;
     #[cfg(windows)]
