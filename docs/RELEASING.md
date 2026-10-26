@@ -38,7 +38,7 @@ Until these gates have evidence or an explicit, recorded maintainer decision acc
 
 ## Installation and upgrades
 
-Windows setup installs for the current user in a separate version folder and creates a versioned Start menu entry. It refuses a nonempty destination and never stops Handy or an existing recording. Uninstall deletes literal listed program files and nonempty folders remain; it never recursively removes user data. WebView2 and Microsoft Visual C++ x64 runtime may need to be installed separately. The ZIP is the portable alternative. The compiled installer/stub license is retained in `licenses/installer/NSIS-3.13-COPYING.txt`.
+Windows setup installs for the current user in a separate version folder and creates a versioned Start menu entry. It requires a new destination and refuses existing/inaccessible folders or an already registered installation of the same version. The final directory is reserved exclusively before extraction. It never stops Handy or an existing recording. Uninstall removes shared registration only when its directory still belongs to that installation. It deletes literal listed program files and nonempty folders remain; it never recursively removes user data. WebView2 and Microsoft Visual C++ x64 runtime may need to be installed separately. The ZIP is the portable alternative. The compiled installer/stub license is retained in `licenses/installer/NSIS-3.13-COPYING.txt`.
 
 Linux uses package `handymeeting`, versioned program files under `/opt/handymeeting`, and the normal desktop launcher. Install the DEB through the package manager to resolve its declared libraries. Earlier `handymeeting-rust-beta` packages are preserved; remove them explicitly through the package manager if no longer wanted.
 
@@ -51,6 +51,7 @@ The local data location remains `HandyMeeting/RustBeta` below the platform's loc
 - Failed/missing checks, targets, checksums, source fingerprints, native-store proofs or installer preservation proofs prevent assembly before any upload.
 - Publication uses only artifacts from the current successful reusable jobs and exact tag commit. Artifacts from a different commit/run are not substituted.
 - Existing release assets are never overwritten. A conflicting asset aborts; the old bytes are preserved.
+- Additional or duplicate remote release assets also block uploading/promotion. The workflow never silently publishes an unrelated attachment or removes it to make validation pass. The already-complete path checks the remote file list again immediately before promotion.
 - The verified bundle is retained as an Actions artifact **before** uploads, so a network failure does not discard the reviewed package set. Use **Re-run failed jobs** to retry publishing the same build artifacts. Rebuilding the same version can legitimately produce different bytes and is not an overwrite permission.
 - An already complete release is checked by commit, source fingerprint, expected asset names, sizes and SHA-256 values. Publishing the draft does not trigger a second compile or replace its assets.
 - Release assembly tests use fake package bytes and simulated GitHub calls. They are not a real GitHub upload or real provider test. Actual pipeline results are linked in `BUILD_STATUS.md` only after execution.

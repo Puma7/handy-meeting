@@ -22,7 +22,7 @@ VIAddVersionKey /LANG=1033 "LegalCopyright" "HandyMeeting contributors"
 !define MUI_FINISHPAGE_LINK_LOCATION "https://github.com/Puma7/handy-meeting/blob/main/README.de.md"
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "${APP_LICENSE}"
-!define MUI_PAGE_CUSTOMFUNCTION_LEAVE CheckEmptyDirectory
+!define MUI_PAGE_CUSTOMFUNCTION_LEAVE CheckNewDirectory
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
@@ -33,6 +33,14 @@ VIAddVersionKey /LANG=1033 "LegalCopyright" "HandyMeeting contributors"
 Function .onInit
   SetShellVarContext current
   SetRegView 64
+  ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-${APP_VERSION}" "InstallLocation"
+  StrCmp $0 "" version_available
+  IfSilent existing_version_silent
+  MessageBox MB_ICONSTOP "This version is already installed. Uninstall it through Windows Apps first, or choose a different program version. Your recordings will be retained."
+  existing_version_silent:
+    SetErrorLevel 2
+    Abort
+  version_available:
   ${IfNot} ${RunningX64}
     MessageBox MB_ICONSTOP "HandyMeeting requires 64-bit Windows."
     Abort
@@ -42,26 +50,40 @@ Function .onInit
     Abort
   ${EndIf}
 FunctionEnd
-Function CheckEmptyDirectory
-  FindFirst $0 $1 "$INSTDIR\*"
-  loop:
-    StrCmp $1 "" empty
-    StrCmp $1 "." next
-    StrCmp $1 ".." next
-    FindClose $0
-    MessageBox MB_ICONSTOP "Choose an empty version folder. Existing programs and recordings will not be replaced."
+Function CheckNewDirectory
+  ; Never interpret a failed directory enumeration as an empty destination.
+  System::Call 'kernel32::GetFileAttributesW(w "$INSTDIR") i .r0 ?e'
+  Pop $1
+  StrCmp $0 -1 0 destination_rejected
+  StrCmp $1 2 destination_available
+  StrCmp $1 3 destination_available
+  destination_rejected:
+    IfSilent destination_rejected_silent
+    MessageBox MB_ICONSTOP "Choose a new version folder. Existing or inaccessible destinations will not be replaced."
+  destination_rejected_silent:
     SetErrorLevel 2
     Abort
-  next:
-    FindNext $0 $1
-    Goto loop
-  empty:
-    FindClose $0
+  destination_available:
 FunctionEnd
 Section "HandyMeeting" Main
-  Call CheckEmptyDirectory
+  Call CheckNewDirectory
   SetShellVarContext current
   SetRegView 64
+  GetFullPathName $2 "$INSTDIR\.."
+  ClearErrors
+  CreateDirectory "$2"
+  IfErrors reservation_failed
+  ; Reserve the final directory exclusively, including against a concurrent setup.
+  System::Call 'kernel32::CreateDirectoryW(w "$INSTDIR", p 0) i .r0'
+  StrCmp $0 0 reservation_failed destination_reserved
+  reservation_failed:
+    IfSilent reservation_failed_silent
+    MessageBox MB_ICONSTOP "The new program directory could not be reserved. Existing files were preserved."
+  reservation_failed_silent:
+    SetErrorLevel 2
+    Abort
+  destination_reserved:
+  SetOverwrite off
   !include "${INSTALL_FILES}"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   CreateDirectory "$SMPROGRAMS\HandyMeeting"
@@ -80,9 +102,13 @@ Section "Uninstall"
   SetRegView 64
   !include "${UNINSTALL_FILES}"
   Delete "$INSTDIR\Uninstall.exe"
+  ; A different installation must retain its shared registration and shortcut.
+  ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-${APP_VERSION}" "InstallLocation"
+  StrCmp $0 "$INSTDIR" 0 keep_registration
   Delete "$SMPROGRAMS\HandyMeeting\HandyMeeting ${APP_VERSION}.lnk"
   RMDir "$SMPROGRAMS\HandyMeeting"
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-${APP_VERSION}"
+  keep_registration:
   ; Non-recursive: unknown files and all user sessions are retained.
   RMDir "$INSTDIR"
 SectionEnd

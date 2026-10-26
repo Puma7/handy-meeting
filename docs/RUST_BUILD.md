@@ -10,7 +10,7 @@ Native SDK preparation, installer-tool preparation and package-manager setup are
 
 ## Prerequisites and preparation
 
-Use PowerShell 7.4+, Rust 1.91.1 with rustfmt/clippy, Node 26.7.0 and Visual Studio C++ Build Tools. The preserved C# regression suite also needs the .NET SDK pinned by `global.json`. Running the packaged Rust application does not need .NET.
+Use PowerShell 7.4+, Python 3.11+, Rust 1.91.1 with rustfmt/clippy, Node 26.7.0 and Visual Studio C++ Build Tools. The preserved C# regression suite also needs the .NET SDK pinned by `global.json`. Running the packaged Rust application does not need .NET or Python.
 
 Prepare the pinned native SDK separately:
 
@@ -46,7 +46,7 @@ python -m unittest discover -s scripts -p test_release_packages.py
 node scripts/rust-artifacts.mjs record-check distribution-guards $LASTEXITCODE
 
 ./verify.ps1
-# Only after successful completion of the throwing legacy verification script:
+if (-not $?) { throw 'Legacy verification failed.' }
 node scripts/rust-artifacts.mjs record-check legacy 0
 
 node scripts/rust-artifacts.mjs self-test
@@ -122,7 +122,7 @@ An existing ZIP is preserved. Use a new version or a fresh `-OutputDirectory` in
 
 The additional core jobs exercise the portable crates without ASR. Separately, `.github/workflows/rust-portable.yml` builds the complete native desktop application and DEB/DMGs on Linux and both Mac architectures. `.github/workflows/rust-release.yml` calls both workflows, requires matching source fingerprints and actual credential/installer checks, and assembles the five downloads. See [release instructions](RELEASING.md). These jobs do not capture physical audio or validate a visible desktop session.
 
-Real local text-model references, the native two-track speech/restart smoke test, actual audio devices/disconnects, and a new two-hour Rust memory/recovery run are separate release gates. Fixtures and raw reports stay outside public source export. The earlier C# two-hour result does not certify this beta. Process termination is not a power-loss test. See `TEST_REPORT.md` and `RUST_STORAGE.md` for actual measurements and outstanding checks.
+Real local text-model references, the native two-track speech/restart smoke test, actual audio devices/disconnects, and a new two-hour Rust memory/recovery run are separate release gates. Private local test sessions and raw recording reports stay outside public source export; synthetic regression fixtures and the explicitly labelled screenshot demos are public. The earlier C# two-hour result does not certify this Rust release. Process termination is not a power-loss test. See `TEST_REPORT.md` and `RUST_STORAGE.md` for actual measurements and outstanding checks.
 
 ## Cross-platform byte identity
 

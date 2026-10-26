@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "./App";
 import SessionWarnings from "./views/SessionWarnings";
@@ -93,9 +93,11 @@ it("opens and exports the exact selected historical meeting, never a same-named 
   const { api, other } = fixture();
   render(<App api={api} />);
   await screen.findByRole("button", { name: de.openFolder });
-  expect(
-    document.querySelector<HTMLDetailsElement>(".setup-details")?.open,
-  ).toBe(false);
+  await waitFor(() =>
+    expect(
+      document.querySelector<HTMLDetailsElement>(".setup-details")?.open,
+    ).toBe(false),
+  );
   await userEvent.click(screen.getByRole("button", { name: de.history }));
   const row = screen.getAllByRole("button", { name: de.open })[1];
   await userEvent.click(row);

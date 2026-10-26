@@ -141,12 +141,20 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: '26.7.0'
       - name: Publish the already verified complete release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.validate.outputs.tag }}
         run: |
           set -euo pipefail
+          mkdir -p .build
+          node scripts/rust-artifacts.mjs source-fingerprint > .build/release-source.json
+          python3 scripts/publish-rust-release.py --check-existing --repository "$GITHUB_REPOSITORY" --tag "$TAG" --commit "$GITHUB_SHA" --source .build/release-source.json > .build/existing-release.json
+          python3 -c 'import json; assert json.load(open(".build/existing-release.json"))["complete"] is True, "Complete exact-source release required immediately before promotion"'
           if [[ "$TAG" = *-* ]]; then
             gh release edit "$TAG" -R "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
           else

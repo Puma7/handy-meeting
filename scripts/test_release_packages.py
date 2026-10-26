@@ -36,7 +36,7 @@ class ReleaseGuards(unittest.TestCase):
             file = self.put(f'{scope}/{name}', b'not-executable-synthetic-' + suffix.encode())
             self.package_files.append(file)
             self.put(f'{scope}/{name}.sha256', (packages.sha(file) + '  ' + name + '\n').encode())
-            proof = {'success': True, 'version': VERSION, 'applicationVersion': VERSION, 'sourceFingerprintSHA256': FINGERPRINT, 'sourceSHA256': FINGERPRINT, 'package': name, 'sha256': packages.sha(file), 'bytes': file.stat().st_size, 'userRecordingsIncluded': False, 'rid': rid, 'releaseChecks': {'success': True}, 'relocatedReleaseChecks': {'success': True}, 'actualInstallUninstallChecked': True, 'unknownUserFilePreserved': True, 'recursiveDeletion': False}
+            proof = {'success': True, 'version': VERSION, 'applicationVersion': VERSION, 'sourceFingerprintSHA256': FINGERPRINT, 'sourceSHA256': FINGERPRINT, 'package': name, 'sha256': packages.sha(file), 'bytes': file.stat().st_size, 'userRecordingsIncluded': False, 'rid': rid, 'releaseChecks': {'success': True}, 'relocatedReleaseChecks': {'success': True}, 'actualInstallUninstallChecked': True, 'existingDestinationRejected': True, 'duplicateVersionRejected': True, 'unknownUserFilePreserved': True, 'recursiveDeletion': False}
             self.put(f'{scope}/{name}.' + ('verification' if scope == 'windows' else 'manifest') + '.json', proof)
 
     def put(self, name, value):
@@ -109,6 +109,18 @@ class ReleaseGuards(unittest.TestCase):
             self.assemble()
         self.assertEqual(sentinel.read_text(), 'original')
 
+    def test_installer_requires_actual_duplicate_version_rejection(self):
+        file = next((self.input / 'windows').glob('*setup.exe.verification.json'))
+        self.change(file, 'duplicateVersionRejected', False)
+        with self.assertRaisesRegex(ValueError, 'Actual installer'):
+            self.assemble()
+
+    def test_installer_requires_actual_existing_destination_preservation(self):
+        file = next((self.input / 'windows').glob('*setup.exe.verification.json'))
+        self.change(file, 'existingDestinationRejected', False)
+        with self.assertRaisesRegex(ValueError, 'Actual installer'):
+            self.assemble()
+
     def test_publisher_checks_tag_identity_before_any_upload(self):
         self.assemble()
         with mock.patch.object(publisher, 'gh', return_value=json.dumps({'sha': 'c' * 40})) as cli:
@@ -151,6 +163,41 @@ class ReleaseGuards(unittest.TestCase):
             release['assets'][0]['digest'] = 'sha256:' + 'd' * 64
             with self.assertRaisesRegex(ValueError, 'incomplete or differs'):
                 publisher.existing_complete('owner/repo', 'v1.0.0', COMMIT, FINGERPRINT)
+
+    def test_extra_remote_asset_prevents_upload_and_publication_without_deleting_it(self):
+        self.assemble()
+        release = {'assets': [{'name': 'private.wav', 'size': 1}], 'html_url': 'https://example.test/release'}
+        with mock.patch.object(publisher, 'gh', side_effect=[json.dumps({'sha': COMMIT}), json.dumps(release), json.dumps(release)]) as cli:
+            with self.assertRaisesRegex(ValueError, 'Unexpected existing release assets'):
+                publisher.publish(self.output, 'owner/repo', 'v1.0.0', COMMIT, self.root / 'notes.md', True)
+            self.assertTrue(all(call.args[0] == 'api' for call in cli.call_args_list))
+            self.assertEqual(release['assets'][0]['name'], 'private.wav')
+
+    def test_new_remote_asset_after_verification_prevents_final_promotion(self):
+        result = self.assemble()
+        rows = result['files'] + [{'name': name, 'sha256': packages.sha(self.output / name), 'bytes': (self.output / name).stat().st_size} for name in ['RELEASE_MANIFEST.json', 'SHA256SUMS.txt']]
+        release = {'assets': [{'name': row['name'], 'size': row['bytes'], 'digest': 'sha256:' + row['sha256']} for row in rows], 'html_url': 'https://example.test/release'}
+        changed = dict(release, assets=release['assets'] + [{'name': 'private.wav', 'size': 1}])
+        with mock.patch.object(publisher, 'gh', side_effect=[json.dumps({'sha': COMMIT}), json.dumps(release), json.dumps(release), json.dumps(changed)]) as cli:
+            with self.assertRaisesRegex(ValueError, 'Unexpected existing release assets'):
+                publisher.publish(self.output, 'owner/repo', 'v1.0.0', COMMIT, self.root / 'notes.md', True)
+            self.assertTrue(all(call.args[0] == 'api' for call in cli.call_args_list))
+
+    def test_existing_complete_rejects_extra_or_duplicate_remote_assets(self):
+        result = self.assemble()
+        rows = result['files'] + [{'name': name, 'sha256': packages.sha(self.output / name), 'bytes': (self.output / name).stat().st_size} for name in ['RELEASE_MANIFEST.json', 'SHA256SUMS.txt']]
+        assets = [{'name': row['name'], 'size': row['bytes'], 'digest': 'sha256:' + row['sha256']} for row in rows]
+        for extra in [{'name': 'private.wav', 'size': 1}, assets[0]]:
+            release = {'assets': assets + [extra]}
+            def cli(*args, **_):
+                if args[0] == 'api':
+                    return json.dumps(release)
+                target = pathlib.Path(args[args.index('--dir') + 1]) / 'RELEASE_MANIFEST.json'
+                target.write_bytes((self.output / 'RELEASE_MANIFEST.json').read_bytes())
+                return ''
+            with mock.patch.object(publisher, 'gh', side_effect=cli):
+                with self.assertRaisesRegex(ValueError, 'Unexpected existing release assets'):
+                    publisher.existing_complete('owner/repo', 'v1.0.0', COMMIT, FINGERPRINT)
 
 
 class InstallerGuards(unittest.TestCase):

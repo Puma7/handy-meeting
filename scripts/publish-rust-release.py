@@ -55,6 +55,17 @@ def asset_matches(repository, tag, checks, asset, item):
     return asset['size'] == item['bytes'] and digest == 'sha256:' + item['sha256']
 
 
+def asset_index(release, rows, complete=False):
+    assets = release['assets']
+    names = [item['name'] for item in assets]
+    expected = {item['name'] for item in rows}
+    if len(set(names)) != len(names) or not set(names).issubset(expected):
+        raise ValueError('Unexpected existing release assets; all files were preserved and publication was refused')
+    if complete and set(names) != expected:
+        raise ValueError('Existing release is incomplete or differs; all files were preserved')
+    return {item['name']: item for item in assets}
+
+
 def existing_complete(repository, tag, commit, fingerprint):
     validate_target(repository, tag, commit)
     raw = gh('api', f'repos/{repository}/releases/tags/{tag}', missing_ok=True)
@@ -74,6 +85,7 @@ def existing_complete(repository, tag, commit, fingerprint):
         sums = ''.join(f'{item["sha256"]}  {item["name"]}\n' for item in manifest['packages']).encode()
         import hashlib
         rows.append({'name': 'SHA256SUMS.txt', 'sha256': hashlib.sha256(sums).hexdigest(), 'bytes': len(sums)})
+        assets = asset_index(release, rows, complete=True)
         if any(item['name'] not in assets or not asset_matches(repository, tag, checks, assets[item['name']], item) for item in rows):
             raise ValueError('Existing release is incomplete or differs; published assets were preserved')
     return True
@@ -98,7 +110,7 @@ def publish(folder, repository, tag, commit, notes, make_public):
     if existing is None:
         gh('release', 'create', tag, '-R', repository, '--verify-tag', '--target', commit, '--draft', '--title', 'HandyMeeting ' + tag[1:], '--notes-file', notes)
     release = json.loads(gh('api', f'repos/{repository}/releases/tags/{tag}'))
-    assets = {asset['name']: asset for asset in release['assets']}
+    assets = asset_index(release, rows)
     for item in rows:
         asset = assets.get(item['name'])
         if asset:
@@ -107,7 +119,7 @@ def publish(folder, repository, tag, commit, notes, make_public):
         else:
             gh('release', 'upload', tag, '-R', repository, folder / item['name'])
     final = json.loads(gh('api', f'repos/{repository}/releases/tags/{tag}'))
-    uploaded = {asset['name']: asset for asset in final['assets']}
+    uploaded = asset_index(final, rows, complete=True)
     if any(item['name'] not in uploaded or not asset_matches(repository, tag, checks, uploaded[item['name']], item) for item in rows):
         raise ValueError('Final GitHub assets do not match the verified bundle')
     if make_public:

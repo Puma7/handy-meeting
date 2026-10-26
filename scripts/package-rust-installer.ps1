@@ -28,10 +28,21 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Installer compiler failed.' }
     $tested = $false
     if ($RunChecks) {
+        $occupied = Join-Path $work 'preexisting'
+        New-Item -ItemType Directory -Path $occupied | Out-Null
+        $existingFile = Join-Path $occupied 'HandyMeeting.exe'
+        [IO.File]::WriteAllText($existingFile,'Synthetic user-owned original, not an executable.')
+        $rejected = Start-Process -FilePath $package -ArgumentList @('/S',('/D=' + $occupied)) -WindowStyle Hidden -Wait -PassThru
+        if ($rejected.ExitCode -eq 0 -or [IO.File]::ReadAllText($existingFile) -ne 'Synthetic user-owned original, not an executable.') { throw 'Installer replaced an existing destination.' }
         $install = Join-Path $work 'installed'
         $child = Start-Process -FilePath $package -ArgumentList @('/S',('/D=' + $install)) -WindowStyle Hidden -Wait -PassThru
         if ($child.ExitCode -ne 0) { throw 'Silent installer check failed.' }
         foreach ($file in $receipt.programFiles) { if ((Get-FileHash -LiteralPath (Join-Path $install $file.path)).Hash.ToLowerInvariant() -ne $file.sha256) { throw 'Installed program differs from checked payload.' } }
+        $registration = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-' + $version
+        if ((Get-ItemProperty -LiteralPath $registration).InstallLocation -ne $install) { throw 'Installer registration differs from its own directory.' }
+        $secondInstall = Join-Path $work 'second-install'
+        $duplicate = Start-Process -FilePath $package -ArgumentList @('/S',('/D=' + $secondInstall)) -WindowStyle Hidden -Wait -PassThru
+        if ($duplicate.ExitCode -eq 0 -or (Test-Path -LiteralPath (Join-Path $secondInstall 'HandyMeeting.exe')) -or (Get-ItemProperty -LiteralPath $registration).InstallLocation -ne $install) { throw 'Duplicate version replaced an existing installation registration.' }
         & (Join-Path $install 'HandyMeeting.exe') --release-checks (Join-Path $work 'installed-checks') | Out-Host
         if ($LASTEXITCODE -ne 0) { throw 'Installed executable checks failed.' }
         $sentinel = Join-Path $install 'Sessions/user-owned-sentinel.txt'
@@ -45,7 +56,7 @@ try {
         $tested = $true
     }
     $hash = (Get-FileHash -LiteralPath $package -Algorithm SHA256).Hash.ToLowerInvariant()
-    $proof = [ordered]@{success=$true;version=$version;rid='windows-x64';package=[IO.Path]::GetFileName($package);sha256=$hash;bytes=(Get-Item -LiteralPath $package).Length;sourceFingerprintSHA256=$receipt.sourceFingerprintSHA256;executableSHA256=$receipt.executableSHA256;compilerVersion=$compiler.version;compilerArchiveSHA256=$compiler.archiveSHA256;actualInstallUninstallChecked=$tested;unknownUserFilePreserved=$tested;recursiveDeletion=$false;userRecordingsIncluded=$false;signing='unsigned'}
+    $proof = [ordered]@{success=$true;version=$version;rid='windows-x64';package=[IO.Path]::GetFileName($package);sha256=$hash;bytes=(Get-Item -LiteralPath $package).Length;sourceFingerprintSHA256=$receipt.sourceFingerprintSHA256;executableSHA256=$receipt.executableSHA256;compilerVersion=$compiler.version;compilerArchiveSHA256=$compiler.archiveSHA256;actualInstallUninstallChecked=$tested;existingDestinationRejected=$tested;duplicateVersionRejected=$tested;unknownUserFilePreserved=$tested;recursiveDeletion=$false;userRecordingsIncluded=$false;signing='unsigned'}
     [IO.File]::WriteAllText(($package+'.sha256'),($hash+'  '+[IO.Path]::GetFileName($package)+"`n"),[Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText(($package+'.verification.json'),(($proof|ConvertTo-Json)+"`n"),[Text.UTF8Encoding]::new($false))
     $proof | ConvertTo-Json
