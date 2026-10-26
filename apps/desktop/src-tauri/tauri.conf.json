@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "HandyMeeting · 1.0.0",
+        "title": "HandyMeeting",
         "width": 1180,
         "height": 820,
         "minWidth": 800,
