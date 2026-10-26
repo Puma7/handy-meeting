@@ -1,6 +1,6 @@
 # Releases: version tag to downloadable packages
 
-The Rust distribution is versioned together in the workspace Cargo manifest, desktop package/lock and Tauri configuration. Existing native dependency versions and model weights are not changed by a release. The current release preparation targets **1.0.0**.
+The Rust distribution is versioned together in the workspace Cargo manifest, desktop package/lock and Tauri configuration. Existing native dependency versions and model weights are not changed by a release. **1.0.0 is public** with five packages. Future releases must use a new version: update the Cargo workspace, desktop package/lock and Tauri configuration together, then tag that exact reviewed commit. Existing published tags and asset bytes are preserved.
 
 ## What is attached
 
@@ -14,7 +14,7 @@ The Rust distribution is versioned together in the workspace Cargo manifest, des
 
 Each has a SHA-256 sidecar and package proof. `SHA256SUMS.txt` covers all five packages. `RELEASE_MANIFEST.json` binds their bytes to the application version, exact Git commit and common source fingerprint. No audio, model, session, setting or key is packaged. The workflow publishes no bare Windows EXE requiring users to reconstruct its native libraries: the Setup EXE and ZIP contain the complete checked payload.
 
-## Recommended first release
+## Each release
 
 1. Finish/review the implementation PR and require its Windows, Linux and both Mac checks to pass. Update `TEST_REPORT.md` with actual results; do not turn a prepared workflow into a test claim.
 2. Check the manual release gates below. The product's version number does not prove capture reliability.

@@ -26,7 +26,9 @@ An independent **Rust + Tauri companion for [Handy](https://github.com/cjpais/Ha
 | Mac · Apple Silicon / M-series | [Apple Silicon DMG](https://github.com/Puma7/handy-meeting/releases/download/v1.0.0/HandyMeeting-1.0.0-osx-arm64.dmg) | macOS 13+; recording permissions |
 | Mac · Intel | [Intel DMG](https://github.com/Puma7/handy-meeting/releases/download/v1.0.0/HandyMeeting-1.0.0-osx-x64.dmg) | macOS 13+; recording permissions |
 
-**Release status:** these links become public when the `v1.0.0` release is published. A draft is visible only to repository collaborators. Every complete release includes checksums and a source-bound `RELEASE_MANIFEST.json`. [All releases and current status](https://github.com/Puma7/handy-meeting/releases).
+**Release status:** [Version 1.0.0 is public](https://github.com/Puma7/handy-meeting/releases/tag/v1.0.0) with all five packages, checksums and a source-bound `RELEASE_MANIFEST.json`. The links above refer to that published version. [All releases](https://github.com/Puma7/handy-meeting/releases).
+
+**Future releases:** a matching version tag automatically starts the full Windows/Linux/Mac build matrix. Successful checks produce all five packages and their proofs in a release draft. Publish the populated draft to make the downloads public; publishing a release directly also starts this workflow. [Release procedure](docs/RELEASING.md).
 
 **Validation limits:** Mac/Linux device capture and a new full-app Rust two-hour run still require hardware validation. Mac builds are ad-hoc signed and not Apple-notarized; Windows setup is unsigned. Operating-system trust checks may block them. Do not disable system protection to install a build. Use independently backed-up test meetings first. [Measured evidence and open gates](TEST_REPORT.md).
 
