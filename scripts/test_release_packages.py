@@ -169,21 +169,22 @@ class ReleaseGuards(unittest.TestCase):
 
     def test_publisher_preserves_mismatching_existing_asset(self):
         result = self.assemble()
-        old = {'assets': [{'name': result['files'][0]['name'], 'size': 7, 'digest': 'sha256:' + 'c' * 64}], 'html_url': 'https://example.test/release'}
+        old = {'id': 41, 'tag_name': 'v1.0.0', 'assets': [{'name': result['files'][0]['name'], 'size': 7, 'digest': 'sha256:' + 'c' * 64}], 'html_url': 'https://example.test/release'}
         with mock.patch.object(publisher, 'gh', side_effect=[json.dumps({'sha': COMMIT}), json.dumps(old), json.dumps(old)]) as cli:
             with self.assertRaisesRegex(ValueError, 'existing release asset differs'):
                 publisher.publish(self.output, 'owner/repo', 'v1.0.0', COMMIT, self.root / 'notes.md', False)
             self.assertTrue(all(call.args[0] == 'api' for call in cli.call_args_list))
+            self.assertFalse(any('POST' in call.args or 'PATCH' in call.args for call in cli.call_args_list))
 
     def test_complete_existing_release_is_verified_without_rebuilding_or_uploading(self):
         result = self.assemble()
         rows = result['files'] + [{'name': name, 'sha256': packages.sha(self.output / name), 'bytes': (self.output / name).stat().st_size} for name in ['RELEASE_MANIFEST.json', 'SHA256SUMS.txt']]
-        release = {'assets': [{'name': row['name'], 'size': row['bytes'], 'digest': 'sha256:' + row['sha256']} for row in rows]}
+        release = {'id': 41, 'tag_name': 'v1.0.0', 'assets': [{'id': index + 100, 'name': row['name'], 'size': row['bytes'], 'digest': 'sha256:' + row['sha256']} for index, row in enumerate(rows)]}
         def cli(*args, **_):
-            if args[0] == 'api':
+            if args[0] == 'api' and 'Accept: application/octet-stream' not in args:
                 return json.dumps(release)
-            self.assertEqual(args[:2], ('release', 'download'))
-            target = pathlib.Path(args[args.index('--dir') + 1]) / 'RELEASE_MANIFEST.json'
+            self.assertIn('/releases/assets/', args[1])
+            target = _['output_path']
             target.write_bytes((self.output / 'RELEASE_MANIFEST.json').read_bytes())
             return ''
         with mock.patch.object(publisher, 'gh', side_effect=cli) as calls:
@@ -195,33 +196,36 @@ class ReleaseGuards(unittest.TestCase):
 
     def test_extra_remote_asset_prevents_upload_and_publication_without_deleting_it(self):
         self.assemble()
-        release = {'assets': [{'name': 'private.wav', 'size': 1}], 'html_url': 'https://example.test/release'}
+        release = {'id': 41, 'tag_name': 'v1.0.0', 'assets': [{'name': 'private.wav', 'size': 1}], 'html_url': 'https://example.test/release'}
         with mock.patch.object(publisher, 'gh', side_effect=[json.dumps({'sha': COMMIT}), json.dumps(release), json.dumps(release)]) as cli:
             with self.assertRaisesRegex(ValueError, 'Unexpected existing release assets'):
                 publisher.publish(self.output, 'owner/repo', 'v1.0.0', COMMIT, self.root / 'notes.md', True)
             self.assertTrue(all(call.args[0] == 'api' for call in cli.call_args_list))
+            self.assertFalse(any('POST' in call.args or 'PATCH' in call.args for call in cli.call_args_list))
             self.assertEqual(release['assets'][0]['name'], 'private.wav')
 
     def test_new_remote_asset_after_verification_prevents_final_promotion(self):
         result = self.assemble()
         rows = result['files'] + [{'name': name, 'sha256': packages.sha(self.output / name), 'bytes': (self.output / name).stat().st_size} for name in ['RELEASE_MANIFEST.json', 'SHA256SUMS.txt']]
-        release = {'assets': [{'name': row['name'], 'size': row['bytes'], 'digest': 'sha256:' + row['sha256']} for row in rows], 'html_url': 'https://example.test/release'}
+        release = {'id': 41, 'tag_name': 'v1.0.0', 'assets': [{'name': row['name'], 'size': row['bytes'], 'digest': 'sha256:' + row['sha256']} for row in rows], 'html_url': 'https://example.test/release'}
         changed = dict(release, assets=release['assets'] + [{'name': 'private.wav', 'size': 1}])
         with mock.patch.object(publisher, 'gh', side_effect=[json.dumps({'sha': COMMIT}), json.dumps(release), json.dumps(release), json.dumps(changed)]) as cli:
             with self.assertRaisesRegex(ValueError, 'Unexpected existing release assets'):
                 publisher.publish(self.output, 'owner/repo', 'v1.0.0', COMMIT, self.root / 'notes.md', True)
             self.assertTrue(all(call.args[0] == 'api' for call in cli.call_args_list))
+            self.assertFalse(any('POST' in call.args or 'PATCH' in call.args for call in cli.call_args_list))
 
     def test_existing_complete_rejects_extra_or_duplicate_remote_assets(self):
         result = self.assemble()
         rows = result['files'] + [{'name': name, 'sha256': packages.sha(self.output / name), 'bytes': (self.output / name).stat().st_size} for name in ['RELEASE_MANIFEST.json', 'SHA256SUMS.txt']]
-        assets = [{'name': row['name'], 'size': row['bytes'], 'digest': 'sha256:' + row['sha256']} for row in rows]
+        assets = [{'id': index + 100, 'name': row['name'], 'size': row['bytes'], 'digest': 'sha256:' + row['sha256']} for index, row in enumerate(rows)]
         for extra in [{'name': 'private.wav', 'size': 1}, assets[0]]:
-            release = {'assets': assets + [extra]}
+            release = {'id': 41, 'tag_name': 'v1.0.0', 'assets': assets + [extra]}
             def cli(*args, **_):
-                if args[0] == 'api':
+                if args[0] == 'api' and 'Accept: application/octet-stream' not in args:
                     return json.dumps(release)
-                target = pathlib.Path(args[args.index('--dir') + 1]) / 'RELEASE_MANIFEST.json'
+                self.assertIn('/releases/assets/', args[1])
+                target = _['output_path']
                 target.write_bytes((self.output / 'RELEASE_MANIFEST.json').read_bytes())
                 return ''
             with mock.patch.object(publisher, 'gh', side_effect=cli):

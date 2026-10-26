@@ -6,16 +6,67 @@ import pathlib
 import re
 import subprocess
 import tempfile
+from urllib.parse import quote
 
 
-def gh(*args, missing_ok=False):
-    result = subprocess.run(['gh', *map(str, args)], capture_output=True, text=True, check=False)
+def gh(*args, missing_ok=False, output_path=None):
+    command = ['gh', *map(str, args)]
+    if output_path is None:
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+    else:
+        with output_path.open('xb') as output:
+            result = subprocess.run(command, stdout=output, stderr=subprocess.PIPE, check=False)
     if result.returncode:
-        if missing_ok and ('HTTP 404' in result.stderr or 'release not found' in result.stderr.lower()):
+        error = result.stderr if isinstance(result.stderr, str) else result.stderr.decode(errors='replace')
+        if missing_ok and ('HTTP 404' in error or 'release not found' in error.lower()):
             return None
         # Do not echo headers, tokens, environment or release body in errors.
         raise RuntimeError('GitHub release operation failed: ' + ' '.join(map(str, args[:2])))
     return result.stdout
+
+
+def release_identity(release, tag, expected_id=None):
+    if (not isinstance(release, dict) or type(release.get('id')) is not int
+            or release['id'] <= 0 or release.get('tag_name') != tag
+            or (expected_id is not None and release['id'] != expected_id)):
+        raise ValueError('Release identity mismatch; existing releases were preserved')
+    return release
+
+
+def get_release(repository, tag, release_id):
+    if type(release_id) is not int or release_id <= 0:
+        raise ValueError('Invalid release ID')
+    return release_identity(json.loads(gh('api', f'repos/{repository}/releases/{release_id}')), tag, release_id)
+
+
+def find_release(repository, tag, release_id=None):
+    if release_id is not None:
+        return get_release(repository, tag, release_id)
+    # GitHub's tag endpoint returns published releases only. A 404 does not mean
+    # there is no draft; inspect every page before deciding to create one.
+    raw = gh('api', f'repos/{repository}/releases/tags/{tag}', missing_ok=True)
+    if raw is not None:
+        return release_identity(json.loads(raw), tag)
+    matches = []
+    for page in range(1, 1001):
+        rows = json.loads(gh('api', f'repos/{repository}/releases?per_page=100&page={page}'))
+        if not isinstance(rows, list):
+            raise ValueError('Invalid release listing')
+        matches.extend(release_identity(row, tag) for row in rows if row.get('tag_name') == tag)
+        if len(rows) < 100:
+            break
+    else:
+        raise ValueError('Release listing limit reached; no release was created')
+    if len(matches) > 1:
+        raise ValueError('Multiple releases use this tag; select an explicit --release-id. All drafts were preserved.')
+    return matches[0] if matches else None
+
+
+def download_asset(repository, asset, output):
+    if type(asset.get('id')) is not int or asset['id'] <= 0:
+        raise ValueError('Invalid release asset ID')
+    gh('api', f'repos/{repository}/releases/assets/{asset["id"]}',
+       '-H', 'Accept: application/octet-stream', output_path=output)
 
 
 def validate_target(repository, tag, commit):
@@ -50,8 +101,9 @@ def asset_matches(repository, tag, checks, asset, item):
     digest = asset.get('digest')
     if digest is None:
         with tempfile.TemporaryDirectory(prefix='handymeeting-release-verify-') as temp:
-            gh('release', 'download', tag, '-R', repository, '--pattern', item['name'], '--dir', temp)
-            digest = 'sha256:' + checks.sha(pathlib.Path(temp) / item['name'])
+            output = pathlib.Path(temp) / item['name']
+            download_asset(repository, asset, output)
+            digest = 'sha256:' + checks.sha(output)
     return asset['size'] == item['bytes'] and digest == 'sha256:' + item['sha256']
 
 
@@ -66,19 +118,18 @@ def asset_index(release, rows, complete=False):
     return {item['name']: item for item in assets}
 
 
-def existing_complete(repository, tag, commit, fingerprint):
+def existing_complete(repository, tag, commit, fingerprint, release_id=None):
     validate_target(repository, tag, commit)
-    raw = gh('api', f'repos/{repository}/releases/tags/{tag}', missing_ok=True)
-    if raw is None:
+    release = find_release(repository, tag, release_id)
+    if release is None:
         return False
-    release = json.loads(raw)
     assets = {item['name']: item for item in release['assets']}
     if 'RELEASE_MANIFEST.json' not in assets:
         return False
     checks = verification_module()
     with tempfile.TemporaryDirectory(prefix='handymeeting-manifest-verify-') as temp:
-        gh('release', 'download', tag, '-R', repository, '--pattern', 'RELEASE_MANIFEST.json', '--dir', temp)
         file = pathlib.Path(temp) / 'RELEASE_MANIFEST.json'
+        download_asset(repository, assets['RELEASE_MANIFEST.json'], file)
         manifest = checks.read(file)
         validate_manifest(manifest, tag, commit, fingerprint)
         rows = manifest['files'] + [{'name': 'RELEASE_MANIFEST.json', 'sha256': checks.sha(file), 'bytes': file.stat().st_size}]
@@ -91,7 +142,7 @@ def existing_complete(repository, tag, commit, fingerprint):
     return True
 
 
-def publish(folder, repository, tag, commit, notes, make_public):
+def publish(folder, repository, tag, commit, notes, make_public, release_id=None):
     validate_target(repository, tag, commit)
     checks = verification_module()
     manifest = checks.read(folder / 'RELEASE_MANIFEST.json')
@@ -106,10 +157,14 @@ def publish(folder, repository, tag, commit, notes, make_public):
         file = folder / item['name']
         if file.is_symlink() or not file.is_file() or checks.sha(file) != item['sha256'] or file.stat().st_size != item['bytes']:
             raise ValueError('Release bundle changed before upload')
-    existing = gh('api', f'repos/{repository}/releases/tags/{tag}', missing_ok=True)
+    existing = find_release(repository, tag, release_id)
     if existing is None:
         gh('release', 'create', tag, '-R', repository, '--verify-tag', '--target', commit, '--draft', '--title', 'HandyMeeting ' + tag[1:], '--notes-file', notes)
-    release = json.loads(gh('api', f'repos/{repository}/releases/tags/{tag}'))
+        existing = find_release(repository, tag)
+        if existing is None:
+            raise ValueError('Created draft could not be located; inspect before retrying')
+    release_id = existing['id']
+    release = get_release(repository, tag, release_id)
     assets = asset_index(release, rows)
     for item in rows:
         asset = assets.get(item['name'])
@@ -117,14 +172,15 @@ def publish(folder, repository, tag, commit, notes, make_public):
             if not asset_matches(repository, tag, checks, asset, item):
                 raise ValueError('An existing release asset differs; it was preserved')
         else:
-            gh('release', 'upload', tag, '-R', repository, folder / item['name'])
-    final = json.loads(gh('api', f'repos/{repository}/releases/tags/{tag}'))
+            endpoint = f'https://uploads.github.com/repos/{repository}/releases/{release_id}/assets?name={quote(item["name"], safe="")}'
+            gh('api', '--method', 'POST', endpoint, '-H', 'Content-Type: application/octet-stream', '--input', folder / item['name'])
+    final = get_release(repository, tag, release_id)
     uploaded = asset_index(final, rows, complete=True)
     if any(item['name'] not in uploaded or not asset_matches(repository, tag, checks, uploaded[item['name']], item) for item in rows):
         raise ValueError('Final GitHub assets do not match the verified bundle')
     if make_public:
-        args = ['release', 'edit', tag, '-R', repository, '--draft=false']
-        args += ['--prerelease', '--latest=false'] if '-' in tag else ['--prerelease=false', '--latest']
+        args = ['api', '--method', 'PATCH', f'repos/{repository}/releases/{release_id}', '-F', 'draft=false']
+        args += ['-F', 'prerelease=true', '-f', 'make_latest=false'] if '-' in tag else ['-F', 'prerelease=false', '-f', 'make_latest=true']
         gh(*args)
     print(json.dumps({'tag': tag, 'commit': commit, 'url': final['html_url'], 'assetsVerified': len(rows), 'publishedByThisRun': make_public, 'existingAssetsOverwritten': False}))
 
@@ -139,12 +195,13 @@ if __name__ == '__main__':
     parser.add_argument('--check-existing', action='store_true')
     parser.add_argument('--source', type=pathlib.Path)
     parser.add_argument('--publish', action='store_true')
+    parser.add_argument('--release-id', type=int, help='Explicit release identity for recovery when multiple drafts share a tag')
     args = parser.parse_args()
     if args.check_existing:
         if args.source is None:
             parser.error('--source is required for existing-release verification')
-        print(json.dumps({'complete': existing_complete(args.repository, args.tag, args.commit, verification_module().read(args.source)['sha256'])}))
+        print(json.dumps({'complete': existing_complete(args.repository, args.tag, args.commit, verification_module().read(args.source)['sha256'], args.release_id)}))
     else:
         if args.folder is None or args.notes is None:
             parser.error('--folder and --notes are required for publication')
-        publish(args.folder, args.repository, args.tag, args.commit, args.notes, args.publish)
+        publish(args.folder, args.repository, args.tag, args.commit, args.notes, args.publish, args.release_id)

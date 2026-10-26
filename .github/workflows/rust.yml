@@ -95,7 +95,7 @@ jobs:
       - name: Verify installer and release publication guards
         shell: pwsh
         run: |
-          python -m unittest discover -s scripts -p test_release_packages.py
+          python -m unittest discover -s scripts -p 'test_release*.py'
           node scripts/rust-artifacts.mjs record-check distribution-guards $LASTEXITCODE
       - name: Verify the preserved C sharp prototype
         shell: pwsh
