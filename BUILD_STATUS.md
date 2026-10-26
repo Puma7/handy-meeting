@@ -4,11 +4,15 @@ Repository: [Puma7/handy-meeting](https://github.com/Puma7/handy-meeting), publi
 
 ## Current 1.0.0 release preparation
 
-Version metadata, bilingual README, demonstration screenshots and the exact-source release workflow are prepared for 1.0.0. The workflow builds Windows Setup/ZIP, an Ubuntu/Debian DEB and two Mac DMGs. A tag creates a complete draft after successful checks; publishing that verified draft selects Latest. See [RELEASING.md](docs/RELEASING.md). Preparation alone does not establish a successful build, published download or stable hardware support.
+The Rust/Tauri application, bilingual illustrated README and release tooling have been merged through [PR #8](https://github.com/Puma7/handy-meeting/pull/8). Application source `ac6323a42bbefa1586ef4242c79fcc0c56e49da5` passed actual [Windows/Core](https://github.com/Puma7/handy-meeting/actions/runs/40287668333), [Linux/Apple Silicon/Intel GUI packages](https://github.com/Puma7/handy-meeting/actions/runs/40287668343), and [preserved Windows checks](https://github.com/Puma7/handy-meeting/actions/runs/40287668354). The five downloaded packages were assembled and hash-checked together against fingerprint `db86c4ad3734bc23c7feb6448137c842ce1eaff0756d25b92d87454d898b10ce`.
+
+Actual Windows installation/uninstallation, rejection of an existing destination and duplicate version, preservation of an unknown file, and five isolated native credential cases on all four targets passed. Linux installed/executed the DEB in Debian 12/13 containers. These are headless and synthetic checks, not device recording. A final release-workflow adjustment serializes tag and release events for the same version. Its tagged end-to-end run is separate evidence and will be linked after completion.
+
+The release workflow builds Windows Setup/ZIP, an Ubuntu/Debian DEB and two Mac DMGs. A tag creates a complete draft after successful checks; publishing that verified draft selects Latest. [Release instructions](docs/RELEASING.md). No public 1.0.0 Latest release is claimed by this preparation status.
 
 The previous beta.4 Windows CI found an unsynchronized synthetic test helper: process existence was mistaken for fixture readiness. The test now waits for the helper's actual readiness marker, with a separate startup deadline and unchanged complete-PCM requirement. Production recording logic was not changed. Real Mac/Linux capture, a complete Rust two-hour capture/recovery run, the original GPU-memory warning, trusted Windows signing and Mac notarization remain open. Actual evidence is maintained in [TEST_REPORT.md](TEST_REPORT.md).
 
-## Current Rust/Tauri beta 3
+## Earlier Rust/Tauri beta 3
 
 `1.0.0-beta.3` implements the issue work: revisioned template management, opt-in native credential storage and visible per-session agent consent. Source commit `207678a41084edcba9816d79f4ef35bae4a524ac` passed the actual [Windows/Core checks](https://github.com/Puma7/handy-meeting/actions/runs/40239590566), [Linux and both Mac desktop packages](https://github.com/Puma7/handy-meeting/actions/runs/40239590551), and [preserved C# checks](https://github.com/Puma7/handy-meeting/actions/runs/40239590550). All four targets passed five actual isolated native credential-store checks. Hash/source bindings were verified after download. [Issue implementation PR](https://github.com/Puma7/handy-meeting/pull/8) remains a draft.
 

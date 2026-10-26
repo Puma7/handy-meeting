@@ -24,6 +24,8 @@ Each has a SHA-256 sidecar and package proof. `SHA256SUMS.txt` covers all five p
 
 Creating/publishing a release directly in GitHub also triggers the workflow. Its assets appear after the complete build matrix and verification finish; the page may initially contain no packages. Creating the tag first and waiting for the populated draft avoids that gap.
 
+Tag pushes, release publication and manual runs for the same version share one concurrency key. They wait for each other instead of uploading different builds concurrently.
+
 The manual **Run workflow** form accepts the exact existing tag and a `publish` switch. Default `false` keeps a draft. Select the tag's commit (or `main` only when it is still that exact commit). Setting `publish=true` publishes a fully verified bundle and sets Latest for a final version. This is an operator publication action, not a substitute for the manual gates.
 
 ## Manual release gates and current limits
