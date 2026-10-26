@@ -4,11 +4,11 @@
 
 Damit bleiben Meeting-Oberfläche, Sitzungen und Aufzeichnung unabhängig von Handy. Spracherkennung und Modellunterstützung kommen aus dessen Ökosystem. Ein zusätzlicher Dienst in Handy ist eine spätere Optimierung, keine Voraussetzung.
 
-**Arbeitsname:** HandyMeeting. Für eine Veröffentlichung wird ein eigener Produktname verwendet, solange keine Zustimmung zur Handy-Marke besteht.
+**Produktname:** HandyMeeting ist eine eigenständige Companion App. Die öffentliche Beschreibung kennzeichnet sie ausdrücklich als unabhängig und nicht als offizielle Handy-Veröffentlichung; eine Zustimmung oder technische Schnittstellenzusage des Handy-Teams wird nicht behauptet.
 
-**Stand:** 25. Oktober 2026. Windows-Prototyp mit lokalem Streaming, Historie, Wiederherstellung und belegter Nachbearbeitung. Die folgenden Produktziele und Freigabekriterien beschreiben die weitere Entwicklung; Leistungswerte werden auf benannter Hardware geprüft.
+**Stand:** 26. Oktober 2026. Rust/Tauri 1.0.0 mit lokalem Streaming, Historie, Wiederherstellung und belegter Nachbearbeitung wird für die Veröffentlichung vorbereitet. Die folgenden Produktziele und Freigabekriterien gelten weiterhin; Leistungswerte werden auf benannter Hardware geprüft.
 
-**Aktuelle technische Entscheidung:** Windows 0.4.1 behält die vorhandene .NET-/WPF-Oberfläche. Die portable Vorschau 0.5.0-preview.1 verwendet Avalonia 11.3.22 und denselben herausgelösten C#-Kern für Audiosicherung, Journal, Streaming und belegte Auswertung. Die nachfolgenden Tauri-/Rust-Überlegungen bleiben Architekturvarianten und beschreiben nicht den aktuellen Implementierungsstand. Ein Ubuntu-/Debian-Vorschaupaket wurde gebaut; echte Linux-Geräteprüfungen sowie der Mac-Helfer-/DMG-Build auf macOS stehen aus. Plattformstatus: [PORTABILITY.md](PORTABILITY.md). Die erste lokale Agentenschnittstelle bietet Fähigkeitsabfrage, Vorlagenprüfung, freigegebenes Lesen abgeschlossener Transkripte und lokale Auswertung; vollständige Aufnahmesteuerung und MCP sind noch nicht implementiert.
+**Aktuelle technische Entscheidung:** Die Anwendung verwendet Rust/Tauri und orientiert sich an Handy. Modelllisten stammen aus Handy, die Erkennung aus den offiziellen transcribe.cpp-Rust-Bindings; eine eigene Erkennungsengine oder ein zweiter Modellkatalog wird nicht entwickelt. Windows, Linux und beide Mac-Architekturen haben eigene Aufnahmeadapter und Pakete. Revisionierte Vorlagen, lokale Modellerkennung, optionale native Schlüsselspeicher und das private Agentenprotokoll mit sichtbarer Einzelfreigabe sind in Rust umgesetzt. Das Protokoll ist keine MCP-Schnittstelle. [Migrationsplan und Freigabestufen](docs/RUST_MIGRATION.md), [Veröffentlichung](docs/RELEASING.md). WPF-/Avalonia-Prototypen und Nutzeraufnahmen bleiben erhalten. Tatsächliche Build-Ergebnisse und offene Geräte-/Langzeitprüfungen stehen getrennt im [Prüfbericht](TEST_REPORT.md) und [Plattformstatus](PORTABILITY.md).
 
 # Vier Produktziele und ihre Freigabekriterien
 

@@ -1,0 +1,116 @@
+{
+  "PackageLockSHA256": "303482c484c72ac420c27192aa4ea3f68120d10d303a97fb2454ac8269f7970e",
+  "Scope": "Locked production JavaScript packages and reused Handy palette; development tools are excluded from the shipped bundle notices.",
+  "PackageCount": 7,
+  "Packages": [
+    {
+      "Name": "@tauri-apps/api",
+      "Version": "2.11.0",
+      "SPDX": "Apache-2.0 OR MIT",
+      "Repository": "https://github.com/tauri-apps/tauri.git",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE_APACHE-2.0",
+          "File": "_tauri-apps_api-2.11.0-LICENSE_APACHE-2.0.txt",
+          "SHA256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+        },
+        {
+          "OriginalFilename": "LICENSE_MIT",
+          "File": "_tauri-apps_api-2.11.0-LICENSE_MIT.txt",
+          "SHA256": "9dd42ea92cff2ede5cd477cbfcce051b2d0115c0ac7f368ee88cb545055dff1d"
+        }
+      ]
+    },
+    {
+      "Name": "js-tokens",
+      "Version": "4.0.0",
+      "SPDX": "MIT",
+      "Repository": "https://github.com/lydell/js-tokens",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE",
+          "File": "js-tokens-4.0.0-LICENSE.txt",
+          "SHA256": "2213d91c606205c71eb051a199478cdc2adde945893404d7f1421436dd6d5cc1"
+        }
+      ]
+    },
+    {
+      "Name": "loose-envify",
+      "Version": "1.4.0",
+      "SPDX": "MIT",
+      "Repository": "https://github.com/zertosh/loose-envify.git",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE",
+          "File": "loose-envify-1.4.0-LICENSE.txt",
+          "SHA256": "4eb7543b08d955a6d23fcc224601d43ff566e775be918805e26210d7f6eb4893"
+        }
+      ]
+    },
+    {
+      "Name": "lucide-react",
+      "Version": "0.542.0",
+      "SPDX": "ISC",
+      "Repository": "https://github.com/lucide-icons/lucide.git",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE",
+          "File": "lucide-react-0.542.0-LICENSE.txt",
+          "SHA256": "3c57143f22dac950efebf84002e360bba5458c7b90fe583b0667aaaef1a7256e"
+        }
+      ]
+    },
+    {
+      "Name": "react",
+      "Version": "18.3.1",
+      "SPDX": "MIT",
+      "Repository": "https://github.com/facebook/react.git",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE",
+          "File": "react-18.3.1-LICENSE.txt",
+          "SHA256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85"
+        }
+      ]
+    },
+    {
+      "Name": "react-dom",
+      "Version": "18.3.1",
+      "SPDX": "MIT",
+      "Repository": "https://github.com/facebook/react.git",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE",
+          "File": "react-dom-18.3.1-LICENSE.txt",
+          "SHA256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85"
+        }
+      ]
+    },
+    {
+      "Name": "scheduler",
+      "Version": "0.23.2",
+      "SPDX": "MIT",
+      "Repository": "https://github.com/facebook/react.git",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE",
+          "File": "scheduler-0.23.2-LICENSE.txt",
+          "SHA256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85"
+        }
+      ]
+    },
+    {
+      "Name": "Handy shared frontend palette",
+      "Version": "73c095857bc4eadff097f64767c40ad129cc372d",
+      "SPDX": "MIT",
+      "Repository": "https://github.com/cjpais/Handy",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "HANDY_STYLE_NOTICE.md",
+          "File": "Handy-palette-73c095857bc4eadff097f64767c40ad129cc372d-HANDY_STYLE_NOTICE.md.txt",
+          "SHA256": "61cd1cdc4514ea46e833015fbc1eaed60134fc36fb782750f737ec0f3658bb7b"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,162 @@
+name: Build and publish downloads
+on:
+  push:
+    tags: ['v*']
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag on the selected source commit (for example v1.0.0)
+        required: true
+        type: string
+      publish:
+        description: Publish the verified draft as Latest (otherwise retain a draft)
+        required: true
+        default: false
+        type: boolean
+  pull_request:
+    paths: ['.github/workflows/rust-release.yml', 'scripts/*release*.py', 'scripts/*installer*', '.github/RELEASE_NOTES.md']
+permissions:
+  contents: read
+concurrency:
+  group: downloads-${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      tag: ${{ steps.identity.outputs.tag }}
+      version: ${{ steps.identity.outputs.version }}
+      already_complete: ${{ steps.existing.outputs.complete }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: '26.7.0'
+      - name: Validate version and exact tag commit
+        id: identity
+        env:
+          REQUESTED_TAG: ${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, pathlib, re, subprocess, tomllib
+          version = json.load(open('apps/desktop/package.json'))['version']
+          assert version == json.load(open('apps/desktop/src-tauri/tauri.conf.json'))['version']
+          assert version == tomllib.load(open('Cargo.toml', 'rb'))['workspace']['package']['version']
+          assert re.fullmatch(r'\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?', version)
+          tag = 'v' + version
+          if os.environ['GITHUB_EVENT_NAME'] != 'pull_request':
+              assert os.environ['REQUESTED_TAG'] == tag, 'Tag must match all application versions'
+              commit = json.loads(subprocess.check_output(['gh','api','repos/'+os.environ['GITHUB_REPOSITORY']+'/commits/'+tag]))['sha']
+              assert commit == os.environ['GITHUB_SHA'], 'Select the exact tag commit; artifacts from another source are refused'
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('tag='+tag+'\nversion='+version+'\n')
+          PY
+      - name: Verify package, installer and publication boundaries using synthetic data
+        run: python3 -m unittest discover -s scripts -p test_release_packages.py
+      - name: Reuse an already complete exact-source release without rebuilding different bytes
+        id: existing
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.identity.outputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p .build
+          node scripts/rust-artifacts.mjs source-fingerprint > .build/release-source.json
+          python3 scripts/publish-rust-release.py --check-existing --repository "$GITHUB_REPOSITORY" --tag "$TAG" --commit "$GITHUB_SHA" --source .build/release-source.json > .build/existing-release.json
+          python3 - <<'PY'
+          import json, os
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+              out.write('complete='+str(json.load(open('.build/existing-release.json'))['complete']).lower()+'\n')
+          PY
+  windows:
+    needs: validate
+    if: github.event_name != 'pull_request' && needs.validate.outputs.already_complete != 'true'
+    uses: ./.github/workflows/rust.yml
+  portable:
+    needs: validate
+    if: github.event_name != 'pull_request' && needs.validate.outputs.already_complete != 'true'
+    uses: ./.github/workflows/rust-portable.yml
+  publish:
+    needs: [validate, windows, portable]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: '26.7.0'
+      - name: Download only this successful run's platform artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .build/release-inputs
+          gh run download "$GITHUB_RUN_ID" -R "$GITHUB_REPOSITORY" -n rust-windows-beta-candidate -D .build/release-inputs/windows
+          gh run download "$GITHUB_RUN_ID" -R "$GITHUB_REPOSITORY" -n rust-windows-checks -D .build/release-inputs/windows-checks
+          gh run download "$GITHUB_RUN_ID" -R "$GITHUB_REPOSITORY" -n rust-desktop-linux-x64 -D .build/release-inputs/linux
+          gh run download "$GITHUB_RUN_ID" -R "$GITHUB_REPOSITORY" -n rust-portable-checks-linux-x64 -D .build/release-inputs/linux-checks
+          gh run download "$GITHUB_RUN_ID" -R "$GITHUB_REPOSITORY" -n rust-desktop-osx-arm64 -D .build/release-inputs/mac-arm64
+          gh run download "$GITHUB_RUN_ID" -R "$GITHUB_REPOSITORY" -n rust-portable-checks-osx-arm64 -D .build/release-inputs/mac-arm64-checks
+          gh run download "$GITHUB_RUN_ID" -R "$GITHUB_REPOSITORY" -n rust-desktop-osx-x64 -D .build/release-inputs/mac-x64
+          gh run download "$GITHUB_RUN_ID" -R "$GITHUB_REPOSITORY" -n rust-portable-checks-osx-x64 -D .build/release-inputs/mac-x64-checks
+      - name: Verify every package, native store and exact-source proof before uploading anything
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          node scripts/rust-artifacts.mjs source-fingerprint > .build/release-source.json
+          python3 scripts/release-packages.py --artifacts .build/release-inputs --version "$VERSION" --commit "$GITHUB_SHA" --source .build/release-source.json --output .build/release-bundle
+      - name: Retain the complete verified bundle before any publication attempt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: verified-release-bundle
+          path: .build/release-bundle/*
+          if-no-files-found: error
+          retention-days: 30
+      - name: Attach complete verified packages without replacing existing assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.validate.outputs.tag }}
+          PUBLISH_RELEASE: ${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.publish) }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [[ "$PUBLISH_RELEASE" = true ]]; then args+=(--publish); fi
+          python3 scripts/publish-rust-release.py --folder .build/release-bundle --repository "$GITHUB_REPOSITORY" --tag "$TAG" --commit "$GITHUB_SHA" --notes .github/RELEASE_NOTES.md "${args[@]}"
+  publish_existing:
+    needs: validate
+    if: needs.validate.outputs.already_complete == 'true' && (github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.publish))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: '26.7.0'
+      - name: Publish the already verified complete release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.validate.outputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p .build
+          node scripts/rust-artifacts.mjs source-fingerprint > .build/release-source.json
+          python3 scripts/publish-rust-release.py --check-existing --repository "$GITHUB_REPOSITORY" --tag "$TAG" --commit "$GITHUB_SHA" --source .build/release-source.json > .build/existing-release.json
+          python3 -c 'import json; assert json.load(open(".build/existing-release.json"))["complete"] is True, "Complete exact-source release required immediately before promotion"'
+          if [[ "$TAG" = *-* ]]; then
+            gh release edit "$TAG" -R "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
+          else
+            gh release edit "$TAG" -R "$GITHUB_REPOSITORY" --draft=false --prerelease=false --latest
+          fi

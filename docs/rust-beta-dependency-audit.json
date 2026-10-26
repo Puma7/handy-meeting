@@ -1,0 +1,53 @@
+{
+  "ReviewedAt": "2026-10-25",
+  "CargoLockSha256": "bf189970c52cdf7a332ee9424f850112309bfd1bc4b2113664c086c4ea66e212",
+  "DatabaseCommit": "21d909e4c8bd4e14c7aea58bf980c881a0053ab1",
+  "DatabaseUpdatedAt": "2026-10-24T10:30:13+02:00",
+  "DatabaseAdvisoryCount": 1352,
+  "Vulnerabilities": 0,
+  "Warnings": [
+    {
+      "Kind": "unmaintained",
+      "Package": "proc-macro-error",
+      "Version": "1.0.4",
+      "Advisory": "RUSTSEC-2024-0370"
+    },
+    {
+      "Kind": "unmaintained",
+      "Package": "unic-char-property",
+      "Version": "0.9.0",
+      "Advisory": "RUSTSEC-2025-0081"
+    },
+    {
+      "Kind": "unmaintained",
+      "Package": "unic-char-range",
+      "Version": "0.9.0",
+      "Advisory": "RUSTSEC-2025-0075"
+    },
+    {
+      "Kind": "unmaintained",
+      "Package": "unic-common",
+      "Version": "0.9.0",
+      "Advisory": "RUSTSEC-2025-0080"
+    },
+    {
+      "Kind": "unmaintained",
+      "Package": "unic-ucd-ident",
+      "Version": "0.9.0",
+      "Advisory": "RUSTSEC-2025-0100"
+    },
+    {
+      "Kind": "unmaintained",
+      "Package": "unic-ucd-version",
+      "Version": "0.9.0",
+      "Advisory": "RUSTSEC-2025-0098"
+    },
+    {
+      "Kind": "unsound",
+      "Package": "glib",
+      "Version": "0.18.5",
+      "Advisory": "RUSTSEC-2024-0429"
+    }
+  ],
+  "Limits": "Known-advisory database check, not general security proof. GLib belongs to the Linux dependency stack and is absent from the active Windows graph."
+}

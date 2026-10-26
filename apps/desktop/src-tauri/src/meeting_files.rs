@@ -1,0 +1,376 @@
+//! Local file actions only. No model transport, shell strings or overwrite path.
+use crate::{validate_id, AppResult};
+use meeting_core::SessionData;
+use std::{
+    fs::{self, OpenOptions},
+    io::Write,
+    path::{Path, PathBuf},
+    process::Command,
+    sync::atomic::{AtomicU64, Ordering},
+    time::{SystemTime, UNIX_EPOCH},
+};
+
+pub(super) fn directory(path: &Path) -> AppResult<PathBuf> {
+    let meta = fs::symlink_metadata(path)
+        .map_err(|_| "Sitzungsordner nicht gefunden. / Session folder not found.")?;
+    #[cfg(windows)]
+    let linked = {
+        use std::os::windows::fs::MetadataExt;
+        meta.file_attributes() & 0x400 != 0
+    };
+    #[cfg(not(windows))]
+    let linked = meta.file_type().is_symlink();
+    if linked || !meta.is_dir() {
+        return Err("Verknüpfte Sitzungsordner werden nicht geöffnet oder beschrieben. / Linked session folders are not supported.".into());
+    }
+    path.canonicalize()
+        .map_err(|_| "Sitzungsordner ist nicht erreichbar. / Session folder is unavailable.".into())
+}
+
+pub(super) fn session_folder(root: &Path, id: &str) -> AppResult<PathBuf> {
+    validate_id(id)?;
+    let sessions = directory(&root.join("sessions"))?;
+    let folder = directory(&sessions.join(id))?;
+    if folder.parent() != Some(sessions.as_path()) {
+        return Err(
+            "Sitzungsordner liegt außerhalb der Ablage. / Session folder escapes storage.".into(),
+        );
+    }
+    Ok(folder)
+}
+
+fn export_directory(folder: &Path) -> AppResult<PathBuf> {
+    let parent = directory(folder)?;
+    let exports = parent.join("exports");
+    match fs::create_dir(&exports) {
+        Ok(()) => (),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => (),
+        Err(_) => {
+            return Err(
+                "Exportordner konnte nicht angelegt werden. / Could not create export folder."
+                    .into(),
+            )
+        }
+    }
+    let exports = directory(&exports)?;
+    if exports.parent() != Some(parent.as_path()) {
+        return Err(
+            "Exportordner liegt außerhalb der Sitzung. / Export folder escapes session.".into(),
+        );
+    }
+    Ok(exports)
+}
+
+fn warning(value: &str, de: bool) -> String {
+    for (source, label_de, label_en) in [
+        ("system", "Computerton", "System audio"),
+        ("microphone", "Mikrofon", "Microphone"),
+    ] {
+        if value == format!("{source}: audio driver reported a discontinuity; affected recording ranges can be incomplete.") {
+            return if de { format!("{label_de}: Der Audiotreiber hat eine Unterbrechung gemeldet. Teile dieser Spur können fehlen.") } else { format!("{label_en}: The audio driver reported an interruption. Parts of this track may be missing.") };
+        }
+    }
+    value.into()
+}
+
+fn timestamp(samples: u64) -> String {
+    let s = samples / u64::from(meeting_core::SAMPLE_RATE);
+    format!("{:02}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60)
+}
+
+fn transcript(data: &SessionData, locale: &str) -> AppResult<String> {
+    if !["de", "en"].contains(&locale) {
+        return Err("Unsupported export language".into());
+    }
+    let de = locale == "de";
+    let mut text = format!(
+        "{}\n{} · {}\n{}\n",
+        data.title,
+        data.started_at,
+        data.model_id,
+        if de {
+            "Abschnittszeiten, keine exakten Wortzeiten."
+        } else {
+            "Section times, not exact word timestamps."
+        }
+    );
+    if data.status != "complete" {
+        text.push_str(if de {
+            "UNVOLLSTÄNDIG: Es stehen Abschnitte aus.\n"
+        } else {
+            "INCOMPLETE: Some sections remain pending.\n"
+        });
+    }
+    for value in &data.warnings {
+        text.push_str(&warning(value, de));
+        text.push('\n');
+    }
+    if data.capture_incomplete && data.warnings.is_empty() {
+        text.push_str(if de {
+            "Die Aufnahme kann Audiolücken enthalten.\n"
+        } else {
+            "This recording may contain audio gaps.\n"
+        });
+    }
+    let mut parts: Vec<_> = data.parts.iter().collect();
+    parts.sort_by_key(|p| (p.start_sample, &p.source));
+    for part in parts {
+        if let Some(value) = part.text.as_ref().filter(|value| !value.trim().is_empty()) {
+            let label = match (part.source.as_str(), de) {
+                ("system", true) => "Computerton",
+                ("system", false) => "System audio",
+                ("microphone", true) => "Mikrofon",
+                ("microphone", false) => "Microphone",
+                _ => &part.source,
+            };
+            text.push_str(&format!(
+                "\n[{}–{}] {}\n\n{}\n",
+                timestamp(part.start_sample),
+                timestamp(part.start_sample + part.sample_count),
+                label,
+                value
+            ));
+        }
+        if text.len() > 32 * 1024 * 1024 {
+            return Err(
+                "Transkriptexport überschreitet 32 MiB. / Transcript export exceeds 32 MiB.".into(),
+            );
+        }
+    }
+    Ok(text)
+}
+
+pub(super) fn save_transcript(
+    folder: &Path,
+    data: &SessionData,
+    locale: &str,
+) -> AppResult<String> {
+    let text = transcript(data, locale)?;
+    let exports = export_directory(folder)?;
+    static SEQUENCE: AtomicU64 = AtomicU64::new(0);
+    let at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| "System clock unavailable")?
+        .as_millis();
+    for _ in 0..32 {
+        let name = format!(
+            "transcript-{at}-{}.txt",
+            SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        );
+        // A failed write remains explicitly pending; only synced complete text
+        // gets the final .txt name. Linking refuses existing destination files.
+        let path = exports.join(format!(".{name}.pending"));
+        let mut file = match OpenOptions::new().write(true).create_new(true).open(&path) {
+            Ok(file) => file,
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(_) => return Err("Textexport konnte nicht angelegt werden. Speicherplatz und Ordnerrechte prüfen. / Could not create transcript export; check free space and folder permissions.".into()),
+        };
+        file.write_all(text.as_bytes()).and_then(|_| file.sync_all()).map_err(|_| "Textexport nicht vollständig gespeichert. Vorhandene Originale bleiben erhalten. / Export was not fully saved; originals are retained.")?;
+        drop(file);
+        publish_export(&path, &exports.join(&name))?;
+        // Only our own redundant temporary link is removed after publication.
+        let _ = fs::remove_file(&path);
+        return Ok(format!("exports/{name}"));
+    }
+    Err("Kein freier Exportname gefunden. Frühere Exporte bleiben erhalten. / Could not reserve a new export name.".into())
+}
+
+fn publish_export(pending: &Path, final_path: &Path) -> AppResult<()> {
+    fs::hard_link(pending, final_path).map_err(|_| "Textexport konnte nicht abgeschlossen werden. Vorhandene Exporte wurden nicht ersetzt; der neue Schreibstand bleibt als .pending erhalten. / Could not finish export; existing files were not replaced and the new write remains .pending.".into())
+}
+
+fn folder_command(folder: &Path) -> Command {
+    #[cfg(windows)]
+    let mut command = {
+        use std::os::windows::process::CommandExt;
+        let base = std::env::var_os("SystemRoot").unwrap_or_else(|| "C:\\Windows".into());
+        let mut command = Command::new(PathBuf::from(base).join("explorer.exe"));
+        command.creation_flags(0x08000000);
+        command
+    };
+    #[cfg(target_os = "macos")]
+    let mut command = Command::new("/usr/bin/open");
+    #[cfg(target_os = "linux")]
+    let mut command = Command::new("xdg-open");
+    command.arg(file_manager_path(folder));
+    command
+}
+
+// Windows canonicalization returns verbatim prefixes, which Explorer does not
+// handle consistently. Keep the verified target, expose its ordinary path form.
+fn file_manager_path(folder: &Path) -> PathBuf {
+    #[cfg(windows)]
+    {
+        use std::path::{Component, Prefix};
+        let mut components = folder.components();
+        let mut path = match components.next() {
+            Some(Component::Prefix(prefix)) => match prefix.kind() {
+                Prefix::VerbatimDisk(drive) => PathBuf::from(format!("{}:\\", char::from(drive))),
+                Prefix::VerbatimUNC(server, share) => {
+                    PathBuf::from("\\\\").join(server).join(share)
+                }
+                _ => return folder.to_owned(),
+            },
+            _ => return folder.to_owned(),
+        };
+        for component in components {
+            if let Component::Normal(name) = component {
+                path.push(name);
+            }
+        }
+        path
+    }
+    #[cfg(not(windows))]
+    folder.to_owned()
+}
+
+pub(super) fn open_folder(folder: &Path) -> AppResult<()> {
+    let folder = directory(folder)?;
+    let mut child = folder_command(&folder).spawn().map_err(|_| {
+        "Dateimanager konnte nicht geöffnet werden. / Could not open the file manager.".to_string()
+    })?;
+    // Reap short-lived launchers without waiting for the user's file-manager window.
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn fixture() -> (PathBuf, meeting_core::SessionStore) {
+        let root = std::env::temp_dir().join(format!(
+            "hm-export-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let store = meeting_core::SessionStore::create(
+            &root.join("sessions"),
+            "<script>synthetic</script>",
+            "synthetic",
+            "system",
+            None,
+        )
+        .unwrap();
+        let mut writer = meeting_core::PcmWriter::new(store.clone(), "system").unwrap();
+        writer.append(&[0; 16000]).unwrap();
+        writer.finish().unwrap();
+        (root, store)
+    }
+    #[test]
+    fn refuses_traversal_and_unknown_session_without_creating_output() {
+        let (root, store) = fixture();
+        for id in [
+            "../outside",
+            "",
+            "C:\\Windows",
+            "00000000000000000000000000000000",
+        ] {
+            assert!(session_folder(&root, id).is_err());
+        }
+        assert!(!store.folder().join("exports").exists());
+    }
+    #[test]
+    fn exports_full_snapshot_both_tracks_and_preserves_originals_and_earlier_exports() {
+        let (_, store) = fixture();
+        let before = fs::read(store.folder().join("session.json")).unwrap();
+        let mut data = store.snapshot().unwrap();
+        data.parts[0].text = Some("Original one <script>alert(1)</script>".into());
+        let mut second = data.parts[0].clone();
+        second.source = "microphone".into();
+        second.text = Some("Last section ä €".into());
+        data.parts.push(second);
+        for index in 0..500 {
+            let mut part = data.parts[0].clone();
+            part.start_sample = (index + 1) * 16000;
+            part.text = Some(format!("Synthetic section {index}"));
+            data.parts.push(part);
+        }
+        data.warnings.push("system: audio driver reported a discontinuity; affected recording ranges can be incomplete.".into());
+        let first = save_transcript(store.folder(), &data, "de").unwrap();
+        let bytes = fs::read(store.folder().join(&first)).unwrap();
+        let text = String::from_utf8(bytes.clone()).unwrap();
+        for expected in [
+            "Original one <script>alert(1)</script>",
+            "Last section ä €",
+            "Synthetic section 499",
+            "UNVOLLSTÄNDIG",
+            "Computerton: Der Audiotreiber",
+            "Mikrofon",
+        ] {
+            assert!(text.contains(expected));
+        }
+        let second = save_transcript(store.folder(), &data, "en").unwrap();
+        assert_ne!(first, second);
+        assert_eq!(fs::read(store.folder().join(&first)).unwrap(), bytes);
+        assert_eq!(
+            fs::read(store.folder().join("session.json")).unwrap(),
+            before
+        );
+        assert!(fs::read_to_string(store.folder().join(second))
+            .unwrap()
+            .contains("INCOMPLETE"));
+    }
+    #[test]
+    fn invalid_language_or_export_file_never_overwrites_any_file() {
+        let (_, store) = fixture();
+        assert!(save_transcript(store.folder(), &store.snapshot().unwrap(), "xx").is_err());
+        assert!(!store.folder().join("exports").exists());
+        fs::write(store.folder().join("exports"), "keep").unwrap();
+        assert!(save_transcript(store.folder(), &store.snapshot().unwrap(), "de").is_err());
+        assert_eq!(
+            fs::read_to_string(store.folder().join("exports")).unwrap(),
+            "keep"
+        );
+    }
+    #[test]
+    fn folder_is_one_literal_argument_even_with_spaces_and_shell_text() {
+        let path = Path::new("/synthetic/folder with space; $USER & whoami");
+        let command = folder_command(path);
+        assert_eq!(
+            command.get_args().collect::<Vec<_>>(),
+            vec![path.as_os_str()]
+        );
+    }
+    #[cfg(windows)]
+    #[test]
+    fn explorer_receives_ordinary_drive_or_unc_paths_without_verbatim_prefixes() {
+        assert_eq!(
+            file_manager_path(Path::new("\\\\?\\C:\\Users\\Synthetic name\\session")),
+            Path::new("C:\\Users\\Synthetic name\\session")
+        );
+        assert_eq!(
+            file_manager_path(Path::new("\\\\?\\UNC\\server\\share\\Synthetic name")),
+            Path::new("\\\\server\\share\\Synthetic name")
+        );
+    }
+    #[test]
+    fn publishing_never_replaces_existing_exports_and_retains_pending_bytes_on_failure() {
+        let (_, store) = fixture();
+        let folder = export_directory(store.folder()).unwrap();
+        let final_path = folder.join("existing.txt");
+        let pending = folder.join(".new.pending");
+        fs::write(&final_path, "original export").unwrap();
+        fs::write(&pending, "new complete bytes").unwrap();
+        assert!(publish_export(&pending, &final_path).is_err());
+        assert_eq!(fs::read_to_string(&final_path).unwrap(), "original export");
+        assert_eq!(fs::read_to_string(&pending).unwrap(), "new complete bytes");
+        let new_path = folder.join("new.txt");
+        publish_export(&pending, &new_path).unwrap();
+        assert_eq!(fs::read_to_string(new_path).unwrap(), "new complete bytes");
+    }
+    #[cfg(unix)]
+    #[test]
+    fn linked_export_directory_cannot_redirect_writes() {
+        let (root, store) = fixture();
+        let outside = root.join("outside");
+        fs::create_dir(&outside).unwrap();
+        std::os::unix::fs::symlink(&outside, store.folder().join("exports")).unwrap();
+        assert!(save_transcript(store.folder(), &store.snapshot().unwrap(), "en").is_err());
+        assert_eq!(fs::read_dir(outside).unwrap().count(), 0);
+    }
+}

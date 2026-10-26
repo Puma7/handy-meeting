@@ -34,6 +34,10 @@ final class Sink: @unchecked Sendable {
 func fail(_ message: String) -> Never {
     FileHandle.standardError.write(Data((message + "\n").utf8)); exit(1)
 }
+func announceReady() {
+    // Startup acknowledgement is separate from PCM: silence is valid after permissions succeed.
+    FileHandle.standardError.write(Data("HANDYMEETING_AUDIO_READY\n".utf8))
+}
 @available(macOS 13.0, *)
 final class SystemCapture: NSObject, SCStreamOutput, SCStreamDelegate {
     let sink = Sink()
@@ -48,7 +52,7 @@ final class SystemCapture: NSObject, SCStreamOutput, SCStreamDelegate {
         configuration.sampleRate = 16000; configuration.channelCount = 1
         let stream = SCStream(filter: filter, configuration: configuration, delegate: self)
         try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: DispatchQueue(label: "HandyMeeting.audio"))
-        self.stream = stream; try await stream.startCapture()
+        self.stream = stream; try await stream.startCapture(); announceReady()
     }
     func stream(_ stream: SCStream, didOutputSampleBuffer sample: CMSampleBuffer, of type: SCStreamOutputType) {
         guard type == .audio, sample.isValid, sample.numSamples > 0, let description = sample.formatDescription,
@@ -88,7 +92,7 @@ final class SystemCapture: NSObject, SCStreamOutput, SCStreamDelegate {
             let engine = AVAudioEngine(); let sink = Sink()
             let input = engine.inputNode; let format = input.outputFormat(forBus: 0)
             input.installTap(onBus: 0, bufferSize: 1600, format: format) { buffer, _ in sink.write(buffer) }
-            do { try engine.start(); while true { try await Task.sleep(nanoseconds: 1_000_000_000) } }
+            do { try engine.start(); announceReady(); while true { try await Task.sleep(nanoseconds: 1_000_000_000) } }
             catch { fail("Microphone capture failed: " + error.localizedDescription) }
         } else if CommandLine.arguments[2] == "system" {
             guard #available(macOS 13.0, *) else { fail("System audio requires macOS 13 or later") }

@@ -1,0 +1,20 @@
+HandyMeeting 1.0.0 - additional third-party notices
+
+Rust dependency records and verbatim license texts: licenses/rust/x86_64-pc-windows-msvc/.
+Frontend production dependency records and verbatim license texts: licenses/frontend/.
+The manifests identify exact package versions, declared licenses, original filenames,
+source repositories and SHA-256 values. The Rust list includes active build tools as
+well as application dependencies; it is not a claim that every crate is linked at runtime.
+
+transcribe-cpp and transcribe-cpp-sys 0.4.1: MIT.
+wasapi 0.26.0: MIT. hound 3.5.1: Apache-2.0.
+Tauri crates retain their respective supplied Apache-2.0/MIT notices.
+Handy's shared frontend palette: MIT, Copyright (c) 2025 CJ Pais.
+The unchanged native transcribe.cpp runtime retains its own license directory.
+No model weights are included. Model licenses are separate.
+
+selectors 0.36.1 declares MPL-2.0. Its original source notice and Mozilla's
+canonical license text are included. Original source is available at:
+https://crates.io/crates/selectors/0.36.1
+https://github.com/servo/stylo/tree/635e1a19d02960588a00e189bd4bd5bdb150ec3d/selectors
+This project does not relicense third-party code under its own MIT license.
