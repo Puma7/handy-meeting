@@ -20,7 +20,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: downloads-${{ github.event.release.tag_name || inputs.tag || github.ref }}
+  group: downloads-${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
   cancel-in-progress: false
 jobs:
   validate:

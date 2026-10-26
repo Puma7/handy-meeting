@@ -15,7 +15,9 @@ HandyMeeting ist eine eigenständige **Rust-/Tauri-Companion-App für [Handy](ht
 | Mac · Apple Silicon / M-Serie | [Apple-Silicon-DMG](https://github.com/Puma7/handy-meeting/releases/download/v1.0.0/HandyMeeting-1.0.0-osx-arm64.dmg) | macOS 13+ und Aufnahmeberechtigungen |
 | Mac · Intel | [Intel-DMG](https://github.com/Puma7/handy-meeting/releases/download/v1.0.0/HandyMeeting-1.0.0-osx-x64.dmg) | macOS 13+ und Aufnahmeberechtigungen |
 
-**Die Links werden mit der Veröffentlichung von `v1.0.0` öffentlich verfügbar.** Einen Entwurf sehen nur Mitwirkende des Repositories. Prüfsummen und `RELEASE_MANIFEST.json` gehören zum vollständigen Release. [Release-Stand ansehen](https://github.com/Puma7/handy-meeting/releases).
+**[Version 1.0.0 ist öffentlich verfügbar](https://github.com/Puma7/handy-meeting/releases/tag/v1.0.0)** und enthält alle fünf Pakete, Prüfsummen und den Quellnachweis `RELEASE_MANIFEST.json`. Die Links oben beziehen sich auf diese veröffentlichte Version. [Alle Releases](https://github.com/Puma7/handy-meeting/releases).
+
+**Künftige Releases:** Ein zur Programmversion passender Versionstag startet automatisch die Windows-/Linux-/Mac-Buildmatrix. Nach bestandenen Prüfungen hängen alle fünf Pakete und Nachweise an einem Release-Entwurf. Den vollständig bestückten Entwurf veröffentlichen; auch ein direkt veröffentlichtes Release startet diesen Ablauf. [Release-Anleitung](docs/RELEASING.md).
 
 **Noch offene Freigaben:** Echte Mac-/Linux-Geräteaufnahmen und ein vollständiger neuer Rust-Zweistundentest stehen aus. Mac-Pakete sind ad hoc signiert und nicht von Apple notarisiert; die Windows-Setup-Datei ist unsigniert. Schutzprüfungen des Betriebssystems können diese Pakete blockieren. Schutzfunktionen nicht abschalten, um einen Build auszuführen. Wichtige Meetings zunächst unabhängig zusätzlich sichern. [Nachweise und Grenzen](TEST_REPORT.md).
 
