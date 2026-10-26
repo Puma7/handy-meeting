@@ -151,28 +151,45 @@ function result(template = defaultTemplate()): AnalysisResult {
 }
 beforeEach(() => localStorage.clear());
 
-it("migrates valid browser templates once, then creates, duplicates, renames and reviews removal in native storage", async () => {
+it("migrates browser templates once and creates an independent native preset", async () => {
   const custom = defaultTemplate();
   custom.name = "Browser original";
   custom.steps[0].prompt = "Original custom prompt";
   const raw = JSON.stringify([custom]);
   localStorage.setItem(TEMPLATE_KEY, raw);
   const { api } = fixture();
-  render(<App api={api} />);
+  const view = render(<App api={api} />);
   await notes();
   expect(vi.mocked(api.saveTemplates).mock.calls[0][0].templates).toEqual([
     custom,
   ]);
   await userEvent.click(screen.getByRole("button", { name: "Neue Vorlage" }));
   await saveName("Fresh preset");
-  let saved = vi.mocked(api.saveTemplates).mock.calls.at(-1)![0].templates;
+  const saved = vi.mocked(api.saveTemplates).mock.calls.at(-1)![0].templates;
   const fresh = saved.find((item) => item.name === "Fresh preset")!;
   expect(fresh.steps[0].prompt).not.toBe(custom.steps[0].prompt);
+  expect(saved.find((item) => item.id === custom.id)).toEqual(custom);
+  const writes = vi.mocked(api.saveTemplates).mock.calls.length;
+  view.unmount();
+  render(<App api={api} />);
+  await notes();
+  expect(api.saveTemplates).toHaveBeenCalledTimes(writes);
+  expect(localStorage.getItem(TEMPLATE_KEY)).toBe(raw);
+});
+
+it("duplicates and renames a native preset without sharing step identities or changing the original", async () => {
+  const fresh = defaultTemplate();
+  fresh.name = "Native original";
+  const { api } = fixture();
+  await api.saveTemplates({ revision: 0, templates: [fresh] });
+  vi.mocked(api.saveTemplates).mockClear();
+  render(<App api={api} />);
+  await notes();
   await userEvent.click(
     screen.getByRole("button", { name: "Vorlage duplizieren" }),
   );
   await saveName("Independent copy");
-  saved = vi.mocked(api.saveTemplates).mock.calls.at(-1)![0].templates;
+  let saved = vi.mocked(api.saveTemplates).mock.calls.at(-1)![0].templates;
   const copied = saved.find((item) => item.name === "Independent copy")!;
   expect(copied.steps.map((item) => item.prompt)).toEqual(
     fresh.steps.map((item) => item.prompt),
@@ -186,6 +203,28 @@ it("migrates valid browser templates once, then creates, duplicates, renames and
     screen.getByRole("button", { name: "Vorlage umbenennen" }),
   );
   await saveName("Renamed copy");
+  saved = vi.mocked(api.saveTemplates).mock.calls.at(-1)![0].templates;
+  expect(saved.find((item) => item.id === fresh.id)).toEqual(fresh);
+  expect(saved.find((item) => item.id === copied.id)).toEqual({
+    ...copied,
+    name: "Renamed copy",
+  });
+});
+
+it("requires confirmation before removing a native preset and preserves other presets", async () => {
+  const original = defaultTemplate();
+  original.name = "Retained original";
+  const removable = defaultTemplate();
+  removable.name = "Remove this preset";
+  const { api } = fixture();
+  await api.saveTemplates({ revision: 0, templates: [original, removable] });
+  vi.mocked(api.saveTemplates).mockClear();
+  render(<App api={api} />);
+  await notes();
+  await userEvent.selectOptions(
+    screen.getByRole("combobox", { name: "Vorlage" }),
+    removable.id,
+  );
   const before = vi.mocked(api.saveTemplates).mock.calls.length;
   await userEvent.click(
     screen.getByRole("button", { name: "Vorlage entfernen" }),
@@ -202,9 +241,9 @@ it("migrates valid browser templates once, then creates, duplicates, renames and
     }),
   );
   await waitFor(() =>
-    expect(screen.queryByRole("option", { name: "Renamed copy" })).toBeNull(),
+    expect(screen.queryByRole("option", { name: "Remove this preset" })).toBeNull(),
   );
-  expect(localStorage.getItem(TEMPLATE_KEY)).toBe(raw);
+  expect((await api.listTemplates()).templates).toEqual([original]);
 });
 
 it("keeps native templates authoritative and imports previous browser templates only on explicit request", async () => {

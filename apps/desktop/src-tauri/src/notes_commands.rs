@@ -3,6 +3,15 @@ use std::sync::Arc;
 use tauri::State;
 
 #[tauri::command]
+pub(crate) async fn list_unfinished_analyses(
+    service: State<'_, Arc<Service>>,
+    meeting_id: String,
+) -> AppResult<Vec<meeting_notes::PendingAnalysis>> {
+    let service = Arc::clone(&service);
+    blocking(move || crate::notes_service::pending_analyses(&service, &meeting_id)).await
+}
+
+#[tauri::command]
 pub(crate) async fn list_text_models(endpoint: String, mode: String) -> AppResult<Vec<String>> {
     if mode != "local" {
         return Err("Automatische Textmodellerkennung ist ausschließlich lokal verfügbar. Cloud-Modelle bitte ausdrücklich eingeben.".into());

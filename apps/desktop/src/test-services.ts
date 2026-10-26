@@ -5,6 +5,7 @@ import type { TemplateLibrary } from "./types";
 export function testServices() {
   let library: TemplateLibrary = { revision: 0, templates: [] };
   return {
+    listUnfinishedAnalyses: vi.fn().mockResolvedValue([]),
     openMeetingFolder: vi.fn().mockResolvedValue(undefined),
     exportTranscript: vi
       .fn()

@@ -8,14 +8,16 @@ HandyMeeting ist eine eigenständige **Rust-/Tauri-Companion-App für [Handy](ht
 
 ## Pakete für deinen Computer
 
-| System | Version 1.0.0 | Voraussetzung |
-| --- | --- | --- |
-| Windows 10/11 · x64 | [Setup-EXE](https://github.com/Puma7/handy-meeting/releases/download/v1.0.0/HandyMeeting-1.0.0-windows-x64-setup.exe) · [ZIP ohne Installation](https://github.com/Puma7/handy-meeting/releases/download/v1.0.0/HandyMeeting-1.0.0-windows-x64.zip) | WebView2 und Microsoft Visual C++ x64; kein .NET erforderlich |
-| Ubuntu 22.04+ / Debian 12–13 · x64 | [DEB](https://github.com/Puma7/handy-meeting/releases/download/v1.0.0/HandyMeeting-1.0.0-linux-amd64.deb) | PulseAudio oder PipeWire-Pulse; Bibliotheken über den Paketmanager |
-| Mac · Apple Silicon / M-Serie | [Apple-Silicon-DMG](https://github.com/Puma7/handy-meeting/releases/download/v1.0.0/HandyMeeting-1.0.0-osx-arm64.dmg) | macOS 13+ und Aufnahmeberechtigungen |
-| Mac · Intel | [Intel-DMG](https://github.com/Puma7/handy-meeting/releases/download/v1.0.0/HandyMeeting-1.0.0-osx-x64.dmg) | macOS 13+ und Aufnahmeberechtigungen |
+**[Releases und passende Downloads öffnen](https://github.com/Puma7/handy-meeting/releases)**. Einen vollständigen Release öffnen und unter „Assets“ das passende Paket auswählen. Dort liegen die versionierten Dateien mit ihren Prüfsummen.
 
-**[Version 1.0.0 ist öffentlich verfügbar](https://github.com/Puma7/handy-meeting/releases/tag/v1.0.0)** und enthält alle fünf Pakete, Prüfsummen und den Quellnachweis `RELEASE_MANIFEST.json`. Die Links oben beziehen sich auf diese veröffentlichte Version. [Alle Releases](https://github.com/Puma7/handy-meeting/releases).
+| System | Pakettyp | Voraussetzung |
+| --- | --- | --- |
+| Windows 10/11 · x64 | Setup-EXE · ZIP ohne Installation | WebView2 und Microsoft Visual C++ x64; kein .NET erforderlich |
+| Ubuntu 22.04+ / Debian 12–13 · x64 | DEB | PulseAudio oder PipeWire-Pulse; Bibliotheken über den Paketmanager |
+| Mac · Apple Silicon / M-Serie | Apple-Silicon-DMG | macOS 13+ und Aufnahmeberechtigungen |
+| Mac · Intel | Intel-DMG | macOS 13+ und Aufnahmeberechtigungen |
+
+**Patch-Stand:** 1.0.1 korrigiert den Fehler beim erstmaligen Erstellen des Windows-Installationsordners aus 1.0.0. Eine leere Release-Seite oder ein Tag allein bedeutet keinen bestandenen Build: Alle fünf Pakete und `RELEASE_MANIFEST.json` müssen vorhanden sein. Bis ein vollständiger korrigierter Release bereitsteht, gilt die bekannte Setup-Grenze von 1.0.0; das portable ZIP ist ein eigenes Paket.
 
 **Künftige Releases:** Ein zur Programmversion passender Versionstag startet automatisch die Windows-/Linux-/Mac-Buildmatrix. Nach bestandenen Prüfungen hängen alle fünf Pakete und Nachweise an einem Release-Entwurf. Den vollständig bestückten Entwurf veröffentlichen; auch ein direkt veröffentlichtes Release startet diesen Ablauf. [Release-Anleitung](docs/RELEASING.md).
 

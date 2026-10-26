@@ -1,6 +1,16 @@
 # Changelog
 
-## 1.0.0 — release preparation
+## 1.0.1 — installer and recovery fixes
+
+- Fix first-time Windows setup when the default parent folders do not exist; retain exclusive destination reservation and existing user files. Native regression checks cover missing nested parents, occupied directories and parent paths blocked by files. Full CI installation now starts with a fresh nested path.
+- Split the long combined template workflow test into independent preservation cases, retaining the existing five-second per-case timeout.
+- Keep all workspace crates, desktop configuration and lockfile metadata on one application version.
+- Require the fresh-parent installation check before accepting a Windows Setup package.
+- Bring the three reviewed recovery/package-proof fixes from PR #9 into the next version; they were not included in public 1.0.0.
+
+## 1.0.0 — initial public release
+
+
 
 - Present the Rust/Tauri application with bilingual guides and screenshots rendered from synthetic demonstration data.
 - Build Windows Setup EXE and ZIP, Ubuntu/Debian DEB, and separate Apple Silicon/Intel DMGs from the same checked source.

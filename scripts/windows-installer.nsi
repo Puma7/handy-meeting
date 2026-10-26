@@ -3,6 +3,7 @@ Unicode true
 !include x64.nsh
 !include WinVer.nsh
 !include LogicLib.nsh
+!include FileFunc.nsh
 Name "HandyMeeting ${APP_VERSION}"
 OutFile "${OUTPUT_FILE}"
 InstallDir "$LOCALAPPDATA\Programs\HandyMeeting\${APP_VERSION}"
@@ -65,16 +66,26 @@ Function CheckNewDirectory
     Abort
   destination_available:
 FunctionEnd
+Function ReserveNewDirectory
+  ; Parse the parent without requiring any of the destination folders to exist.
+  ${GetParent} "$INSTDIR" $2
+  ClearErrors
+  CreateDirectory "$2"
+  IfErrors reserve_failed
+  ; Reserve the final directory exclusively, including against a concurrent setup.
+  System::Call 'kernel32::CreateDirectoryW(w "$INSTDIR", p 0) i .r0'
+  StrCmp $0 0 reserve_failed
+  Push 1
+  Return
+  reserve_failed:
+  Push 0
+FunctionEnd
 Section "HandyMeeting" Main
   Call CheckNewDirectory
   SetShellVarContext current
   SetRegView 64
-  GetFullPathName $2 "$INSTDIR\.."
-  ClearErrors
-  CreateDirectory "$2"
-  IfErrors reservation_failed
-  ; Reserve the final directory exclusively, including against a concurrent setup.
-  System::Call 'kernel32::CreateDirectoryW(w "$INSTDIR", p 0) i .r0'
+  Call ReserveNewDirectory
+  Pop $0
   StrCmp $0 0 reservation_failed destination_reserved
   reservation_failed:
     IfSilent reservation_failed_silent

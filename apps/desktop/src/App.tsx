@@ -1,4 +1,5 @@
 import NotesView from "./views/NotesView";
+import ResumeAnalysisDialog from "./views/ResumeAnalysisDialog";
 import Sidebar, { type Page } from "./views/Sidebar";
 import MeetingView from "./views/MeetingView";
 import MeetingDetail from "./views/MeetingDetail";
@@ -33,6 +34,7 @@ import type {
   Meeting,
   MeetingSummary,
   NotesRequest,
+  PendingAnalysis,
   Theme,
 } from "./types";
 
@@ -116,6 +118,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     [resultId, setResultId] = useState(""),
     [cloudRequest, setCloudRequest] = useState<NotesRequest | null>(null),
     [source, setSource] = useState<SourceSelection | null>(null);
+  const [pendingAnalyses, setPendingAnalyses] = useState<PendingAnalysis[]>([]);
+  const [resumeAnalysis, setResumeAnalysis] = useState<PendingAnalysis | null>(
+    null,
+  );
   const requestSequence = useRef(0),
     selectedRef = useRef<string | null>(null),
     fullMeetingRef = useRef<string | null>(null),
@@ -151,6 +157,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     ]);
     setResultId(next.id);
     setStepId(next.sections[0]?.id ?? "");
+    setPendingAnalyses((items) => items.filter((item) => item.id !== next.id));
   }, []);
   const notesJob = useNotesJob(
     api,
@@ -206,7 +213,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     [],
   );
   const modalOpen = Boolean(
-    editing || templateAction || cloudRequest || source,
+    editing || templateAction || cloudRequest || source || resumeAnalysis,
   );
   useEffect(() => {
     if (!modalOpen) return;
@@ -219,11 +226,26 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     const focusable = () =>
       Array.from(
         dialog?.querySelectorAll<HTMLElement>(
-          'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]',
+          'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary,[tabindex="0"]',
         ) ?? [],
-      );
+      ).filter((element) => {
+        if (element.closest("[hidden]")) return false;
+        let parent = element.parentElement;
+        while (parent && parent !== dialog) {
+          if (
+            parent instanceof HTMLDetailsElement &&
+            !parent.open &&
+            parent.querySelector(":scope > summary") !== element
+          )
+            return false;
+          parent = parent.parentElement;
+        }
+        return true;
+      });
+    const initialTargets = focusable();
     (
-      dialog?.querySelector<HTMLElement>("input,textarea") ?? focusable()[0]
+      initialTargets.find((element) => element.matches("input,textarea")) ??
+      initialTargets[0]
     )?.focus();
     const keydown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -235,6 +257,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         setTemplateAction(null);
         setCloudRequest(null);
         setSource(null);
+        setResumeAnalysis(null);
         return;
       }
       if (event.key !== "Tab") return;
@@ -476,6 +499,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     setNotesMeetingId(id);
     setAnalyses([]);
     setResultId("");
+    setPendingAnalyses([]);
+    setResumeAnalysis(null);
     if (!id) {
       setNotesMeetingLoading(false);
       return;
@@ -494,17 +519,24 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       selectedRef.current = current.id;
       fullMeetingRef.current = current.id;
       setMeeting(current);
-      const items = await api.listAnalyses(id);
+      const [items, pending] = await Promise.all([
+        api.listAnalyses(id),
+        api.listUnfinishedAnalyses(id),
+      ]);
       if (
         !mounted.current ||
         sequence !== notesLoadSequence.current ||
         notesSelectionRef.current !== id
       )
         return;
-      if (items.some((item) => item.meetingId !== id))
+      if (
+        items.some((item) => item.meetingId !== id) ||
+        pending.some((item) => item.meetingId !== id)
+      )
         throw new Error(t.wrongMeeting);
       setAnalyses(items);
       setResultId(items[0]?.id ?? "");
+      setPendingAnalyses(pending);
     } catch (failure) {
       if (mounted.current && sequence === notesLoadSequence.current)
         setError(errorMessage(failure));
@@ -713,6 +745,22 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     setError(null);
     setCloudRequest(null);
     await notesJob.run(request);
+    const sequence = notesLoadSequence.current;
+    try {
+      const pending = await api.listUnfinishedAnalyses(request.meetingId);
+      if (
+        mounted.current &&
+        sequence === notesLoadSequence.current &&
+        notesSelectionRef.current === request.meetingId
+      ) {
+        if (pending.some((item) => item.meetingId !== request.meetingId))
+          throw new Error(t.wrongMeeting);
+        setPendingAnalyses(pending);
+      }
+    } catch (failure) {
+      if (mounted.current && notesSelectionRef.current === request.meetingId)
+        setError(errorMessage(failure));
+    }
   }
   function resumeNotes() {
     const previous = notesJob.lastRequest,
@@ -1237,6 +1285,44 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             </button>
           </section>
         )}
+        {page === "notes" && pendingAnalyses.length > 0 && (
+          <section
+            className="pending-analyses"
+            aria-label={t.unfinishedAnalyses}
+          >
+            <h2>{t.unfinishedAnalyses}</h2>
+            <p>{t.resumeHelp}</p>
+            <div className="pending-analyses-list">
+              {pendingAnalyses.map((run) => (
+                <div className="pending-analysis-row" key={run.id}>
+                  <div>
+                    <strong>{run.template.name}</strong> ·{" "}
+                    {new Date(run.createdAt).toLocaleString(
+                      locale === "de" ? "de-DE" : "en-GB",
+                    )}
+                    <p>
+                      {run.model} · {run.confirmedTasks}/{run.totalTasks}{" "}
+                      {t.confirmedTasks}
+                    </p>
+                  </div>
+                  <button
+                    className="secondary"
+                    disabled={
+                      !connected ||
+                      notesBusy ||
+                      recording ||
+                      busy ||
+                      notesMeetingLoading
+                    }
+                    onClick={() => setResumeAnalysis(run)}
+                  >
+                    {t.resumeAnalysis}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
         {page === "notes" && (
           <NotesView
             t={t}
@@ -1308,6 +1394,22 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
           />
         )}
       </main>
+      {resumeAnalysis && (
+        <ResumeAnalysisDialog
+          key={resumeAnalysis.id}
+          run={resumeAnalysis}
+          api={api}
+          t={t}
+          blocked={
+            !connected || notesBusy || recording || busy || notesMeetingLoading
+          }
+          onClose={() => setResumeAnalysis(null)}
+          onResume={(request) => {
+            setResumeAnalysis(null);
+            void runNotes(request);
+          }}
+        />
+      )}
       {editing && (
         <div
           className="modal-backdrop"

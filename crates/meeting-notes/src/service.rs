@@ -1,6 +1,6 @@
 use crate::{
     validate_answer, validate_template, Analysis, AnalysisControl, AnalysisProgress, Connection,
-    Section, Source, Template, TextClient, PROMPT_VERSION,
+    PendingAnalysis, Section, Source, Template, TextClient, PROMPT_VERSION,
 };
 use anyhow::{ensure, Context, Result};
 use serde::Serialize;
@@ -29,6 +29,98 @@ pub fn read_analysis(path: &Path) -> Result<Analysis> {
     let result: Analysis = serde_json::from_slice(&fs::read(path)?)?;
     validate_analysis(&result)?;
     Ok(result)
+}
+
+fn validate_sources(sources: &[Source]) -> Result<()> {
+    ensure!(
+        !sources.is_empty()
+            && sources.len() <= 100_000
+            && sources
+                .iter()
+                .all(|s| !s.text.is_empty() && s.text.chars().count() <= 1800),
+        "Kein gültiger Transkriptstand für die Auswertung vorhanden."
+    );
+    ensure!(
+        sources.iter().map(|s| &s.id).collect::<HashSet<_>>().len() == sources.len(),
+        "Doppelte Quellenkennung."
+    );
+    Ok(())
+}
+
+/// Reading a saved request never creates a model client or restores cloud consent.
+pub fn read_snapshot(path: &Path) -> Result<Analysis> {
+    let metadata = fs::symlink_metadata(path)?;
+    #[cfg(windows)]
+    let linked = {
+        use std::os::windows::fs::MetadataExt;
+        metadata.file_attributes() & 0x400 != 0
+    };
+    #[cfg(not(windows))]
+    let linked = metadata.file_type().is_symlink();
+    ensure!(
+        metadata.is_file() && !linked && metadata.len() <= 64_000_000,
+        "Gespeicherter Arbeitsstand ist nicht sicher lesbar."
+    );
+    let snapshot: Analysis = serde_json::from_slice(&fs::read(path)?)?;
+    validate_template(&snapshot.template)?;
+    validate_sources(&snapshot.sources)?;
+    ensure!(
+        snapshot.id.len() == 32
+            && snapshot.id.bytes().all(|c| c.is_ascii_hexdigit())
+            && !snapshot.meeting_id.is_empty()
+            && snapshot.meeting_id.len() <= 128
+            && snapshot.source_hash == source_hash(&snapshot.sources)?
+            && snapshot.prompt_version == PROMPT_VERSION
+            && snapshot.sections.is_empty()
+            && ["local", "cloud"].contains(&snapshot.mode.as_str())
+            && !snapshot.model.is_empty()
+            && snapshot.model.len() <= 512
+            && !snapshot.endpoint.is_empty()
+            && snapshot.endpoint.len() <= 4096,
+        "Gespeicherter Arbeitsstand ist beschädigt oder nicht kompatibel."
+    );
+    Ok(snapshot)
+}
+
+pub fn read_pending_analysis(folder: &Path) -> Result<Option<PendingAnalysis>> {
+    if folder.join("result.json").exists() || !folder.join("snapshot.json").exists() {
+        return Ok(None);
+    }
+    let snapshot = read_snapshot(&folder.join("snapshot.json"))?;
+    ensure!(
+        folder.file_name().and_then(|s| s.to_str()) == Some(snapshot.id.as_str()),
+        "Arbeitsstand und Auswertungsordner passen nicht zusammen."
+    );
+    let batches = source_batches(&snapshot.sources);
+    let mut confirmed_tasks = 0;
+    for (step_index, step) in snapshot.template.steps.iter().enumerate() {
+        for (batch_index, sources) in batches.iter().enumerate() {
+            let path = folder.join(format!("step-{step_index:04}-{batch_index:06}.json"));
+            if path.exists() {
+                let metadata = fs::symlink_metadata(&path)?;
+                ensure!(
+                    metadata.is_file()
+                        && !metadata.file_type().is_symlink()
+                        && metadata.len() <= 4_000_000,
+                    "Bestätigter Auswertungsabschnitt ist nicht sicher lesbar."
+                );
+                validate_answer(&fs::read_to_string(&path)?, sources, &step.kind)?;
+                confirmed_tasks += 1;
+            }
+        }
+    }
+    Ok(Some(PendingAnalysis {
+        id: snapshot.id,
+        meeting_id: snapshot.meeting_id,
+        source_hash: snapshot.source_hash,
+        total_tasks: snapshot.template.steps.len() * batches.len(),
+        template: snapshot.template,
+        created_at: snapshot.created_at,
+        model: snapshot.model,
+        mode: snapshot.mode,
+        endpoint: snapshot.endpoint,
+        confirmed_tasks,
+    }))
 }
 pub(crate) fn validate_analysis(result: &Analysis) -> Result<()> {
     validate_template(&result.template)?;
@@ -98,18 +190,7 @@ pub fn analyze_controlled(
 ) -> Result<Analysis> {
     control.check()?;
     validate_template(&template)?;
-    ensure!(
-        !sources.is_empty()
-            && sources.len() <= 100_000
-            && sources
-                .iter()
-                .all(|s| !s.text.is_empty() && s.text.chars().count() <= 1800),
-        "Kein gültiger Transkriptstand für die Auswertung vorhanden."
-    );
-    ensure!(
-        sources.iter().map(|s| &s.id).collect::<HashSet<_>>().len() == sources.len(),
-        "Doppelte Quellenkennung."
-    );
+    validate_sources(&sources)?;
     let client = TextClient::new(&connection)?;
     let id = resume
         .map(str::to_string)
@@ -135,9 +216,10 @@ pub fn analyze_controlled(
         prompt_version: PROMPT_VERSION.to_string(),
     };
     if resume.is_some() {
-        let previous: Analysis = serde_json::from_slice(&fs::read(folder.join("snapshot.json"))?)?;
+        let previous = read_snapshot(&folder.join("snapshot.json"))?;
         ensure!(
-            previous.source_hash == analysis.source_hash
+            previous.id == analysis.id
+                && previous.source_hash == analysis.source_hash
                 && previous.meeting_id == analysis.meeting_id
                 && previous.model == analysis.model
                 && previous.mode == analysis.mode

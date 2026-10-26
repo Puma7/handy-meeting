@@ -513,7 +513,9 @@ pub fn list_sessions(root: &Path) -> Result<Vec<SessionData>> {
         let path = entry?.path();
         if path.is_dir() && reject_link(&path).is_ok() {
             let manifest = path.join("session.json");
-            if let Ok(data) = read_json::<SessionData>(&manifest) {
+            if let Ok(data) = read_json::<SessionData>(&manifest)
+                .or_else(|_| read_json(&path.join("session.json.bak")))
+            {
                 if validate_data(&data).is_ok() {
                     result.push(data);
                 }

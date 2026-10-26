@@ -128,6 +128,18 @@ export interface StartRequest {
   systemDeviceId: string;
   microphoneDeviceId: string | null;
 }
+export interface PendingAnalysis {
+  id: string;
+  meetingId: string;
+  sourceHash: string;
+  template: AnalysisTemplate;
+  createdAt: string;
+  model: string;
+  mode: "local" | "cloud";
+  endpoint: string;
+  confirmedTasks: number;
+  totalTasks: number;
+}
 export interface NotesRequest {
   jobId?: string;
   resumeRunId?: string;
@@ -174,6 +186,7 @@ export interface DesktopApi {
   importLegacy(manifest: string): Promise<Meeting>;
   generateNotes(request: NotesRequest): Promise<AnalysisResult>;
   listAnalyses(meetingId: string): Promise<AnalysisResult[]>;
+  listUnfinishedAnalyses(meetingId: string): Promise<PendingAnalysis[]>;
   listTextModels(endpoint: string): Promise<string[]>;
   getNotesProgress(): Promise<NotesProgress | null>;
   cancelNotes(jobId: string): Promise<boolean>;

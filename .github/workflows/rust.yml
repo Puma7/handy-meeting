@@ -86,6 +86,9 @@ jobs:
       - name: Prepare hash-pinned installer compiler
         shell: pwsh
         run: ./scripts/prepare-installer.ps1
+      - name: Verify native reservation of missing destination parents and preservation failures
+        shell: pwsh
+        run: ./scripts/check-installer-reservation.ps1
       - name: Bind separate checks to this source tree
         shell: pwsh
         run: node scripts/rust-artifacts.mjs begin-check

@@ -118,6 +118,35 @@ class PortableArtifactGuards(unittest.TestCase):
         self.put(str(work.relative_to(self.root) / "source-after-package.json"), {"synthetic": "known source"})
         return work
 
+    def test_final_package_binding_hashes_the_archive_without_changing_payload_proof(self):
+        for rid, suffix in [('linux-x64', 'linux-amd64.deb'), ('osx-arm64', 'osx-arm64.dmg'), ('osx-x64', 'osx-x64.dmg')]:
+            with self.subTest(rid=rid):
+                work = self.root / ('.build/rust-portable-package/' + rid + '-synthetic')
+                proof = self.put(str(work.relative_to(self.root) / 'package-manifest.json'), {'rid': rid, 'applicationVersion': '1.0.0', 'sourceSHA256': 'a' * 64, 'files': [{'path': 'HandyMeeting', 'sha256': 'b' * 64}]})
+                package = self.put('packages/HandyMeeting-1.0.0-' + suffix, b'synthetic final archive, not an installer')
+                before = proof.read_bytes()
+                with contextlib.redirect_stdout(io.StringIO()):
+                    artifacts.bind_package(work, package)
+                bound = artifacts.read(package.with_name(package.name + '.manifest.json'))
+                self.assertEqual(bound['package'], package.name)
+                self.assertEqual(bound['sha256'], artifacts.sha(package))
+                self.assertEqual(bound['bytes'], package.stat().st_size)
+                self.assertEqual(bound['sourceSHA256'], 'a' * 64)
+                self.assertEqual(proof.read_bytes(), before)
+                self.assertNotIn(str(self.root), json.dumps(bound))
+                with self.assertRaises(FileExistsError):
+                    artifacts.bind_package(work, package)
+                self.assertEqual(proof.read_bytes(), before)
+
+    def test_final_package_binding_rejects_mismatched_filename_and_external_directory(self):
+        work = self.root / '.build/rust-portable-package/linux-x64-synthetic'
+        self.put(str(work.relative_to(self.root) / 'package-manifest.json'), {'rid': 'linux-x64', 'applicationVersion': '1.0.0'})
+        for name in ['packages/HandyMeeting-1.0.0-osx-arm64.dmg', 'other/HandyMeeting-1.0.0-linux-amd64.deb']:
+            package = self.put(name, b'synthetic final archive')
+            with self.assertRaisesRegex(RuntimeError, 'filename or directory mismatch'):
+                artifacts.bind_package(work, package)
+            self.assertFalse(package.with_name(package.name + '.manifest.json').exists())
+
     def assert_flat_proof_scope(self, work):
         observed = []
         original_read = artifacts.read

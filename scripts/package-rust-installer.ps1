@@ -34,7 +34,9 @@ try {
         [IO.File]::WriteAllText($existingFile,'Synthetic user-owned original, not an executable.')
         $rejected = Start-Process -FilePath $package -ArgumentList @('/S',('/D=' + $occupied)) -WindowStyle Hidden -Wait -PassThru
         if ($rejected.ExitCode -eq 0 -or [IO.File]::ReadAllText($existingFile) -ne 'Synthetic user-owned original, not an executable.') { throw 'Installer replaced an existing destination.' }
-        $install = Join-Path $work 'installed'
+        # The default Programs/HandyMeeting/version layout starts with missing parents.
+        # An existing direct parent hid the 1.0.0 GetFullPathName failure.
+        $install = Join-Path $work ('Fresh programs ä/HandyMeeting/' + $version)
         $child = Start-Process -FilePath $package -ArgumentList @('/S',('/D=' + $install)) -WindowStyle Hidden -Wait -PassThru
         if ($child.ExitCode -ne 0) { throw 'Silent installer check failed.' }
         foreach ($file in $receipt.programFiles) { if ((Get-FileHash -LiteralPath (Join-Path $install $file.path)).Hash.ToLowerInvariant() -ne $file.sha256) { throw 'Installed program differs from checked payload.' } }
@@ -56,7 +58,7 @@ try {
         $tested = $true
     }
     $hash = (Get-FileHash -LiteralPath $package -Algorithm SHA256).Hash.ToLowerInvariant()
-    $proof = [ordered]@{success=$true;version=$version;rid='windows-x64';package=[IO.Path]::GetFileName($package);sha256=$hash;bytes=(Get-Item -LiteralPath $package).Length;sourceFingerprintSHA256=$receipt.sourceFingerprintSHA256;executableSHA256=$receipt.executableSHA256;compilerVersion=$compiler.version;compilerArchiveSHA256=$compiler.archiveSHA256;actualInstallUninstallChecked=$tested;existingDestinationRejected=$tested;duplicateVersionRejected=$tested;unknownUserFilePreserved=$tested;recursiveDeletion=$false;userRecordingsIncluded=$false;signing='unsigned'}
+    $proof = [ordered]@{success=$true;version=$version;rid='windows-x64';package=[IO.Path]::GetFileName($package);sha256=$hash;bytes=(Get-Item -LiteralPath $package).Length;sourceFingerprintSHA256=$receipt.sourceFingerprintSHA256;executableSHA256=$receipt.executableSHA256;compilerVersion=$compiler.version;compilerArchiveSHA256=$compiler.archiveSHA256;actualInstallUninstallChecked=$tested;existingDestinationRejected=$tested;freshMissingParentsChecked=$tested;duplicateVersionRejected=$tested;unknownUserFilePreserved=$tested;recursiveDeletion=$false;userRecordingsIncluded=$false;signing='unsigned'}
     [IO.File]::WriteAllText(($package+'.sha256'),($hash+'  '+[IO.Path]::GetFileName($package)+"`n"),[Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText(($package+'.verification.json'),(($proof|ConvertTo-Json)+"`n"),[Text.UTF8Encoding]::new($false))
     $proof | ConvertTo-Json

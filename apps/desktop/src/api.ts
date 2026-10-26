@@ -22,6 +22,8 @@ export const desktopApi: DesktopApi = {
   importLegacy: (manifest) => desktopInvoke("import_legacy", { manifest }),
   generateNotes: (request) => desktopInvoke("generate_notes", { request }),
   listAnalyses: (meetingId) => desktopInvoke("list_analyses", { meetingId }),
+  listUnfinishedAnalyses: (meetingId) =>
+    desktopInvoke("list_unfinished_analyses", { meetingId }),
   listTextModels: (endpoint) =>
     desktopInvoke("list_text_models", { endpoint, mode: "local" }),
   getNotesProgress: () => desktopInvoke("get_notes_progress"),

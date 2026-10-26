@@ -1,6 +1,13 @@
-## HandyMeeting 1.0.0
+## HandyMeeting 1.0.1
 
-The first Rust/Tauri distribution of an independent meeting companion for Handy: separate local audio tracks, live transcription and source-linked meeting notes.
+A patch release of the independent Rust/Tauri meeting companion for Handy.
+
+### Fixed in 1.0.1
+
+- Windows setup now creates a fresh default destination when its parent folders do not yet exist. Existing program directories and user files remain protected. Native tests and actual CI installation cover this first-install layout.
+- Unfinished analysis work is discoverable after restarting the app, preserving original instructions and requiring fresh cloud consent. Backup-recoverable sessions remain visible in history.
+- Portable package proofs bind the final archive name, bytes and SHA-256.
+- Template UI tests use independent cases rather than one long combined workflow; no timeout increase or test retry is used.
 
 ### Choose your download
 
