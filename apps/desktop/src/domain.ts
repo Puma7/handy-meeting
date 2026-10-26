@@ -39,6 +39,19 @@ export const trackName = (track: Track, locale: Locale) =>
     : locale === "de"
       ? "Mikrofon"
       : "Microphone";
+export function describeWarning(value: string, locale: Locale): string {
+  const match =
+    /^(system|microphone): audio driver reported a discontinuity; affected recording ranges can be incomplete\.$/.exec(
+      value,
+    );
+  if (!match) return value;
+  return (
+    trackName(match[1] as Track, locale) +
+    (locale === "de"
+      ? ": Der Audiotreiber hat eine Unterbrechung gemeldet. Teile dieser Spur können fehlen."
+      : ": The audio driver reported an interruption. Parts of this track may be missing.")
+  );
+}
 export function clock(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
   return (
@@ -142,7 +155,11 @@ export function renderTranscript(meeting: Meeting, locale: Locale): string {
             ? "UNVOLLSTÄNDIG: Es stehen Abschnitte aus."
             : "INCOMPLETE: Some sections remain pending.",
         ]),
-    ...meeting.warnings,
+    ...[
+      ...new Set(
+        meeting.warnings.map((value) => describeWarning(value, locale)),
+      ),
+    ],
     ...[...meeting.parts]
       .sort(
         (a, b) =>

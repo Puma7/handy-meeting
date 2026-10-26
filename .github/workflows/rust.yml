@@ -179,7 +179,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: rust-windows-beta-candidate
-          path: packages/HandyMeeting-1.0.0-beta.3-windows-x64.zip*
+          path: packages/HandyMeeting-1.0.0-beta.4-windows-x64.zip*
           retention-days: 14
   portable-core:
     name: Portable core (${{ matrix.runner }})

@@ -1,0 +1,13 @@
+# Lokale Dateien und lange Meetings
+
+Audio und Textjournale werden bereits während der Aufnahme lokal gesichert. Die Schaltfläche **Transkript als Text speichern** legt zusätzlich eine vollständige Text-Momentaufnahme der ausgewählten Sitzung an. Sie verwendet den im Backend gesicherten Stand beider Spuren, nicht nur die sichtbare Live-Vorschau. Bei noch laufender Erkennung steht im Export ausdrücklich, dass Abschnitte ausstehen. Eine abgeschlossene Erkennung schließt mögliche, separat gemeldete Audiolücken nicht aus.
+
+**Sitzungsordner öffnen** öffnet genau diese Sitzung im Dateimanager: Explorer unter Windows, Finder unter macOS oder der konfigurierte Dateimanager unter Linux. Dort liegen `session.json`, die getrennten Audiospuren, Audio-/Textjournale und gegebenenfalls der Ordner `analyses`. Textkopien liegen im Unterordner `exports`. Es werden keine Audiodateien umbenannt, zusammengeführt oder gelöscht.
+
+Jeder Textexport bekommt einen neuen Namen. Erst nach vollständigem Schreiben und Synchronisieren wird die endgültige TXT-Datei veröffentlicht; ein vorhandener Zielname wird nie ersetzt. Unvollständige Schreibstände bleiben als `.pending` erkennbar. Das Dateisystem muss Hardlinks innerhalb des Sitzungsordners unterstützen; andernfalls meldet die App den fehlgeschlagenen Abschluss. Ein bestätigter Dateiexport ist kein Schutz vor Stromausfall oder Datenträgerdefekt. Schreibgeschützt importierte Prototyp-Sitzungen bleiben unverändert; ihr Transkript kann vollständig kopiert werden.
+
+Aufnahme- und Auswertungseinstellungen lassen sich aufklappen. Während Aufnahme beziehungsweise Auswertung wird der zugehörige Einstellungsbereich eingeklappt; Stop und Abbruch bleiben verfügbar. Das Transkript hat einen eigenen mit Tastatur bedienbaren Scrollbereich, sodass auch das Ende einer langen Sitzung erreichbar bleibt. Kopieren und Dateiexport bleiben unabhängig vom sichtbaren Ausschnitt.
+
+Die laufende Nachbearbeitung zeigt ihren Status beim Scrollen und auf den anderen Seiten. Ihre Prozentzahl zählt geprüfte und gesicherte Teilaufgaben; sie schätzt weder Restzeit noch den internen Modellfortschritt. Der Abbruch bezieht sich weiterhin auf den ausgewählten Lauf. Eine abgeschlossene Auswertung zeigt einen kompakten, schließbaren Hinweis.
+
+Bekannte Treiberunterbrechungen werden verständlich übersetzt. Technische Originalmeldungen stehen unter **Technische Meldungen anzeigen** und bleiben in den Sitzungsdaten erhalten. Eine Treibermeldung beweist weder eine bestimmte Lückendauer noch eine vollständig verlorene Sitzung. Unbekannte Meldungen werden nicht unterdrückt oder als Anweisungen behandelt.

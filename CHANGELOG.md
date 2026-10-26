@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-beta.4 — clearer meeting workflow and local text exports
+
+- Collapse recording setup during capture and analysis setup during processing or result review. Keep the recording controls available and long transcripts in a keyboard-scrollable region.
+- Show understandable German/English explanations for known audio-driver interruptions, with original technical messages available on demand and preserved in session metadata. Unknown warnings remain literal data.
+- Open the exact selected meeting folder in the system file manager; save complete current transcripts as new UTF-8 text snapshots in its exports folder. Prior exports and original journals are retained. Failed writes remain pending, never a finished TXT export.
+- Keep analysis stage, confirmed-task percentage, elapsed time and targeted cancellation visible while scrolling or visiting another page. Compact completed feedback and historical-prompt explanations.
+- Verify 480 synthetic original sections, same-named meeting selection, export failures, literal untrusted warning text and small-window rendering. No capture or recognition-engine change is included.
+
 ## 1.0.0-beta.3 — issue implementation and verification
 
 - Manage named templates explicitly with create, duplicate, rename, reviewed removal and optional browser import. Keep prior revisions and historical analysis prompts immutable; reject conflicting or damaged stores.

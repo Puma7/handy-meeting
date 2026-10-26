@@ -5,6 +5,10 @@ import type { TemplateLibrary } from "./types";
 export function testServices() {
   let library: TemplateLibrary = { revision: 0, templates: [] };
   return {
+    openMeetingFolder: vi.fn().mockResolvedValue(undefined),
+    exportTranscript: vi
+      .fn()
+      .mockResolvedValue("exports/transcript-synthetic.txt"),
     listTemplates: vi.fn(async () => structuredClone(library)),
     saveTemplates: vi.fn(async (next: TemplateLibrary) => {
       if (next.revision !== library.revision)

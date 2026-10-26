@@ -3,6 +3,8 @@ import { meetingLabel } from "../domain";
 import type { Meeting, Locale } from "../types";
 import type { MessageKey } from "../i18n";
 import TranscriptBody from "./TranscriptBody";
+import SessionWarnings from "./SessionWarnings";
+import MeetingFiles from "./MeetingFiles";
 export default function MeetingDetail({
   meeting,
   locale,
@@ -12,6 +14,9 @@ export default function MeetingDetail({
   onBack,
   onCopy,
   onAnalyse,
+  onOpenFolder,
+  onExport,
+  savedFile,
 }: {
   meeting: Meeting;
   locale: Locale;
@@ -21,6 +26,9 @@ export default function MeetingDetail({
   onBack: () => void;
   onCopy: () => void;
   onAnalyse: () => void;
+  onOpenFolder: () => void;
+  onExport: () => void;
+  savedFile: string | null;
 }) {
   const parts = [...meeting.parts]
     .sort(
@@ -63,11 +71,16 @@ export default function MeetingDetail({
       {meeting.status !== "complete" && (
         <div className="notice warning">{t.pendingNotes}</div>
       )}
-      {meeting.warnings.map((warning, index) => (
-        <div className="notice warning" key={index}>
-          {warning}
-        </div>
-      ))}
+      <div className="meeting-files">
+        <MeetingFiles
+          t={t}
+          disabled={busy}
+          onOpenFolder={onOpenFolder}
+          onExport={onExport}
+          savedFile={savedFile}
+        />
+      </div>
+      <SessionWarnings warnings={meeting.warnings} locale={locale} t={t} />
       <TranscriptBody parts={parts} locale={locale} t={t} />
     </section>
   );

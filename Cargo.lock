@@ -1617,7 +1617,7 @@ dependencies = [
 
 [[package]]
 name = "handy-meeting-desktop"
-version = "1.0.0-beta.3"
+version = "1.0.0-beta.4"
 dependencies = [
  "anyhow",
  "arboard",
@@ -2270,7 +2270,7 @@ dependencies = [
 
 [[package]]
 name = "meeting-notes"
-version = "1.0.0-beta.3"
+version = "1.0.0-beta.4"
 dependencies = [
  "anyhow",
  "chrono",

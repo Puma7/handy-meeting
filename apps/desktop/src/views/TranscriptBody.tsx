@@ -12,7 +12,13 @@ export default function TranscriptBody({
   t: Record<MessageKey, string>;
 }) {
   return (
-    <div className="transcript-content" aria-live="polite">
+    <div
+      className="transcript-content"
+      role="region"
+      aria-label={t.live}
+      tabIndex={0}
+      aria-live="polite"
+    >
       {parts.length ? (
         parts.map((part, index) => (
           <article

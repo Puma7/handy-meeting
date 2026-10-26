@@ -1,4 +1,4 @@
-HandyMeeting 1.0.0-beta.3 - additional third-party notices
+HandyMeeting 1.0.0-beta.4 - additional third-party notices
 
 Rust dependency records and verbatim license texts: licenses/rust/x86_64-pc-windows-msvc/.
 Frontend production dependency records and verbatim license texts: licenses/frontend/.

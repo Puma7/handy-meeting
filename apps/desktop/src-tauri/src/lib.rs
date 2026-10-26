@@ -2,6 +2,7 @@ mod agent;
 mod asr;
 mod credential_commands;
 mod credential_service;
+mod meeting_files;
 mod notes_commands;
 mod notes_service;
 mod template_commands;
@@ -871,6 +872,46 @@ async fn copy_text(text: String) -> AppResult<()> {
     .await
 }
 #[tauri::command]
+async fn open_meeting_folder(service: State<'_, Arc<Service>>, id: String) -> AppResult<()> {
+    let service = Arc::clone(&service);
+    blocking(move || {
+        // Resolve through the known session identity, never a frontend-supplied path.
+        service.data(&id)?;
+        let folder = if valid_legacy_id(&id) {
+            let manifest = service
+                .lock()?
+                .legacy
+                .get(&id)
+                .cloned()
+                .ok_or("Unknown imported session")?;
+            manifest
+                .parent()
+                .ok_or("Session folder missing")?
+                .to_owned()
+        } else {
+            meeting_files::session_folder(&service.root, &id)?
+        };
+        meeting_files::open_folder(&folder)
+    })
+    .await
+}
+#[tauri::command]
+async fn export_transcript(
+    service: State<'_, Arc<Service>>,
+    id: String,
+    locale: String,
+) -> AppResult<String> {
+    let service = Arc::clone(&service);
+    blocking(move || {
+        let data = service.data(&id)?;
+        if data.read_only {
+            return Err("Diese Originalsitzung ist schreibgeschützt. Das Transkript kann weiterhin vollständig kopiert werden. / This original session is read-only; the full transcript can still be copied.".into());
+        }
+        let folder = meeting_files::session_folder(&service.root, &id)?;
+        meeting_files::save_transcript(&folder, &data, &locale)
+    }).await
+}
+#[tauri::command]
 async fn generate_notes(
     service: State<'_, Arc<Service>>,
     request: NotesRequest,
@@ -899,7 +940,7 @@ pub fn run() {
         if std::env::args().skip(1).eq(["--agent", "serve"]) { agent::start_stdio(Arc::clone(&service)).map_err(std::io::Error::other)?; }
         tauri::async_runtime::spawn_blocking(move|| {let _=service.refresh(None);});
         Ok(())
-    }).invoke_handler(tauri::generate_handler![get_app_state,refresh_handy,list_devices,start_meeting,stop_meeting,agent_decide_recording,agent_revoke,list_meetings,get_meeting,resume_meeting,import_legacy,copy_text,generate_notes,list_analyses,notes_commands::list_text_models,notes_commands::get_notes_progress,notes_commands::cancel_notes,notes_commands::notes_markdown,template_commands::list_templates,template_commands::save_templates,template_commands::import_templates,credential_commands::credential_status,credential_commands::save_credential,credential_commands::remove_credential])
+    }).invoke_handler(tauri::generate_handler![get_app_state,refresh_handy,list_devices,start_meeting,stop_meeting,agent_decide_recording,agent_revoke,list_meetings,get_meeting,resume_meeting,import_legacy,copy_text,open_meeting_folder,export_transcript,generate_notes,list_analyses,notes_commands::list_text_models,notes_commands::get_notes_progress,notes_commands::cancel_notes,notes_commands::notes_markdown,template_commands::list_templates,template_commands::save_templates,template_commands::import_templates,credential_commands::credential_status,credential_commands::save_credential,credential_commands::remove_credential])
     .on_window_event(|window,event|{if let tauri::WindowEvent::CloseRequested{api,..}=event{let service=window.state::<Arc<Service>>();let blocked=service.lock().is_ok_and(|inner|inner.transitioning||inner.active.as_ref().is_some_and(|a|a.capture.is_some()));if blocked{api.prevent_close();if let Ok(mut inner)=service.lock(){inner.error=Some(if inner.transitioning { "Ein Vorgang läuft noch. Bitte warten, bis Audioabschluss und Verarbeitung beendet sind.".into() } else { "Bitte zuerst „Meeting beenden“ wählen. Audio wird gesichert und offene Abschnitte werden verarbeitet.".into() });}let _=window.emit("recording-close-blocked",());}}})
     .run(tauri::generate_context!()).expect("HandyMeeting konnte nicht gestartet werden.");
 }

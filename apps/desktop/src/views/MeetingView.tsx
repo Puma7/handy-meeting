@@ -18,6 +18,9 @@ import type {
 import type { MessageKey, extraDe } from "../i18n";
 import { clock } from "../domain";
 import TranscriptBody from "./TranscriptBody";
+import { useEffect, useState } from "react";
+import SessionWarnings from "./SessionWarnings";
+import MeetingFiles from "./MeetingFiles";
 type Props = {
   t: Record<MessageKey, string>;
   x: Record<keyof typeof extraDe, string>;
@@ -30,6 +33,9 @@ type Props = {
   title: string;
   defaultTitle: string;
   onAnalyse: () => void;
+  onOpenFolder: () => void;
+  onExport: () => void;
+  savedFile: string | null;
   modelId: string;
   systemId: string;
   micId: string;
@@ -64,6 +70,9 @@ export default function MeetingView({
   title,
   defaultTitle,
   onAnalyse,
+  onOpenFolder,
+  onExport,
+  savedFile,
   modelId,
   systemId,
   micId,
@@ -86,6 +95,10 @@ export default function MeetingView({
   resume,
   copyFullTranscript,
 }: Props) {
+  const [setupOpen, setSetupOpen] = useState(!meeting && !recording);
+  useEffect(() => {
+    if (meeting) setSetupOpen(false);
+  }, [recording, meeting?.id]);
   return (
     <>
       {!!app?.handy?.error && (
@@ -104,98 +117,114 @@ export default function MeetingView({
           </div>
         )}
       <section className="setup-panel" aria-label={t.meeting}>
-        <label className="full">
-          {t.title}
-          <input
-            value={title}
-            disabled={recording || busy}
-            placeholder={defaultTitle}
-            maxLength={200}
-            onChange={(event) => setTitle(event.target.value)}
-          />
-        </label>
-        <label className="full">
-          {t.model}
-          <div className="inline-control">
-            <select
-              title={t.modelTooltip}
-              value={modelId}
-              disabled={recording || busy || !models.length}
-              onChange={(event) => setModelId(event.target.value)}
-            >
-              <option value="">{models.length ? t.choose : t.noModels}</option>
-              {models.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-            <button
-              className="icon-button bordered"
-              title={t.refresh}
-              aria-label={t.refresh}
-              disabled={busy || recording || !connected}
-              onClick={refreshHandy}
-            >
-              <RefreshCw size={17} />
-            </button>
+        <details
+          className="setup-details"
+          open={setupOpen}
+          onToggle={(event) => setSetupOpen(event.currentTarget.open)}
+        >
+          <summary>
+            <strong>{t.captureSetup}</strong>
+            <span>
+              {models.find((model) => model.id === modelId)?.name ?? t.choose}
+            </span>
+          </summary>
+          <div className="setup-grid">
+            <label className="full">
+              {t.title}
+              <input
+                value={title}
+                disabled={recording || busy}
+                placeholder={defaultTitle}
+                maxLength={200}
+                onChange={(event) => setTitle(event.target.value)}
+              />
+            </label>
+            <label className="full">
+              {t.model}
+              <div className="inline-control">
+                <select
+                  title={t.modelTooltip}
+                  value={modelId}
+                  disabled={recording || busy || !models.length}
+                  onChange={(event) => setModelId(event.target.value)}
+                >
+                  <option value="">
+                    {models.length ? t.choose : t.noModels}
+                  </option>
+                  {models.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="icon-button bordered"
+                  title={t.refresh}
+                  aria-label={t.refresh}
+                  disabled={busy || recording || !connected}
+                  onClick={refreshHandy}
+                >
+                  <RefreshCw size={17} />
+                </button>
+              </div>
+            </label>
+            <label>
+              <span className="label-icon">
+                <Monitor size={15} />
+                {t.system}
+              </span>
+              <select
+                value={systemId}
+                disabled={
+                  recording ||
+                  busy ||
+                  !devices.some((item) => item.source === "system")
+                }
+                onChange={(event) => setSystemId(event.target.value)}
+              >
+                {!devices.some((item) => item.source === "system") && (
+                  <option value="">{t.noDevices}</option>
+                )}
+                {devices
+                  .filter((item) => item.source === "system")
+                  .map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <div className="microphone-field">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={micEnabled}
+                  disabled={recording || busy}
+                  onChange={(event) => setMicEnabled(event.target.checked)}
+                />
+                <Mic size={15} />
+                {t.microphone}
+              </label>
+              <select
+                aria-label={t.sourceMicrophone}
+                value={micId}
+                disabled={!micEnabled || recording || busy}
+                onChange={(event) => setMicId(event.target.value)}
+              >
+                {!devices.some((item) => item.source === "microphone") && (
+                  <option value="">{t.noDevices}</option>
+                )}
+                {devices
+                  .filter((item) => item.source === "microphone")
+                  .map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
           </div>
-        </label>
-        <label>
-          <span className="label-icon">
-            <Monitor size={15} />
-            {t.system}
-          </span>
-          <select
-            value={systemId}
-            disabled={
-              recording ||
-              busy ||
-              !devices.some((item) => item.source === "system")
-            }
-            onChange={(event) => setSystemId(event.target.value)}
-          >
-            {!devices.some((item) => item.source === "system") && (
-              <option value="">{t.noDevices}</option>
-            )}
-            {devices
-              .filter((item) => item.source === "system")
-              .map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-          </select>
-        </label>
-        <div className="microphone-field">
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={micEnabled}
-              disabled={recording || busy}
-              onChange={(event) => setMicEnabled(event.target.checked)}
-            />
-            <Mic size={15} />
-            {t.microphone}
-          </label>
-          <select
-            aria-label={t.sourceMicrophone}
-            value={micId}
-            disabled={!micEnabled || recording || busy}
-            onChange={(event) => setMicId(event.target.value)}
-          >
-            {!devices.some((item) => item.source === "microphone") && (
-              <option value="">{t.noDevices}</option>
-            )}
-            {devices
-              .filter((item) => item.source === "microphone")
-              .map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-          </select>
-        </div>
+        </details>
         <div className="record-controls full">
           <span className={recording ? "state recording" : "state"}>
             <span className="state-dot" />
@@ -272,15 +301,8 @@ export default function MeetingView({
           </div>
         </div>
       )}
-      {!!meeting?.warnings.length && (
-        <div className="notice warning">
-          <div>
-            <strong>{t.warnings}</strong>
-            {meeting.warnings.map((warning, index) => (
-              <p key={index}>{warning}</p>
-            ))}
-          </div>
-        </div>
+      {meeting && (
+        <SessionWarnings warnings={meeting.warnings} locale={locale} t={t} />
       )}
       {meeting &&
         !recording &&
@@ -327,6 +349,17 @@ export default function MeetingView({
             )}
           </div>
         </div>
+        {meeting && (
+          <div className="meeting-files">
+            <MeetingFiles
+              t={t}
+              disabled={busy || !connected}
+              onOpenFolder={onOpenFolder}
+              onExport={onExport}
+              savedFile={savedFile}
+            />
+          </div>
+        )}
         <TranscriptBody parts={recentParts} locale={locale} t={t} />
       </section>
     </>

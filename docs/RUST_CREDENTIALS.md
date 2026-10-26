@@ -27,7 +27,7 @@ The explicit `--credential-checks NEW_OUTPUT_DIRECTORY` mode uses a unique servi
 
 Windows Credential Manager was actually exercised on this Windows host on 25 October 2026: `.build/credential-native-windows-20261025-225123/credential-checks.json` for beta.2 and `.build/credential-native-windows-beta3-20261025-225934/credential-checks.json` for beta.3. Five checks passed in each, `actualNativeStore: true`, `simulated: false`. These checks do not prove behavior under every account policy or OS permission failure.
 
-Actual Mac Keychain and Linux Secret Service execution remains pending until run on those hosts. A prepared workflow is not an executed test. For GitHub-hosted Unix runners only, after building the native application:
+Actual Windows Credential Manager, Mac Keychain on both Apple Silicon and Intel, and Linux Secret Service each passed five isolated checks in the completed beta.3 runs: [Windows](https://github.com/Puma7/handy-meeting/actions/runs/40239590566), [Unix targets](https://github.com/Puma7/handy-meeting/actions/runs/40239590551). All records report actualNativeStore=true, simulated=false, usesUserEntries=false and cloudRequests=false. Local downloaded records are under `.build/ci-beta3-207678a/<rid>/`; physical desktop account/permission failures remain simulated separately. For GitHub-hosted Unix runners only, after building the native application:
 
 ```bash
 # Linux prerequisites: dbus and gnome-keyring, in addition to app dependencies.

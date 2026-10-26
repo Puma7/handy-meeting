@@ -29,6 +29,9 @@ export const desktopApi: DesktopApi = {
   notesMarkdown: (meetingId, analysisId) =>
     desktopInvoke("notes_markdown", { meetingId, analysisId }),
   copyText: (text) => desktopInvoke("copy_text", { text }),
+  openMeetingFolder: (id) => desktopInvoke("open_meeting_folder", { id }),
+  exportTranscript: (id, locale) =>
+    desktopInvoke("export_transcript", { id, locale }),
   listTemplates: () => desktopInvoke("list_templates"),
   saveTemplates: (library) => desktopInvoke("save_templates", { library }),
   importTemplates: (templates) =>

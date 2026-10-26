@@ -102,7 +102,7 @@ export default function NotesProgressPanel({
           </button>
         )}
       </div>
-      {progress && (
+      {running && progress && (
         <>
           <div className="notes-progress-meta">
             <span>
@@ -135,11 +135,14 @@ export default function NotesProgressPanel({
         </>
       )}
       {running && (
-        <p className="muted">
-          {cancelPending || progress?.cancelRequested
-            ? t.cancelHelp
-            : t.inferenceUnknown}
-        </p>
+        <details className="progress-explanation">
+          <summary>{t.analysisDetails}</summary>
+          <p className="muted">
+            {cancelPending || progress?.cancelRequested
+              ? t.cancelHelp
+              : t.inferenceUnknown}
+          </p>
+        </details>
       )}
       {running && feedback?.kind === "cancel-unavailable" && (
         <p className="inline-error">{t.cancelUnavailable}</p>
@@ -150,24 +153,18 @@ export default function NotesProgressPanel({
         </p>
       )}
       {feedback?.message && <p className="inline-error">{feedback.message}</p>}
-      {!running && (
-        <div className="progress-result-actions">
-          <button className="text-button" onClick={onOpen}>
-            <ArrowUpRight size={15} />
-            {t.openAnalysisMeeting}
+      <div className="progress-result-actions">
+        <button className="text-button" onClick={onOpen}>
+          <ArrowUpRight size={15} />
+          {t.openAnalysisMeeting}
+        </button>
+        {!running && onResume && (
+          <button className="secondary" onClick={onResume} title={t.resumeHelp}>
+            <RefreshCw size={15} />
+            {t.resumeAnalysis}
           </button>
-          {onResume && (
-            <button
-              className="secondary"
-              onClick={onResume}
-              title={t.resumeHelp}
-            >
-              <RefreshCw size={15} />
-              {t.resumeAnalysis}
-            </button>
-          )}
-        </div>
-      )}
+        )}
+      </div>
     </section>
   );
 }

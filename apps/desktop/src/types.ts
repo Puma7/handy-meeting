@@ -179,6 +179,8 @@ export interface DesktopApi {
   cancelNotes(jobId: string): Promise<boolean>;
   notesMarkdown(meetingId: string, analysisId: string): Promise<string>;
   copyText(text: string): Promise<void>;
+  openMeetingFolder(id: string): Promise<void>;
+  exportTranscript(id: string, locale: Locale): Promise<string>;
   listTemplates(): Promise<TemplateLibrary>;
   saveTemplates(library: TemplateLibrary): Promise<TemplateLibrary>;
   importTemplates(templates: AnalysisTemplate[]): Promise<TemplateLibrary>;

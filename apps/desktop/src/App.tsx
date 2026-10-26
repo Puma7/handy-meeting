@@ -72,6 +72,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     [isStopping, setIsStopping] = useState(false),
     [refreshingHandy, setRefreshingHandy] = useState(false),
     [copied, setCopied] = useState<"transcript" | "notes" | null>(null);
+  const [fileExport, setFileExport] = useState<{
+    id: string;
+    file: string;
+  } | null>(null);
   const [devices, setDevices] = useState<AudioDevice[]>([]),
     [history, setHistory] = useState<MeetingSummary[]>([]),
     [meeting, setMeeting] = useState<Meeting | null>(null),
@@ -977,6 +981,25 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             onAnalyse={() => {
               if (liveMeeting) void openNotesFor(liveMeeting.id);
             }}
+            onOpenFolder={() =>
+              void action(async () => {
+                if (liveMeeting) await api.openMeetingFolder(liveMeeting.id);
+              })
+            }
+            onExport={() =>
+              void action(async () => {
+                if (liveMeeting) {
+                  const id = liveMeeting.id;
+                  const file = await api.exportTranscript(id, locale);
+                  setFileExport({ id, file });
+                }
+              })
+            }
+            savedFile={
+              fileExport?.id === liveMeeting?.id
+                ? (fileExport?.file ?? null)
+                : null
+            }
             modelId={modelId}
             systemId={systemId}
             micId={micId}
@@ -1019,6 +1042,17 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             onBack={() => void navigate("history")}
             onCopy={() => void copyFullTranscript(meeting)}
             onAnalyse={() => void openNotesFor(meeting.id)}
+            onOpenFolder={() =>
+              void action(() => api.openMeetingFolder(meeting.id))
+            }
+            onExport={() =>
+              void action(async () => {
+                const id = meeting.id;
+                const file = await api.exportTranscript(id, locale);
+                setFileExport({ id, file });
+              })
+            }
+            savedFile={fileExport?.id === meeting.id ? fileExport.file : null}
           />
         )}
         {page === "history" && (

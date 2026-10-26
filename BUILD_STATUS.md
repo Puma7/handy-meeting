@@ -2,7 +2,20 @@
 
 Repository: [Puma7/handy-meeting](https://github.com/Puma7/handy-meeting), publicly shared with the owner's approval on 25 October 2026. This is an independent prototype.
 
-## Current Rust/Tauri beta 2
+## Current Rust/Tauri beta 3
+
+`1.0.0-beta.3` implements the issue work: revisioned template management, opt-in native credential storage and visible per-session agent consent. Source commit `207678a41084edcba9816d79f4ef35bae4a524ac` passed the actual [Windows/Core checks](https://github.com/Puma7/handy-meeting/actions/runs/40239590566), [Linux and both Mac desktop packages](https://github.com/Puma7/handy-meeting/actions/runs/40239590551), and [preserved C# checks](https://github.com/Puma7/handy-meeting/actions/runs/40239590550). All four targets passed five actual isolated native credential-store checks. Hash/source bindings were verified after download. [Issue implementation PR](https://github.com/Puma7/handy-meeting/pull/8) remains a draft.
+
+| Target | Checked beta.3 candidate |
+| --- | --- |
+| Windows x64 | [ZIP](packages/rust-beta3-ci-207678a/windows-x64/HandyMeeting-1.0.0-beta.3-windows-x64.zip) |
+| Ubuntu/Debian x64 | [DEB](packages/rust-beta3-ci-207678a/linux-x64/HandyMeeting-1.0.0-beta.3-linux-amd64.deb) |
+| macOS 13+ Apple Silicon | [DMG](packages/rust-beta3-ci-207678a/osx-arm64/HandyMeeting-1.0.0-beta.3-osx-arm64.dmg) |
+| macOS 13+ Intel | [DMG](packages/rust-beta3-ci-207678a/osx-x64/HandyMeeting-1.0.0-beta.3-osx-x64.dmg) |
+
+Windows native UI and pending-agent/EOF behavior were checked in isolated profiles with synthetic data. Human recording approval and physical Mac/Linux capture remain open. The completed paired worker-only GPU experiment is reported separately in [TEST_REPORT.md](TEST_REPORT.md); it does not replace a full-app two-hour test or resolve the original warning. Mac packages remain ad-hoc signed, not notarized. Existing distributions and user data remain intact.
+
+## Earlier Rust/Tauri beta 2
 
 The guided analysis, local-model discovery, meeting-detail history, truthful task progress/elapsed time/cancellation and validated Markdown copy are implemented in `1.0.0-beta.2`. [Draft PR #8](https://github.com/Puma7/handy-meeting/pull/8) remains open; no stable Rust release or merge is implied.
 

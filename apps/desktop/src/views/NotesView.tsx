@@ -22,6 +22,7 @@ import type {
 import type { MessageKey } from "../i18n";
 import type { TemplateAction } from "./TemplateDialog";
 import CredentialPanel from "./CredentialPanel";
+import { useEffect, useState } from "react";
 import type { DesktopApi } from "../types";
 type Props = {
   t: Record<MessageKey, string>;
@@ -142,6 +143,10 @@ export default function NotesView({
   showEvidence,
   locale,
 }: Props) {
+  const [setupOpen, setSetupOpen] = useState(!result);
+  useEffect(() => {
+    if (notesBusy || result) setSetupOpen(false);
+  }, [notesBusy, result?.id]);
   const templateLocked =
     notesBusy || libraryInvalid || libraryPending || !connected;
   const visibleSteps = result ? result.sections : template.steps;
@@ -198,241 +203,268 @@ export default function NotesView({
         </div>
       )}
       <section className="notes-config">
-        {mode === "local" && (
-          <p className="local-service-help">{t.localServiceHelp}</p>
-        )}
-        <div className="settings-grid">
-          <label>
-            {t.processing}
-            <select
-              value={mode}
-              disabled={notesBusy}
-              onChange={(event) => {
-                setMode(event.target.value as "local" | "cloud");
-                setEndpoint(
-                  event.target.value === "local"
-                    ? "http://127.0.0.1:1234/v1/"
-                    : "https://openrouter.ai/api/v1/",
-                );
-                setApiKey("");
-              }}
-            >
-              <option value="local">{t.local}</option>
-              <option value="cloud">{t.cloud}</option>
-            </select>
-          </label>
-          <label>
-            {t.textModel}
-            {mode === "local" && !manualModel ? (
-              <div className="inline-control">
+        <details
+          className="analysis-setup"
+          open={setupOpen}
+          onToggle={(event) => setSetupOpen(event.currentTarget.open)}
+        >
+          <summary>
+            <strong>{t.analysisSetup}</strong>
+            <span>
+              {[textModel, template.name].filter(Boolean).join(" · ")}
+            </span>
+          </summary>
+          <div className="analysis-setup-fields">
+            <div className="settings-grid">
+              <label>
+                {t.processing}
                 <select
-                  value={textModel}
-                  disabled={notesBusy || modelsLoading}
-                  onChange={(event) => setTextModel(event.target.value)}
+                  value={mode}
+                  disabled={notesBusy}
+                  onChange={(event) => {
+                    setMode(event.target.value as "local" | "cloud");
+                    setEndpoint(
+                      event.target.value === "local"
+                        ? "http://127.0.0.1:1234/v1/"
+                        : "https://openrouter.ai/api/v1/",
+                    );
+                    setApiKey("");
+                  }}
                 >
-                  <option value="">
-                    {modelsLoading ? t.loadingTextModels : t.selectTextModel}
-                  </option>
-                  {textModel && !localModels.includes(textModel) && (
-                    <option value={textModel} disabled>
-                      {textModel} · {t.notFound}
-                    </option>
+                  <option value="local">{t.local}</option>
+                  <option value="cloud">{t.cloud}</option>
+                </select>
+              </label>
+              <label>
+                {t.textModel}
+                {mode === "local" && !manualModel ? (
+                  <div className="inline-control">
+                    <select
+                      aria-label={t.textModel}
+                      value={textModel}
+                      disabled={notesBusy || modelsLoading}
+                      onChange={(event) => setTextModel(event.target.value)}
+                    >
+                      <option value="">
+                        {modelsLoading
+                          ? t.loadingTextModels
+                          : t.selectTextModel}
+                      </option>
+                      {textModel && !localModels.includes(textModel) && (
+                        <option value={textModel} disabled>
+                          {textModel} · {t.notFound}
+                        </option>
+                      )}
+                      {localModels.map((model) => (
+                        <option value={model} key={model}>
+                          {model}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="icon-button bordered"
+                      onClick={refreshModels}
+                      disabled={notesBusy || modelsLoading || !connected}
+                      title={t.refreshTextModels}
+                      aria-label={t.refreshTextModels}
+                    >
+                      <RefreshCw
+                        size={17}
+                        className={modelsLoading ? "spinning" : undefined}
+                      />
+                    </button>
+                  </div>
+                ) : (
+                  <input
+                    aria-label={t.textModel}
+                    value={textModel}
+                    disabled={notesBusy}
+                    onChange={(event) => setTextModel(event.target.value)}
+                    autoComplete="off"
+                  />
+                )}
+              </label>
+            </div>
+            {mode === "local" && (
+              <details className="local-service-help">
+                <summary>{t.setupHelp}</summary>
+                <p>{t.localServiceHelp}</p>
+                <p>{t.firstModelLoad}</p>
+              </details>
+            )}
+            {mode === "local" && (
+              <>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={manualModel}
+                    disabled={notesBusy}
+                    onChange={(event) => setManualModel(event.target.checked)}
+                  />
+                  {t.manualTextModel}
+                </label>
+                {modelsError && (
+                  <div className="notice warning">
+                    <div>
+                      <strong>{modelsError}</strong>
+                      <p>{t.textModelsHelp}</p>
+                    </div>
+                  </div>
+                )}
+                {modelsLoaded && !localModels.length && (
+                  <p className="muted">
+                    {t.noTextModels} {t.textModelsHelp}
+                  </p>
+                )}
+                {textModel &&
+                  !manualModel &&
+                  modelsLoaded &&
+                  !localModels.includes(textModel) && (
+                    <p className="inline-error">{t.textModelUnavailable}</p>
                   )}
-                  {localModels.map((model) => (
-                    <option value={model} key={model}>
-                      {model}
+              </>
+            )}
+            <details
+              className="connection-settings"
+              open={mode === "cloud" ? true : undefined}
+            >
+              <summary>{t.connectionSettings}</summary>
+              <label>
+                {mode === "local" ? t.localEndpoint : t.endpoint}
+                <input
+                  type="url"
+                  value={endpoint}
+                  disabled={notesBusy}
+                  onChange={(event) => setEndpoint(event.target.value)}
+                  autoComplete="off"
+                />
+              </label>
+              <CredentialPanel
+                api={api}
+                endpoint={endpoint}
+                mode={mode}
+                connected={connected}
+                disabled={notesBusy}
+                apiKey={apiKey}
+                setApiKey={setApiKey}
+                useSavedKey={useSavedKey}
+                setUseSavedKey={setUseSavedKey}
+                t={t}
+              />
+            </details>
+            <div className="template-selector">
+              <label>
+                {t.template}
+                <select
+                  value={template.id}
+                  disabled={templateLocked}
+                  onChange={(event) => {
+                    const next = templates.find(
+                      (item) => item.id === event.target.value,
+                    )!;
+                    setTemplateId(next.id);
+                    setStepId(next.steps[0].id);
+                    setResultId("");
+                  }}
+                >
+                  {templates.map((item) => (
+                    <option value={item.id} key={item.id}>
+                      {item.name}
                     </option>
                   ))}
                 </select>
+              </label>
+            </div>
+            <div className="template-actions" aria-label={t.template}>
+              <button
+                className="secondary"
+                disabled={templateLocked || templates.length >= 100}
+                onClick={() => openTemplateAction("new")}
+              >
+                <Plus size={15} />
+                {t.newTemplate}
+              </button>
+              <button
+                className="secondary"
+                disabled={templateLocked || templates.length >= 100}
+                onClick={() =>
+                  openTemplateAction("duplicate", result?.template ?? template)
+                }
+              >
+                <Copy size={15} />
+                {t.duplicateTemplate}
+              </button>
+              <button
+                className="text-button"
+                disabled={templateLocked}
+                onClick={() => openTemplateAction("rename")}
+              >
+                <Pencil size={14} />
+                {t.renameTemplate}
+              </button>
+              <button
+                className="text-button"
+                disabled={templateLocked || templates.length < 2}
+                title={templates.length < 2 ? t.lastTemplate : t.removeTemplate}
+                onClick={() => openTemplateAction("delete")}
+              >
+                <Trash2 size={14} />
+                {t.removeTemplate}
+              </button>
+              <button
+                className="text-button"
+                disabled={notesBusy || libraryPending || !connected}
+                onClick={refreshTemplates}
+              >
+                <RefreshCw
+                  size={14}
+                  className={libraryPending ? "spinning" : undefined}
+                />
+                {t.refreshTemplates}
+              </button>
+            </div>
+            <p className="muted">{t.templatesPortable}</p>
+            {importBrowser && (
+              <details>
+                <summary>{t.importBrowserTemplates}</summary>
+                <p>{t.browserTemplatesHelp}</p>
                 <button
-                  type="button"
-                  className="icon-button bordered"
-                  onClick={refreshModels}
-                  disabled={notesBusy || modelsLoading || !connected}
-                  title={t.refreshTextModels}
-                  aria-label={t.refreshTextModels}
+                  className="secondary"
+                  disabled={templateLocked}
+                  onClick={importBrowser}
                 >
-                  <RefreshCw
-                    size={17}
-                    className={modelsLoading ? "spinning" : undefined}
-                  />
+                  {t.importBrowserTemplates}
                 </button>
-              </div>
-            ) : (
-              <input
-                value={textModel}
-                disabled={notesBusy}
-                onChange={(event) => setTextModel(event.target.value)}
-                autoComplete="off"
-              />
+              </details>
             )}
-          </label>
-        </div>
-        {mode === "local" && <p className="muted">{t.firstModelLoad}</p>}
-        {mode === "local" && (
-          <>
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={manualModel}
-                disabled={notesBusy}
-                onChange={(event) => setManualModel(event.target.checked)}
-              />
-              {t.manualTextModel}
-            </label>
-            {modelsError && (
-              <div className="notice warning">
-                <div>
-                  <strong>{modelsError}</strong>
-                  <p>{t.textModelsHelp}</p>
-                </div>
-              </div>
+            {analyses.length > 0 && (
+              <label>
+                {t.earlier}
+                <select
+                  value={resultId}
+                  onChange={(event) => {
+                    setResultId(event.target.value);
+                    const next = analyses.find(
+                      (item) => item.id === event.target.value,
+                    );
+                    if (next) setStepId(next.sections[0]?.id ?? "");
+                  }}
+                >
+                  <option value="">{t.currentTemplate}</option>
+                  {analyses.map((item) => (
+                    <option value={item.id} key={item.id}>
+                      {item.template.name} ·{" "}
+                      {new Date(item.createdAt).toLocaleString(
+                        locale === "de" ? "de-DE" : "en-GB",
+                      )}
+                    </option>
+                  ))}
+                </select>
+              </label>
             )}
-            {modelsLoaded && !localModels.length && (
-              <p className="muted">
-                {t.noTextModels} {t.textModelsHelp}
-              </p>
-            )}
-            {textModel &&
-              !manualModel &&
-              modelsLoaded &&
-              !localModels.includes(textModel) && (
-                <p className="inline-error">{t.textModelUnavailable}</p>
-              )}
-          </>
-        )}
-        <label>
-          {mode === "local" ? t.localEndpoint : t.endpoint}
-          <input
-            type="url"
-            value={endpoint}
-            disabled={notesBusy}
-            onChange={(event) => setEndpoint(event.target.value)}
-            autoComplete="off"
-          />
-        </label>
-        <CredentialPanel
-          api={api}
-          endpoint={endpoint}
-          mode={mode}
-          connected={connected}
-          disabled={notesBusy}
-          apiKey={apiKey}
-          setApiKey={setApiKey}
-          useSavedKey={useSavedKey}
-          setUseSavedKey={setUseSavedKey}
-          t={t}
-        />
-        <div className="template-selector">
-          <label>
-            {t.template}
-            <select
-              value={template.id}
-              disabled={templateLocked}
-              onChange={(event) => {
-                const next = templates.find(
-                  (item) => item.id === event.target.value,
-                )!;
-                setTemplateId(next.id);
-                setStepId(next.steps[0].id);
-                setResultId("");
-              }}
-            >
-              {templates.map((item) => (
-                <option value={item.id} key={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <div className="template-actions" aria-label={t.template}>
-          <button
-            className="secondary"
-            disabled={templateLocked || templates.length >= 100}
-            onClick={() => openTemplateAction("new")}
-          >
-            <Plus size={15} />
-            {t.newTemplate}
-          </button>
-          <button
-            className="secondary"
-            disabled={templateLocked || templates.length >= 100}
-            onClick={() =>
-              openTemplateAction("duplicate", result?.template ?? template)
-            }
-          >
-            <Copy size={15} />
-            {t.duplicateTemplate}
-          </button>
-          <button
-            className="text-button"
-            disabled={templateLocked}
-            onClick={() => openTemplateAction("rename")}
-          >
-            <Pencil size={14} />
-            {t.renameTemplate}
-          </button>
-          <button
-            className="text-button"
-            disabled={templateLocked || templates.length < 2}
-            title={templates.length < 2 ? t.lastTemplate : t.removeTemplate}
-            onClick={() => openTemplateAction("delete")}
-          >
-            <Trash2 size={14} />
-            {t.removeTemplate}
-          </button>
-          <button
-            className="text-button"
-            disabled={notesBusy || libraryPending || !connected}
-            onClick={refreshTemplates}
-          >
-            <RefreshCw
-              size={14}
-              className={libraryPending ? "spinning" : undefined}
-            />
-            {t.refreshTemplates}
-          </button>
-        </div>
-        <p className="muted">{t.templatesPortable}</p>
-        {importBrowser && (
-          <details>
-            <summary>{t.importBrowserTemplates}</summary>
-            <p>{t.browserTemplatesHelp}</p>
-            <button
-              className="secondary"
-              disabled={templateLocked}
-              onClick={importBrowser}
-            >
-              {t.importBrowserTemplates}
-            </button>
-          </details>
-        )}
-        {analyses.length > 0 && (
-          <label>
-            {t.earlier}
-            <select
-              value={resultId}
-              onChange={(event) => {
-                setResultId(event.target.value);
-                const next = analyses.find(
-                  (item) => item.id === event.target.value,
-                );
-                if (next) setStepId(next.sections[0]?.id ?? "");
-              }}
-            >
-              <option value="">{t.currentTemplate}</option>
-              {analyses.map((item) => (
-                <option value={item.id} key={item.id}>
-                  {item.template.name} ·{" "}
-                  {new Date(item.createdAt).toLocaleString(
-                    locale === "de" ? "de-DE" : "en-GB",
-                  )}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
+          </div>
+        </details>
         <div className="notes-run">
           <span>{meeting ? meetingLabel(meeting, locale) : t.noMeeting}</span>
           <button
@@ -453,7 +485,11 @@ export default function NotesView({
             }
             onClick={beginNotes}
           >
-            <Sparkles size={17} />
+            {notesBusy ? (
+              <RefreshCw size={17} className="spinning" />
+            ) : (
+              <Sparkles size={17} />
+            )}
             {notesBusy ? t.generating : t.generate}
           </button>
         </div>
@@ -461,7 +497,10 @@ export default function NotesView({
       <section className="analysis-panel">
         {result && (
           <div className="saved-template-notice">
-            <p>{t.historicalTemplateHelp}</p>
+            <details>
+              <summary>{t.resultTemplate}</summary>
+              <p>{t.historicalTemplateHelp}</p>
+            </details>
             <button
               className="secondary"
               onClick={() => {

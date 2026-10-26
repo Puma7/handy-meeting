@@ -1,4 +1,22 @@
 export const de = {
+  audioQuality: "Aufnahme prüfen",
+  audioQualityHelp:
+    "Bereits gesicherte Daten bleiben erhalten. Prüfe die betroffenen Spuren, bevor du dich auf ihre Vollständigkeit verlässt.",
+  technicalDetails: "Technische Meldungen anzeigen",
+  openFolder: "Sitzungsordner öffnen",
+  openFolderHelp:
+    "Öffnet den lokalen Ordner mit Audiospuren, Textjournalen und gespeicherten Auswertungen im Dateimanager.",
+  exportTranscript: "Transkript als Text speichern",
+  exportTranscriptHelp:
+    "Speichert den vollständigen aktuell gesicherten Text beider Spuren als neue TXT-Datei im Unterordner exports. Frühere Exporte bleiben erhalten.",
+  exportSaved: "Transkript gespeichert:",
+  savedFilesHelp:
+    "Audio und Textjournale werden bereits automatisch lokal gesichert. Der Textexport ist eine zusätzliche Momentaufnahme.",
+  captureSetup: "Aufnahme einrichten",
+  analysisSetup: "Auswertung einrichten",
+  connectionSettings: "Verbindung und Zugangsschlüssel",
+  setupHelp: "Hilfe zur lokalen Auswertung",
+  analysisDetails: "Details zur Auswertung",
   meetingDetail: "Sitzungsdetails",
   chooseMeeting: "Meeting für die Auswertung",
   selectMeeting: "Bitte ein Meeting auswählen",
@@ -279,6 +297,24 @@ export const extraEn: Record<keyof typeof extraDe, string> = {
 };
 export type MessageKey = keyof typeof de;
 export const en: Record<MessageKey, string> = {
+  audioQuality: "Check the recording",
+  audioQualityHelp:
+    "Previously saved data is retained. Check the affected tracks before relying on their completeness.",
+  technicalDetails: "Show technical messages",
+  openFolder: "Open session folder",
+  openFolderHelp:
+    "Opens the local audio tracks, transcript journals and saved analyses in your file manager.",
+  exportTranscript: "Save transcript as text",
+  exportTranscriptHelp:
+    "Saves the complete currently stored text of both tracks as a new TXT file in exports. Earlier exports are retained.",
+  exportSaved: "Transcript saved:",
+  savedFilesHelp:
+    "Audio and transcript journals are already saved locally. A text export is an additional snapshot.",
+  captureSetup: "Recording setup",
+  analysisSetup: "Analysis setup",
+  connectionSettings: "Connection and access keys",
+  setupHelp: "Help with local analysis",
+  analysisDetails: "Analysis details",
   meetingDetail: "Session details",
   chooseMeeting: "Meeting to analyse",
   selectMeeting: "Please select a meeting",

@@ -11,7 +11,9 @@ An independent companion prototype for the [Handy](https://github.com/cjpais/Han
 
 [Deutsche Anleitung](README.de.md) · [Build status](BUILD_STATUS.md) · [Platform status](PORTABILITY.md) · [Agent API](AGENT_API.md) · [Test evidence](TEST_REPORT.md) · [Contributing](CONTRIBUTING.md)
 
-**Rust/Tauri migration:** `1.0.0-beta.3` adds revisioned template management, optional native operating-system credential storage and visible, session-owned agent recording consent. Local model discovery, history and source-linked analysis remain available. See the [Handy boundary](docs/HANDY_UPSTREAM_PROPOSAL.md), [agent protocol](docs/RUST_AGENT_PROTOCOL.md), [credential contract](docs/RUST_CREDENTIALS.md), [actual evidence and remaining gates](TEST_REPORT.md) and [native validation checklist](docs/NATIVE_VALIDATION.md). Rust packages do not require .NET; the older published C# previews below do. This remains a migration beta, not a release candidate.
+**Rust/Tauri migration:** `1.0.0-beta.4` adds revisioned template management, optional native operating-system credential storage and visible, session-owned agent recording consent. Local model discovery, history and source-linked analysis remain available. See the [Handy boundary](docs/HANDY_UPSTREAM_PROPOSAL.md), [agent protocol](docs/RUST_AGENT_PROTOCOL.md), [credential contract](docs/RUST_CREDENTIALS.md), [actual evidence and remaining gates](TEST_REPORT.md) and [native validation checklist](docs/NATIVE_VALIDATION.md). Rust packages do not require .NET; the older published C# previews below do. This remains a migration beta, not a release candidate.
+
+Beta.4 adds compact setup panels, a sticky analysis status, readable recording warnings and complete local TXT snapshots. [Meeting files and long-session workflow](docs/MEETING_FILES.md).
 
 ## Why a companion app?
 
