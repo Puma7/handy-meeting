@@ -1,8 +1,8 @@
 {
   "Target": "aarch64-apple-darwin",
-  "CargoLockSHA256": "f6712cbe934e286bae05a6f6d9dc63a895c5bc7f65eadcaeabf6e888a85e636c",
+  "CargoLockSHA256": "62d0c7c69823e1eefda3719c21ed23420bb66c522238f9386b6f0195de8f75ce",
   "Scope": "Active Cargo resolve nodes, including build dependencies, filtered to this target; excludes workspace packages.",
-  "PackageCount": 304,
+  "PackageCount": 311,
   "Packages": [
     {
       "Name": "adler2",
@@ -432,6 +432,28 @@
           "OriginalFilename": "LICENSE",
           "File": "brotli-decompressor-5.0.0-LICENSE.txt",
           "SHA256": "c0c56f26d9c051cac4d200c34c84e7ae9aaa853e01a982a1df08b09931e518ae",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
+      "Name": "bs58",
+      "Version": "0.5.1",
+      "SPDX": "MIT/Apache-2.0",
+      "Repository": "https://github.com/Nullus157/bs58-rs",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/bs58/0.5.1/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE-APACHE",
+          "File": "bs58-0.5.1-LICENSE-APACHE.txt",
+          "SHA256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+          "Source": "provided-crate-file"
+        },
+        {
+          "OriginalFilename": "LICENSE-MIT",
+          "File": "bs58-0.5.1-LICENSE-MIT.txt",
+          "SHA256": "42d3bf7e7d4d49d72c0555d14ed99c3ee7ce9ce3cbffbc38bbafe8c103f50969",
           "Source": "provided-crate-file"
         }
       ]
@@ -996,15 +1018,15 @@
     },
     {
       "Name": "darling",
-      "Version": "0.21.3",
+      "Version": "0.23.0",
       "SPDX": "MIT",
       "Repository": "https://github.com/TedDriggs/darling",
       "Source": "registry+https://github.com/rust-lang/crates.io-index",
-      "SourceArchive": "https://crates.io/api/v1/crates/darling/0.21.3/download",
+      "SourceArchive": "https://crates.io/api/v1/crates/darling/0.23.0/download",
       "LicenseFiles": [
         {
           "OriginalFilename": "LICENSE",
-          "File": "darling-0.21.3-LICENSE.txt",
+          "File": "darling-0.23.0-LICENSE.txt",
           "SHA256": "8ea93490d74a5a1b1af3ff71d786271b3f1e5f0bea79ac16e02ec533cef040d6",
           "Source": "provided-crate-file"
         }
@@ -1012,15 +1034,15 @@
     },
     {
       "Name": "darling_core",
-      "Version": "0.21.3",
+      "Version": "0.23.0",
       "SPDX": "MIT",
       "Repository": "https://github.com/TedDriggs/darling",
       "Source": "registry+https://github.com/rust-lang/crates.io-index",
-      "SourceArchive": "https://crates.io/api/v1/crates/darling_core/0.21.3/download",
+      "SourceArchive": "https://crates.io/api/v1/crates/darling_core/0.23.0/download",
       "LicenseFiles": [
         {
           "OriginalFilename": "LICENSE",
-          "File": "darling_core-0.21.3-LICENSE.txt",
+          "File": "darling_core-0.23.0-LICENSE.txt",
           "SHA256": "8ea93490d74a5a1b1af3ff71d786271b3f1e5f0bea79ac16e02ec533cef040d6",
           "Source": "provided-crate-file"
         }
@@ -1028,16 +1050,82 @@
     },
     {
       "Name": "darling_macro",
-      "Version": "0.21.3",
+      "Version": "0.23.0",
       "SPDX": "MIT",
       "Repository": "https://github.com/TedDriggs/darling",
       "Source": "registry+https://github.com/rust-lang/crates.io-index",
-      "SourceArchive": "https://crates.io/api/v1/crates/darling_macro/0.21.3/download",
+      "SourceArchive": "https://crates.io/api/v1/crates/darling_macro/0.23.0/download",
       "LicenseFiles": [
         {
           "OriginalFilename": "LICENSE",
-          "File": "darling_macro-0.21.3-LICENSE.txt",
+          "File": "darling_macro-0.23.0-LICENSE.txt",
           "SHA256": "8ea93490d74a5a1b1af3ff71d786271b3f1e5f0bea79ac16e02ec533cef040d6",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
+      "Name": "defmt",
+      "Version": "1.2.0",
+      "SPDX": "MIT OR Apache-2.0",
+      "Repository": "https://github.com/knurling-rs/defmt",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/defmt/1.2.0/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE-APACHE",
+          "File": "defmt-1.2.0-LICENSE-APACHE.txt",
+          "SHA256": "8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90",
+          "Source": "provided-crate-file"
+        },
+        {
+          "OriginalFilename": "LICENSE-MIT",
+          "File": "defmt-1.2.0-LICENSE-MIT.txt",
+          "SHA256": "2710a622a896bba67356913d4d0492cab5465f61b2ecce6d880aeb483834fb50",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
+      "Name": "defmt-macros",
+      "Version": "1.2.0",
+      "SPDX": "MIT OR Apache-2.0",
+      "Repository": "https://github.com/knurling-rs/defmt",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/defmt-macros/1.2.0/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE-APACHE",
+          "File": "defmt-macros-1.2.0-LICENSE-APACHE.txt",
+          "SHA256": "8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90",
+          "Source": "provided-crate-file"
+        },
+        {
+          "OriginalFilename": "LICENSE-MIT",
+          "File": "defmt-macros-1.2.0-LICENSE-MIT.txt",
+          "SHA256": "2710a622a896bba67356913d4d0492cab5465f61b2ecce6d880aeb483834fb50",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
+      "Name": "defmt-parser",
+      "Version": "1.1.0",
+      "SPDX": "MIT OR Apache-2.0",
+      "Repository": "https://github.com/knurling-rs/defmt",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/defmt-parser/1.1.0/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE-APACHE",
+          "File": "defmt-parser-1.1.0-LICENSE-APACHE.txt",
+          "SHA256": "8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90",
+          "Source": "provided-crate-file"
+        },
+        {
+          "OriginalFilename": "LICENSE-MIT",
+          "File": "defmt-parser-1.1.0-LICENSE-MIT.txt",
+          "SHA256": "2710a622a896bba67356913d4d0492cab5465f61b2ecce6d880aeb483834fb50",
           "Source": "provided-crate-file"
         }
       ]
@@ -2565,6 +2653,50 @@
           "OriginalFilename": "LICENSE-MIT",
           "File": "itoa-1.0.17-LICENSE-MIT.txt",
           "SHA256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
+      "Name": "jiff",
+      "Version": "0.2.38",
+      "SPDX": "Unlicense OR MIT",
+      "Repository": "https://github.com/BurntSushi/jiff",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/jiff/0.2.38/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "COPYING",
+          "File": "jiff-0.2.38-COPYING.txt",
+          "SHA256": "01c266bced4a434da0051174d6bee16a4c82cf634e2679b6155d40d75012390f",
+          "Source": "provided-crate-file"
+        },
+        {
+          "OriginalFilename": "LICENSE-MIT",
+          "File": "jiff-0.2.38-LICENSE-MIT.txt",
+          "SHA256": "0f96a83840e146e43c0ec96a22ec1f392e0680e6c1226e6f3ba87e0740af850f",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
+      "Name": "jiff-core",
+      "Version": "0.1.1",
+      "SPDX": "Unlicense OR MIT",
+      "Repository": "https://github.com/BurntSushi/jiff",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/jiff-core/0.1.1/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "COPYING",
+          "File": "jiff-core-0.1.1-COPYING.txt",
+          "SHA256": "01c266bced4a434da0051174d6bee16a4c82cf634e2679b6155d40d75012390f",
+          "Source": "provided-crate-file"
+        },
+        {
+          "OriginalFilename": "LICENSE-MIT",
+          "File": "jiff-core-0.1.1-LICENSE-MIT.txt",
+          "SHA256": "0f96a83840e146e43c0ec96a22ec1f392e0680e6c1226e6f3ba87e0740af850f",
           "Source": "provided-crate-file"
         }
       ]
@@ -4499,21 +4631,21 @@
     },
     {
       "Name": "serde_with",
-      "Version": "3.16.1",
+      "Version": "3.22.0",
       "SPDX": "MIT OR Apache-2.0",
       "Repository": "https://github.com/jonasbb/serde_with/",
       "Source": "registry+https://github.com/rust-lang/crates.io-index",
-      "SourceArchive": "https://crates.io/api/v1/crates/serde_with/3.16.1/download",
+      "SourceArchive": "https://crates.io/api/v1/crates/serde_with/3.22.0/download",
       "LicenseFiles": [
         {
           "OriginalFilename": "LICENSE-APACHE",
-          "File": "serde_with-3.16.1-LICENSE-APACHE.txt",
+          "File": "serde_with-3.22.0-LICENSE-APACHE.txt",
           "SHA256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
           "Source": "provided-crate-file"
         },
         {
           "OriginalFilename": "LICENSE-MIT",
-          "File": "serde_with-3.16.1-LICENSE-MIT.txt",
+          "File": "serde_with-3.22.0-LICENSE-MIT.txt",
           "SHA256": "7576269ea71f767b99297934c0b2367532690f8c4badc695edf8e04ab6a1e545",
           "Source": "provided-crate-file"
         }
@@ -4521,21 +4653,21 @@
     },
     {
       "Name": "serde_with_macros",
-      "Version": "3.16.1",
+      "Version": "3.22.0",
       "SPDX": "MIT OR Apache-2.0",
       "Repository": "https://github.com/jonasbb/serde_with/",
       "Source": "registry+https://github.com/rust-lang/crates.io-index",
-      "SourceArchive": "https://crates.io/api/v1/crates/serde_with_macros/3.16.1/download",
+      "SourceArchive": "https://crates.io/api/v1/crates/serde_with_macros/3.22.0/download",
       "LicenseFiles": [
         {
           "OriginalFilename": "LICENSE-APACHE",
-          "File": "serde_with_macros-3.16.1-LICENSE-APACHE.txt",
+          "File": "serde_with_macros-3.22.0-LICENSE-APACHE.txt",
           "SHA256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
           "Source": "provided-crate-file"
         },
         {
           "OriginalFilename": "LICENSE-MIT",
-          "File": "serde_with_macros-3.16.1-LICENSE-MIT.txt",
+          "File": "serde_with_macros-3.22.0-LICENSE-MIT.txt",
           "SHA256": "7576269ea71f767b99297934c0b2367532690f8c4badc695edf8e04ab6a1e545",
           "Source": "provided-crate-file"
         }
@@ -4902,6 +5034,28 @@
         {
           "OriginalFilename": "LICENSE-MIT",
           "File": "syn-2.0.117-LICENSE-MIT.txt",
+          "SHA256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
+      "Name": "syn",
+      "Version": "3.0.9",
+      "SPDX": "MIT OR Apache-2.0",
+      "Repository": "https://github.com/dtolnay/syn",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/syn/3.0.9/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE-APACHE",
+          "File": "syn-3.0.9-LICENSE-APACHE.txt",
+          "SHA256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+          "Source": "provided-crate-file"
+        },
+        {
+          "OriginalFilename": "LICENSE-MIT",
+          "File": "syn-3.0.9-LICENSE-MIT.txt",
           "SHA256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
           "Source": "provided-crate-file"
         }

@@ -101,8 +101,8 @@
   },
   {
     "Path": "Cargo.lock",
-    "SHA256": "F6712CBE934E286BAE05A6F6D9DC63A895C5BC7F65EADCAEABF6E888A85E636C",
-    "Bytes": 140113
+    "SHA256": "62D0C7C69823E1EEFDA3719C21ED23420BB66C522238F9386B6F0195DE8F75CE",
+    "Bytes": 142828
   },
   {
     "Path": "global.json",
@@ -1165,6 +1165,16 @@
     "Bytes": 1483
   },
   {
+    "Path": "licenses/rust/aarch64-apple-darwin/bs58-0.5.1-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/bs58-0.5.1-LICENSE-MIT.txt",
+    "SHA256": "42D3BF7E7D4D49D72C0555D14ED99C3EE7CE9CE3CBFFBC38BBAFE8C103F50969",
+    "Bytes": 1082
+  },
+  {
     "Path": "licenses/rust/aarch64-apple-darwin/byteorder-1.5.0-COPYING.txt",
     "SHA256": "01C266BCED4A434DA0051174D6BEE16A4C82CF634E2679B6155D40D75012390F",
     "Bytes": 126
@@ -1410,7 +1420,17 @@
     "Bytes": 1067
   },
   {
+    "Path": "licenses/rust/aarch64-apple-darwin/darling_core-0.23.0-LICENSE.txt",
+    "SHA256": "8EA93490D74A5A1B1AF3FF71D786271B3F1E5F0BEA79AC16E02EC533CEF040D6",
+    "Bytes": 1067
+  },
+  {
     "Path": "licenses/rust/aarch64-apple-darwin/darling_macro-0.21.3-LICENSE.txt",
+    "SHA256": "8EA93490D74A5A1B1AF3FF71D786271B3F1E5F0BEA79AC16E02EC533CEF040D6",
+    "Bytes": 1067
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/darling_macro-0.23.0-LICENSE.txt",
     "SHA256": "8EA93490D74A5A1B1AF3FF71D786271B3F1E5F0BEA79AC16E02EC533CEF040D6",
     "Bytes": 1067
   },
@@ -1418,6 +1438,41 @@
     "Path": "licenses/rust/aarch64-apple-darwin/darling-0.21.3-LICENSE.txt",
     "SHA256": "8EA93490D74A5A1B1AF3FF71D786271B3F1E5F0BEA79AC16E02EC533CEF040D6",
     "Bytes": 1067
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/darling-0.23.0-LICENSE.txt",
+    "SHA256": "8EA93490D74A5A1B1AF3FF71D786271B3F1E5F0BEA79AC16E02EC533CEF040D6",
+    "Bytes": 1067
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/defmt-1.2.0-LICENSE-APACHE.txt",
+    "SHA256": "8173D5C29B4F956D532781D2B86E4E30F83E6B7878DCE18C919451D6BA707C90",
+    "Bytes": 10850
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/defmt-1.2.0-LICENSE-MIT.txt",
+    "SHA256": "2710A622A896BBA67356913D4D0492CAB5465F61B2ECCE6D880AEB483834FB50",
+    "Bytes": 1053
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/defmt-macros-1.2.0-LICENSE-APACHE.txt",
+    "SHA256": "8173D5C29B4F956D532781D2B86E4E30F83E6B7878DCE18C919451D6BA707C90",
+    "Bytes": 10850
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/defmt-macros-1.2.0-LICENSE-MIT.txt",
+    "SHA256": "2710A622A896BBA67356913D4D0492CAB5465F61B2ECCE6D880AEB483834FB50",
+    "Bytes": 1053
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/defmt-parser-1.1.0-LICENSE-APACHE.txt",
+    "SHA256": "8173D5C29B4F956D532781D2B86E4E30F83E6B7878DCE18C919451D6BA707C90",
+    "Bytes": 10850
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/defmt-parser-1.1.0-LICENSE-MIT.txt",
+    "SHA256": "2710A622A896BBA67356913D4D0492CAB5465F61B2ECCE6D880AEB483834FB50",
+    "Bytes": 1053
   },
   {
     "Path": "licenses/rust/aarch64-apple-darwin/deranged-0.5.7-LICENSE-Apache.txt",
@@ -2065,6 +2120,26 @@
     "Bytes": 1023
   },
   {
+    "Path": "licenses/rust/aarch64-apple-darwin/jiff-0.2.38-COPYING.txt",
+    "SHA256": "01C266BCED4A434DA0051174D6BEE16A4C82CF634E2679B6155D40D75012390F",
+    "Bytes": 126
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/jiff-0.2.38-LICENSE-MIT.txt",
+    "SHA256": "0F96A83840E146E43C0EC96A22EC1F392E0680E6C1226E6F3BA87E0740AF850F",
+    "Bytes": 1081
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/jiff-core-0.1.1-COPYING.txt",
+    "SHA256": "01C266BCED4A434DA0051174D6BEE16A4C82CF634E2679B6155D40D75012390F",
+    "Bytes": 126
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/jiff-core-0.1.1-LICENSE-MIT.txt",
+    "SHA256": "0F96A83840E146E43C0EC96A22EC1F392E0680E6C1226E6F3BA87E0740AF850F",
+    "Bytes": 1081
+  },
+  {
     "Path": "licenses/rust/aarch64-apple-darwin/json-patch-3.0.1-LICENSE-APACHE.txt",
     "SHA256": "B40930BBCF80744C86C46A12BC9DA056641D722716C378F5659B9E555EF833E1",
     "Bytes": 11357
@@ -2166,8 +2241,8 @@
   },
   {
     "Path": "licenses/rust/aarch64-apple-darwin/manifest.json",
-    "SHA256": "EEB060CD89A6B9330F858F2CA13A177475F089CF3A10A3854EC9A9BAF07FAB60",
-    "Bytes": 260316
+    "SHA256": "498BB982CEEB842E13626B93C8D503846302F7FA79A685B192E6470D879ADF9D",
+    "Bytes": 266339
   },
   {
     "Path": "licenses/rust/aarch64-apple-darwin/markup5ever-0.38.0-LICENSE-APACHE.txt",
@@ -2920,12 +2995,32 @@
     "Bytes": 1043
   },
   {
+    "Path": "licenses/rust/aarch64-apple-darwin/serde_with_macros-3.22.0-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/serde_with_macros-3.22.0-LICENSE-MIT.txt",
+    "SHA256": "7576269EA71F767B99297934C0B2367532690F8C4BADC695EDF8E04AB6A1E545",
+    "Bytes": 1043
+  },
+  {
     "Path": "licenses/rust/aarch64-apple-darwin/serde_with-3.16.1-LICENSE-APACHE.txt",
     "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
     "Bytes": 10847
   },
   {
     "Path": "licenses/rust/aarch64-apple-darwin/serde_with-3.16.1-LICENSE-MIT.txt",
+    "SHA256": "7576269EA71F767B99297934C0B2367532690F8C4BADC695EDF8E04AB6A1E545",
+    "Bytes": 1043
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/serde_with-3.22.0-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/serde_with-3.22.0-LICENSE-MIT.txt",
     "SHA256": "7576269EA71F767B99297934C0B2367532690F8C4BADC695EDF8E04AB6A1E545",
     "Bytes": 1043
   },
@@ -3091,6 +3186,16 @@
   },
   {
     "Path": "licenses/rust/aarch64-apple-darwin/syn-2.0.117-LICENSE-MIT.txt",
+    "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
+    "Bytes": 1023
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/syn-3.0.9-LICENSE-APACHE.txt",
+    "SHA256": "62C7A1E35F56406896D7AA7CA52D0CC0D272AC022B5D2796E7D6905DB8A3636A",
+    "Bytes": 9723
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/syn-3.0.9-LICENSE-MIT.txt",
     "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
     "Bytes": 1023
   },
@@ -3930,6 +4035,16 @@
     "Bytes": 1483
   },
   {
+    "Path": "licenses/rust/x86_64-apple-darwin/bs58-0.5.1-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/bs58-0.5.1-LICENSE-MIT.txt",
+    "SHA256": "42D3BF7E7D4D49D72C0555D14ED99C3EE7CE9CE3CBFFBC38BBAFE8C103F50969",
+    "Bytes": 1082
+  },
+  {
     "Path": "licenses/rust/x86_64-apple-darwin/byteorder-1.5.0-COPYING.txt",
     "SHA256": "01C266BCED4A434DA0051174D6BEE16A4C82CF634E2679B6155D40D75012390F",
     "Bytes": 126
@@ -4185,7 +4300,17 @@
     "Bytes": 1067
   },
   {
+    "Path": "licenses/rust/x86_64-apple-darwin/darling_core-0.23.0-LICENSE.txt",
+    "SHA256": "8EA93490D74A5A1B1AF3FF71D786271B3F1E5F0BEA79AC16E02EC533CEF040D6",
+    "Bytes": 1067
+  },
+  {
     "Path": "licenses/rust/x86_64-apple-darwin/darling_macro-0.21.3-LICENSE.txt",
+    "SHA256": "8EA93490D74A5A1B1AF3FF71D786271B3F1E5F0BEA79AC16E02EC533CEF040D6",
+    "Bytes": 1067
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/darling_macro-0.23.0-LICENSE.txt",
     "SHA256": "8EA93490D74A5A1B1AF3FF71D786271B3F1E5F0BEA79AC16E02EC533CEF040D6",
     "Bytes": 1067
   },
@@ -4193,6 +4318,41 @@
     "Path": "licenses/rust/x86_64-apple-darwin/darling-0.21.3-LICENSE.txt",
     "SHA256": "8EA93490D74A5A1B1AF3FF71D786271B3F1E5F0BEA79AC16E02EC533CEF040D6",
     "Bytes": 1067
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/darling-0.23.0-LICENSE.txt",
+    "SHA256": "8EA93490D74A5A1B1AF3FF71D786271B3F1E5F0BEA79AC16E02EC533CEF040D6",
+    "Bytes": 1067
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/defmt-1.2.0-LICENSE-APACHE.txt",
+    "SHA256": "8173D5C29B4F956D532781D2B86E4E30F83E6B7878DCE18C919451D6BA707C90",
+    "Bytes": 10850
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/defmt-1.2.0-LICENSE-MIT.txt",
+    "SHA256": "2710A622A896BBA67356913D4D0492CAB5465F61B2ECCE6D880AEB483834FB50",
+    "Bytes": 1053
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/defmt-macros-1.2.0-LICENSE-APACHE.txt",
+    "SHA256": "8173D5C29B4F956D532781D2B86E4E30F83E6B7878DCE18C919451D6BA707C90",
+    "Bytes": 10850
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/defmt-macros-1.2.0-LICENSE-MIT.txt",
+    "SHA256": "2710A622A896BBA67356913D4D0492CAB5465F61B2ECCE6D880AEB483834FB50",
+    "Bytes": 1053
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/defmt-parser-1.1.0-LICENSE-APACHE.txt",
+    "SHA256": "8173D5C29B4F956D532781D2B86E4E30F83E6B7878DCE18C919451D6BA707C90",
+    "Bytes": 10850
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/defmt-parser-1.1.0-LICENSE-MIT.txt",
+    "SHA256": "2710A622A896BBA67356913D4D0492CAB5465F61B2ECCE6D880AEB483834FB50",
+    "Bytes": 1053
   },
   {
     "Path": "licenses/rust/x86_64-apple-darwin/deranged-0.5.7-LICENSE-Apache.txt",
@@ -4840,6 +5000,26 @@
     "Bytes": 1023
   },
   {
+    "Path": "licenses/rust/x86_64-apple-darwin/jiff-0.2.38-COPYING.txt",
+    "SHA256": "01C266BCED4A434DA0051174D6BEE16A4C82CF634E2679B6155D40D75012390F",
+    "Bytes": 126
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/jiff-0.2.38-LICENSE-MIT.txt",
+    "SHA256": "0F96A83840E146E43C0EC96A22EC1F392E0680E6C1226E6F3BA87E0740AF850F",
+    "Bytes": 1081
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/jiff-core-0.1.1-COPYING.txt",
+    "SHA256": "01C266BCED4A434DA0051174D6BEE16A4C82CF634E2679B6155D40D75012390F",
+    "Bytes": 126
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/jiff-core-0.1.1-LICENSE-MIT.txt",
+    "SHA256": "0F96A83840E146E43C0EC96A22EC1F392E0680E6C1226E6F3BA87E0740AF850F",
+    "Bytes": 1081
+  },
+  {
     "Path": "licenses/rust/x86_64-apple-darwin/json-patch-3.0.1-LICENSE-APACHE.txt",
     "SHA256": "B40930BBCF80744C86C46A12BC9DA056641D722716C378F5659B9E555EF833E1",
     "Bytes": 11357
@@ -4941,8 +5121,8 @@
   },
   {
     "Path": "licenses/rust/x86_64-apple-darwin/manifest.json",
-    "SHA256": "4DD9C55F7D7A97AB68A7AB3497B3AAB260095A93D5A5F427AE7938B28765FAC1",
-    "Bytes": 261196
+    "SHA256": "7BA40AECA4910EE83619A39CB9E13FF4621B81697623C3015F0C41E0BB3BCF32",
+    "Bytes": 267219
   },
   {
     "Path": "licenses/rust/x86_64-apple-darwin/markup5ever-0.38.0-LICENSE-APACHE.txt",
@@ -5695,12 +5875,32 @@
     "Bytes": 1043
   },
   {
+    "Path": "licenses/rust/x86_64-apple-darwin/serde_with_macros-3.22.0-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/serde_with_macros-3.22.0-LICENSE-MIT.txt",
+    "SHA256": "7576269EA71F767B99297934C0B2367532690F8C4BADC695EDF8E04AB6A1E545",
+    "Bytes": 1043
+  },
+  {
     "Path": "licenses/rust/x86_64-apple-darwin/serde_with-3.16.1-LICENSE-APACHE.txt",
     "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
     "Bytes": 10847
   },
   {
     "Path": "licenses/rust/x86_64-apple-darwin/serde_with-3.16.1-LICENSE-MIT.txt",
+    "SHA256": "7576269EA71F767B99297934C0B2367532690F8C4BADC695EDF8E04AB6A1E545",
+    "Bytes": 1043
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/serde_with-3.22.0-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/serde_with-3.22.0-LICENSE-MIT.txt",
     "SHA256": "7576269EA71F767B99297934C0B2367532690F8C4BADC695EDF8E04AB6A1E545",
     "Bytes": 1043
   },
@@ -5866,6 +6066,16 @@
   },
   {
     "Path": "licenses/rust/x86_64-apple-darwin/syn-2.0.117-LICENSE-MIT.txt",
+    "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
+    "Bytes": 1023
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/syn-3.0.9-LICENSE-APACHE.txt",
+    "SHA256": "62C7A1E35F56406896D7AA7CA52D0CC0D272AC022B5D2796E7D6905DB8A3636A",
+    "Bytes": 9723
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/syn-3.0.9-LICENSE-MIT.txt",
     "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
     "Bytes": 1023
   },
@@ -6675,6 +6885,16 @@
     "Bytes": 1483
   },
   {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/bs58-0.5.1-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/bs58-0.5.1-LICENSE-MIT.txt",
+    "SHA256": "42D3BF7E7D4D49D72C0555D14ED99C3EE7CE9CE3CBFFBC38BBAFE8C103F50969",
+    "Bytes": 1082
+  },
+  {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/byteorder-1.5.0-COPYING.txt",
     "SHA256": "01C266BCED4A434DA0051174D6BEE16A4C82CF634E2679B6155D40D75012390F",
     "Bytes": 126
@@ -6890,7 +7110,17 @@
     "Bytes": 1067
   },
   {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/darling_core-0.23.0-LICENSE.txt",
+    "SHA256": "8EA93490D74A5A1B1AF3FF71D786271B3F1E5F0BEA79AC16E02EC533CEF040D6",
+    "Bytes": 1067
+  },
+  {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/darling_macro-0.21.3-LICENSE.txt",
+    "SHA256": "8EA93490D74A5A1B1AF3FF71D786271B3F1E5F0BEA79AC16E02EC533CEF040D6",
+    "Bytes": 1067
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/darling_macro-0.23.0-LICENSE.txt",
     "SHA256": "8EA93490D74A5A1B1AF3FF71D786271B3F1E5F0BEA79AC16E02EC533CEF040D6",
     "Bytes": 1067
   },
@@ -6898,6 +7128,41 @@
     "Path": "licenses/rust/x86_64-pc-windows-msvc/darling-0.21.3-LICENSE.txt",
     "SHA256": "8EA93490D74A5A1B1AF3FF71D786271B3F1E5F0BEA79AC16E02EC533CEF040D6",
     "Bytes": 1067
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/darling-0.23.0-LICENSE.txt",
+    "SHA256": "8EA93490D74A5A1B1AF3FF71D786271B3F1E5F0BEA79AC16E02EC533CEF040D6",
+    "Bytes": 1067
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/defmt-1.2.0-LICENSE-APACHE.txt",
+    "SHA256": "8173D5C29B4F956D532781D2B86E4E30F83E6B7878DCE18C919451D6BA707C90",
+    "Bytes": 10850
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/defmt-1.2.0-LICENSE-MIT.txt",
+    "SHA256": "2710A622A896BBA67356913D4D0492CAB5465F61B2ECCE6D880AEB483834FB50",
+    "Bytes": 1053
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/defmt-macros-1.2.0-LICENSE-APACHE.txt",
+    "SHA256": "8173D5C29B4F956D532781D2B86E4E30F83E6B7878DCE18C919451D6BA707C90",
+    "Bytes": 10850
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/defmt-macros-1.2.0-LICENSE-MIT.txt",
+    "SHA256": "2710A622A896BBA67356913D4D0492CAB5465F61B2ECCE6D880AEB483834FB50",
+    "Bytes": 1053
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/defmt-parser-1.1.0-LICENSE-APACHE.txt",
+    "SHA256": "8173D5C29B4F956D532781D2B86E4E30F83E6B7878DCE18C919451D6BA707C90",
+    "Bytes": 10850
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/defmt-parser-1.1.0-LICENSE-MIT.txt",
+    "SHA256": "2710A622A896BBA67356913D4D0492CAB5465F61B2ECCE6D880AEB483834FB50",
+    "Bytes": 1053
   },
   {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/deranged-0.5.7-LICENSE-Apache.txt",
@@ -7480,6 +7745,46 @@
     "Bytes": 1023
   },
   {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/jiff-0.2.38-COPYING.txt",
+    "SHA256": "01C266BCED4A434DA0051174D6BEE16A4C82CF634E2679B6155D40D75012390F",
+    "Bytes": 126
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/jiff-0.2.38-LICENSE-MIT.txt",
+    "SHA256": "0F96A83840E146E43C0EC96A22EC1F392E0680E6C1226E6F3BA87E0740AF850F",
+    "Bytes": 1081
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/jiff-core-0.1.1-COPYING.txt",
+    "SHA256": "01C266BCED4A434DA0051174D6BEE16A4C82CF634E2679B6155D40D75012390F",
+    "Bytes": 126
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/jiff-core-0.1.1-LICENSE-MIT.txt",
+    "SHA256": "0F96A83840E146E43C0EC96A22EC1F392E0680E6C1226E6F3BA87E0740AF850F",
+    "Bytes": 1081
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/jiff-tzdb-0.1.9-COPYING.txt",
+    "SHA256": "01C266BCED4A434DA0051174D6BEE16A4C82CF634E2679B6155D40D75012390F",
+    "Bytes": 126
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/jiff-tzdb-0.1.9-LICENSE-MIT.txt",
+    "SHA256": "0F96A83840E146E43C0EC96A22EC1F392E0680E6C1226E6F3BA87E0740AF850F",
+    "Bytes": 1081
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/jiff-tzdb-platform-0.1.3-COPYING.txt",
+    "SHA256": "01C266BCED4A434DA0051174D6BEE16A4C82CF634E2679B6155D40D75012390F",
+    "Bytes": 126
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/jiff-tzdb-platform-0.1.3-LICENSE-MIT.txt",
+    "SHA256": "0F96A83840E146E43C0EC96A22EC1F392E0680E6C1226E6F3BA87E0740AF850F",
+    "Bytes": 1081
+  },
+  {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/json-patch-3.0.1-LICENSE-APACHE.txt",
     "SHA256": "B40930BBCF80744C86C46A12BC9DA056641D722716C378F5659B9E555EF833E1",
     "Bytes": 11357
@@ -7581,8 +7886,8 @@
   },
   {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/manifest.json",
-    "SHA256": "B38A2FB0E1083C813E684C2FBF6B61B26A1DC146CAC6185E2709AB37343293C9",
-    "Bytes": 262381
+    "SHA256": "AF644FDB5AF632B7E41318D3155F9E3F0A4B549F2D0262FEB47B1AA81D4BAFC9",
+    "Bytes": 270154
   },
   {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/markup5ever-0.38.0-LICENSE-APACHE.txt",
@@ -8205,12 +8510,32 @@
     "Bytes": 1043
   },
   {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/serde_with_macros-3.22.0-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/serde_with_macros-3.22.0-LICENSE-MIT.txt",
+    "SHA256": "7576269EA71F767B99297934C0B2367532690F8C4BADC695EDF8E04AB6A1E545",
+    "Bytes": 1043
+  },
+  {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/serde_with-3.16.1-LICENSE-APACHE.txt",
     "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
     "Bytes": 10847
   },
   {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/serde_with-3.16.1-LICENSE-MIT.txt",
+    "SHA256": "7576269EA71F767B99297934C0B2367532690F8C4BADC695EDF8E04AB6A1E545",
+    "Bytes": 1043
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/serde_with-3.22.0-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/serde_with-3.22.0-LICENSE-MIT.txt",
     "SHA256": "7576269EA71F767B99297934C0B2367532690F8C4BADC695EDF8E04AB6A1E545",
     "Bytes": 1043
   },
@@ -8376,6 +8701,16 @@
   },
   {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/syn-2.0.117-LICENSE-MIT.txt",
+    "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
+    "Bytes": 1023
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/syn-3.0.9-LICENSE-APACHE.txt",
+    "SHA256": "62C7A1E35F56406896D7AA7CA52D0CC0D272AC022B5D2796E7D6905DB8A3636A",
+    "Bytes": 9723
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/syn-3.0.9-LICENSE-MIT.txt",
     "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
     "Bytes": 1023
   },
@@ -9665,6 +10000,16 @@
     "Bytes": 1483
   },
   {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/bs58-0.5.1-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/bs58-0.5.1-LICENSE-MIT.txt",
+    "SHA256": "42D3BF7E7D4D49D72C0555D14ED99C3EE7CE9CE3CBFFBC38BBAFE8C103F50969",
+    "Bytes": 1082
+  },
+  {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/byteorder-1.5.0-COPYING.txt",
     "SHA256": "01C266BCED4A434DA0051174D6BEE16A4C82CF634E2679B6155D40D75012390F",
     "Bytes": 126
@@ -9980,12 +10325,27 @@
     "Bytes": 1067
   },
   {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/darling_core-0.23.0-LICENSE.txt",
+    "SHA256": "8EA93490D74A5A1B1AF3FF71D786271B3F1E5F0BEA79AC16E02EC533CEF040D6",
+    "Bytes": 1067
+  },
+  {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/darling_macro-0.21.3-LICENSE.txt",
     "SHA256": "8EA93490D74A5A1B1AF3FF71D786271B3F1E5F0BEA79AC16E02EC533CEF040D6",
     "Bytes": 1067
   },
   {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/darling_macro-0.23.0-LICENSE.txt",
+    "SHA256": "8EA93490D74A5A1B1AF3FF71D786271B3F1E5F0BEA79AC16E02EC533CEF040D6",
+    "Bytes": 1067
+  },
+  {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/darling-0.21.3-LICENSE.txt",
+    "SHA256": "8EA93490D74A5A1B1AF3FF71D786271B3F1E5F0BEA79AC16E02EC533CEF040D6",
+    "Bytes": 1067
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/darling-0.23.0-LICENSE.txt",
     "SHA256": "8EA93490D74A5A1B1AF3FF71D786271B3F1E5F0BEA79AC16E02EC533CEF040D6",
     "Bytes": 1067
   },
@@ -9998,6 +10358,36 @@
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/dbus-0.9.12-LICENSE-MIT.txt",
     "SHA256": "DE3911C2D98C8BD2D701EE721347053D9B55995A11F9A8C955E44D3CA1B376BF",
     "Bytes": 1107
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/defmt-1.2.0-LICENSE-APACHE.txt",
+    "SHA256": "8173D5C29B4F956D532781D2B86E4E30F83E6B7878DCE18C919451D6BA707C90",
+    "Bytes": 10850
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/defmt-1.2.0-LICENSE-MIT.txt",
+    "SHA256": "2710A622A896BBA67356913D4D0492CAB5465F61B2ECCE6D880AEB483834FB50",
+    "Bytes": 1053
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/defmt-macros-1.2.0-LICENSE-APACHE.txt",
+    "SHA256": "8173D5C29B4F956D532781D2B86E4E30F83E6B7878DCE18C919451D6BA707C90",
+    "Bytes": 10850
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/defmt-macros-1.2.0-LICENSE-MIT.txt",
+    "SHA256": "2710A622A896BBA67356913D4D0492CAB5465F61B2ECCE6D880AEB483834FB50",
+    "Bytes": 1053
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/defmt-parser-1.1.0-LICENSE-APACHE.txt",
+    "SHA256": "8173D5C29B4F956D532781D2B86E4E30F83E6B7878DCE18C919451D6BA707C90",
+    "Bytes": 10850
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/defmt-parser-1.1.0-LICENSE-MIT.txt",
+    "SHA256": "2710A622A896BBA67356913D4D0492CAB5465F61B2ECCE6D880AEB483834FB50",
+    "Bytes": 1053
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/deranged-0.5.7-LICENSE-Apache.txt",
@@ -10880,6 +11270,26 @@
     "Bytes": 1104
   },
   {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/jiff-0.2.38-COPYING.txt",
+    "SHA256": "01C266BCED4A434DA0051174D6BEE16A4C82CF634E2679B6155D40D75012390F",
+    "Bytes": 126
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/jiff-0.2.38-LICENSE-MIT.txt",
+    "SHA256": "0F96A83840E146E43C0EC96A22EC1F392E0680E6C1226E6F3BA87E0740AF850F",
+    "Bytes": 1081
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/jiff-core-0.1.1-COPYING.txt",
+    "SHA256": "01C266BCED4A434DA0051174D6BEE16A4C82CF634E2679B6155D40D75012390F",
+    "Bytes": 126
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/jiff-core-0.1.1-LICENSE-MIT.txt",
+    "SHA256": "0F96A83840E146E43C0EC96A22EC1F392E0680E6C1226E6F3BA87E0740AF850F",
+    "Bytes": 1081
+  },
+  {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/json-patch-3.0.1-LICENSE-APACHE.txt",
     "SHA256": "B40930BBCF80744C86C46A12BC9DA056641D722716C378F5659B9E555EF833E1",
     "Bytes": 11357
@@ -11036,8 +11446,8 @@
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/manifest.json",
-    "SHA256": "B6AA1C9027D3CCF20349BD6D4CD40F4A83A54B5F99955821F9FE235A755A424C",
-    "Bytes": 328268
+    "SHA256": "65FEA865F2CA3CCE52495CDFB5A2EA1DDFA74BFC776F3C99E0A76739DF3FFB54",
+    "Bytes": 333447
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/markup5ever-0.38.0-LICENSE-APACHE.txt",
@@ -11885,12 +12295,32 @@
     "Bytes": 1043
   },
   {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/serde_with_macros-3.22.0-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/serde_with_macros-3.22.0-LICENSE-MIT.txt",
+    "SHA256": "7576269EA71F767B99297934C0B2367532690F8C4BADC695EDF8E04AB6A1E545",
+    "Bytes": 1043
+  },
+  {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/serde_with-3.16.1-LICENSE-APACHE.txt",
     "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
     "Bytes": 10847
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/serde_with-3.16.1-LICENSE-MIT.txt",
+    "SHA256": "7576269EA71F767B99297934C0B2367532690F8C4BADC695EDF8E04AB6A1E545",
+    "Bytes": 1043
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/serde_with-3.22.0-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/serde_with-3.22.0-LICENSE-MIT.txt",
     "SHA256": "7576269EA71F767B99297934C0B2367532690F8C4BADC695EDF8E04AB6A1E545",
     "Bytes": 1043
   },
