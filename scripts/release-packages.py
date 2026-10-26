@@ -70,6 +70,8 @@ def assemble(artifacts, version, commit, fingerprint, output):
             if suffix.endswith('setup.exe') and (proof.get('actualInstallUninstallChecked') is not True or proof.get('existingDestinationRejected') is not True or proof.get('duplicateVersionRejected') is not True or proof.get('unknownUserFilePreserved') is not True or proof.get('recursiveDeletion') is not False):
                 raise ValueError('Actual installer/uninstaller preservation check required')
         else:
+            if proof.get('package') != name or proof.get('sha256') != actual or proof.get('bytes') != package.stat().st_size:
+                raise ValueError('Portable package proof mismatch')
             expected_rid = {'linux': 'linux-x64', 'mac-arm64': 'osx-arm64', 'mac-x64': 'osx-x64'}[scope]
             if proof.get('rid') != expected_rid or proof.get('releaseChecks', {}).get('success') is not True or proof.get('relocatedReleaseChecks', {}).get('success') is not True:
                 raise ValueError('Native and relocated package checks required')

@@ -223,11 +223,23 @@ pub(crate) fn analyze(service: &Service, mut request: NotesRequest) -> AppResult
         if valid_legacy_id(&request.meeting_id) {
             anyhow::bail!("Diese Beta verändert Originalimporte nicht. Ihre Auswertung bleibt in der bisherigen Version verfügbar.");
         }
-        let data = service
-            .data(&request.meeting_id)
-            .map_err(anyhow::Error::msg)?;
-        anyhow::ensure!(data.status=="complete"&&data.parts.iter().all(|p|p.status=="complete"),"Bitte zuerst alle offenen Transkriptabschnitte nachholen. Ausgewertet wird nur ein abgeschlossener Originalstand.");
-        let sources = note_sources(&data).map_err(anyhow::Error::msg)?;
+        let sources = if let Some(run_id) = &request.resume_run_id {
+            let folder = analysis_folder(service, &request.meeting_id, run_id)
+                .map_err(anyhow::Error::msg)?;
+            let snapshot = meeting_notes::read_snapshot(&folder.join("snapshot.json"))?;
+            anyhow::ensure!(
+                snapshot.id == *run_id && snapshot.meeting_id == request.meeting_id,
+                "Der Arbeitsstand gehört nicht zur ausgewählten Sitzung."
+            );
+            // Continue the original immutable transcript, never a newer ASR revision.
+            snapshot.sources
+        } else {
+            let data = service
+                .data(&request.meeting_id)
+                .map_err(anyhow::Error::msg)?;
+            anyhow::ensure!(data.status=="complete"&&data.parts.iter().all(|p|p.status=="complete"),"Bitte zuerst alle offenen Transkriptabschnitte nachholen. Ausgewertet wird nur ein abgeschlossener Originalstand.");
+            note_sources(&data).map_err(anyhow::Error::msg)?
+        };
         if request.use_saved_key {
             anyhow::ensure!(key.is_empty(),"Bitte entweder den gespeicherten Schlüssel oder einen Schlüssel nur für diese Sitzung wählen.");
             key = crate::credential_service::load_for_run(
@@ -264,9 +276,157 @@ pub(crate) fn analyze(service: &Service, mut request: NotesRequest) -> AppResult
     result.map_err(|error| error.to_string())
 }
 
+fn analysis_folder(
+    service: &Service,
+    meeting_id: &str,
+    run_id: &str,
+) -> AppResult<std::path::PathBuf> {
+    crate::validate_id(run_id)?;
+    let session = crate::meeting_files::session_folder(&service.root, meeting_id)?;
+    let analyses = crate::meeting_files::directory(&session.join("analyses"))?;
+    crate::meeting_files::directory(&analyses.join(run_id))
+}
+
+pub(crate) fn pending_analyses(
+    service: &Service,
+    meeting_id: &str,
+) -> AppResult<Vec<meeting_notes::PendingAnalysis>> {
+    if valid_legacy_id(meeting_id) {
+        return Ok(vec![]);
+    }
+    let session = crate::meeting_files::session_folder(&service.root, meeting_id)?;
+    let root = session.join("analyses");
+    if !root.exists() {
+        return Ok(vec![]);
+    }
+    let root = crate::meeting_files::directory(&root)?;
+    let mut pending = vec![];
+    for entry in std::fs::read_dir(root)
+        .map_err(|_| "Gespeicherte Arbeitsstände konnten nicht gelesen werden.")?
+    {
+        let entry =
+            entry.map_err(|_| "Gespeicherte Arbeitsstände konnten nicht gelesen werden.")?;
+        let Some(id) = entry.file_name().to_str().map(str::to_owned) else {
+            continue;
+        };
+        if crate::validate_id(&id).is_err() {
+            continue;
+        }
+        let folder = analysis_folder(service, meeting_id, &id)?;
+        if let Some(item) = meeting_notes::read_pending_analysis(&folder).map_err(|_| "Ein gespeicherter Arbeitsstand besteht die Quellenprüfung nicht. Originaldateien bleiben erhalten.")? {
+            if item.meeting_id != meeting_id { return Err("Der Arbeitsstand gehört zu einer anderen Sitzung.".into()); }
+            pending.push(item);
+        }
+    }
+    pending.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    Ok(pending)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unfinished_snapshot_survives_service_restart_and_never_restores_cloud_consent() {
+        let root = std::env::temp_dir().join(format!(
+            "handymeeting-notes-recovery-{}",
+            meeting_notes::new_job_id()
+        ));
+        let session = meeting_core::SessionStore::create(
+            &root.join("sessions"),
+            "Synthetic recovery",
+            "synthetic",
+            "system",
+            None,
+        )
+        .unwrap();
+        let meeting_id = session.snapshot().unwrap().id;
+        let folder = session
+            .folder()
+            .join("analyses")
+            .join("0123456789abcdef0123456789abcdef");
+        drop(session);
+        std::fs::create_dir_all(&folder).unwrap();
+        let sources = vec![meeting_notes::Source {
+            id: "S00001".into(),
+            source: "system".into(),
+            start_ms: 0,
+            end_ms: 1000,
+            text: "Original synthetic transcript.".into(),
+        }];
+        let template = meeting_notes::Template {
+            id: "original".into(),
+            name: "Original instructions".into(),
+            steps: vec![
+                meeting_notes::Step {
+                    id: "summary".into(),
+                    name: "Summary".into(),
+                    kind: meeting_notes::Kind::Summary,
+                    prompt: "Summarise original statements with evidence.".into(),
+                },
+                meeting_notes::Step {
+                    id: "tasks".into(),
+                    name: "Tasks".into(),
+                    kind: meeting_notes::Kind::Tasks,
+                    prompt: "Find explicitly assigned tasks with evidence.".into(),
+                },
+            ],
+        };
+        let snapshot = Analysis {
+            id: "0123456789abcdef0123456789abcdef".into(),
+            meeting_id: meeting_id.clone(),
+            source_hash: meeting_notes::source_hash(&sources).unwrap(),
+            template,
+            sections: vec![],
+            sources,
+            created_at: "2026-10-26T08:00:00Z".into(),
+            model: "original-model".into(),
+            mode: "cloud".into(),
+            endpoint: "https://example.test/v1/".into(),
+            prompt_version: meeting_notes::PROMPT_VERSION.into(),
+        };
+        let original = serde_json::to_vec(&snapshot).unwrap();
+        std::fs::write(folder.join("snapshot.json"), &original).unwrap();
+        let checkpoint = br#"{"items":[]}"#;
+        std::fs::write(folder.join("step-0000-000000.json"), checkpoint).unwrap();
+        let first = Service::new(root.clone()).unwrap();
+        assert_eq!(pending_analyses(&first, &meeting_id).unwrap().len(), 1);
+        drop(first);
+        let restarted = Service::new(root).unwrap();
+        assert!(restarted.notes_jobs.snapshot().unwrap().is_none());
+        let pending = pending_analyses(&restarted, &meeting_id)
+            .unwrap()
+            .pop()
+            .unwrap();
+        assert_eq!(pending.confirmed_tasks, 1);
+        assert_eq!(pending.total_tasks, 2);
+        assert_eq!(pending.model, "original-model");
+        assert_eq!(pending.template.name, "Original instructions");
+        let public = serde_json::to_value(&pending).unwrap();
+        for name in ["sources", "apiKey", "cloudConsent", "useSavedKey"] {
+            assert!(public.get(name).is_none());
+        }
+        let mut attempt = request(&meeting_notes::new_job_id());
+        attempt.meeting_id = meeting_id.clone();
+        attempt.resume_run_id = Some(pending.id);
+        attempt.template = pending.template;
+        attempt.endpoint = pending.endpoint;
+        attempt.mode = pending.mode;
+        attempt.model = pending.model;
+        assert!(analyze(&restarted, attempt)
+            .unwrap_err()
+            .contains("Textfreigabe"));
+        assert_eq!(
+            std::fs::read(folder.join("snapshot.json")).unwrap(),
+            original
+        );
+        assert_eq!(
+            std::fs::read(folder.join("step-0000-000000.json")).unwrap(),
+            checkpoint
+        );
+        assert_eq!(pending_analyses(&restarted, &meeting_id).unwrap().len(), 1);
+    }
+
     fn request(id: &str) -> NotesRequest {
         NotesRequest {
             job_id: Some(id.into()),

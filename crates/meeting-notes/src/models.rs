@@ -81,6 +81,22 @@ pub struct Analysis {
     pub prompt_version: String,
 }
 
+/// Immutable request identity and verified progress; no credentials or source text.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingAnalysis {
+    pub id: String,
+    pub meeting_id: String,
+    pub source_hash: String,
+    pub template: Template,
+    pub created_at: String,
+    pub model: String,
+    pub mode: String,
+    pub endpoint: String,
+    pub confirmed_tasks: usize,
+    pub total_tasks: usize,
+}
+
 /// Deliberately not serializable: an API key must never enter a stored run snapshot.
 pub struct Connection {
     pub endpoint: String,

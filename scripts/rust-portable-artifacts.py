@@ -212,6 +212,23 @@ def controlled_path(file):
     return absolute
 
 
+def bind_package(work, package):
+    """Bind the actual final archive, after DEB creation or DMG sealing."""
+    work = controlled_path(work)
+    manifest = read(work / "package-manifest.json")
+    rid = manifest["rid"]
+    if rid not in TARGETS or work.parent != controlled_path(ROOT / ".build/rust-portable-package") or not work.name.startswith(rid + "-"):
+        raise RuntimeError("Unexpected portable package proof directory")
+    package = controlled_path(package)
+    suffix = "linux-amd64.deb" if rid == "linux-x64" else rid + ".dmg"
+    expected = "HandyMeeting-" + manifest["applicationVersion"] + "-" + suffix
+    if package.parent != controlled_path(ROOT / "packages") or package.name != expected:
+        raise RuntimeError("Portable package filename or directory mismatch")
+    bound = {**manifest, "package": package.name, "sha256": sha(package), "bytes": package.stat().st_size}
+    write(package.with_name(package.name + ".manifest.json"), bound)
+    print(json.dumps({"package": package.name, "sha256": bound["sha256"], "bytes": bound["bytes"]}))
+
+
 def collect_proofs(rid, work=None):
     """Copy explicit regular JSON files; never search application/image trees."""
     output = controlled_path(ROOT / ".build/rust-portable-proofs" / rid)
@@ -262,7 +279,7 @@ def collect_proofs(rid, work=None):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["begin-release", "stage", "finalize", "collect-proofs"])
+    parser.add_argument("command", choices=["begin-release", "stage", "finalize", "bind-package", "collect-proofs"])
     parser.add_argument("target", help="RID, or staged work directory for finalize")
     parser.add_argument("source", nargs="?", type=pathlib.Path)
     parser.add_argument("checks", nargs="?", type=pathlib.Path)
@@ -275,6 +292,8 @@ if __name__ == "__main__":
         collect_proofs(args.target, args.source)
     elif args.source is None:
         parser.error("This command requires a source fingerprint path")
+    elif args.command == "bind-package":
+        bind_package(pathlib.Path(args.target), args.source)
     elif args.command == "finalize":
         finalize(pathlib.Path(args.target), args.source, args.checks)
     elif args.target not in TARGETS:

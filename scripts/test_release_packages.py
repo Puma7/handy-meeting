@@ -74,6 +74,26 @@ class ReleaseGuards(unittest.TestCase):
             self.assemble()
         self.assertFalse(self.output.exists())
 
+    def test_rehashed_portable_package_cannot_reuse_a_different_payload_proof(self):
+        for package in self.package_files[2:]:
+            with self.subTest(package=package.name):
+                self.output = self.root / ('bundle-' + package.name)
+                original = package.read_bytes()
+                checksum = package.with_name(package.name + '.sha256')
+                old_checksum = checksum.read_bytes()
+                proof = package.with_name(package.name + '.manifest.json')
+                old_proof = proof.read_bytes()
+                package.write_bytes(b'different synthetic package with a consistent checksum')
+                checksum.write_text(packages.sha(package) + '  ' + package.name + '\n', encoding='utf-8')
+                try:
+                    with self.assertRaisesRegex(ValueError, 'Portable package proof mismatch'):
+                        self.assemble()
+                    self.assertFalse(self.output.exists())
+                    self.assertEqual(proof.read_bytes(), old_proof)
+                finally:
+                    package.write_bytes(original)
+                    checksum.write_bytes(old_checksum)
+
     def test_older_source_proof_is_not_mixed_into_release(self):
         file = next((self.input / 'mac-x64').glob('*.manifest.json'))
         self.change(file, 'sourceFingerprintSHA256', 'c' * 64)

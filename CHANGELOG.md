@@ -2,6 +2,8 @@
 
 ## 1.0.0 — release preparation
 
+- Address the first Codex review: rediscover unfinished analysis snapshots after restart, restore original request/source identity with fresh cloud consent, include backup-recoverable sessions in history, and bind portable proofs to the final archive bytes.
+
 - Present the Rust/Tauri application with bilingual guides and screenshots rendered from synthetic demonstration data.
 - Build Windows Setup EXE and ZIP, Ubuntu/Debian DEB, and separate Apple Silicon/Intel DMGs from the same checked source.
 - Verify actual isolated Windows installation/uninstallation and native credential stores before assembling a complete release draft. Publishing the verified draft marks a stable version Latest.
