@@ -1,5 +1,9 @@
 # Build and release status
 
+## Exact-tag package builds passed; draft attachment repair
+
+Tag run40402428229 built and checked the entire Windows/Linux/Apple-Silicon/Intel matrix and retained its verified 17-file bundle as artifact12691197240. Only the subsequent attachment step failed: GitHub's published-tag endpoint does not locate draft releases. The corrected publisher discovers paginated drafts and binds uploads/readback/promotion to exact IDs, rejecting ambiguous duplicate drafts. Nine new simulated regressions and the existing20 release guards pass. Original tag package bytes and both empty drafts are retained; no completed upload/publication is claimed here.
+
 ## 1.0.1 first-install correction in preparation
 
 The reported Windows 1.0.0 failure was reproduced in an owned synthetic directory: NSIS `GetFullPathName` returned an empty parent for a nonexistent nested default path; `CreateDirectoryW` failed with error 3. Parsing the parent with FileFunc GetParent succeeds without requiring existing folders. A native harness compiles the production reservation function and checks missing parents, occupied directories and a parent blocked by a file. Restoring the old parent lookup makes the new test fail; the correction passes all three cases. No user installation, registry entry or recording was touched by this local harness. Actual CI Setup installation now uses a pristine nested directory; release assembly requires its fresh-parent proof.

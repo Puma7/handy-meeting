@@ -18,7 +18,7 @@ Each has a SHA-256 sidecar and package proof. `SHA256SUMS.txt` covers all five p
 
 1. Finish/review the implementation PR and require its Windows, Linux and both Mac checks to pass. Update `TEST_REPORT.md` with actual results; do not turn a prepared workflow into a test claim.
 2. Check the manual release gates below. The product's version number does not prove capture reliability.
-3. Merge the verified source into `main`, then create/push **tag `v1.0.0` on that commit**. A tag alone triggers **Build and publish downloads**, which runs the existing verified Windows and portable workflows as reusable jobs.
+3. Merge the verified source into `main`, then create/push **the matching `v<application-version>` tag on that commit**. A tag alone triggers **Build and publish downloads**, which runs the existing verified Windows and portable workflows as reusable jobs.
 4. The workflow builds all five assets, including a real Windows install/uninstall preservation check in its disposable CI account. Only after the entire matrix passes does it assemble/upload the bundle into a **GitHub release draft**.
 5. Review the populated draft and its notes, then choose **Publish release** when ready. The `published` event verifies the already complete exact-source bundle without recompiling different binaries, and marks a final semantic version as **Latest**. Tags containing a suffix remain prereleases and are not made Latest.
 
@@ -54,6 +54,8 @@ The local data location remains `HandyMeeting/RustBeta` below the platform's loc
 - Additional or duplicate remote release assets also block uploading/promotion. The workflow never silently publishes an unrelated attachment or removes it to make validation pass. The already-complete path checks the remote file list again immediately before promotion.
 - The verified bundle is retained as an Actions artifact **before** uploads, so a network failure does not discard the reviewed package set. Use **Re-run failed jobs** to retry publishing the same build artifacts. Rebuilding the same version can legitimately produce different bytes and is not an overwrite permission.
 - An already complete release is checked by commit, source fingerprint, expected asset names, sizes and SHA-256 values. Publishing the draft does not trigger a second compile or replace its assets.
+- Draft discovery checks the paginated release list after a missing published-tag response. GitHub's tag endpoint returns published releases only; its 404 is not permission to create another draft blindly. Uploads, binary fallback downloads and promotion use explicit release/asset IDs.
+- Multiple drafts for one tag stop automatic publication before any upload. Preserve them and inspect their IDs, authors, notes and assets. For an explicitly selected original draft, the maintainer can run the verified publisher with `--release-id <id>` and the retained exact-tag `verified-release-bundle`. The ID must still belong to that tag. Omit `--publish` to populate only the draft. Conflicting assets remain a hard failure; an upload failure does not justify rebuilding or replacing different bytes.
 - Release assembly tests use fake package bytes and simulated GitHub calls. They are not a real GitHub upload or real provider test. Actual pipeline results are linked in `BUILD_STATUS.md` only after execution.
 
 Implementation: `.github/workflows/rust-release.yml`, `scripts/release-packages.py`, `scripts/publish-rust-release.py`. The older C# publishing workflow and old release assets remain historical and are not used for Rust 1.0.

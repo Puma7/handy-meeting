@@ -1,5 +1,11 @@
 # Prüfung von HandyMeeting
 
+## Korrektur der Release-Entwurfssuche
+
+Der exakte 1.0.1-Taglauf 40402428229 bestand alle Windows-, Linux-, Apple-Silicon- und Intel-Mac-Paketprüfungen sowie die Zusammenführung. Er bewahrte den vollständigen 17-Dateien-Satz als Actions-Artefakt 12691197240, scheiterte aber beim anschließenden Upload: `releases/tags/v1.0.1` liefert für unveröffentlichte Entwürfe 404. Eine direkt gelesene Release-ID und die paginierte Liste zeigten den ursprünglichen Entwurf 424691025 sowie den zusätzlich vom fehlgeschlagenen Versuch angelegten leeren Entwurf 424794429. Beide hatten null Anhänge. Das ist ein bestätigter Fehler im Veröffentlichungshelfer, kein fehlgeschlagener Programm-Build und kein vorübergehender Netzfehler.
+
+Neue synthetische Regressionen reproduzieren vor der Korrektur die unerwünschte zweite Erstellung. Nach der Korrektur bestehen neun zusätzliche Fälle neben den bisherigen 20 Releaseprüfungen: vorhandene Entwürfe wiederverwenden, alle Listenseiten berücksichtigen, doppelte Entwürfe auch auf späteren Seiten vor Mutation ablehnen, ausdrücklich gewählte IDs an ihren Tag binden, Upload/Veröffentlichung an derselben geprüften ID halten und vorhandene Binärausgaben vor einem Request erhalten. Dabei werden keine echten GitHub-Mutationen ausgeführt. Die getrennten Tag-Pakete und deren ursprünglicher Quellstand bleiben unverändert; eine ausgeführte neue Veröffentlichung wird erst nach tatsächlicher Prüfung berichtet.
+
 ## 1.0.1 – nachgewiesene Fehlerursachen und neue Regression
 
 Setup 1.0.0: Ein eigener NSIS-Diagnoselauf mit noch nicht vorhandenen verschachtelten Elternordnern reproduziert leeren Elternpfad und Win32-Fehler 3. Mit FileFunc GetParent bestehen drei native Fälle (neue Elternordner mit Leerzeichen/Umlaut, belegter Zielordner, Elternpfad als Datei); Originaldateien bleiben bytegleich. Derselbe neue Test schlägt mit wieder eingesetzter alter Pfadermittlung fehl. Der Test installiert kein Programm und schreibt keine Registrierung. Die vollständige Setup-Installation im CI verwendet künftig ebenfalls fehlende Elternordner; deren Nachweis wird vor Paketannahme verlangt.
