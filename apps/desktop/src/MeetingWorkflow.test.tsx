@@ -195,5 +195,46 @@ it("keeps background-job ownership, truthful confirmed progress and exact open/c
     />,
   );
   expect(within(panel).getByText(de.notesComplete)).toBeTruthy();
-  expect(within(panel).queryByRole("progressbar")).toBeNull();
+  expect(
+    (within(panel).getByRole("progressbar") as HTMLProgressElement).value,
+  ).toBe(6);
+  expect(within(panel).getByText("100%")).toBeTruthy();
+  expect(within(panel).getByText("01:05")).toBeTruthy();
+});
+
+it("scrolls to a search source once while polling preserves the reader position", () => {
+  const scroll = vi.fn();
+  const old = Element.prototype.scrollIntoView;
+  Element.prototype.scrollIntoView = scroll;
+  try {
+    const view = render(
+      <TranscriptBody
+        parts={meeting.parts}
+        locale="en"
+        t={en}
+        selectedFile="part-1.wav"
+      />,
+    );
+    expect(scroll).toHaveBeenCalledTimes(1);
+    view.rerender(
+      <TranscriptBody
+        parts={[...meeting.parts]}
+        locale="en"
+        t={en}
+        selectedFile="part-1.wav"
+      />,
+    );
+    expect(scroll).toHaveBeenCalledTimes(1);
+    view.rerender(
+      <TranscriptBody
+        parts={meeting.parts}
+        locale="en"
+        t={en}
+        selectedFile="part-2.wav"
+      />,
+    );
+    expect(scroll).toHaveBeenCalledTimes(2);
+  } finally {
+    Element.prototype.scrollIntoView = old;
+  }
 });

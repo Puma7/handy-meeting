@@ -1,8 +1,8 @@
 {
   "Target": "x86_64-apple-darwin",
-  "CargoLockSHA256": "ad629622642d3feef75597558f141a94d2d42e853ba5754c9a95f3dd18b6c229",
+  "CargoLockSHA256": "34ad4e59eb11cf6b2b18e1e6f35f37af74c36d80d22688def2f09d4ea421c1e3",
   "Scope": "Active Cargo resolve nodes, including build dependencies, filtered to this target; excludes workspace packages.",
-  "PackageCount": 312,
+  "PackageCount": 323,
   "Packages": [
     {
       "Name": "adler2",
@@ -1582,6 +1582,50 @@
       ]
     },
     {
+      "Name": "fallible-iterator",
+      "Version": "0.3.0",
+      "SPDX": "MIT/Apache-2.0",
+      "Repository": "https://github.com/sfackler/rust-fallible-iterator",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/fallible-iterator/0.3.0/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE-APACHE",
+          "File": "fallible-iterator-0.3.0-LICENSE-APACHE.txt",
+          "SHA256": "c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08",
+          "Source": "provided-crate-file"
+        },
+        {
+          "OriginalFilename": "LICENSE-MIT",
+          "File": "fallible-iterator-0.3.0-LICENSE-MIT.txt",
+          "SHA256": "0816e154b159ba255c563f7c8c7df5bbb8cc5fc96f5ab8cf9f4743b4f41fe7eb",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
+      "Name": "fallible-streaming-iterator",
+      "Version": "0.1.9",
+      "SPDX": "MIT/Apache-2.0",
+      "Repository": "https://github.com/sfackler/fallible-streaming-iterator",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/fallible-streaming-iterator/0.1.9/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE-APACHE",
+          "File": "fallible-streaming-iterator-0.1.9-LICENSE-APACHE.txt",
+          "SHA256": "c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08",
+          "Source": "provided-crate-file"
+        },
+        {
+          "OriginalFilename": "LICENSE-MIT",
+          "File": "fallible-streaming-iterator-0.1.9-LICENSE-MIT.txt",
+          "SHA256": "8dcec5569a9be5b0e086c80faed6f1aefa670af0ec29cecc2f714303096887e0",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
       "Name": "fastrand",
       "Version": "2.3.0",
       "SPDX": "Apache-2.0 OR MIT",
@@ -2115,6 +2159,28 @@
           "OriginalFilename": "LICENSE-MIT",
           "File": "hashbrown-0.17.1-LICENSE-MIT.txt",
           "SHA256": "ff8f68cb076caf8cefe7a6430d4ac086ce6af2ca8ce2c4e5a2004d4552ef52a2",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
+      "Name": "hashlink",
+      "Version": "0.12.2",
+      "SPDX": "MIT OR Apache-2.0",
+      "Repository": "https://github.com/djc/hashlink",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/hashlink/0.12.2/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE-APACHE",
+          "File": "hashlink-0.12.2-LICENSE-APACHE.txt",
+          "SHA256": "c144680885b29e4719e2a51f0aab5439a1e02d980692b5aaf086cae12727f28b",
+          "Source": "provided-crate-file"
+        },
+        {
+          "OriginalFilename": "LICENSE-MIT",
+          "File": "hashlink-0.12.2-LICENSE-MIT.txt",
+          "SHA256": "e915669a595b11a200873df8286561881b0e04932f6412a585db6297ba0bc97c",
           "Source": "provided-crate-file"
         }
       ]
@@ -2856,6 +2922,22 @@
       ]
     },
     {
+      "Name": "libsqlite3-sys",
+      "Version": "0.39.1",
+      "SPDX": "MIT",
+      "Repository": "https://github.com/rusqlite/rusqlite",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/libsqlite3-sys/0.39.1/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE",
+          "File": "libsqlite3-sys-0.39.1-LICENSE.txt",
+          "SHA256": "c10c1f27337546471e5f7e4e97fdd398b35b9d4e126115dcd22de8d8e65abf6f",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
       "Name": "litemap",
       "Version": "0.8.1",
       "SPDX": "Unicode-3.0",
@@ -3099,6 +3181,22 @@
           "OriginalFilename": "LICENSE-MIT",
           "File": "new_debug_unreachable-1.0.6-LICENSE-MIT.txt",
           "SHA256": "f7715d38a3fa1b4ac97c5729740752505a39cb92ee83ab5b102aeb5eaa7cdea4",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
+      "Name": "nix",
+      "Version": "0.31.3",
+      "SPDX": "MIT",
+      "Repository": "https://github.com/nix-rust/nix",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/nix/0.31.3/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE",
+          "File": "nix-0.31.3-LICENSE.txt",
+          "SHA256": "66e3ee1fa7f909ad3c612d556f2a0cdabcd809ad6e66f3b0605015ac64841b70",
           "Source": "provided-crate-file"
         }
       ]
@@ -3596,6 +3694,28 @@
           "OriginalFilename": "LICENSE-MIT",
           "File": "pin-utils-0.1.0-LICENSE-MIT.txt",
           "SHA256": "28802412d2bfbafe432b305634413b41a984d30fba0df41d30aa2c8a2077c5b1",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
+      "Name": "pkg-config",
+      "Version": "0.3.32",
+      "SPDX": "MIT OR Apache-2.0",
+      "Repository": "https://github.com/rust-lang/pkg-config-rs",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/pkg-config/0.3.32/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE-APACHE",
+          "File": "pkg-config-0.3.32-LICENSE-APACHE.txt",
+          "SHA256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+          "Source": "provided-crate-file"
+        },
+        {
+          "OriginalFilename": "LICENSE-MIT",
+          "File": "pkg-config-0.3.32-LICENSE-MIT.txt",
+          "SHA256": "378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397",
           "Source": "provided-crate-file"
         }
       ]
@@ -4108,6 +4228,22 @@
           "OriginalFilename": "LICENSE-other-bits",
           "File": "ring-0.17.14-LICENSE-other-bits.txt",
           "SHA256": "f025ccfb7dfb6bdfedc75ca0f67acc69e6fb4998143d834f7c2f38a29989680f",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
+      "Name": "rusqlite",
+      "Version": "0.41.0",
+      "SPDX": "MIT",
+      "Repository": "https://github.com/rusqlite/rusqlite",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/rusqlite/0.41.0/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE",
+          "File": "rusqlite-0.41.0-LICENSE.txt",
+          "SHA256": "c10c1f27337546471e5f7e4e97fdd398b35b9d4e126115dcd22de8d8e65abf6f",
           "Source": "provided-crate-file"
         }
       ]
@@ -5892,6 +6028,28 @@
       ]
     },
     {
+      "Name": "typed-path",
+      "Version": "0.13.0",
+      "SPDX": "MIT OR Apache-2.0",
+      "Repository": "https://github.com/chipsenkbeil/typed-path",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/typed-path/0.13.0/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE-APACHE",
+          "File": "typed-path-0.13.0-LICENSE-APACHE.txt",
+          "SHA256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+          "Source": "provided-crate-file"
+        },
+        {
+          "OriginalFilename": "LICENSE-MIT",
+          "File": "typed-path-0.13.0-LICENSE-MIT.txt",
+          "SHA256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
       "Name": "typeid",
       "Version": "1.0.3",
       "SPDX": "MIT OR Apache-2.0",
@@ -6257,6 +6415,28 @@
       ]
     },
     {
+      "Name": "vcpkg",
+      "Version": "0.2.15",
+      "SPDX": "MIT/Apache-2.0",
+      "Repository": "https://github.com/mcgoo/vcpkg-rs",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/vcpkg/0.2.15/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE-APACHE",
+          "File": "vcpkg-0.2.15-LICENSE-APACHE.txt",
+          "SHA256": "60c93a31f490375aadf64098b75f10715010379541021e00261045d7800611d3",
+          "Source": "provided-crate-file"
+        },
+        {
+          "OriginalFilename": "LICENSE-MIT",
+          "File": "vcpkg-0.2.15-LICENSE-MIT.txt",
+          "SHA256": "016d20f335060a70e79d9fcf8dfaa6201114d65d592211f4bdfb8ae9ca2bc1dc",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
       "Name": "version_check",
       "Version": "0.9.5",
       "SPDX": "MIT/Apache-2.0",
@@ -6572,6 +6752,38 @@
           "OriginalFilename": "LICENSE",
           "File": "zerovec-derive-0.11.2-LICENSE.txt",
           "SHA256": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
+      "Name": "zip",
+      "Version": "9.1.2",
+      "SPDX": "MIT",
+      "Repository": "https://github.com/zip-rs/zip2",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/zip/9.1.2/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE",
+          "File": "zip-9.1.2-LICENSE.txt",
+          "SHA256": "58545fed1565e42d687aecec6897d35c6d37ccb71479a137c0deb2203e125c79",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
+      "Name": "zlib-rs",
+      "Version": "0.6.8",
+      "SPDX": "Zlib",
+      "Repository": "https://github.com/trifectatechfoundation/zlib-rs",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/zlib-rs/0.6.8/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE",
+          "File": "zlib-rs-0.6.8-LICENSE.txt",
+          "SHA256": "e72111c52b7d96ebe25348dee19f0744f444d3c95ae6b1ecb6ccaecc5bce05ba",
           "Source": "provided-crate-file"
         }
       ]

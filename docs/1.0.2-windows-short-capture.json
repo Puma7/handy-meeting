@@ -1,0 +1,16 @@
+{
+  "captureIncomplete": true,
+  "differenceMs": 182,
+  "elapsedMs": 15369,
+  "limits": "Audio-only live-device diagnostic of the actual requested duration; no ASR, full-disk or general reliability claim. Recovery is a separate explicit action.",
+  "microphoneMs": 15002,
+  "realHardware": true,
+  "sessionId": "6b3b4ec3faff43fd8222f636a242adbd",
+  "speechRecognition": false,
+  "systemMs": 15184,
+  "trackDifferenceWithinLimit": true,
+  "version": "1.0.2",
+  "warnings": [
+    "microphone: audio driver reported a discontinuity; affected recording ranges can be incomplete."
+  ]
+}

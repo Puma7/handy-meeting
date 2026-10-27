@@ -124,6 +124,7 @@ pub fn read_pending_analysis(folder: &Path) -> Result<Option<PendingAnalysis>> {
 }
 pub(crate) fn validate_analysis(result: &Analysis) -> Result<()> {
     validate_template(&result.template)?;
+    crate::name_candidates::validate(result)?;
     ensure!(
         source_hash(&result.sources)? == result.source_hash
             && result.prompt_version == PROMPT_VERSION
@@ -314,6 +315,7 @@ pub fn analyze_controlled(
         });
     }
     control.check()?;
+    validate_analysis(&analysis)?;
     create_export(
         &folder.join("result.txt"),
         render_text(&analysis).as_bytes(),

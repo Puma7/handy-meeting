@@ -1,3 +1,12 @@
+import MeetingLabels from "./views/MeetingLabels";
+import SpeakerLabels from "./views/SpeakerLabels";
+import SpeakerExperiments from "./views/SpeakerExperiments";
+import { SPEAKER_NAME_TEMPLATE } from "./speaker-proposals";
+import HistorySearch from "./views/HistorySearch";
+import LibraryStatus from "./views/LibraryStatus";
+import UpdatePanel from "./views/UpdatePanel";
+import RetentionPanel from "./views/RetentionPanel";
+import MaintenanceStatus from "./views/MaintenanceStatus";
 import NotesView from "./views/NotesView";
 import ResumeAnalysisDialog from "./views/ResumeAnalysisDialog";
 import Sidebar, { type Page } from "./views/Sidebar";
@@ -10,7 +19,7 @@ import AgentPanel from "./views/AgentPanel";
 import { useTemplateLibrary } from "./useTemplateLibrary";
 import { useLocalTextModels } from "./useLocalTextModels";
 import { useNotesJob } from "./useNotesJob";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FolderClock, RefreshCw, X } from "lucide-react";
 import { desktopApi, errorMessage } from "./api";
 import {
@@ -84,6 +93,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     [liveMeeting, setLiveMeeting] = useState<Meeting | null>(null),
     [notesMeetingId, setNotesMeetingId] = useState(""),
     [notesMeetingLoading, setNotesMeetingLoading] = useState(false);
+  const [searchSource, setSearchSource] = useState<{
+    meetingId: string;
+    file: string | null;
+  } | null>(null);
   const [legacyManifest, setLegacyManifest] = useState("");
   const [title, setTitle] = useState(""),
     [modelId, setModelId] = useState(""),
@@ -92,7 +105,13 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     [micEnabled, setMicEnabled] = useState(false),
     [handyPath, setHandyPath] = useState("");
   const templateStore = useTemplateLibrary(api, connected, locale);
-  const templates = templateStore.templates;
+  const templates = useMemo(
+    () =>
+      templateStore.templates.some((t) => t.id === SPEAKER_NAME_TEMPLATE.id)
+        ? templateStore.templates
+        : [...templateStore.templates, SPEAKER_NAME_TEMPLATE],
+    [templateStore.templates],
+  );
   const [templateId, setTemplateId] = useState(""),
     [stepId, setStepId] = useState("");
   const [editing, setEditing] = useState<AnalysisStep | null>(null),
@@ -183,6 +202,20 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     manualTextModel ||
     (localTextModels.loaded && localTextModels.models.includes(textModel));
 
+  const canStartNotes =
+    connected &&
+    Boolean(notesMeeting) &&
+    notesMeeting?.status === "complete" &&
+    !recording &&
+    !notesBusy &&
+    !busy &&
+    !notesMeetingLoading &&
+    Boolean(textModel.trim()) &&
+    notesModelReady &&
+    Boolean(endpoint.trim()) &&
+    templateStore.ready &&
+    !templateStore.pending;
+
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -219,7 +252,9 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     if (!modalOpen) return;
     const previous = document.activeElement as HTMLElement | null;
     const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
-    const surfaces = document.querySelectorAll<HTMLElement>(".sidebar, main");
+    const surfaces = document.querySelectorAll<HTMLElement>(
+      ".sidebar, main, .notes-statusbar, .job-status-stack",
+    );
     surfaces.forEach((element) => {
       element.inert = true;
     });
@@ -332,6 +367,13 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
   const refreshHistory = useCallback(async () => {
     setHistory(await api.listMeetings());
   }, [api]);
+  useEffect(() => {
+    const updated = () => {
+      void refreshHistory().catch((e) => setError(errorMessage(e)));
+    };
+    window.addEventListener("library-index-updated", updated);
+    return () => window.removeEventListener("library-index-updated", updated);
+  }, [refreshHistory]);
   const refreshDevices = useCallback(async () => {
     applyDevices(await api.listDevices());
   }, [api, applyDevices]);
@@ -627,8 +669,18 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     });
   }
   async function updateTemplate(next: AnalysisTemplate) {
+    if (next.id === SPEAKER_NAME_TEMPLATE.id) {
+      setError(
+        locale === "de"
+          ? "Diese integrierte Vorlage ist geschützt. Bitte zuerst duplizieren."
+          : "This built-in template is protected. Duplicate it first.",
+      );
+      return false;
+    }
     return templateStore.commit(
-      templates.map((item) => (item.id === next.id ? next : item)),
+      templateStore.templates.map((item) =>
+        item.id === next.id ? next : item,
+      ),
     );
   }
   async function saveStep() {
@@ -700,16 +752,24 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     let next: AnalysisTemplate | null = null;
     let updated: AnalysisTemplate[];
     if (kind === "delete") {
-      if (templates.length < 2) return;
-      updated = templates.filter((item) => item.id !== original.id);
+      if (
+        templateStore.templates.length < 2 ||
+        original.id === SPEAKER_NAME_TEMPLATE.id
+      )
+        return;
+      updated = templateStore.templates.filter(
+        (item) => item.id !== original.id,
+      );
     } else if (kind === "rename") {
-      const current = templates.find((item) => item.id === original.id);
+      const current = templateStore.templates.find(
+        (item) => item.id === original.id,
+      );
       if (!current) {
         setTemplateActionError(t.templateSaveFailed);
         return;
       }
       next = { ...current, name };
-      updated = templates.map((item) =>
+      updated = templateStore.templates.map((item) =>
         item.id === original.id ? next! : item,
       );
     } else {
@@ -720,7 +780,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         name,
         steps: base.steps.map((item) => ({ ...item, id: uid() })),
       };
-      updated = [...templates, next];
+      updated = [...templateStore.templates, next];
     }
     if (!(await templateStore.commit(updated))) {
       setTemplateActionError(t.templateSaveFailed);
@@ -733,14 +793,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     setTemplateAction(null);
   }
   function beginNotes() {
-    if (
-      !notesMeeting ||
-      !notesModelReady ||
-      notesMeetingLoading ||
-      !templateStore.ready ||
-      templateStore.pending
-    )
-      return;
+    if (!notesMeeting || !canStartNotes) return;
     const request: NotesRequest = {
       meetingId: notesMeeting.id,
       template: structuredClone(template),
@@ -910,6 +963,81 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             </button>
           )}
         </header>
+        {(page === "meeting"
+          ? liveMeeting
+          : page === "detail"
+            ? meeting
+            : null) && (
+          <MeetingLabels
+            api={api}
+            meeting={(page === "meeting" ? liveMeeting : meeting)!}
+            locale={locale}
+            onChanged={(meta) => {
+              const target = (page === "meeting" ? liveMeeting : meeting)!;
+              setMeeting((old) =>
+                old?.id === target.id
+                  ? {
+                      ...old,
+                      title: meta.title ?? old.title,
+                      userMetadata: meta,
+                    }
+                  : old,
+              );
+              setLiveMeeting((old) =>
+                old?.id === target.id
+                  ? {
+                      ...old,
+                      title: meta.title ?? old.title,
+                      userMetadata: meta,
+                    }
+                  : old,
+              );
+              void refreshHistory().catch((e) => setError(errorMessage(e)));
+            }}
+          />
+        )}
+        {page === "detail" && meeting && (
+          <SpeakerLabels
+            key={meeting.id}
+            api={api}
+            meeting={meeting}
+            locale={locale}
+            onPropose={() => {
+              void action(async () => {
+                setMode("local");
+                setApiKey("");
+                setSavedKeyScope(null);
+                if (mode === "cloud") {
+                  setEndpoint("http://127.0.0.1:1234/v1/");
+                  setTextModel("");
+                }
+                await openNotesFor(meeting.id);
+                if (notesSelectionRef.current === meeting.id) {
+                  setTemplateId(SPEAKER_NAME_TEMPLATE.id);
+                  setResultId("");
+                }
+              });
+            }}
+          />
+        )}
+        {(page === "detail"
+          ? meeting
+          : page === "meeting"
+            ? liveMeeting
+            : null) && (
+          <SpeakerExperiments
+            key={(page === "detail" ? meeting : liveMeeting)!.id}
+            api={api}
+            locale={locale}
+            meeting={page === "detail" ? meeting : liveMeeting}
+            models={app?.handy?.models ?? []}
+            recording={Boolean(
+              app?.recording &&
+                (page === "detail" ? meeting : liveMeeting)?.id ===
+                  liveMeeting?.id,
+            )}
+          />
+        )}
         {error && (
           <div role="alert" className="notice error">
             <span>{error}</span>
@@ -944,38 +1072,6 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             </button>
           </div>
         )}
-        <NotesProgressPanel
-          progress={notesJob.progress}
-          elapsedMs={notesJob.elapsedMs}
-          cancelPending={notesJob.cancelPending}
-          feedback={notesJob.feedback}
-          pollError={notesJob.pollError}
-          meetingTitle={(() => {
-            const id =
-              notesJob.progress?.meetingId ?? notesJob.feedback?.meetingId;
-            const value = [meeting, liveMeeting, ...history].find(
-              (item) => item?.id === id,
-            );
-            return value
-              ? meetingLabel(value, locale)
-              : [t.notesTask, id].filter(Boolean).join(" · ");
-          })()}
-          t={t}
-          onCancel={() => void notesJob.cancel()}
-          onOpen={() => {
-            const id =
-              notesJob.progress?.meetingId ?? notesJob.feedback?.meetingId;
-            if (id) void openNotesFor(id);
-          }}
-          onDismiss={notesJob.dismiss}
-          onResume={
-            notesJob.progress?.runId &&
-            ["failed", "cancelled"].includes(notesJob.progress.status) &&
-            notesJob.lastRequest?.meetingId === notesMeetingId
-              ? resumeNotes
-              : null
-          }
-        />
         <AgentPanel
           agent={app?.agent}
           blocked={
@@ -1096,6 +1192,9 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         {page === "detail" && meeting && (
           <MeetingDetail
             meeting={meeting}
+            selectedFile={
+              searchSource?.meetingId === meeting.id ? searchSource.file : null
+            }
             locale={locale}
             t={t}
             busy={busy}
@@ -1116,7 +1215,18 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             savedFile={fileExport?.id === meeting.id ? fileExport.file : null}
           />
         )}
-        {page === "history" && (
+        {page === "history" && api.searchMeetings && (
+          <HistorySearch
+            api={api}
+            locale={locale}
+            onOpen={(id, file) => {
+              void openMeeting(id).then(() =>
+                setSearchSource({ meetingId: id, file }),
+              );
+            }}
+          />
+        )}
+        {page === "history" && !api.searchMeetings && (
           <section className="history-panel">
             <div className="section-heading">
               <h2>{t.storage}</h2>
@@ -1260,6 +1370,50 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
               )}
             </section>
           </div>
+        )}
+        {page === "settings" && (
+          <UpdatePanel
+            api={api}
+            locale={locale}
+            blocked={Boolean(
+              app?.recording ||
+                app?.transitioning ||
+                app?.notesRunning ||
+                liveMeeting?.status === "catching-up",
+            )}
+          />
+        )}
+        {page === "settings" && api.rebuildSearchIndex && (
+          <section className="legacy-panel">
+            <h2>
+              {locale === "de" ? "Lokaler Suchindex" : "Local search index"}
+            </h2>
+            <p className="muted">
+              {locale === "de"
+                ? "Der Suchindex beschleunigt große Historien. Er wird lokal aus deinen Sitzungen aufgebaut; Originale werden nicht geändert."
+                : "The local index speeds up large histories. Rebuilding never changes original sessions."}
+            </p>
+            <button
+              className="secondary"
+              onClick={() =>
+                void api
+                  .rebuildSearchIndex?.()
+                  .catch((e) => setError(errorMessage(e)))
+              }
+            >
+              <RefreshCw size={15} />
+              {locale === "de"
+                ? "Suchindex aktualisieren"
+                : "Update search index"}
+            </button>
+          </section>
+        )}
+        {page === "settings" && (
+          <RetentionPanel
+            api={api}
+            locale={locale}
+            models={app?.handy?.models ?? []}
+          />
         )}
         {page === "settings" && (
           <section className="legacy-panel">
@@ -1407,6 +1561,67 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
           />
         )}
       </main>
+      <div className="job-status-stack">
+        <MaintenanceStatus api={api} locale={locale} />
+        <SpeakerExperiments api={api} locale={locale} footer />
+        <UpdatePanel api={api} locale={locale} footer />
+        <LibraryStatus api={api} connected={connected} locale={locale} />
+        <NotesProgressPanel
+          progress={notesJob.progress}
+          elapsedMs={notesJob.elapsedMs}
+          cancelPending={notesJob.cancelPending}
+          feedback={notesJob.feedback}
+          pollError={notesJob.pollError}
+          awaitingProgress={Boolean(app?.notesRunning) && !notesJob.progress}
+          meetingTitle={(() => {
+            const id =
+              notesJob.progress?.meetingId ?? notesJob.feedback?.meetingId;
+            const value = [meeting, liveMeeting, ...history].find(
+              (item) => item?.id === id,
+            );
+            return value
+              ? meetingLabel(value, locale)
+              : [t.notesTask, id].filter(Boolean).join(" · ");
+          })()}
+          setup={
+            page === "notes"
+              ? {
+                  loading: notesMeetingLoading,
+                  message: notesMeetingLoading
+                    ? t.busy
+                    : !notesMeeting
+                      ? t.noMeeting
+                      : notesMeeting.status !== "complete" || recording
+                        ? t.pendingNotes
+                        : !notesModelReady || !textModel.trim()
+                          ? t.analysisChooseModel
+                          : !connected
+                            ? t.disconnected
+                            : !templateStore.ready || templateStore.pending
+                              ? t.templateLoadFailed
+                              : t.analysisReady,
+                  startDisabled: !canStartNotes,
+                  onStart: beginNotes,
+                }
+              : undefined
+          }
+          t={t}
+          onCancel={() => void notesJob.cancel()}
+          onOpen={() => {
+            const id =
+              notesJob.progress?.meetingId ?? notesJob.feedback?.meetingId;
+            if (id) void openNotesFor(id);
+          }}
+          onDismiss={notesJob.dismiss}
+          onResume={
+            notesJob.progress?.runId &&
+            ["failed", "cancelled"].includes(notesJob.progress.status) &&
+            notesJob.lastRequest?.meetingId === notesMeetingId
+              ? resumeNotes
+              : null
+          }
+        />
+      </div>
       {resumeAnalysis && (
         <ResumeAnalysisDialog
           key={resumeAnalysis.id}

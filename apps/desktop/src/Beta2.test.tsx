@@ -474,8 +474,9 @@ describe("beta.2 guided meeting analysis", () => {
     expect(bar.value).toBe(1);
     expect(bar.max).toBe(3);
     expect(
-      screen.getByText(/1\/3 geprüfte und gespeicherte Teilaufgaben · 33%/),
+      screen.getByText(/1\/3 geprüfte und gespeicherte Teilaufgaben/),
     ).toBeTruthy();
+    expect(screen.getByText("33%")).toBeTruthy();
     expect(
       screen.getByText(/Rechenzeit des Modells ist nicht vorhersehbar/),
     ).toBeTruthy();
@@ -675,4 +676,57 @@ describe("beta.2 guided meeting analysis", () => {
       ),
     ).toBeTruthy();
   });
+});
+
+it("prepares local name candidates without carrying a cloud key or automatically starting analysis", async () => {
+  const { api } = apiFixture();
+  api.getSpeakerLabels = vi.fn().mockResolvedValue({
+    meetingId: first.id,
+    revision: 0,
+    enabled: false,
+    assignments: [],
+    sources: {},
+  });
+  api.saveSpeakerLabels = vi.fn();
+  render(<App api={api} />);
+  await openNotes();
+  await userEvent.selectOptions(screen.getByLabelText("Verarbeitung"), "cloud");
+  const endpoint = screen.getByLabelText("API-Adresse");
+  await userEvent.clear(endpoint);
+  await userEvent.type(endpoint, "https://cloud.example.test/v1/");
+  await userEvent.type(
+    screen.getByLabelText(
+      "Schl\u00fcssel nur f\u00fcr diese App-Sitzung",
+    ) as HTMLInputElement,
+    "synthetic-secret-only",
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Historie" }));
+  await userEvent.click(
+    (await screen.findAllByRole("button", { name: "\u00d6ffnen" }))[1],
+  );
+  await userEvent.click(
+    screen.getByText("Sprecher nach dem Meeting zuordnen · optional"),
+  );
+  await userEvent.click(
+    screen.getByRole("button", {
+      name: "Lokale KI-Namensvorschläge vorbereiten",
+    }),
+  );
+  await waitFor(() =>
+    expect(
+      (screen.getByLabelText("Verarbeitung") as HTMLSelectElement).value,
+    ).toBe("local"),
+  );
+  expect(
+    (document.querySelector('input[type="url"]') as HTMLInputElement).value,
+  ).toBe("http://127.0.0.1:1234/v1/");
+  expect(
+    (
+      document.querySelector(
+        'input[type="password"]',
+      ) as HTMLInputElement as HTMLInputElement
+    ).value,
+  ).toBe("");
+  expect(api.generateNotes).not.toHaveBeenCalled();
+  expect(api.saveCredential).not.toHaveBeenCalled();
 });

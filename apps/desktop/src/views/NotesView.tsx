@@ -149,6 +149,10 @@ export default function NotesView({
   }, [notesBusy, result?.id]);
   const templateLocked =
     notesBusy || libraryInvalid || libraryPending || !connected;
+  const builtIn = template.id === "speaker-name-candidates-v1";
+  const editableTemplateCount = templates.filter(
+    (t) => t.id !== "speaker-name-candidates-v1",
+  ).length;
   const visibleSteps = result ? result.sections : template.steps;
   const activeId =
     (result ? resultSection?.id : selectedStep.id) ?? visibleSteps[0].id;
@@ -397,7 +401,7 @@ export default function NotesView({
               </button>
               <button
                 className="text-button"
-                disabled={templateLocked}
+                disabled={templateLocked || builtIn}
                 onClick={() => openTemplateAction("rename")}
               >
                 <Pencil size={14} />
@@ -405,8 +409,12 @@ export default function NotesView({
               </button>
               <button
                 className="text-button"
-                disabled={templateLocked || templates.length < 2}
-                title={templates.length < 2 ? t.lastTemplate : t.removeTemplate}
+                disabled={
+                  templateLocked || builtIn || editableTemplateCount < 2
+                }
+                title={
+                  editableTemplateCount < 2 ? t.lastTemplate : t.removeTemplate
+                }
                 onClick={() => openTemplateAction("delete")}
               >
                 <Trash2 size={14} />

@@ -14,10 +14,10 @@ HandyMeeting ist eine eigenständige **Rust-/Tauri-Companion-App für [Handy](ht
 | --- | --- | --- |
 | Windows 10/11 · x64 | Setup-EXE · ZIP ohne Installation | WebView2 und Microsoft Visual C++ x64; kein .NET erforderlich |
 | Ubuntu 22.04+ / Debian 12–13 · x64 | DEB | PulseAudio oder PipeWire-Pulse; Bibliotheken über den Paketmanager |
-| Mac · Apple Silicon / M-Serie | Apple-Silicon-DMG | macOS 13+ und Aufnahmeberechtigungen |
-| Mac · Intel | Intel-DMG | macOS 13+ und Aufnahmeberechtigungen |
+| Mac · Apple Silicon / M-Serie | Apple-Silicon-DMG | macOS 15+ und Aufnahmeberechtigungen |
+| Mac · Intel | Intel-DMG | macOS 15+ und Aufnahmeberechtigungen |
 
-**Patch-Stand:** 1.0.1 korrigiert den Fehler beim erstmaligen Erstellen des Windows-Installationsordners aus 1.0.0. Eine leere Release-Seite oder ein Tag allein bedeutet keinen bestandenen Build: Alle fünf Pakete und `RELEASE_MANIFEST.json` müssen vorhanden sein. Bis ein vollständiger korrigierter Release bereitsteht, gilt die bekannte Setup-Grenze von 1.0.0; das portable ZIP ist ein eigenes Paket.
+**Patch-Stand:** 1.0.1 korrigiert den Fehler beim erstmaligen Erstellen des Windows-Installationsordners aus 1.0.0. Eine leere Release-Seite oder ein Tag allein bedeutet keinen bestandenen Build: Alle fünf Pakete und `RELEASE_MANIFEST.json` müssen vorhanden sein. Der vollständige Release 1.0.1 ist inzwischen mit allen 17 Dateien geprüft und veröffentlicht.
 
 **Künftige Releases:** Ein zur Programmversion passender Versionstag startet automatisch die Windows-/Linux-/Mac-Buildmatrix. Nach bestandenen Prüfungen hängen alle fünf Pakete und Nachweise an einem Release-Entwurf. Den vollständig bestückten Entwurf veröffentlichen; auch ein direkt veröffentlichtes Release startet diesen Ablauf. [Release-Anleitung](docs/RELEASING.md).
 

@@ -200,7 +200,16 @@ fn canonical_job_id(id: &str) -> AppResult<String> {
 
 pub(crate) fn analyze(service: &Service, mut request: NotesRequest) -> AppResult<Analysis> {
     let mut key = Zeroizing::new(std::mem::take(&mut request.api_key));
-    let (id, control) = service.notes_jobs.begin(&request)?;
+    let (id, control) = {
+        let _gate = service
+            .transition
+            .lock()
+            .map_err(|_| "Anwendungszustand nicht verfügbar. / Application state unavailable.")?;
+        if service.lock()?.transitioning {
+            return Err("Bitte den laufenden Anwendungswechsel abschließen. / Finish the current application transition first.".into());
+        }
+        service.notes_jobs.begin(&request)?
+    };
     struct Guard<'a> {
         jobs: &'a NotesJobs,
         id: &'a str,

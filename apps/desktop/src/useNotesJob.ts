@@ -78,9 +78,12 @@ export function useNotesJob(
         previous,
         0,
         next.elapsedMs,
-        started.current === null ? 0 : Date.now() - started.current,
+        next.status !== "running" || started.current === null
+          ? 0
+          : Date.now() - started.current,
       ),
     );
+    if (next.status !== "running") started.current = null;
     setPollError(null);
     if (next.status === "cancelled")
       setFeedback({ kind: "cancelled", meetingId: next.meetingId });
@@ -100,11 +103,13 @@ export function useNotesJob(
     } catch (failure) {
       if (
         mounted.current &&
-        (localBusyRef.current || progressRef.current?.status === "running")
+        (backendRunning ||
+          localBusyRef.current ||
+          progressRef.current?.status === "running")
       )
         setPollError(errorMessage(failure));
     }
-  }, [api, applyProgress]);
+  }, [api, applyProgress, backendRunning]);
   const busy = localBusy || backendRunning || progress?.status === "running";
   useEffect(() => {
     if (!connected) return;
@@ -114,7 +119,7 @@ export function useNotesJob(
     return () => clearInterval(timer);
   }, [connected, busy, poll]);
   useEffect(() => {
-    if (!busy) return;
+    if (progress?.status !== "running") return;
     const timer = setInterval(() => {
       if (started.current !== null)
         setElapsedMs((previous) =>
@@ -122,7 +127,7 @@ export function useNotesJob(
         );
     }, 1000);
     return () => clearInterval(timer);
-  }, [busy]);
+  }, [progress?.status]);
   const run = useCallback(
     async (request: NotesRequest) => {
       if (localBusyRef.current || progressRef.current?.status === "running")

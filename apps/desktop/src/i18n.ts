@@ -35,6 +35,18 @@ export const de = {
   textModelUnavailable:
     "Die bisherige Modellwahl wird von diesem Dienst nicht angeboten. Bitte ausdrücklich ein verfügbares Modell auswählen oder den Namen manuell bestätigen.",
   notesTask: "Auswertung",
+  notesNotStarted: "Auswertung noch nicht gestartet.",
+  notesCheckingStatus:
+    "Auswertung läuft. Der aktuelle Fortschritt wird abgefragt …",
+  startAnalysis: "Auswertung starten",
+  analysisReady:
+    "Vorlage und Textmodell sind bereit. Klicke auf „Auswertung starten“, um die Verarbeitung zu beginnen.",
+  analysisChooseModel:
+    "Wähle ein Textmodell und prüfe den lokalen Modelldienst. Danach kannst du die Auswertung starten.",
+  analysisFailureHelp:
+    "Prüfe die Verbindung und das gewählte Textmodell. Öffne das zugehörige Meeting, um die Auswertung erneut zu starten oder gesicherte Schritte fortzusetzen.",
+  elapsedSeconds: "Sekunden",
+  elapsedSecond: "Sekunde",
   cancelAnalysis: "Auswertung abbrechen",
   cancelRequested: "Abbruch angefordert …",
   cancelHelp:
@@ -336,6 +348,17 @@ export const en: Record<MessageKey, string> = {
   textModelUnavailable:
     "This service does not offer the previous model selection. Explicitly choose an available model or confirm its name manually.",
   notesTask: "Analysis",
+  notesNotStarted: "Analysis has not started yet.",
+  notesCheckingStatus: "Analysis is running. Checking its current progress …",
+  startAnalysis: "Start analysis",
+  analysisReady:
+    "The template and text model are ready. Click Start analysis to begin processing.",
+  analysisChooseModel:
+    "Choose a text model and check the local model service. You can then start the analysis.",
+  analysisFailureHelp:
+    "Check the connection and selected text model. Open the associated meeting to retry or resume saved steps.",
+  elapsedSeconds: "seconds",
+  elapsedSecond: "second",
   cancelAnalysis: "Cancel analysis",
   cancelRequested: "Cancellation requested …",
   cancelHelp:

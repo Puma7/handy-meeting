@@ -1,0 +1,22 @@
+{
+  "actualLocalModel": true,
+  "cloudTested": false,
+  "elapsedSeconds": 60.769105,
+  "limits": "Names are quoted review candidates only. No audio diarization, personal identity, hardware or long-term test claim.",
+  "mode": "local",
+  "model": "handymeeting-102-final-reference",
+  "names": [
+    "Anna",
+    "Peter",
+    "Anna"
+  ],
+  "sourceCategories": [
+    "positive self-introduction and commitment",
+    "hypothetical mention and addressing another person",
+    "noncommittal statement without name"
+  ],
+  "speakerAssignmentsMade": 0,
+  "success": true,
+  "syntheticText": true,
+  "version": "1.0.2"
+}

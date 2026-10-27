@@ -19,20 +19,22 @@ An independent **Rust + Tauri companion for [Handy](https://github.com/cjpais/Ha
 
 ## Download
 
-**[Open releases and download the matching package](https://github.com/Puma7/handy-meeting/releases)**. Open a complete release and expand Assets. The versioned package files are listed there together with their checksums.
+**[Download the latest complete release](https://github.com/Puma7/handy-meeting/releases/latest)**. Open Assets and choose the package for your computer. The versioned downloads are listed together with their checksums. [Older releases](https://github.com/Puma7/handy-meeting/releases) remain available.
 
 | Your computer | Package type | Requirements |
 | --- | --- | --- |
 | Windows 10/11 · x64 | Setup EXE · portable ZIP | WebView2 and Microsoft Visual C++ x64 runtime; no .NET needed |
 | Ubuntu 22.04+ / Debian 12–13 · x64 | DEB | PulseAudio or PipeWire-Pulse; package manager resolves declared libraries |
-| Mac · Apple Silicon / M-series | Apple Silicon DMG | macOS 13+; recording permissions |
-| Mac · Intel | Intel DMG | macOS 13+; recording permissions |
+| Mac · Apple Silicon / M-series | Apple Silicon DMG | macOS 15+; recording permissions |
+| Mac · Intel | Intel DMG | macOS 15+; recording permissions |
 
-**Patch status:** 1.0.1 corrects the first-install Windows folder failure found in 1.0.0. An empty release page or a tag alone does not establish a successful build: all five packages and `RELEASE_MANIFEST.json` must be present. Until a complete corrected release is available, 1.0.0 has this known installer limitation; the portable ZIP is separate.
+**Installer status:** the complete 1.0.1 release corrects the first-install Windows folder failure found in 1.0.0. Every complete release includes five packages and `RELEASE_MANIFEST.json`. Keep the versioned program folders separate; recordings and older installations are preserved.
 
 **Future releases:** a matching version tag automatically starts the full Windows/Linux/Mac build matrix. Successful checks produce all five packages and their proofs in a release draft. Publish the populated draft to make the downloads public; publishing a release directly also starts this workflow. [Release procedure](docs/RELEASING.md).
 
 **Validation limits:** Mac/Linux device capture and a new full-app Rust two-hour run still require hardware validation. Mac builds are ad-hoc signed and not Apple-notarized; Windows setup is unsigned. Operating-system trust checks may block them. Do not disable system protection to install a build. Use independently backed-up test meetings first. [Measured evidence and open gates](TEST_REPORT.md).
+
+Version 1.0.2 adds visible analysis progress, names and VIP flags, local history search, separately confirmed archives and audio copies, optional speaker experiments, and explicit update checks. See the [full 1.0.2 user guide](docs/1.0.2-USER-GUIDE.md) for the separate controls and their limits.
 
 ## A meeting workflow, kept together
 

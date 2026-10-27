@@ -60,6 +60,12 @@ impl ModelRoots {
         if !model.ready_for_streaming() {
             return Err(BridgeError::ModelUnavailable);
         }
+        self.resolve_downloaded(model)
+    }
+    pub fn resolve_downloaded(&self, model: &HandyModel) -> Result<ResolvedModel> {
+        if !model.is_downloaded || model.is_downloading {
+            return Err(BridgeError::ModelUnavailable);
+        }
         validate_component(&model.filename)?;
         let source = &model.source;
         if let Some(hf) = source.get("HuggingFace") {

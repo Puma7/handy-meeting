@@ -42,6 +42,13 @@ try {
         foreach ($file in $receipt.programFiles) { if ((Get-FileHash -LiteralPath (Join-Path $install $file.path)).Hash.ToLowerInvariant() -ne $file.sha256) { throw 'Installed program differs from checked payload.' } }
         $registration = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-' + $version
         if ((Get-ItemProperty -LiteralPath $registration).InstallLocation -ne $install) { throw 'Installer registration differs from its own directory.' }
+        $stableShortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'HandyMeeting/HandyMeeting.lnk'
+        if (-not (Test-Path -LiteralPath $stableShortcut)) { throw 'Stable HandyMeeting Start menu link is missing.' }
+        $shortcutShell = New-Object -ComObject WScript.Shell
+        if ($shortcutShell.CreateShortcut($stableShortcut).TargetPath -ne (Join-Path $install 'HandyMeeting.exe')) { throw 'Stable shortcut points to another installation.' }
+        # An older uninstaller may not remove the newer installation's shortcut.
+        & (Join-Path $install 'ManageStartMenu.ps1') -Mode uninstall -InstallDirectory (Join-Path $work 'other-older-installation')
+        if (-not (Test-Path -LiteralPath $stableShortcut)) { throw 'A foreign-version uninstall removed the current shortcut.' }
         $secondInstall = Join-Path $work 'second-install'
         $duplicate = Start-Process -FilePath $package -ArgumentList @('/S',('/D=' + $secondInstall)) -WindowStyle Hidden -Wait -PassThru
         if ($duplicate.ExitCode -eq 0 -or (Test-Path -LiteralPath (Join-Path $secondInstall 'HandyMeeting.exe')) -or (Get-ItemProperty -LiteralPath $registration).InstallLocation -ne $install) { throw 'Duplicate version replaced an existing installation registration.' }
@@ -50,15 +57,18 @@ try {
         $sentinel = Join-Path $install 'Sessions/user-owned-sentinel.txt'
         New-Item -ItemType Directory -Path (Split-Path $sentinel -Parent) | Out-Null
         [IO.File]::WriteAllText($sentinel,'Synthetic user data must survive uninstall.')
+        # A user-modified link must also survive removal of owned program files.
+        [IO.File]::WriteAllText($stableShortcut,'Synthetic user-owned shortcut edit; preserve these bytes.')
         $uninstall = Join-Path $install 'Uninstall.exe'
         $child = Start-Process -FilePath $uninstall -ArgumentList @('/S',('_?=' + $install)) -WindowStyle Hidden -Wait -PassThru
         if ($child.ExitCode -ne 0) { throw 'Silent uninstall check failed.' }
         foreach ($file in $receipt.programFiles) { if (Test-Path -LiteralPath (Join-Path $install $file.path)) { throw 'Uninstall left an owned program payload file.' } }
         if ((Test-Path -LiteralPath (Join-Path $install 'HandyMeeting.exe')) -or [IO.File]::ReadAllText($sentinel) -ne 'Synthetic user data must survive uninstall.') { throw 'Uninstall did not remove only the owned program files.' }
+        if ([IO.File]::ReadAllText($stableShortcut) -ne 'Synthetic user-owned shortcut edit; preserve these bytes.') { throw 'Uninstall removed a user-modified shortcut.' }
         $tested = $true
     }
     $hash = (Get-FileHash -LiteralPath $package -Algorithm SHA256).Hash.ToLowerInvariant()
-    $proof = [ordered]@{success=$true;version=$version;rid='windows-x64';package=[IO.Path]::GetFileName($package);sha256=$hash;bytes=(Get-Item -LiteralPath $package).Length;sourceFingerprintSHA256=$receipt.sourceFingerprintSHA256;executableSHA256=$receipt.executableSHA256;compilerVersion=$compiler.version;compilerArchiveSHA256=$compiler.archiveSHA256;actualInstallUninstallChecked=$tested;existingDestinationRejected=$tested;freshMissingParentsChecked=$tested;duplicateVersionRejected=$tested;unknownUserFilePreserved=$tested;recursiveDeletion=$false;userRecordingsIncluded=$false;signing='unsigned'}
+    $proof = [ordered]@{success=$true;version=$version;rid='windows-x64';package=[IO.Path]::GetFileName($package);sha256=$hash;bytes=(Get-Item -LiteralPath $package).Length;sourceFingerprintSHA256=$receipt.sourceFingerprintSHA256;executableSHA256=$receipt.executableSHA256;compilerVersion=$compiler.version;compilerArchiveSHA256=$compiler.archiveSHA256;actualInstallUninstallChecked=$tested;existingDestinationRejected=$tested;freshMissingParentsChecked=$tested;duplicateVersionRejected=$tested;unknownUserFilePreserved=$tested;stableStartMenuNameChecked=$tested;foreignVersionShortcutPreserved=$tested;userEditedShortcutPreserved=$tested;recursiveDeletion=$false;userRecordingsIncluded=$false;signing='unsigned'}
     [IO.File]::WriteAllText(($package+'.sha256'),($hash+'  '+[IO.Path]::GetFileName($package)+"`n"),[Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText(($package+'.verification.json'),(($proof|ConvertTo-Json)+"`n"),[Text.UTF8Encoding]::new($false))
     $proof | ConvertTo-Json

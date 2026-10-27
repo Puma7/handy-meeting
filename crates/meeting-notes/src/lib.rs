@@ -2,6 +2,7 @@
 mod control;
 mod markdown;
 mod models;
+pub mod name_candidates;
 mod service;
 mod templates;
 mod transport;

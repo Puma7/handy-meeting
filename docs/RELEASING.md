@@ -1,16 +1,16 @@
 # Releases: version tag to downloadable packages
 
-The Rust distribution is versioned together in the workspace Cargo manifest, desktop package/lock and Tauri configuration. Existing native dependency versions and model weights are not changed by a release. **1.0.0 is public** with five packages. The 1.0.1 patch is being checked after a first-install failure; its existing empty release/tag currently precedes the version bump and is not evidence of usable packages. Future releases must use a new version: update the Cargo workspace, desktop package/lock and Tauri configuration together, then tag that exact reviewed commit. Existing published tags and asset bytes are preserved.
+The Rust distribution is versioned together in the workspace Cargo manifest, desktop package/lock and Tauri configuration. Existing native dependency versions and model weights are not changed by a release. **1.0.1 is public** with five verified packages. Version 1.0.2 is in development; no completed 1.0.2 package or release is claimed by these instructions. Future releases must use a new version: update the Cargo workspace, desktop package/lock and Tauri configuration together, then tag that exact reviewed commit. Existing published tags and asset bytes are preserved.
 
 ## What is attached
 
 | Target | Asset |
 | --- | --- |
-| Windows x64 installer | `HandyMeeting-1.0.1-windows-x64-setup.exe` |
-| Windows x64 portable | `HandyMeeting-1.0.1-windows-x64.zip` |
-| Ubuntu/Debian x64 | `HandyMeeting-1.0.1-linux-amd64.deb` |
-| macOS 13+ Apple Silicon | `HandyMeeting-1.0.1-osx-arm64.dmg` |
-| macOS 13+ Intel | `HandyMeeting-1.0.1-osx-x64.dmg` |
+| Windows x64 installer | `HandyMeeting-1.0.2-windows-x64-setup.exe` |
+| Windows x64 portable | `HandyMeeting-1.0.2-windows-x64.zip` |
+| Ubuntu/Debian x64 | `HandyMeeting-1.0.2-linux-amd64.deb` |
+| macOS 15+ Apple Silicon | `HandyMeeting-1.0.2-osx-arm64.dmg` |
+| macOS 15+ Intel | `HandyMeeting-1.0.2-osx-x64.dmg` |
 
 Each has a SHA-256 sidecar and package proof. `SHA256SUMS.txt` covers all five packages. `RELEASE_MANIFEST.json` binds their bytes to the application version, exact Git commit and common source fingerprint. No audio, model, session, setting or key is packaged. The workflow publishes no bare Windows EXE requiring users to reconstruct its native libraries: the Setup EXE and ZIP contain the complete checked payload.
 
@@ -38,7 +38,7 @@ Until these gates have evidence or an explicit, recorded maintainer decision acc
 
 ## Installation and upgrades
 
-Windows setup installs for the current user in a separate version folder and creates a versioned Start menu entry. It requires a new destination and refuses existing/inaccessible folders or an already registered installation of the same version. The final directory is reserved exclusively before extraction. It never stops Handy or an existing recording. Uninstall removes shared registration only when its directory still belongs to that installation. It deletes literal listed program files and nonempty folders remain; it never recursively removes user data. WebView2 and Microsoft Visual C++ x64 runtime may need to be installed separately. The ZIP is the portable alternative. The compiled installer/stub license is retained in `licenses/installer/NSIS-3.13-COPYING.txt`.
+Windows setup installs for the current user in a separate version folder and creates the stable HandyMeeting Start menu entry using recorded shortcut ownership, while retaining separate version directories and preserving user-modified or foreign shortcuts. It requires a new destination and refuses existing/inaccessible folders or an already registered installation of the same version. The final directory is reserved exclusively before extraction. It never stops Handy or an existing recording. Uninstall removes shared registration only when its directory still belongs to that installation. It deletes literal listed program files and nonempty folders remain; it never recursively removes user data. WebView2 and Microsoft Visual C++ x64 runtime may need to be installed separately. The ZIP is the portable alternative. The compiled installer/stub license is retained in `licenses/installer/NSIS-3.13-COPYING.txt`.
 
 Linux uses package `handymeeting`, versioned program files under `/opt/handymeeting`, and the normal desktop launcher. Install the DEB through the package manager to resolve its declared libraries. Earlier `handymeeting-rust-beta` packages are preserved; remove them explicitly through the package manager if no longer wanted.
 

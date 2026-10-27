@@ -11,6 +11,57 @@ function desktopInvoke<T>(
   return invoke<T>(command, args);
 }
 export const desktopApi: DesktopApi = {
+  listAudioCopies: (offset) => desktopInvoke("list_audio_copies", { offset }),
+  transcribeAudioCopy: (runId, modelId, confirmed) =>
+    desktopInvoke("transcribe_audio_copy", { runId, modelId, confirmed }),
+  compactArchive: (archiveId, confirmed) =>
+    desktopInvoke("compact_archive", { archiveId, confirmed }),
+  listArchives: (offset, limit) =>
+    desktopInvoke("list_archives", { offset, limit }),
+  restoreArchive: (archiveId, confirmed) =>
+    desktopInvoke("restore_archive", { archiveId, confirmed }),
+  applyRetention: (planId, candidateIndex, confirmation) =>
+    desktopInvoke("apply_retention", { planId, candidateIndex, confirmation }),
+  getRetentionPolicy: () => desktopInvoke("get_retention_policy"),
+  saveRetentionPolicy: (expectedRevision, policy) =>
+    desktopInvoke("save_retention_policy", { expectedRevision, policy }),
+  previewRetention: () => desktopInvoke("preview_retention"),
+  getRetentionPlan: (jobId) => desktopInvoke("get_retention_plan", { jobId }),
+  getMaintenanceProgress: () => desktopInvoke("get_maintenance_progress"),
+  cancelMaintenance: (jobId) => desktopInvoke("cancel_maintenance", { jobId }),
+  startSpeakerExperiment: (meetingId, modelId, mode) =>
+    desktopInvoke("start_speaker_experiment", { meetingId, modelId, mode }),
+  getSpeakerProgress: () => desktopInvoke("get_speaker_progress"),
+  cancelSpeakerExperiment: (jobId) =>
+    desktopInvoke("cancel_speaker_experiment", { jobId }),
+  getSpeakerSections: (meetingId) =>
+    desktopInvoke("get_speaker_sections", { meetingId }),
+  checkForUpdate: () => desktopInvoke("check_for_update"),
+  downloadUpdate: () => desktopInvoke("download_update"),
+  getUpdateProgress: () => desktopInvoke("get_update_progress"),
+  cancelUpdate: () => desktopInvoke("cancel_update"),
+  installUpdate: () => desktopInvoke("install_update"),
+  getSpeakerLabels: (meetingId) =>
+    desktopInvoke("get_speaker_labels", { meetingId }),
+  saveSpeakerLabels: (meetingId, expectedRevision, enabled, assignments) =>
+    desktopInvoke("save_speaker_labels", {
+      meetingId,
+      expectedRevision,
+      enabled,
+      assignments,
+    }),
+  editMeetingMetadata: (meetingId, expectedRevision, title, pinned) =>
+    desktopInvoke("edit_meeting_metadata", {
+      meetingId,
+      expectedRevision,
+      title,
+      pinned,
+    }),
+  searchMeetings: (query, offset, limit) =>
+    desktopInvoke("search_meetings", { query, offset, limit }),
+  rebuildSearchIndex: () => desktopInvoke("rebuild_search_index"),
+  getLibraryProgress: () => desktopInvoke("get_library_progress"),
+  cancelLibraryJob: (jobId) => desktopInvoke("cancel_library_job", { jobId }),
   getAppState: () => desktopInvoke("get_app_state"),
   refreshHandy: (executable) => desktopInvoke("refresh_handy", { executable }),
   listDevices: () => desktopInvoke("list_devices"),

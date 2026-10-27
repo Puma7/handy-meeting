@@ -1,4 +1,12 @@
-import { RefreshCw, Square, X, ArrowUpRight } from "lucide-react";
+import {
+  RefreshCw,
+  Square,
+  X,
+  ArrowUpRight,
+  Sparkles,
+  CheckCircle2,
+  CircleAlert,
+} from "lucide-react";
 import { clock } from "../domain";
 import type { NotesProgress } from "../types";
 import type { MessageKey } from "../i18n";
@@ -16,6 +24,13 @@ type Props = {
   onOpen: () => void;
   onDismiss: () => void;
   onResume: (() => void) | null;
+  awaitingProgress?: boolean;
+  setup?: {
+    loading: boolean;
+    message: string;
+    startDisabled: boolean;
+    onStart: () => void;
+  };
 };
 export default function NotesProgressPanel({
   progress,
@@ -29,24 +44,83 @@ export default function NotesProgressPanel({
   onOpen,
   onDismiss,
   onResume,
+  setup,
+  awaitingProgress,
 }: Props) {
-  if (!progress && !feedback) return null;
+  if (!progress && !feedback) {
+    if (awaitingProgress)
+      return (
+        <section
+          className="notes-progress notes-statusbar"
+          data-status="checking"
+          aria-label={t.notesTask}
+          role="status"
+        >
+          <div className="notes-statusbar-summary">
+            <strong>
+              <RefreshCw size={16} className="spinning" aria-hidden="true" />
+              {t.notesCheckingStatus}
+            </strong>
+          </div>
+          <progress aria-label={t.notesCheckingStatus} />
+          {pollError && (
+            <p className="inline-error" role="alert">
+              {t.progressUnavailable} {pollError}
+            </p>
+          )}
+        </section>
+      );
+    if (!setup) return null;
+    return (
+      <section
+        className="notes-progress notes-statusbar"
+        data-status="idle"
+        aria-label={t.notesTask}
+        role="status"
+      >
+        <div className="notes-statusbar-row">
+          <div className="notes-statusbar-summary">
+            <strong>
+              {setup.loading && (
+                <RefreshCw size={16} className="spinning" aria-hidden="true" />
+              )}
+              {t.notesNotStarted}
+            </strong>
+            <p>{setup.message}</p>
+          </div>
+          <button
+            className="primary"
+            disabled={setup.startDisabled}
+            onClick={setup.onStart}
+          >
+            <Sparkles size={16} aria-hidden="true" />
+            {t.startAnalysis}
+          </button>
+        </div>
+      </section>
+    );
+  }
   const running = progress?.status === "running";
-  const total = progress?.totalTasks ?? 0;
-  const confirmed = Math.min(
-    Math.max(0, progress?.confirmedTasks ?? 0),
-    Math.max(0, total),
-  );
+  const state = running ? "running" : (feedback?.kind ?? progress?.status);
+  const complete = state === "complete";
+  const failed = state === "failed";
+  const total = Math.max(0, progress?.totalTasks ?? 0);
+  const confirmed = complete
+    ? total
+    : Math.min(Math.max(0, progress?.confirmedTasks ?? 0), total);
+  const percent = complete
+    ? 100
+    : total > 0
+      ? Math.floor((confirmed * 100) / total)
+      : null;
   const status =
-    feedback?.kind === "cancelled"
+    state === "cancelled"
       ? t.notesCancelled
-      : feedback?.kind === "failed"
+      : failed
         ? t.notesFailed
-        : feedback?.kind === "cancel-unavailable"
-          ? t.cancelUnavailable
-          : feedback?.kind === "complete"
-            ? t.notesComplete
-            : t.notesTask;
+        : complete
+          ? t.notesComplete
+          : t.notesTask;
   const stage =
     progress?.stage === "requesting"
       ? t.stageRequesting
@@ -55,42 +129,51 @@ export default function NotesProgressPanel({
         : progress?.stage === "saving"
           ? t.stageSaving
           : t.stagePreparing;
+  const cancelling = running && (cancelPending || progress?.cancelRequested);
+  const message = feedback?.message ?? progress?.error;
   return (
     <section
-      className="notes-progress"
-      data-status={progress?.status ?? feedback?.kind}
+      className="notes-progress notes-statusbar"
+      data-status={state}
       aria-label={t.notesTask}
       role="status"
     >
-      <div className="notes-progress-heading">
-        <div>
+      <div className="notes-statusbar-row">
+        <div className="notes-statusbar-summary">
           <strong>
-            {running && <RefreshCw size={16} className="spinning" />}
-            {running
-              ? cancelPending || progress?.cancelRequested
-                ? t.cancelRequested
-                : stage
-              : status}
+            {running ? (
+              <RefreshCw size={16} className="spinning" aria-hidden="true" />
+            ) : complete ? (
+              <CheckCircle2 size={16} aria-hidden="true" />
+            ) : (
+              <CircleAlert size={16} aria-hidden="true" />
+            )}
+            {running ? (cancelling ? t.cancelRequested : stage) : status}
           </strong>
           <p>{meetingTitle}</p>
+        </div>
+        <div
+          className="notes-statusbar-time"
+          aria-label={t.elapsed}
+          aria-live="off"
+        >
+          <strong>{clock(elapsedMs)}</strong>
+          <span>
+            {Math.floor(Math.max(0, elapsedMs) / 1000)}{" "}
+            {Math.floor(Math.max(0, elapsedMs) / 1000) === 1
+              ? t.elapsedSecond
+              : t.elapsedSeconds}
+          </span>
         </div>
         {running ? (
           <button
             className="secondary"
-            disabled={cancelPending || progress?.cancelRequested}
+            disabled={Boolean(cancelling)}
             onClick={onCancel}
             title={t.cancelHelp}
           >
-            {cancelPending || progress?.cancelRequested ? (
-              <RefreshCw size={15} className="spinning" />
-            ) : (
-              <Square size={15} />
-            )}
-            <span>
-              {cancelPending || progress?.cancelRequested
-                ? t.cancelRequested
-                : t.cancelAnalysis}
-            </span>
+            <Square size={15} aria-hidden="true" />
+            <span>{cancelling ? t.cancelRequested : t.cancelAnalysis}</span>
           </button>
         ) : (
           <button
@@ -102,60 +185,39 @@ export default function NotesProgressPanel({
           </button>
         )}
       </div>
-      {running && progress && (
-        <>
-          <div className="notes-progress-meta">
-            <span>
-              {t.elapsed}: <strong>{clock(elapsedMs)}</strong>
-            </span>
-            {progress.stepName && (
-              <span>
-                {progress.stepName}
-                {progress.totalSteps > 0
-                  ? " · " + progress.stepIndex + "/" + progress.totalSteps
-                  : ""}
-              </span>
-            )}
-          </div>
-          {total > 0 ? (
-            <>
-              <progress
-                value={confirmed}
-                max={total}
-                aria-label={t.confirmedTasks}
-              />
-              <p className="muted">
-                {confirmed}/{total} {t.confirmedTasks} ·{" "}
-                {Math.floor((confirmed * 100) / total)}%
-              </p>
-            </>
-          ) : running ? (
+      {(running || total > 0 || complete) && (
+        <div className="notes-statusbar-progress">
+          {percent === null ? (
             <progress aria-label={t.stagePreparing} />
-          ) : null}
-        </>
+          ) : (
+            <progress
+              value={confirmed || (complete ? 1 : 0)}
+              max={total || 1}
+              aria-label={t.confirmedTasks}
+            />
+          )}
+          <span>{percent === null ? t.stagePreparing : percent + "%"}</span>
+        </div>
       )}
-      {running && (
-        <details className="progress-explanation">
-          <summary>{t.analysisDetails}</summary>
-          <p className="muted">
-            {cancelPending || progress?.cancelRequested
-              ? t.cancelHelp
-              : t.inferenceUnknown}
-          </p>
-        </details>
-      )}
-      {running && feedback?.kind === "cancel-unavailable" && (
-        <p className="inline-error">{t.cancelUnavailable}</p>
-      )}
-      {pollError && (
-        <p className="inline-error">
-          {t.progressUnavailable} {pollError}
-        </p>
-      )}
-      {feedback?.message && <p className="inline-error">{feedback.message}</p>}
-      <div className="progress-result-actions">
+      <div className="notes-statusbar-details">
+        <span>
+          {total > 0 && (
+            <>
+              {confirmed}/{total} {t.confirmedTasks}
+            </>
+          )}
+          {progress?.stepName && (
+            <>
+              {total > 0 ? " · " : ""}
+              {progress.stepName}
+              {progress.totalSteps > 0
+                ? " · " + progress.stepIndex + "/" + progress.totalSteps
+                : ""}
+            </>
+          )}
+        </span>
         <button className="text-button" onClick={onOpen}>
-          <ArrowUpRight size={15} />
+          <ArrowUpRight size={14} />
           {t.openAnalysisMeeting}
         </button>
         {!running && onResume && (
@@ -165,6 +227,27 @@ export default function NotesProgressPanel({
           </button>
         )}
       </div>
+      {running && (
+        <p className="notes-statusbar-help">
+          {cancelling ? t.cancelHelp : t.inferenceUnknown}
+        </p>
+      )}
+      {running && feedback?.kind === "cancel-unavailable" && (
+        <p className="inline-error">{t.cancelUnavailable}</p>
+      )}
+      {pollError && (
+        <p className="inline-error" role="alert">
+          {t.progressUnavailable} {pollError}
+        </p>
+      )}
+      {message && (
+        <p className="inline-error" role="alert">
+          {message}
+        </p>
+      )}
+      {failed && (
+        <p className="notes-statusbar-help">{t.analysisFailureHelp}</p>
+      )}
     </section>
   );
 }

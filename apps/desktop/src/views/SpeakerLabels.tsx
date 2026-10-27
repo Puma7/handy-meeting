@@ -1,0 +1,295 @@
+import { useEffect, useState } from "react";
+import { errorMessage } from "../api";
+import { clock } from "../domain";
+import { nameCandidates } from "../speaker-proposals";
+import type {
+  DesktopApi,
+  Meeting,
+  Locale,
+  SpeakerDocument,
+  SpeakerAssignment,
+} from "../types";
+export default function SpeakerLabels({
+  api,
+  meeting,
+  locale,
+  onPropose,
+}: {
+  api: DesktopApi;
+  meeting: Meeting;
+  locale: Locale;
+  onPropose?: () => void;
+}) {
+  const de = locale === "de";
+  const [doc, setDoc] = useState<
+      (SpeakerDocument & { sources: Record<string, string> }) | null
+    >(null),
+    [error, setError] = useState<string | null>(null),
+    [busy, setBusy] = useState(false);
+  const [source, setSource] = useState(""),
+    [name, setName] = useState(""),
+    [quote, setQuote] = useState("");
+  const [candidates, setCandidates] = useState<
+    ReturnType<typeof nameCandidates>
+  >([]);
+  useEffect(() => {
+    let active = true;
+    setCandidates([]);
+    api
+      .listAnalyses?.(meeting.id)
+      .then((value) => {
+        if (active) setCandidates(nameCandidates(value, meeting));
+      })
+      .catch((e) => {
+        if (active) setError(errorMessage(e));
+      });
+    return () => {
+      active = false;
+    };
+  }, [api, meeting.id]);
+  useEffect(() => {
+    let active = true;
+    setDoc(null);
+    setError(null);
+    setSource("");
+    setName("");
+    setQuote("");
+    api
+      .getSpeakerLabels?.(meeting.id)
+      .then((v) => {
+        if (active) setDoc(v);
+      })
+      .catch((e) => {
+        if (active) setError(errorMessage(e));
+      });
+    return () => {
+      active = false;
+    };
+  }, [api, meeting.id]);
+  if (!api.getSpeakerLabels || !api.saveSpeakerLabels) return null;
+  const parts = meeting.parts.filter((p) => p.file && p.text?.trim());
+  const selected = parts.find((p) => p.file === source);
+  const stale =
+    doc?.assignments.filter((a) => doc.sources[a.sourceId] !== a.textSha256) ??
+    [];
+  async function save(enabled: boolean, assignments: SpeakerAssignment[]) {
+    if (!doc || busy) return;
+    const target = meeting.id;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.saveSpeakerLabels!(target, doc.revision, enabled, assignments);
+      const updated = await api.getSpeakerLabels!(target);
+      setDoc(updated);
+      setName("");
+      setQuote("");
+      setSource("");
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <details className="speaker-options">
+      <summary>
+        {de
+          ? "Sprecher nach dem Meeting zuordnen · optional"
+          : "Assign speakers after the meeting · optional"}
+      </summary>
+      <p>
+        {de
+          ? "Eine Namensnennung belegt nicht, wer spricht. Ordne nur Abschnitte zu, deren Sprecher du bestätigen kannst. Bei mehreren Stimmen bleibt die Zuordnung unbekannt. Originaltexte und ältere Zuordnungen bleiben erhalten."
+          : "A name mentioned in text does not identify the speaker. Assign a section only when you can confirm who spoke. Leave mixed or uncertain sections unknown. Original text and prior annotations are retained."}
+      </p>
+      {error && <p role="alert">{error}</p>}
+      {onPropose && (
+        <button
+          className="secondary"
+          disabled={busy || meeting.status !== "complete"}
+          onClick={onPropose}
+        >
+          {de
+            ? "Lokale KI-Namensvorschläge vorbereiten"
+            : "Prepare local AI name suggestions"}
+        </button>
+      )}
+      {onPropose && (
+        <p>
+          {de
+            ? "Öffnet eine eigene Auswertungsvorlage. Wähle dort ein lokales Textmodell und starte ausdrücklich. Vorschläge werden nicht automatisch zugeordnet."
+            : "Opens a dedicated analysis template. Choose a local text model there and start explicitly. Suggestions are never assigned automatically."}
+        </p>
+      )}
+      {doc && (
+        <>
+          {candidates.length > 0 && (
+            <div>
+              <h3>
+                {de
+                  ? "Genannte Namen · unbestätigte Vorschläge"
+                  : "Mentioned names · unconfirmed suggestions"}
+              </h3>
+              {candidates.slice(0, 100).map((c, i) => (
+                <article key={c.analysisId + c.file + i}>
+                  <strong>{c.name}</strong>
+                  <blockquote>{c.quote}</blockquote>
+                  <button
+                    disabled={busy}
+                    onClick={() => {
+                      setSource(c.file);
+                      setName(c.name);
+                      setQuote(c.quote);
+                    }}
+                  >
+                    {de
+                      ? "Nur ins Prüfformular übernehmen"
+                      : "Copy only into the review form"}
+                  </button>
+                </article>
+              ))}
+            </div>
+          )}
+          <label>
+            <input
+              type="checkbox"
+              checked={doc.enabled}
+              disabled={busy || stale.length > 0}
+              onChange={(e) => void save(e.target.checked, doc.assignments)}
+            />
+            {de
+              ? "Bestätigte Zuordnungen verwenden"
+              : "Use confirmed assignments"}
+          </label>
+          {stale.length > 0 && (
+            <div role="alert">
+              <p>
+                {de
+                  ? "Einige Originalabschnitte haben sich geändert. Ihre alten Zuordnungen sind nicht mehr bestätigt."
+                  : "Some original sections changed. Their previous labels are no longer confirmed."}
+              </p>
+              <button
+                disabled={busy}
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      de
+                        ? "Veraltete Zuordnungen aus der aktuellen Fassung entfernen? Frühere Fassungen bleiben erhalten."
+                        : "Remove stale labels from the current revision? Previous revisions are retained.",
+                    )
+                  )
+                    void save(
+                      doc.enabled,
+                      doc.assignments.filter((a) => !stale.includes(a)),
+                    );
+                }}
+              >
+                {de ? "Veraltete Zuordnungen entfernen" : "Remove stale labels"}
+              </button>
+            </div>
+          )}
+          <ul>
+            {doc.assignments.map((a) => (
+              <li key={a.sourceId}>
+                <strong>{a.name}</strong> · {a.sourceId}
+                <blockquote>{a.evidence}</blockquote>
+                <button
+                  disabled={busy || stale.length > 0}
+                  onClick={() =>
+                    void save(
+                      doc.enabled,
+                      doc.assignments.filter(
+                        (old) => old.sourceId !== a.sourceId,
+                      ),
+                    )
+                  }
+                >
+                  {de ? "Zuordnung entfernen" : "Remove assignment"}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!selected?.file || !doc.sources[source]) return;
+              void save(true, [
+                ...doc.assignments.filter((a) => a.sourceId !== source),
+                {
+                  sourceId: source,
+                  textSha256: doc.sources[source],
+                  name: name.trim(),
+                  evidence: quote,
+                },
+              ]);
+            }}
+          >
+            <label>
+              {de ? "Originalabschnitt" : "Original section"}
+              <select
+                value={source}
+                disabled={busy}
+                onChange={(e) => {
+                  setSource(e.target.value);
+                  setQuote("");
+                  setName("");
+                }}
+              >
+                <option value="">
+                  {de ? "Abschnitt wählen" : "Choose section"}
+                </option>
+                {parts.map((p) => (
+                  <option value={p.file!} key={p.file}>
+                    {clock(p.startSample / 16)} · {p.source} ·{" "}
+                    {p.text?.slice(0, 70)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {selected && (
+              <>
+                <blockquote>{selected.text}</blockquote>
+                <label>
+                  {de
+                    ? "Von dir bestätigter Sprechername"
+                    : "Speaker name confirmed by you"}
+                  <input
+                    value={name}
+                    maxLength={80}
+                    disabled={busy}
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                </label>
+                <label>
+                  {de
+                    ? "Wörtliches Zitat aus diesem Abschnitt"
+                    : "Literal quote from this section"}
+                  <textarea
+                    value={quote}
+                    maxLength={2000}
+                    disabled={busy}
+                    onChange={(e) => setQuote(e.target.value)}
+                  />
+                </label>
+                <button
+                  className="secondary"
+                  disabled={
+                    busy ||
+                    stale.length > 0 ||
+                    !name.trim() ||
+                    !quote.trim() ||
+                    !selected.text?.includes(quote)
+                  }
+                >
+                  {de
+                    ? "Zuordnung ausdrücklich bestätigen"
+                    : "Explicitly confirm assignment"}
+                </button>
+              </>
+            )}
+          </form>
+        </>
+      )}
+    </details>
+  );
+}

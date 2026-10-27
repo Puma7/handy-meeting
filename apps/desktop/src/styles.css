@@ -343,9 +343,6 @@ main {
   padding: 17px 19px;
   margin-bottom: 22px;
   background: var(--color-background);
-  position: sticky;
-  top: 10px;
-  z-index: 3;
   box-shadow: 0 4px 16px color-mix(in srgb, var(--color-text) 8%, transparent);
 }
 .notes-progress-heading {
@@ -1297,5 +1294,254 @@ mark {
     transition: none !important;
     animation: none !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* The workspace scrolls independently so the footer never covers content. */
+.app-shell {
+  --sidebar-width: 204px;
+  height: 100dvh;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+.app-shell > main {
+  grid-area: 1 / 2;
+  margin-left: 0;
+  width: 100%;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+.notes-progress.notes-statusbar {
+  grid-area: 2 / 2;
+  max-height: 45dvh;
+  overflow: auto;
+  margin: 0;
+  padding: 12px 25px;
+  border: 0;
+  border-top: 1px solid var(--color-line-strong);
+  border-radius: 0;
+  box-shadow: 0 -4px 16px color-mix(in srgb, var(--color-text) 5%, transparent);
+}
+.notes-statusbar-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.notes-statusbar-summary {
+  flex: 1;
+  min-width: 0;
+}
+.notes-statusbar-summary > strong {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.notes-statusbar-summary p,
+.notes-statusbar-time span,
+.notes-statusbar-details,
+.notes-statusbar-help {
+  font-size: 11px;
+  color: var(--color-ink-2);
+}
+.notes-statusbar-summary p {
+  overflow-wrap: anywhere;
+}
+.notes-statusbar-time {
+  display: flex;
+  flex-direction: column;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.notes-statusbar-time strong {
+  font-size: 16px;
+}
+.notes-statusbar-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+.notes-statusbar-progress progress {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+.notes-statusbar-progress > span {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.notes-statusbar-details {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  margin-top: 5px;
+}
+.notes-statusbar-details > span {
+  flex: 1;
+}
+.notes-statusbar-details .text-button {
+  font-size: 11px;
+  padding: 2px 0;
+}
+.notes-statusbar-help {
+  margin-top: 3px;
+}
+.notes-statusbar .inline-error {
+  overflow-wrap: anywhere;
+}
+.notes-statusbar[data-status="failed"] {
+  border-top-color: var(--color-error);
+}
+@media (max-width: 1000px) {
+  .app-shell {
+    --sidebar-width: 180px;
+  }
+}
+@media (max-width: 740px) {
+  .app-shell {
+    --sidebar-width: 68px;
+  }
+  .notes-progress.notes-statusbar {
+    padding: 10px 12px;
+  }
+  .notes-statusbar-row {
+    gap: 9px;
+    flex-wrap: wrap;
+  }
+  .notes-statusbar-summary {
+    flex-basis: calc(100% - 90px);
+  }
+  .notes-statusbar-row > .primary,
+  .notes-statusbar-row > .secondary {
+    width: 100%;
+  }
+  .notes-statusbar-details > span {
+    flex-basis: 100%;
+  }
+}
+
+.job-status-stack {
+  grid-area: 2 / 2;
+  max-height: 45dvh;
+  overflow: auto;
+}
+.job-status-stack .notes-statusbar {
+  max-height: none;
+}
+.meeting-labels {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 0 0 18px;
+}
+.meeting-labels form {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.meeting-labels .pinned {
+  color: var(--color-text);
+}
+.search-field {
+  margin: 20px 0 10px;
+}
+.search-field > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.search-state {
+  font-size: 12px;
+  color: var(--color-ink-2);
+  min-height: 25px;
+}
+.search-excerpt {
+  margin-top: 7px;
+  color: var(--color-text);
+}
+.search-result strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.search-pages {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  margin-top: 20px;
+}
+.transcript-part[data-highlighted] {
+  background: color-mix(in srgb, var(--color-logo-primary) 22%, transparent);
+  outline: 2px solid var(--color-line-strong);
+  outline-offset: -2px;
+}
+.speaker-options {
+  margin: 12px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.speaker-options summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.speaker-options form {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+.speaker-options blockquote {
+  margin: 8px 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--border);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.speaker-options input[type="checkbox"],
+.retention-rule input[type="checkbox"] {
+  width: auto;
+  min-width: 16px;
+  margin-right: 8px;
+}
+.retention-rules {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0;
+}
+.retention-rule {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 110px;
+  align-items: center;
+  gap: 12px;
+}
+.retention-rule label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.retention-panel > label {
+  display: grid;
+  gap: 7px;
+  margin: 12px 0;
+}
+.retention-preview li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+.retention-panel .notes-statusbar {
+  margin-top: 12px;
+}
+@media (max-width: 600px) {
+  .retention-rule {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

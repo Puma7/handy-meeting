@@ -1,0 +1,482 @@
+//! Optional speaker work owns only its child process; capture and original text are independent.
+use crate::{
+    asr::{self, Reply, Request, Worker},
+    AppResult, Service,
+};
+use handy_bridge::native::{NativeSpeakerEngine, SpeakerTurn};
+use serde::{Deserialize, Serialize};
+use std::{
+    collections::HashSet,
+    io::{BufReader, BufWriter},
+    path::Path,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
+    time::{Duration, Instant},
+};
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct Section {
+    pub source_id: String,
+    pub start_ms: u64,
+    pub duration_ms: u64,
+    pub audio_sha256: String,
+    pub turns: Vec<SpeakerTurn>,
+}
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct Progress {
+    pub job_id: String,
+    pub meeting_id: String,
+    pub mode: String,
+    pub status: String,
+    pub stage: String,
+    pub model_id: String,
+    pub confirmed_tasks: u64,
+    pub total_tasks: u64,
+    pub elapsed_ms: u64,
+    pub error: Option<String>,
+    pub cancel_requested: bool,
+    pub last_section: Option<Section>,
+}
+struct Job {
+    view: Progress,
+    started: Instant,
+    cancel: Arc<AtomicBool>,
+}
+#[derive(Default)]
+pub(super) struct Jobs {
+    inner: Mutex<Option<Job>>,
+}
+impl Jobs {
+    pub fn snapshot(&self) -> Option<Progress> {
+        let state = self.inner.lock().ok()?;
+        let job = state.as_ref()?;
+        let mut view = job.view.clone();
+        if view.status == "running" {
+            view.elapsed_ms = job.started.elapsed().as_millis() as u64;
+        }
+        Some(view)
+    }
+    pub fn cancel(&self, id: &str) -> bool {
+        if let Ok(mut state) = self.inner.lock() {
+            if let Some(job) = state
+                .as_mut()
+                .filter(|j| j.view.job_id == id && j.view.status == "running")
+            {
+                job.cancel.store(true, Ordering::Release);
+                job.view.cancel_requested = true;
+                return true;
+            }
+        }
+        false
+    }
+    fn update(&self, id: &str, change: impl FnOnce(&mut Progress)) {
+        if let Ok(mut state) = self.inner.lock() {
+            if let Some(job) = state.as_mut().filter(|j| j.view.job_id == id) {
+                change(&mut job.view);
+                job.view.elapsed_ms = job.started.elapsed().as_millis() as u64;
+            }
+        }
+    }
+    pub fn start(
+        self: &Arc<Self>,
+        service: Arc<Service>,
+        meeting_id: String,
+        model_id: String,
+        mode: String,
+    ) -> AppResult<String> {
+        if !["post-meeting", "live"].contains(&mode.as_str())
+            || !meeting_core::metadata::valid_id(&meeting_id)
+            || meeting_id.starts_with("legacy-")
+        {
+            return Err("Invalid experimental speaker request".into());
+        }
+        let data = service.data(&meeting_id)?;
+        let recording = service.lock()?.active.as_ref().is_some_and(|a| {
+            a.capture.is_some()
+                && a.store
+                    .preview_snapshot(0)
+                    .is_ok_and(|d| d.id == meeting_id)
+        });
+        if data.read_only
+            || mode == "live" && !recording
+            || mode == "post-meeting" && (recording || data.status != "complete")
+        {
+            return Err("Choose a completed meeting for post-meeting separation, or the active recording for the live experiment. / Abgeschlossenes Meeting oder für das Live-Experiment die laufende Aufnahme wählen.".into());
+        }
+        let id = meeting_notes::new_job_id();
+        let cancel = Arc::new(AtomicBool::new(false));
+        {
+            let mut state = self
+                .inner
+                .lock()
+                .map_err(|_| "Speaker job state unavailable")?;
+            if state.as_ref().is_some_and(|j| j.view.status == "running") {
+                return Err("Another optional speaker job is active. Stop it or wait; normal recording remains available.".into());
+            }
+            *state = Some(Job {
+                view: Progress {
+                    job_id: id.clone(),
+                    meeting_id: meeting_id.clone(),
+                    mode: mode.clone(),
+                    status: "running".into(),
+                    stage: "preparing".into(),
+                    model_id: model_id.clone(),
+                    confirmed_tasks: 0,
+                    total_tasks: 0,
+                    elapsed_ms: 0,
+                    error: None,
+                    cancel_requested: false,
+                    last_section: None,
+                },
+                started: Instant::now(),
+                cancel: cancel.clone(),
+            });
+        }
+        let jobs = self.clone();
+        let owned = id.clone();
+        let spawn=std::thread::Builder::new().name("meeting-optional-speakers".into()).spawn(move||{
+   let result=std::panic::catch_unwind(std::panic::AssertUnwindSafe(||run(&service,&jobs,&owned,&meeting_id,&model_id,&mode,&cancel))).unwrap_or_else(|_|Err("Optional speaker worker stopped unexpectedly; capture and original transcripts are preserved".into()));
+   jobs.update(&owned,|p|{p.status=if result.is_ok(){"complete"}else if cancel.load(Ordering::Acquire){"cancelled"}else{"failed"}.into();p.stage="finished".into();p.error=result.err();if p.total_tasks==0{p.total_tasks=p.confirmed_tasks;}});
+  });
+        if spawn.is_err() {
+            self.update(&id, |p| {
+                p.status = "failed".into();
+                p.stage = "finished".into();
+                p.error =
+                    Some("Optional speaker worker could not start. Recording is unchanged.".into());
+            });
+            return Err("Optional speaker job could not start".into());
+        }
+        Ok(id)
+    }
+}
+fn run(
+    service: &Service,
+    jobs: &Jobs,
+    id: &str,
+    meeting_id: &str,
+    model_id: &str,
+    mode: &str,
+    cancel: &Arc<AtomicBool>,
+) -> AppResult<()> {
+    let (bridge, catalog, _) = service.refresh(None)?;
+    let model = catalog.model(model_id).map_err(|e| e.to_string())?;
+    let resolved = bridge
+        .resolve_downloaded_model(model)
+        .map_err(|e| e.to_string())?;
+    let identity = handy_bridge::capture_optional_model_identity(
+        model,
+        &resolved,
+        handy_bridge::native::runtime_identity(),
+    )
+    .map_err(|e| e.to_string())?;
+    if cancel.load(Ordering::Acquire) {
+        return Err("Optional speaker analysis cancelled".into());
+    }
+    let folder = crate::meeting_files::session_folder(&service.root, meeting_id)?;
+    let runs = folder.join("experimental-speakers");
+    match std::fs::create_dir(&runs) {
+        Ok(()) => (),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => (),
+        Err(_) => return Err("Could not create speaker evidence folder".into()),
+    }
+    meeting_core::metadata::checked_directory(&runs)
+        .map_err(|_| "Unsafe speaker evidence folder")?;
+    let output = runs.join(id);
+    std::fs::create_dir(&output).map_err(|_| "Could not reserve a new speaker revision")?;
+    crate::create_json(
+        &output.join("snapshot.json"),
+        &serde_json::json!({"version":crate::VERSION,"runId":id,"meetingId":meeting_id,"mode":mode,"model":identity,"speakerIdentity":"neutral IDs scoped to each audio section and track; no personal identity or cross-section match","wordAlignment":"none; original ASR section text remains unchanged","compute":"independent CPU worker"}),
+    )?;
+    jobs.update(id, |p| p.stage = "loading".into());
+    let mut worker = Worker::start_speaker(
+        &resolved.path,
+        &crate::backend_directory()?,
+        &folder,
+        cancel.clone(),
+    )?;
+    worker.call(Request::SpeakerIdentity { identity })?;
+    let mut seen = HashSet::new();
+    let mut count = 0u64;
+    loop {
+        if cancel.load(Ordering::Acquire) {
+            return Err("Optional speaker analysis cancelled. Confirmed speaker revisions, recordings and original text are retained. / Sprecherexperiment abgebrochen; bestätigte Fassungen und Originale bleiben erhalten.".into());
+        }
+        let data = service.data(meeting_id)?;
+        let recording = service.lock()?.active.as_ref().is_some_and(|a| {
+            a.capture.is_some()
+                && a.store
+                    .preview_snapshot(0)
+                    .is_ok_and(|d| d.id == meeting_id)
+        });
+        let parts: Vec<_> = data
+            .parts
+            .into_iter()
+            .filter(|p| p.audio_closed && p.confirmed_sample_count > 0 && !seen.contains(&p.file))
+            .collect();
+        jobs.update(id, |p| {
+            p.stage = if parts.is_empty() && recording {
+                "waiting"
+            } else {
+                "running"
+            }
+            .into();
+            p.total_tasks = if mode == "live" && recording {
+                0
+            } else {
+                count + parts.len() as u64
+            };
+        });
+        for mut part in parts {
+            let original = part.clone();
+            part.text = None;
+            part.committed_text.clear();
+            part.tentative_text.clear();
+            part.error = None;
+            let reply = worker.call(Request::SpeakerSection { part })?;
+            let section = Section {
+                source_id: original.file.clone(),
+                start_ms: original.start_sample * 1000 / u64::from(meeting_core::SAMPLE_RATE),
+                duration_ms: original.confirmed_sample_count * 1000
+                    / u64::from(meeting_core::SAMPLE_RATE),
+                audio_sha256: original.confirmed_sha256,
+                turns: reply.speaker_turns,
+            };
+            crate::create_json(&output.join(format!("section-{count:08}.json")), &section)?;
+            seen.insert(original.file);
+            count += 1;
+            jobs.update(id, |p| {
+                p.confirmed_tasks = count;
+                p.last_section = Some(section);
+            });
+        }
+        if mode != "live" || !recording {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    crate::create_json(
+        &output.join("complete.json"),
+        &serde_json::json!({"runId":id,"confirmedSections":count,"success":true}),
+    )?;
+    Ok(())
+}
+pub fn worker_main(args: &[String]) -> AppResult<()> {
+    if args.len() != 5 || args[3] != "speaker" || args[4] != "--cpu" {
+        return Err("Invalid independent speaker worker arguments".into());
+    }
+    let folder = meeting_core::metadata::checked_directory(Path::new(&args[2]))
+        .map_err(|_| "Speaker session folder unavailable")?;
+    let mut input = BufReader::new(std::io::stdin());
+    let mut output = BufWriter::new(std::io::stdout());
+    asr::send_reply(
+        &mut output,
+        Reply {
+            ok: true,
+            backend: "independent-cpu-speaker-role".into(),
+            ..Default::default()
+        },
+    )?;
+    let mut engine = None;
+    loop {
+        let Some(request) = asr::read_request(&mut input)? else {
+            return Ok(());
+        };
+        let result = (|| -> AppResult<Reply> {
+            match request {
+                Request::SpeakerIdentity { identity } if engine.is_none() => {
+                    handy_bridge::verify_model_identity(
+                        &identity,
+                        Path::new(&args[0]),
+                        &handy_bridge::native::runtime_identity(),
+                    )
+                    .map_err(|e| e.to_string())?;
+                    engine = Some(
+                        NativeSpeakerEngine::load(Path::new(&args[0]), Path::new(&args[1]))
+                            .map_err(|e| e.to_string())?,
+                    );
+                    Ok(Reply {
+                        ok: true,
+                        ..Default::default()
+                    })
+                }
+                Request::SpeakerSection { part } => {
+                    let engine = engine
+                        .as_ref()
+                        .ok_or("Speaker model identity must be confirmed first")?;
+                    let pcm=meeting_core::read_closed_audio(&folder,&part).map_err(|_|"Closed speaker audio did not pass its original digest verification; recordings are retained")?;
+                    Ok(Reply {
+                        ok: true,
+                        speaker_turns: engine.run(&pcm).map_err(|e| e.to_string())?,
+                        ..Default::default()
+                    })
+                }
+                Request::Quit => Ok(Reply {
+                    ok: true,
+                    ..Default::default()
+                }),
+                _ => Err("Unsupported optional speaker operation".into()),
+            }
+        })();
+        match result {
+            Ok(reply) => asr::send_reply(&mut output, reply)?,
+            Err(error) => {
+                asr::send_reply(
+                    &mut output,
+                    Reply {
+                        ok: false,
+                        error: Some(error.clone()),
+                        ..Default::default()
+                    },
+                )?;
+                return Err(error);
+            }
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct SavedSections {
+    run_id: String,
+    mode: String,
+    model_id: String,
+    sections: Vec<Section>,
+}
+fn json_file(path: &Path) -> AppResult<serde_json::Value> {
+    use std::io::Read;
+    let meta = std::fs::symlink_metadata(path).map_err(|_| "Speaker evidence is unavailable")?;
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        if meta.file_attributes() & 0x400 != 0 {
+            return Err("Linked speaker evidence rejected".into());
+        }
+    }
+    if !meta.is_file() || meta.file_type().is_symlink() || meta.len() > 2 * 1024 * 1024 {
+        return Err("Invalid speaker evidence file".into());
+    }
+    let mut bytes = Vec::new();
+    std::fs::File::open(path)
+        .map_err(|_| "Speaker evidence could not be read")?
+        .take(2 * 1024 * 1024 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| "Speaker evidence could not be read")?;
+    serde_json::from_slice(&bytes).map_err(|_| {
+        "Speaker evidence is incomplete or invalid; original files are preserved".into()
+    })
+}
+pub(super) fn saved(service: &Service, meeting_id: &str) -> AppResult<Option<SavedSections>> {
+    let data = service.data(meeting_id)?;
+    let folder = crate::meeting_files::session_folder(&service.root, meeting_id)?
+        .join("experimental-speakers");
+    if !folder.exists() {
+        return Ok(None);
+    }
+    meeting_core::metadata::checked_directory(&folder)
+        .map_err(|_| "Unsafe speaker evidence directory")?;
+    let mut runs = Vec::new();
+    for (seen_entries, entry) in std::fs::read_dir(folder)
+        .map_err(|_| "Speaker revisions unavailable")?
+        .enumerate()
+    {
+        if seen_entries >= 1001 {
+            return Err("Speaker folder exceeds browsing bound; all revisions retained".into());
+        }
+        let entry = entry.map_err(|_| "Speaker revision unavailable")?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if crate::validate_id(&name).is_err() {
+            continue;
+        }
+        let path = meeting_core::metadata::checked_directory(&entry.path())
+            .map_err(|_| "Unsafe speaker revision")?;
+        let time = std::fs::metadata(&path)
+            .and_then(|m| m.modified())
+            .map_err(|_| "Speaker revision unavailable")?;
+        runs.push((time, name, path));
+    }
+    if runs.len() > 1000 {
+        return Err("Too many speaker revisions to select automatically; preserved on disk".into());
+    }
+    runs.sort_by(|a, b| b.0.cmp(&a.0));
+    let Some((_, run_id, path)) = runs.into_iter().next() else {
+        return Ok(None);
+    };
+    if !path.join("snapshot.json").exists()
+        && service
+            .speaker_jobs
+            .snapshot()
+            .is_some_and(|p| p.job_id == run_id && p.status == "running")
+    {
+        return Ok(None);
+    }
+    let snapshot = json_file(&path.join("snapshot.json"))?;
+    if snapshot["runId"] != run_id || snapshot["meetingId"] != meeting_id {
+        return Err("Speaker evidence identity mismatch".into());
+    }
+    let mode = snapshot["mode"]
+        .as_str()
+        .filter(|s| ["live", "post-meeting"].contains(s))
+        .ok_or("Invalid speaker mode")?
+        .to_owned();
+    let model_id = snapshot["model"]["sourceModelMetadata"]["id"]
+        .as_str()
+        .ok_or("Speaker model provenance missing")?
+        .to_owned();
+    let mut files = Vec::new();
+    for (seen_entries, entry) in std::fs::read_dir(&path)
+        .map_err(|_| "Speaker sections unavailable")?
+        .enumerate()
+    {
+        if seen_entries >= 100002 {
+            return Err("Speaker revision exceeds browsing bound; original files retained".into());
+        }
+        let entry = entry.map_err(|_| "Speaker section unavailable")?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.len() == 21
+            && name.starts_with("section-")
+            && name.ends_with(".json")
+            && name[8..16].bytes().all(|b| b.is_ascii_digit())
+        {
+            files.push((name, entry.path()));
+        }
+    }
+    if files.len() > 100000 {
+        return Err("Speaker evidence exceeds the section limit; originals preserved".into());
+    }
+    files.sort_by(|a, b| b.0.cmp(&a.0));
+    let mut sections = Vec::new();
+    for (_, file) in files.into_iter().take(25) {
+        let section: Section = serde_json::from_value(json_file(&file)?)
+            .map_err(|_| "Invalid saved speaker section")?;
+        let part = data
+            .parts
+            .iter()
+            .find(|p| p.file == section.source_id)
+            .ok_or("Speaker evidence references an unknown original section")?;
+        if part.confirmed_sha256 != section.audio_sha256
+            || section.start_ms != part.start_sample * 1000 / 16000
+            || section.duration_ms != part.confirmed_sample_count * 1000 / 16000
+            || section.turns.len() > 10000
+            || section.turns.iter().any(|t| {
+                t.end_ms <= t.start_ms
+                    || t.end_ms > section.duration_ms
+                    || !(1..=1000).contains(&t.speaker_id)
+                    || t.confidence
+                        .is_some_and(|p| !p.is_finite() || !(0.0..=1.0).contains(&p))
+            })
+        {
+            return Err("Saved speaker evidence failed its original-section checks; preserved for inspection".into());
+        }
+        sections.push(section);
+    }
+    Ok(Some(SavedSections {
+        run_id,
+        mode,
+        model_id,
+        sections,
+    }))
+}

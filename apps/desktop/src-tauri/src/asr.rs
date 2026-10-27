@@ -28,7 +28,13 @@ const FEED_SAMPLES: usize = 8_000;
     rename_all_fields = "camelCase",
     deny_unknown_fields
 )]
-enum Request {
+pub(super) enum Request {
+    SpeakerIdentity {
+        identity: handy_bridge::ModelIdentity,
+    },
+    SpeakerSection {
+        part: AudioPart,
+    },
     Begin {
         file: String,
     },
@@ -43,18 +49,20 @@ enum Request {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct Reply {
-    ok: bool,
+pub(super) struct Reply {
+    pub ok: bool,
     #[serde(default)]
-    full: String,
+    pub speaker_turns: Vec<handy_bridge::native::SpeakerTurn>,
     #[serde(default)]
-    committed: String,
+    pub full: String,
     #[serde(default)]
-    tentative: String,
+    pub committed: String,
     #[serde(default)]
-    backend: String,
+    pub tentative: String,
     #[serde(default)]
-    error: Option<String>,
+    pub backend: String,
+    #[serde(default)]
+    pub error: Option<String>,
 }
 
 fn bridge_protocol(_: impl std::fmt::Display) -> BridgeError {
@@ -232,7 +240,7 @@ fn worker_audio_path(folder: &Path, file: &str, source: &str) -> Result<PathBuf,
     Ok(path)
 }
 
-fn read_request(reader: &mut impl BufRead) -> Result<Option<Request>, String> {
+pub(super) fn read_request(reader: &mut impl BufRead) -> Result<Option<Request>, String> {
     let bytes = bounded_line(reader, MAX_REQUEST)?;
     bytes
         .map(|bytes| {
@@ -256,7 +264,7 @@ fn bounded_line(reader: &mut impl BufRead, limit: usize) -> Result<Option<Vec<u8
     Ok(Some(line))
 }
 
-fn send_reply(writer: &mut impl Write, reply: Reply) -> Result<(), String> {
+pub(super) fn send_reply(writer: &mut impl Write, reply: Reply) -> Result<(), String> {
     let bytes = serde_json::to_vec(&reply).map_err(|_| "Recognition reply could not be encoded")?;
     if bytes.len() > MAX_REPLY {
         return Err("Recognition reply exceeded its safety limit".into());
@@ -268,7 +276,7 @@ fn send_reply(writer: &mut impl Write, reply: Reply) -> Result<(), String> {
         .map_err(|_| "Recognition reply pipe closed".into())
 }
 
-struct Worker {
+pub(super) struct Worker {
     child: Child,
     input: ChildStdin,
     replies: Receiver<Result<Reply, String>>,
@@ -276,6 +284,11 @@ struct Worker {
     stdout_thread: Option<JoinHandle<()>>,
     stderr_thread: Option<JoinHandle<()>>,
     absolute_deadline: Option<Instant>,
+    cancellation: Option<Arc<AtomicBool>>,
+}
+enum WorkerKind {
+    Asr,
+    Speaker(Arc<AtomicBool>),
 }
 
 impl Worker {
@@ -287,6 +300,41 @@ impl Worker {
         cpu_only: bool,
         absolute_deadline: Option<Instant>,
     ) -> Result<Self, String> {
+        Self::start_mode(
+            model,
+            backend,
+            folder,
+            source,
+            cpu_only,
+            absolute_deadline,
+            WorkerKind::Asr,
+        )
+    }
+    pub(super) fn start_speaker(
+        model: &Path,
+        backend: &Path,
+        folder: &Path,
+        cancel: Arc<AtomicBool>,
+    ) -> Result<Self, String> {
+        Self::start_mode(
+            model,
+            backend,
+            folder,
+            "speaker",
+            true,
+            None,
+            WorkerKind::Speaker(cancel),
+        )
+    }
+    fn start_mode(
+        model: &Path,
+        backend: &Path,
+        folder: &Path,
+        source: &str,
+        cpu_only: bool,
+        absolute_deadline: Option<Instant>,
+        kind: WorkerKind,
+    ) -> Result<Self, String> {
         if absolute_deadline.is_some_and(|deadline| Instant::now() >= deadline) {
             return Err("Synthetic worker deadline elapsed".into());
         }
@@ -294,7 +342,11 @@ impl Worker {
             std::env::current_exe().map_err(|_| "Recognition executable was not found")?;
         let mut command = Command::new(executable);
         command
-            .arg("--asr-worker")
+            .arg(if matches!(&kind, WorkerKind::Speaker(_)) {
+                "--speaker-worker"
+            } else {
+                "--asr-worker"
+            })
             .arg(model)
             .arg(backend)
             .arg(folder)
@@ -376,6 +428,10 @@ impl Worker {
             stdout_thread: Some(stdout_thread),
             stderr_thread: Some(stderr_thread),
             absolute_deadline,
+            cancellation: match kind {
+                WorkerKind::Asr => None,
+                WorkerKind::Speaker(flag) => Some(flag),
+            },
         };
         worker.receive(Duration::from_secs(180))?;
         Ok(worker)
@@ -387,6 +443,13 @@ impl Worker {
             |end| end.min(Instant::now() + timeout),
         );
         loop {
+            if self
+                .cancellation
+                .as_ref()
+                .is_some_and(|flag| flag.load(Ordering::Acquire))
+            {
+                return Err("Optional speaker analysis cancelled; recording and original transcripts are unchanged".into());
+            }
             if Instant::now() >= deadline {
                 return Err("Recognition worker deadline elapsed; saved audio is retained".into());
             }
@@ -419,7 +482,12 @@ impl Worker {
         }
     }
 
-    fn call(&mut self, request: Request) -> Result<Reply, String> {
+    pub(super) fn call(&mut self, request: Request) -> Result<Reply, String> {
+        let timeout = if matches!(&request, Request::SpeakerIdentity { .. }) {
+            180
+        } else {
+            90
+        };
         let bytes =
             serde_json::to_vec(&request).map_err(|_| "Recognition request could not be encoded")?;
         if bytes.len() >= MAX_REQUEST {
@@ -430,7 +498,7 @@ impl Worker {
             .and_then(|_| self.input.write_all(b"\n"))
             .and_then(|_| self.input.flush())
             .map_err(|_| "Recognition child input closed")?;
-        self.receive(Duration::from_secs(90))
+        self.receive(Duration::from_secs(timeout))
     }
 }
 

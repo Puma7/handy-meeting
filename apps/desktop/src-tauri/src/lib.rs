@@ -2,10 +2,18 @@ mod agent;
 mod asr;
 mod credential_commands;
 mod credential_service;
+mod library_commands;
+mod library_service;
 mod meeting_files;
+mod name_reference;
 mod notes_commands;
 mod notes_service;
+mod retention_commands;
+mod speaker_commands;
+mod speaker_jobs;
 mod template_commands;
+mod update_commands;
+mod updater;
 
 use handy_bridge::{HandyBridge, ModelCatalog};
 use meeting_core::{AudioDevice, CaptureController, CaptureOptions, SessionData, SessionStore};
@@ -57,6 +65,8 @@ struct MeetingView {
     live_preview_limited: bool,
     pending_audio_ms: u64,
     saved_audio_ms: SavedAudio,
+    user_metadata: meeting_core::metadata::Metadata,
+    metadata_error: Option<String>,
 }
 fn meeting_view(mut data: SessionData, preview: bool) -> MeetingView {
     let (mut system, mut microphone, mut pending_system, mut pending_microphone) = (0, 0, 0, 0);
@@ -90,6 +100,8 @@ fn meeting_view(mut data: SessionData, preview: bool) -> MeetingView {
         pending_audio_ms: pending_system.max(pending_microphone) * 1000
             / u64::from(meeting_core::SAMPLE_RATE),
         saved_audio_ms: SavedAudio { system, microphone },
+        user_metadata: Default::default(),
+        metadata_error: None,
     }
 }
 #[derive(Serialize)]
@@ -129,8 +141,33 @@ struct Service {
     transition: Mutex<()>,
     refresh_gate: Mutex<()>,
     notes_jobs: notes_service::NotesJobs,
+    library_jobs: Arc<library_service::Jobs>,
+    updater: updater::Updater,
+    speaker_jobs: Arc<speaker_jobs::Jobs>,
+    maintenance_jobs: Arc<library_service::Jobs>,
 }
 impl Service {
+    fn meeting_view(&self, data: SessionData, preview: bool) -> MeetingView {
+        let mut view = meeting_view(data, preview);
+        if view.data.read_only && !view.data.id.starts_with("legacy-") {
+            view.saved_audio_ms = SavedAudio {
+                system: 0,
+                microphone: 0,
+            };
+            view.pending_audio_ms = 0;
+        }
+        match meeting_core::metadata::read(&self.root,&view.data.id) {
+            Ok(mut meta) => {
+                if let Some(title) = &meta.title { view.data.title = title.clone(); }
+                if view.data.read_only && !view.data.id.starts_with("legacy-") {
+                    meta.audio_removed = true;
+                }
+                view.user_metadata = meta;
+            },
+            Err(_)=>view.metadata_error=Some("Saved meeting labels could not be read. Originals are preserved. / Gespeicherte Meetingbezeichnungen konnten nicht gelesen werden.".into()),
+        }
+        view
+    }
     fn new(root: PathBuf) -> AppResult<Self> {
         fs::create_dir_all(root.join("sessions"))
             .map_err(|_| "Der lokale Sitzungsordner konnte nicht angelegt werden.")?;
@@ -164,6 +201,10 @@ impl Service {
             transition: Mutex::new(()),
             refresh_gate: Mutex::new(()),
             notes_jobs: notes_service::NotesJobs::default(),
+            library_jobs: Arc::new(library_service::Jobs::default()),
+            updater: updater::Updater::default(),
+            speaker_jobs: Arc::new(speaker_jobs::Jobs::default()),
+            maintenance_jobs: Arc::new(library_service::Jobs::default()),
         })
     }
     fn lock(&self) -> AppResult<MutexGuard<'_, Inner>> {
@@ -185,7 +226,7 @@ impl Service {
             let progress = store
                 .progress()
                 .map_err(|_| "Sicherungsstand konnte nicht gelesen werden.")?;
-            let mut view = meeting_view(data, false);
+            let mut view = self.meeting_view(data, false);
             view.live_preview_limited = progress.total_parts > 16;
             view.pending_audio_ms = progress.pending_ms;
             view.saved_audio_ms = SavedAudio {
@@ -299,7 +340,7 @@ impl Service {
         }
         {
             let mut inner = self.lock()?;
-            if inner.active.is_some() {
+            if inner.active.is_some() || inner.transitioning {
                 return Err(
                     "Es läuft bereits eine Aufnahme oder Wiederaufnahme. Bitte zuerst abschließen."
                         .into(),
@@ -387,7 +428,7 @@ impl Service {
             stop,
             workers,
         });
-        Ok(meeting_view(data, true))
+        Ok(self.meeting_view(data, true))
     }
     fn stop(&self) -> AppResult<MeetingView> {
         self.stop_for(None, None)
@@ -442,13 +483,18 @@ impl Service {
                 let _=active.store.notice("Ein Erkennungsprozess wurde unterbrochen. Offene Abschnitte können später nachgeholt werden.");
             }
         }
+        if let Ok(data) = active.store.snapshot() {
+            if library_service::update(&self.root, &data).is_err() {
+                let _ = active.store.notice("Die Aufnahme ist gespeichert; bitte den lokalen Suchindex unter Einstellungen aktualisieren. / Recording saved; refresh the local search index in Settings.");
+            }
+        }
         let result: AppResult<MeetingView> = if capture_result.is_err() {
             Err("Die Aufnahme wurde mit einer Sicherungswarnung beendet. Bitte den Sitzungsstand prüfen.".into())
         } else {
             active
                 .store
                 .snapshot()
-                .map(|d| meeting_view(d, false))
+                .map(|d| self.meeting_view(d, false))
                 .map_err(|_| "Der gespeicherte Sitzungsstand konnte nicht gelesen werden.".into())
         };
         let mut inner = self.lock()?;
@@ -475,6 +521,9 @@ impl Service {
             }
             self.lock()?.view = Some(active.store.clone());
             Self::finalize_completed_recognition(&active.store)?;
+            if let Ok(data) = active.store.snapshot() {
+                let _ = library_service::update(&self.root, &data);
+            }
         }
         Ok(())
     }
@@ -500,6 +549,16 @@ impl Service {
         Ok(true)
     }
     fn data(&self, id: &str) -> AppResult<SessionData> {
+        if self
+            .maintenance_jobs
+            .snapshot()
+            .is_some_and(|p| p.status == "running" && p.kind != "cleanup-preview")
+            && self.lock()?.transitioning
+        {
+            return Err(
+                "Archive maintenance is running; wait or cancel before opening this meeting".into(),
+            );
+        }
         if valid_legacy_id(id) {
             let path = self
                 .lock()?
@@ -529,7 +588,9 @@ impl Service {
                 }
             }
         }
-        let store=SessionStore::open(&self.root.join("sessions").join(id)).map_err(|_|"Sitzung konnte nicht geöffnet werden. Originaldateien bleiben erhalten; eine andere Instanz könnte sie verwenden.")?;
+        let folder = self.root.join("sessions").join(id);
+        if let Some(data)=meeting_core::archive::read_archived_transcript(&folder).map_err(|_|"Der archivierte Transkriptstand konnte nicht gegen seine Originalquellen geprüft werden. Vorhandene Dateien bleiben erhalten. / Archived transcript provenance check failed; original files are preserved.")? { return Ok(data); }
+        let store=SessionStore::open(&folder).map_err(|_|"Sitzung konnte nicht geöffnet werden. Originaldateien bleiben erhalten; eine andere Instanz könnte sie verwenden.")?;
         let data = store
             .snapshot()
             .map_err(|_| "Sitzungsstand konnte nicht gelesen werden.")?;
@@ -545,13 +606,20 @@ impl Service {
             .lock()
             .map_err(|_| "Aufnahmesteuerung ist gesperrt.")?;
         self.reap_finished()?;
-        if self.lock()?.active.is_some() {
+        let unavailable = {
+            let inner = self.lock()?;
+            inner.active.is_some() || inner.transitioning
+        };
+        if unavailable {
             return Err("Bitte zuerst die laufende Sitzung abschließen.".into());
         }
         if valid_legacy_id(&id) {
             return Err("Originalsitzungen werden in dieser Beta ausschließlich gelesen. Zum Nachholen die bisherige Version verwenden.".into());
         }
         let data = self.data(&id)?;
+        if data.read_only {
+            return Err("Audio ist lokal archiviert. Bitte zuerst Audio wiederherstellen oder eine neue Transkription aus einer Archivkopie anlegen. / Audio is archived locally. Restore audio or create a new transcription from an archive copy first.".into());
+        }
         let store = self
             .lock()?
             .view
@@ -560,7 +628,7 @@ impl Service {
             .cloned()
             .ok_or("Sitzung konnte nicht wiederaufgenommen werden.")?;
         if Self::finalize_completed_recognition(&store)? {
-            return Ok(meeting_view(
+            return Ok(self.meeting_view(
                 store
                     .snapshot()
                     .map_err(|_| "Sitzungsstand konnte nicht gelesen werden.")?,
@@ -607,7 +675,7 @@ impl Service {
             stop,
             workers,
         });
-        Ok(meeting_view(
+        Ok(self.meeting_view(
             store
                 .snapshot()
                 .map_err(|_| "Sitzungsstand nicht lesbar.")?,
@@ -629,11 +697,20 @@ impl Service {
         }
         self.lock()?.legacy.insert(id.clone(), path);
         data.id = id;
-        Ok(meeting_view(data, false))
+        Ok(self.meeting_view(data, false))
     }
     fn history(&self) -> AppResult<Vec<MeetingView>> {
-        let mut sessions = meeting_core::list_sessions(&self.root.join("sessions"))
-            .map_err(|_| "Sitzungshistorie konnte nicht gelesen werden.")?;
+        let mut sessions = if self.root.join("library-index/library.sqlite3").exists() {
+            library_service::search(&self.root, "", 0, 100)?
+                .items
+                .into_iter()
+                .map(|item| item.session_summary())
+                .collect::<meeting_core::Result<Vec<_>>>()
+                .map_err(|_| "The local history index is invalid; originals are preserved")?
+        } else {
+            meeting_core::list_sessions(&self.root.join("sessions"))
+                .map_err(|_| "Sitzungshistorie konnte nicht gelesen werden.")?
+        };
         let (current, legacy) = {
             let inner = self.lock()?;
             (
@@ -663,7 +740,7 @@ impl Service {
             .map(|mut data| {
                 data.parts.clear();
                 data.warnings.clear();
-                meeting_view(data, false)
+                self.meeting_view(data, false)
             })
             .collect())
     }
@@ -839,7 +916,7 @@ async fn list_meetings(service: State<'_, Arc<Service>>) -> AppResult<Vec<Meetin
 #[tauri::command]
 async fn get_meeting(service: State<'_, Arc<Service>>, id: String) -> AppResult<MeetingView> {
     let service = Arc::clone(&service);
-    blocking(move || service.data(&id).map(|d| meeting_view(d, false))).await
+    blocking(move || service.data(&id).map(|d| service.meeting_view(d, false))).await
 }
 #[tauri::command]
 async fn resume_meeting(service: State<'_, Arc<Service>>, id: String) -> AppResult<MeetingView> {
@@ -937,10 +1014,11 @@ pub fn run() {
         Arc::new(Service::new(root).expect("Lokale Sitzungsablage konnte nicht geöffnet werden."));
     tauri::Builder::default().manage(service).setup(|app| {
         let service=Arc::clone(app.state::<Arc<Service>>().inner());
+        let _=service.library_jobs.start_scan(service.root.clone());
         if std::env::args().skip(1).eq(["--agent", "serve"]) { agent::start_stdio(Arc::clone(&service)).map_err(std::io::Error::other)?; }
         tauri::async_runtime::spawn_blocking(move|| {let _=service.refresh(None);});
         Ok(())
-    }).invoke_handler(tauri::generate_handler![get_app_state,refresh_handy,list_devices,start_meeting,stop_meeting,agent_decide_recording,agent_revoke,list_meetings,get_meeting,resume_meeting,import_legacy,copy_text,open_meeting_folder,export_transcript,generate_notes,list_analyses,notes_commands::list_unfinished_analyses,notes_commands::list_text_models,notes_commands::get_notes_progress,notes_commands::cancel_notes,notes_commands::notes_markdown,template_commands::list_templates,template_commands::save_templates,template_commands::import_templates,credential_commands::credential_status,credential_commands::save_credential,credential_commands::remove_credential])
+    }).invoke_handler(tauri::generate_handler![get_app_state,retention_commands::list_audio_copies,retention_commands::transcribe_audio_copy,retention_commands::compact_archive,retention_commands::list_archives,retention_commands::restore_archive,retention_commands::apply_retention,retention_commands::get_retention_policy,retention_commands::save_retention_policy,retention_commands::preview_retention,retention_commands::get_retention_plan,retention_commands::get_maintenance_progress,retention_commands::cancel_maintenance,library_commands::edit_meeting_metadata,library_commands::search_meetings,library_commands::rebuild_search_index,library_commands::get_library_progress,library_commands::cancel_library_job,speaker_commands::get_speaker_labels,speaker_commands::save_speaker_labels,speaker_commands::start_speaker_experiment,speaker_commands::get_speaker_progress,speaker_commands::get_speaker_sections,speaker_commands::cancel_speaker_experiment,update_commands::check_for_update,update_commands::download_update,update_commands::get_update_progress,update_commands::cancel_update,update_commands::install_update,refresh_handy,list_devices,start_meeting,stop_meeting,agent_decide_recording,agent_revoke,list_meetings,get_meeting,resume_meeting,import_legacy,copy_text,open_meeting_folder,export_transcript,generate_notes,list_analyses,notes_commands::list_unfinished_analyses,notes_commands::list_text_models,notes_commands::get_notes_progress,notes_commands::cancel_notes,notes_commands::notes_markdown,template_commands::list_templates,template_commands::save_templates,template_commands::import_templates,credential_commands::credential_status,credential_commands::save_credential,credential_commands::remove_credential])
     .on_window_event(|window,event|{if let tauri::WindowEvent::CloseRequested{api,..}=event{let service=window.state::<Arc<Service>>();let blocked=service.lock().is_ok_and(|inner|inner.transitioning||inner.active.as_ref().is_some_and(|a|a.capture.is_some()));if blocked{api.prevent_close();if let Ok(mut inner)=service.lock(){inner.error=Some(if inner.transitioning { "Ein Vorgang läuft noch. Bitte warten, bis Audioabschluss und Verarbeitung beendet sind.".into() } else { "Bitte zuerst „Meeting beenden“ wählen. Audio wird gesichert und offene Abschnitte werden verarbeitet.".into() });}let _=window.emit("recording-close-blocked",());}}})
     .run(tauri::generate_context!()).expect("HandyMeeting konnte nicht gestartet werden.");
 }
@@ -991,6 +1069,7 @@ pub fn run_cli(args: &[String]) -> Option<AppResult<()>> {
             Ok(())
         })()),
         Some("--asr-worker") => Some(asr::worker_main(&args[1..])),
+        Some("--speaker-worker") => Some(speaker_jobs::worker_main(&args[1..])),
         Some("--synthetic-smoke") => Some(asr::synthetic_smoke(&args[1..])),
         Some("--list-text-models") => Some((|| {
             if args.len() != 2 {
@@ -1004,6 +1083,7 @@ pub fn run_cli(args: &[String]) -> Option<AppResult<()>> {
             );
             Ok(())
         })()),
+        Some("--speaker-name-reference-check") => Some(name_reference::check(&args[1..])),
         Some("--model-probe") => Some((|| {
             if args.len() != 3 {
                 return Err("Invalid model probe arguments".into());

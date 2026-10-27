@@ -83,6 +83,17 @@ pub fn capture_model_identity(
     if model.id != resolved.model_id || !model.ready_for_streaming() {
         return Err(BridgeError::ModelUnavailable);
     }
+    capture_optional_model_identity(model, resolved, runtime)
+}
+/// An experimental role has its own identity and never relaxes the ASR resume gate.
+pub fn capture_optional_model_identity(
+    model: &HandyModel,
+    resolved: &ResolvedModel,
+    runtime: RuntimeIdentity,
+) -> Result<ModelIdentity> {
+    if model.id != resolved.model_id || !model.is_downloaded || model.is_downloading {
+        return Err(BridgeError::ModelUnavailable);
+    }
     let (canonical_path, bytes, sha256) = file_hash(&resolved.path)?;
     Ok(ModelIdentity {
         canonical_path,

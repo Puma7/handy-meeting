@@ -1,0 +1,65 @@
+{
+  "actualInstalledFfmpeg": true,
+  "asrModelUsed": false,
+  "audioDevicesOpened": false,
+  "changedCopyAndSourceRejected": true,
+  "elapsedSeconds": 6.9092523,
+  "limits": "PCM/codec/duration round-trip and verified reimport only. Opus is lossy. This does not establish speech intelligibility, recognition accuracy, real meeting compression ratio, hardware capture or endurance.",
+  "proofs": [
+    {
+      "codec": "flac",
+      "decodedDurationToleranceSamples": 0,
+      "decodedPcmSha256": "ff84be6289c6a16f1bf11510bf9b6822d52dec70521b4e955f1557dc9bcfecf6",
+      "decodedSamples": 48000,
+      "encodedBytes": 29330,
+      "encodedFile": "system-000000000000.flac",
+      "encodedSha256": "7d39aad0e003fb2609a32f06e598248cc46e7d3af3f9c0a2e5fbd5604c321791",
+      "lossy": false,
+      "originalPcmSha256": "ff84be6289c6a16f1bf11510bf9b6822d52dec70521b4e955f1557dc9bcfecf6",
+      "originalRetained": true,
+      "originalSamples": 48000,
+      "parameters": [
+        "-c:a",
+        "flac",
+        "-compression_level",
+        "5"
+      ],
+      "sampleRate": 16000,
+      "sourceId": "system-000000000000.wav",
+      "toolSha256": "ad8f211bc894755e0061c55ab280ae00e8d3d4f15a8cc4372b24cfa247b5942e",
+      "toolVersion": "ffmpeg version 8.1.2-full_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers"
+    },
+    {
+      "codec": "opus",
+      "decodedDurationToleranceSamples": 320,
+      "decodedPcmSha256": "5f6140c5206b0b65192fe7b15b581cdaa466baaa48f003dd955df26340473919",
+      "decodedSamples": 48000,
+      "encodedBytes": 15096,
+      "encodedFile": "system-000000000000.opus",
+      "encodedSha256": "4b3ab26b429603a73a45732a2e1da879ec93dba2bf0885ca66c5c94836b0afee",
+      "lossy": true,
+      "originalPcmSha256": "ff84be6289c6a16f1bf11510bf9b6822d52dec70521b4e955f1557dc9bcfecf6",
+      "originalRetained": true,
+      "originalSamples": 48000,
+      "parameters": [
+        "-c:a",
+        "libopus",
+        "-b:a",
+        "32k",
+        "-vbr",
+        "on",
+        "-application",
+        "voip"
+      ],
+      "sampleRate": 16000,
+      "sourceId": "system-000000000000.wav",
+      "toolSha256": "ad8f211bc894755e0061c55ab280ae00e8d3d4f15a8cc4372b24cfa247b5942e",
+      "toolVersion": "ffmpeg version 8.1.2-full_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers"
+    }
+  ],
+  "success": true,
+  "syntheticToneSeconds": 3,
+  "userAudioRead": false,
+  "verifiedCopyReimport": true,
+  "version": "1.0.2"
+}

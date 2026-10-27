@@ -241,7 +241,9 @@ it("requires confirmation before removing a native preset and preserves other pr
     }),
   );
   await waitFor(() =>
-    expect(screen.queryByRole("option", { name: "Remove this preset" })).toBeNull(),
+    expect(
+      screen.queryByRole("option", { name: "Remove this preset" }),
+    ).toBeNull(),
   );
   expect((await api.listTemplates()).templates).toEqual([original]);
 });
