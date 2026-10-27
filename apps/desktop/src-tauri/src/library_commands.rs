@@ -47,7 +47,7 @@ pub(crate) fn rebuild_search_index(service: State<'_, Arc<Service>>) -> AppResul
     {
         return Err("Finish archive maintenance before updating the search index".into());
     }
-    service.library_jobs.start_scan(service.root.clone())
+    service.library_jobs.start_scan(service.root.clone(), true)
 }
 #[tauri::command]
 pub(crate) fn get_library_progress(
