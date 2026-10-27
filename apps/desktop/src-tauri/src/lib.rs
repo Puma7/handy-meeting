@@ -549,26 +549,36 @@ impl Service {
                 interrupted |= worker.join().is_err();
             }
             self.lock()?.view = Some(active.store.clone());
-            if !Self::finalize_completed_recognition(&active.store)? {
-                // No worker remains: a catch-up that ended with open sections must not stay
-                // "catching-up", which blocks new recordings and the resume action.
-                let caught_up = active
-                    .store
-                    .preview_snapshot(0)
-                    .is_ok_and(|data| data.status == "catching-up");
-                if caught_up {
-                    active
-                        .store
-                        .set_status("recorded")
-                        .map_err(|_| "Sitzungsstatus konnte nicht gesichert werden.")?;
-                    let _ = active.store.notice("Die Erkennung wurde ohne vollständiges Ergebnis beendet. Audio ist gespeichert; offene Abschnitte können über Wiederaufnehmen nachgeholt werden. / Recognition ended with open sections. Audio is saved; resume to process them.");
-                }
-            }
             if interrupted {
                 let _ = active.store.notice("Ein Erkennungsprozess wurde unterbrochen. Offene Abschnitte können später nachgeholt werden.");
             }
+            if let Err(error) = Self::settle_catch_up(&active.store) {
+                // The workers are joined; keep the session so the next poll retries the
+                // status write instead of leaving it "catching-up".
+                self.lock()?.active = Some(active);
+                return Err(error);
+            }
             if let Ok(data) = active.store.snapshot() {
-                let _ = library_service::update(&self.root, &data);
+                if library_service::update(&self.root, &data).is_err() {
+                    let _ = active.store.notice("Die Aufnahme ist gespeichert; bitte den lokalen Suchindex unter Einstellungen aktualisieren. / Recording saved; refresh the local search index in Settings.");
+                }
+            }
+        }
+        Ok(())
+    }
+    /// Records the end of a session whose recognition workers are all finished.
+    fn settle_catch_up(store: &SessionStore) -> AppResult<()> {
+        if !Self::finalize_completed_recognition(store)? {
+            // No worker remains: a catch-up that ended with open sections must not stay
+            // "catching-up", which blocks new recordings and the resume action.
+            let caught_up = store
+                .preview_snapshot(0)
+                .is_ok_and(|data| data.status == "catching-up");
+            if caught_up {
+                store
+                    .set_status("recorded")
+                    .map_err(|_| "Sitzungsstatus konnte nicht gesichert werden.")?;
+                let _ = store.notice("Die Erkennung wurde ohne vollständiges Ergebnis beendet. Audio ist gespeichert; offene Abschnitte können über Wiederaufnehmen nachgeholt werden. / Recognition ended with open sections. Audio is saved; resume to process them.");
             }
         }
         Ok(())
@@ -1470,6 +1480,56 @@ mod service_tests {
         assert!(data.warnings.iter().any(|w| w.contains("unterbrochen")));
         // Audio is untouched.
         assert_eq!(data.parts[0].confirmed_sample_count, 4);
+    }
+
+    #[test]
+    fn a_failed_catch_up_status_write_is_retried_and_an_index_failure_is_reported() {
+        let root = fixture_root("catch-up-retry");
+        let store = SessionStore::create(
+            &root.join("sessions"),
+            "Synthetic blocked status write",
+            "fixture-model",
+            "fixture-output",
+            None,
+        )
+        .unwrap();
+        let mut writer = meeting_core::PcmWriter::new(store.clone(), "system").unwrap();
+        writer.append(&[1_i16, 2, 3, 4]).unwrap();
+        writer.finish().unwrap();
+        drop(writer);
+        store.set_status("catching-up").unwrap();
+        let service = Service::new(root.clone()).unwrap();
+        let worker = std::thread::spawn(|| {});
+        while !worker.is_finished() {
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        service.lock().unwrap().active = Some(Active {
+            owner: None,
+            store: store.clone(),
+            capture: None,
+            stop: Arc::new(AtomicBool::new(true)),
+            workers: vec![worker],
+        });
+        // Synthetic: a directory in place of session.json makes the status write fail.
+        let manifest = store.folder().join("session.json");
+        let saved = std::fs::read(&manifest).unwrap();
+        std::fs::remove_file(&manifest).unwrap();
+        std::fs::create_dir(&manifest).unwrap();
+        assert!(service.reap_finished().is_err());
+        assert!(service.lock().unwrap().active.is_some());
+        assert_eq!(store.snapshot().unwrap().status, "catching-up");
+        std::fs::remove_dir(&manifest).unwrap();
+        std::fs::write(&manifest, saved).unwrap();
+        // Synthetic: a file in place of the index folder makes the search refresh fail.
+        let index = root.join("library-index");
+        assert!(!index.exists());
+        std::fs::write(&index, b"synthetic, blocks the search index").unwrap();
+        service.reap_finished().unwrap();
+        assert!(service.lock().unwrap().active.is_none());
+        let data = store.snapshot().unwrap();
+        assert_eq!(data.status, "recorded");
+        assert_eq!(data.parts[0].confirmed_sample_count, 4);
+        assert!(data.warnings.iter().any(|w| w.contains("Suchindex")));
     }
 
     #[test]

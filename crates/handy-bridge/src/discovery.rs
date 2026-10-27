@@ -27,7 +27,7 @@ pub fn discover_handy(explicit: Option<&Path>) -> Result<PathBuf> {
             // The unversioned name keeps its earlier priority; downloaded
             // release names such as `Handy_0.9.8_amd64.AppImage` follow.
             candidates.push(applications.join("Handy.AppImage"));
-            candidates.extend(versioned_appimages(&applications, std::env::consts::ARCH));
+            candidates.extend(launchable_appimages(&applications, std::env::consts::ARCH));
         }
     }
     if let Some(path) = std::env::var_os("PATH") {
@@ -133,7 +133,7 @@ fn appimage_rank(name: &str, machine_arch: &str) -> Option<AppImageRank> {
     let mut identifiers = Vec::new();
     if !pre_release.is_empty() {
         for id in pre_release.split('.') {
-            if id.is_empty() || !id.bytes().all(|b| b.is_ascii_alphanumeric()) {
+            if id.is_empty() || !id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-') {
                 return None;
             }
             identifiers.push(if id.bytes().all(|b| b.is_ascii_digit()) {
@@ -178,6 +178,27 @@ fn versioned_appimages(directory: &Path, machine_arch: &str) -> Vec<PathBuf> {
         .into_iter()
         .map(|(_, name)| directory.join(name))
         .collect()
+}
+
+/// Versioned AppImages that can be started. A browser download is often saved without
+/// the execute bit; such a file must not hide an older installation that can run.
+fn launchable_appimages(directory: &Path, machine_arch: &str) -> Vec<PathBuf> {
+    versioned_appimages(directory, machine_arch)
+        .into_iter()
+        .filter(|path| is_executable(path))
+        .collect()
+}
+
+#[cfg(unix)]
+fn is_executable(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    path.metadata()
+        .is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
+}
+
+#[cfg(not(unix))]
+fn is_executable(path: &Path) -> bool {
+    path.is_file()
 }
 
 pub(crate) fn home() -> Option<PathBuf> {
@@ -236,6 +257,8 @@ mod tests {
             "Handy_0.10.0-rc.1.AppImage",
             "Handy_0.10.0.AppImage",
         ];
+        // SemVer identifiers may contain hyphens.
+        assert!(appimage_rank("Handy_0.10.0-rc-1.AppImage", "x86_64").is_some());
         for pair in ordered.windows(2) {
             let lower = appimage_rank(pair[0], "x86_64").unwrap();
             let higher = appimage_rank(pair[1], "x86_64").unwrap();
@@ -252,6 +275,28 @@ mod tests {
             versioned_appimages(dir.path(), "x86_64")[0],
             dir.path().join("Handy_0.10.0-beta.10_amd64.AppImage")
         );
+    }
+
+    #[test]
+    fn an_appimage_without_the_execute_bit_does_not_hide_one_that_runs() {
+        if !cfg!(unix) {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let downloaded = dir.path().join("Handy_0.10.0-beta.10_amd64.AppImage");
+        let installed = dir.path().join("Handy_0.9.8_amd64.AppImage");
+        std::fs::write(&downloaded, b"synthetic, never executed").unwrap();
+        std::fs::write(&installed, b"synthetic, never executed").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = |path: &Path, mode| {
+                std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap()
+            };
+            mode(&downloaded, 0o644);
+            mode(&installed, 0o755);
+        }
+        assert_eq!(launchable_appimages(dir.path(), "x86_64"), [installed]);
     }
 
     #[test]
