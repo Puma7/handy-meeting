@@ -220,8 +220,8 @@ class PortableArtifactGuards(unittest.TestCase):
             artifacts.deb_metadata(work)
         link = work / "deb/usr/bin/handymeeting"
         self.assertTrue(link.is_symlink())
-        self.assertEqual(str(link.readlink()), "/opt/handymeeting/1.0.3/HandyMeeting")
-        self.assertEqual((work / "deb" / str(link.readlink()).lstrip("/")).resolve(), executable.resolve())
+        self.assertEqual(link.readlink().as_posix(), "/opt/handymeeting/1.0.3/HandyMeeting")
+        self.assertEqual((work / "deb" / link.readlink().as_posix().lstrip("/")).resolve(), executable.resolve())
         control = (work / "deb/DEBIAN/control").read_text(encoding="utf-8")
         self.assertIn("Recommends: xdg-utils, gnome-keyring\n", control)
         self.assertTrue((work / "deb/usr/share/applications/handymeeting.desktop").is_file())

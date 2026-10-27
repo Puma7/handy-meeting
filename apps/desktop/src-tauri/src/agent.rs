@@ -936,6 +936,7 @@ mod tests {
         .unwrap();
         let id = store.preview_snapshot(0).unwrap().id;
         service.lock().unwrap().active = Some(super::super::Active {
+            _operation: None,
             owner: None,
             store,
             capture: None,
@@ -970,6 +971,7 @@ mod tests {
         let owner = service.agent.view().unwrap().unwrap().owner_id;
         let stopped = Arc::new(std::sync::atomic::AtomicBool::new(false));
         service.lock().unwrap().active = Some(super::super::Active {
+            _operation: None,
             owner: Some(owner.clone()),
             store: store.clone(),
             capture: None,

@@ -6,11 +6,11 @@ The Rust distribution is versioned together in the workspace Cargo manifest, des
 
 | Target | Asset |
 | --- | --- |
-| Windows x64 installer | `HandyMeeting-1.0.3-windows-x64-setup.exe` |
-| Windows x64 portable | `HandyMeeting-1.0.3-windows-x64.zip` |
-| Ubuntu/Debian x64 | `HandyMeeting-1.0.3-linux-amd64.deb` |
-| macOS 15+ Apple Silicon | `HandyMeeting-1.0.3-osx-arm64.dmg` |
-| macOS 15+ Intel | `HandyMeeting-1.0.3-osx-x64.dmg` |
+| Windows x64 installer | `HandyMeeting-1.0.4-windows-x64-setup.exe` |
+| Windows x64 portable | `HandyMeeting-1.0.4-windows-x64.zip` |
+| Ubuntu/Debian x64 | `HandyMeeting-1.0.4-linux-amd64.deb` |
+| macOS 15+ Apple Silicon | `HandyMeeting-1.0.4-osx-arm64.dmg` |
+| macOS 15+ Intel | `HandyMeeting-1.0.4-osx-x64.dmg` |
 
 Each has a SHA-256 sidecar and package proof. `SHA256SUMS.txt` covers all five packages. `RELEASE_MANIFEST.json` binds their bytes to the application version, exact Git commit and common source fingerprint. No audio, model, session, setting or key is packaged. The workflow publishes no bare Windows EXE requiring users to reconstruct its native libraries: the Setup EXE and ZIP contain the complete checked payload.
 
@@ -38,11 +38,11 @@ Until these gates have evidence or an explicit, recorded maintainer decision acc
 
 ## Installation and upgrades
 
-Windows setup installs for the current user in a separate version folder and creates the stable HandyMeeting Start menu entry using recorded shortcut ownership, while retaining separate version directories and preserving user-modified or foreign shortcuts. It requires a new destination and refuses existing/inaccessible folders or an already registered installation of the same version. The final directory is reserved exclusively before extraction. It never stops Handy or an existing recording. Uninstall removes shared registration only when its directory still belongs to that installation. It deletes literal listed program files and nonempty folders remain; it never recursively removes user data. WebView2 and Microsoft Visual C++ x64 runtime may need to be installed separately. The ZIP is the portable alternative. The compiled installer/stub license is retained in `licenses/installer/NSIS-3.13-COPYING.txt`.
+Windows setup installs for the current user in a separate version folder and creates the stable Meeting for Handy Start menu entry using recorded shortcut ownership, while retaining separate version directories and preserving user-modified or foreign shortcuts. It requires a new destination and refuses existing/inaccessible folders or an already registered installation of the same version. The final directory is reserved exclusively before extraction. It never stops Handy or an existing recording. Uninstall removes shared registration only when its directory still belongs to that installation. It deletes literal listed program files and nonempty folders remain; it never recursively removes user data. WebView2 and Microsoft Visual C++ x64 runtime may need to be installed separately. The ZIP is the portable alternative. The compiled installer/stub license is retained in `licenses/installer/NSIS-3.13-COPYING.txt`.
 
 Linux uses package `handymeeting`, versioned program files under `/opt/handymeeting`, and the normal desktop launcher. Install the DEB through the package manager to resolve its declared libraries. Earlier `handymeeting-rust-beta` packages are preserved; remove them explicitly through the package manager if no longer wanted.
 
-Mac users choose the DMG matching their processor, copy the app to Applications and grant the required recording permissions through macOS. The bundle identifier and existing local data location are retained for compatibility; the displayed app name is HandyMeeting.
+Mac users choose the DMG matching their processor, copy the app to Applications and grant the required recording permissions through macOS. The bundle identifier and existing local data location are retained for compatibility; the displayed app name is Meeting for Handy.
 
 The local data location remains `HandyMeeting/RustBeta` below the platform's local application-data directory. This intentionally preserves earlier Rust history without copying or moving a potentially active session. Program updates do not silently switch model/runtime identity for an older unfinished recognition run.
 
@@ -61,3 +61,6 @@ The local data location remains `HandyMeeting/RustBeta` below the platform's loc
 Implementation: `.github/workflows/rust-release.yml`, `scripts/release-packages.py`, `scripts/publish-rust-release.py`. The older C# publishing workflow and old release assets remain historical and are not used for Rust 1.0.
 
 References: [GitHub reusable workflows](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows), [release workflow events](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#release), [GitHub CLI release creation](https://cli.github.com/manual/gh_release_create), [NSIS distribution and license](https://nsis.sourceforge.io/Download).
+
+
+The 1.0.4 capture changes require current physical-device, interruption and endurance evidence before release. No Mac/Linux devices are available to the maintainer at this checkpoint. WSL, synthetic PCM/helper checks and virtual CI devices are not substitutes. Native file selections are confirmed through Rust-only dialogs and expire on app restart. Installer helpers do not override execution policy; disposable CI checks a stricter child-process refusal without changing account policy. Internal package/executable/data IDs remain compatible with earlier update clients.

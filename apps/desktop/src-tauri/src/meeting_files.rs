@@ -145,8 +145,137 @@ pub(super) fn save_transcript(
     data: &SessionData,
     locale: &str,
 ) -> AppResult<String> {
-    let text = transcript(data, locale)?;
-    let exports = export_directory(folder)?;
+    save_transcript_format(folder, data, locale, "txt")
+}
+
+// Quote every line as code: transcript text cannot introduce Markdown links,
+// images, HTML, headings or a closing fence. The original characters are retained.
+fn markdown_literal(value: &str) -> String {
+    // CommonMark accepts CR, LF and CRLF. Normalize this presentation copy
+    // so a lone CR cannot escape the code indentation; JSON keeps raw text.
+    value
+        .replace("\r\n", "\n")
+        .replace('\r', "\n")
+        .split('\n')
+        .map(|line| format!("    {line}\n"))
+        .collect()
+}
+
+fn render_export(
+    data: &SessionData,
+    locale: &str,
+    format: &str,
+) -> AppResult<(String, &'static str)> {
+    let plain = transcript(data, locale)?;
+    match format {
+        "txt" => Ok((plain, "txt")),
+        "md" | "markdown" => Ok((
+            format!(
+                "# Meeting for Handy — {}\n\n{}",
+                if locale == "de" {
+                    "Originaltranskript"
+                } else {
+                    "Original transcript"
+                },
+                markdown_literal(&plain)
+            ),
+            "md",
+        )),
+        "json" => {
+            let mut parts: Vec<_> = data.parts.iter().collect();
+            parts.sort_by_key(|p| (p.start_sample, &p.source, &p.file));
+            let sections: Vec<_> = parts.into_iter().map(|p| {
+                let count = if p.confirmed_sample_count == 0 && data.read_only { p.sample_count } else { p.confirmed_sample_count };
+                let end = p.start_sample.checked_add(count).ok_or("Invalid section range")?;
+                Ok(serde_json::json!({
+                    "sourceId": p.file, "track": p.source,
+                    "startSample": p.start_sample, "confirmedEndSample": end,
+                    "startMs": p.start_sample.saturating_mul(1000) / u64::from(meeting_core::SAMPLE_RATE),
+                    "confirmedEndMs": end.saturating_mul(1000) / u64::from(meeting_core::SAMPLE_RATE),
+                    "status": p.status, "text": p.text, "committedText": p.committed_text,
+                    "tentativeText": p.tentative_text, "modelId": p.model_id,
+                    "transcriptSequence": p.transcript_sequence,
+                    "untrustedText": true
+                }))
+            }).collect::<AppResult<_>>()?;
+            let value = serde_json::json!({
+                "schemaVersion": 1, "exportKind": "original-transcript",
+                "application": "Meeting for Handy", "applicationVersion": crate::VERSION,
+                "meetingId": data.id, "title": data.title,
+                "startedAt": data.started_at, "endedAt": data.ended_at,
+                "status": data.status, "modelId": data.model_id,
+                "captureIncomplete": data.capture_incomplete,
+                "warnings": data.warnings, "snapshotSequence": data.snapshot_sequence,
+                "sampleRate": meeting_core::SAMPLE_RATE,
+                "timeSemantics": "section-boundaries-not-word-timestamps",
+                "speakerIdentity": "unknown-unless-separately-confirmed",
+                "untrustedText": true, "sections": sections
+            });
+            let output = serde_json::to_string_pretty(&value)
+                .map_err(|_| "Export could not be serialized")?;
+            if output.len() > 32 * 1024 * 1024 {
+                return Err(
+                    "Transkriptexport überschreitet 32 MiB. / Transcript export exceeds 32 MiB."
+                        .into(),
+                );
+            }
+            Ok((output, "json"))
+        }
+        _ => Err("Unbekanntes Exportformat. / Unsupported export format.".into()),
+    }
+}
+
+pub(super) fn save_transcript_format(
+    folder: &Path,
+    data: &SessionData,
+    locale: &str,
+    format: &str,
+) -> AppResult<String> {
+    let folder = directory(folder)?;
+    let controls = meeting_core::read_capture_control_events(&folder)
+        .map_err(|_| "Aufnahmesteuerung konnte nicht geprüft werden; Originale bleiben erhalten. / Capture control evidence could not be verified; originals are retained.")?;
+    let (mut text, extension) = render_export(data, locale, format)?;
+    if let Some(controls) = controls {
+        if extension == "json" {
+            let mut value: serde_json::Value =
+                serde_json::from_str(&text).map_err(|_| "Export serialization failed")?;
+            value["captureControls"] =
+                serde_json::to_value(controls).map_err(|_| "Capture control export failed")?;
+            text =
+                serde_json::to_string_pretty(&value).map_err(|_| "Export serialization failed")?;
+        } else {
+            let mut evidence = if locale == "de" {
+                "\nAufnahmesteuerung (kein Gesprächsinhalt; ungefähre Abschnittszeiten):\n"
+            } else {
+                "\nCapture controls (not spoken content; approximate section times):\n"
+            }
+            .to_owned();
+            for event in controls.events {
+                evidence.push_str(&format!(
+                    "{} | {} | paused={} | microphoneMuted={} | missingSamples={}\n",
+                    timestamp(event.requested_sample),
+                    event.kind,
+                    event.paused,
+                    event.microphone_muted,
+                    event.missing_samples.unwrap_or(0)
+                ));
+            }
+            if controls.incomplete_tail {
+                evidence.push_str(if locale == "de" { "Unvollständiger letzter Steuerungseintrag; nur bestätigter Präfix ausgegeben.\n" } else { "Incomplete final control event; only the confirmed prefix is exported.\n" });
+            }
+            text.push_str(&if extension == "md" {
+                markdown_literal(&evidence)
+            } else {
+                evidence
+            });
+        }
+    }
+    if text.len() > 32 * 1024 * 1024 {
+        return Err(
+            "Transkriptexport überschreitet 32 MiB. / Transcript export exceeds 32 MiB.".into(),
+        );
+    }
+    let exports = export_directory(&folder)?;
     static SEQUENCE: AtomicU64 = AtomicU64::new(0);
     let at = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -154,7 +283,7 @@ pub(super) fn save_transcript(
         .as_millis();
     for _ in 0..32 {
         let name = format!(
-            "transcript-{at}-{}.txt",
+            "transcript-{at}-{}.{extension}",
             SEQUENCE.fetch_add(1, Ordering::Relaxed)
         );
         // A failed write remains explicitly pending; only synced complete text
@@ -325,6 +454,62 @@ mod tests {
         assert_eq!(
             fs::read_to_string(store.folder().join("exports")).unwrap(),
             "keep"
+        );
+    }
+    #[test]
+    fn json_and_markdown_exports_preserve_original_sections_and_never_activate_transcript_markup() {
+        let (_, store) = fixture();
+        let manifest = fs::read(store.folder().join("session.json")).unwrap();
+        let mut data = store.snapshot().unwrap();
+        let original = "<script>alert(1)</script>\n```\n![leak](https://example.invalid/private)\n# fake heading\n[run](javascript:alert(1))\r<img src=\"https://example.invalid/secret\">\r![second](https://example.invalid/secret)";
+        data.parts[0].text = Some(original.into());
+        data.parts[0].committed_text = original.into();
+        data.parts[0].tentative_text = "Unconfirmed tail".into();
+        data.parts[0].processed_samples = 16000;
+        data.parts[0].transcript_sequence = 37;
+        let mut pending = data.parts[0].clone();
+        pending.file = "microphone-000000032000.wav".into();
+        pending.source = "microphone".into();
+        pending.start_sample = 32000;
+        pending.text = None;
+        pending.committed_text.clear();
+        pending.tentative_text.clear();
+        pending.transcript_sequence = 0;
+        data.parts.push(pending);
+        let json_path = save_transcript_format(store.folder(), &data, "en", "json").unwrap();
+        let value: serde_json::Value =
+            serde_json::from_slice(&fs::read(store.folder().join(&json_path)).unwrap()).unwrap();
+        assert_eq!(value["sections"].as_array().unwrap().len(), 2);
+        assert_eq!(value["sections"][0]["sourceId"], data.parts[0].file);
+        assert_eq!(value["sections"][0]["text"], original);
+        assert_eq!(value["sections"][0]["tentativeText"], "Unconfirmed tail");
+        assert_eq!(value["sections"][0]["transcriptSequence"], 37);
+        assert_eq!(value["sections"][1]["startMs"], 2000);
+        assert!(value["sections"][1]["text"].is_null());
+        assert_eq!(
+            value["timeSemantics"],
+            "section-boundaries-not-word-timestamps"
+        );
+        assert!(value.get("audioPath").is_none());
+        let md_path = save_transcript_format(store.folder(), &data, "de", "markdown").unwrap();
+        let markdown = fs::read_to_string(store.folder().join(md_path)).unwrap();
+        for line in original.replace('\r', "\n").lines() {
+            assert!(markdown.contains(&format!("    {line}\n")));
+        }
+        assert!(!markdown.contains("\n<script>"));
+        assert!(!markdown.contains("\n```"));
+        assert!(!markdown.contains("\n!["));
+        assert!(!markdown.contains('\r'));
+        assert!(markdown.contains("\n    <img src=\"https://example.invalid/secret\">\n"));
+        let json_before = fs::read(store.folder().join(&json_path)).unwrap();
+        assert!(save_transcript_format(store.folder(), &data, "en", "../../exe").is_err());
+        assert_eq!(
+            fs::read(store.folder().join(json_path)).unwrap(),
+            json_before
+        );
+        assert_eq!(
+            fs::read(store.folder().join("session.json")).unwrap(),
+            manifest
         );
     }
     #[test]

@@ -14,6 +14,38 @@ const disabled: RetentionPolicy = {
   codec: "flac",
   ffmpegExecutable: null,
 };
+it("selects FFmpeg through the native chooser, retains cancellation and saves only after the user's separate action", async () => {
+  const choose = vi
+    .fn()
+    .mockResolvedValueOnce(null)
+    .mockResolvedValueOnce("/native-choice/ffmpeg");
+  const save = vi.fn(async (_revision, policy) => ({ ...policy, revision: 1 }));
+  const api = {
+    getRetentionPolicy: vi.fn().mockResolvedValue(disabled),
+    chooseFfmpegExecutable: choose,
+    saveRetentionPolicy: save,
+  } as unknown as DesktopApi;
+  render(<RetentionPanel api={api} locale="en" />);
+  const input = (await screen.findByLabelText(
+    "Separately installed FFmpeg · only for optional format conversion",
+  )) as HTMLInputElement;
+  expect(input.readOnly).toBe(true);
+  await userEvent.click(
+    screen.getByRole("button", { name: "Choose FFmpeg in file dialog …" }),
+  );
+  expect(input.value).toBe("");
+  expect(save).not.toHaveBeenCalled();
+  await userEvent.click(
+    screen.getByRole("button", { name: "Choose FFmpeg in file dialog …" }),
+  );
+  await waitFor(() => expect(input.value).toBe("/native-choice/ffmpeg"));
+  expect(save).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByRole("button", { name: "Save rules" }));
+  expect(save).toHaveBeenCalledWith(0, {
+    ...disabled,
+    ffmpegExecutable: "/native-choice/ffmpeg",
+  });
+});
 it("leaves every retention rule disabled until explicitly configured and separates saving from preview", async () => {
   const policy = vi.fn().mockResolvedValue(disabled);
   const save = vi

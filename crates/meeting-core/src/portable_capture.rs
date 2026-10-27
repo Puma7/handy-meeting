@@ -1,4 +1,5 @@
 //! Bounded stdout PCM transport. It owns only the exact helper it starts.
+use super::controls::CaptureControls;
 use crate::{PcmWriter, Result, SessionStore, SAMPLE_RATE};
 use std::{
     io::Read,
@@ -80,194 +81,252 @@ pub(super) fn query_command(command: &mut Command, missing: &'static str) -> Res
     Ok(String::from_utf8(data)?)
 }
 
+#[cfg(test)]
 pub(super) fn record(
     store: SessionStore,
     source: &str,
     stop: Arc<AtomicBool>,
     ready: SyncSender<std::result::Result<(), String>>,
+    spec: HelperSpec,
+) -> Result<()> {
+    record_controlled(
+        store,
+        source,
+        stop,
+        ready,
+        spec,
+        Arc::new(CaptureControls::uncontrolled()),
+    )
+}
+
+pub(super) fn record_controlled(
+    store: SessionStore,
+    source: &str,
+    stop: Arc<AtomicBool>,
+    ready: SyncSender<std::result::Result<(), String>>,
     mut spec: HelperSpec,
+    controls: Arc<CaptureControls>,
 ) -> Result<()> {
     let mut announced = false;
     let result = (|| -> Result<()> {
         if !["system", "microphone"].contains(&source) {
             return Err("Invalid audio track".into());
         }
-        let mut child=OwnedChild(spec.command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|_|"Audio helper could not start. Check installed utilities, the complete app bundle and recording permissions.")?);
-        let stdout = child
-            .0
-            .stdout
-            .take()
-            .ok_or("Audio helper output pipe unavailable")?;
-        let stderr = child
-            .0
-            .stderr
-            .take()
-            .ok_or("Audio helper diagnostic pipe unavailable")?;
-        let (sender, receiver) = mpsc::sync_channel(2);
-        let reading = thread::spawn(move || read_packets(stdout, sender));
-        let marked = Arc::new(AtomicBool::new(false));
-        let overflow = Arc::new(AtomicBool::new(false));
-        let marked_reader = Arc::clone(&marked);
-        let overflow_reader = Arc::clone(&overflow);
-        let diagnostics = thread::spawn(move || {
-            let mut input = stderr;
-            let mut buffer = [0_u8; 4096];
-            let mut tail = Vec::with_capacity(8192);
-            let mut count = 0_usize;
-            while let Ok(read) = input.read(&mut buffer) {
-                if read == 0 {
-                    break;
-                }
-                count = count.saturating_add(read);
-                if count > 65536 {
-                    overflow_reader.store(true, Ordering::Release);
-                }
-                tail.extend_from_slice(&buffer[..read]);
-                if tail.windows(READY.len()).any(|value| value == READY) {
-                    marked_reader.store(true, Ordering::Release);
-                }
-                if tail.len() > READY.len() {
-                    tail.drain(..tail.len() - READY.len());
-                }
-            }
-        });
-        let start = Instant::now();
-        let started_at =
-            chrono::DateTime::parse_from_rfc3339(&store.preview_snapshot(0)?.started_at)?;
-        let offset = chrono::Utc::now()
-            .signed_duration_since(started_at)
-            .num_milliseconds()
-            .clamp(0, 300_000) as u64
-            * 16;
         let mut writer = PcmWriter::new(store.clone(), source)?;
         store.notice("Portable audio track ranges use approximate receipt timing, not exact device or word timestamps.")?;
-        let pump = (|| -> Result<()> {
-            let mut carry = None;
-            let mut pcm = Vec::with_capacity(PACKET / 2 + 1);
-            let mut received = false;
-            let mut waiting_reported = false;
-            let mut late_reported = false;
-            let mut stopping = None;
-            loop {
-                if stop.load(Ordering::Acquire) && stopping.is_none() {
-                    stopping = Some(Instant::now());
-                    if spec.graceful_stdin {
-                        drop(child.0.stdin.take());
-                    } else {
-                        let _ = child.0.kill();
+        let epochs_result = (|| -> Result<()> {
+            while !stop.load(Ordering::Acquire) {
+                while controls.suppressed(source) && !stop.load(Ordering::Acquire) {
+                    pad_estimated(&mut writer, controls.elapsed_samples())?;
+                    writer.checkpoint_if_due()?;
+                    thread::sleep(Duration::from_millis(50));
+                }
+                if stop.load(Ordering::Acquire) {
+                    break;
+                }
+                // Give intentionally ignored silence its own closed section; ASR can skip
+                // all-zero parts without treating it as missing speech from a real part.
+                writer.finish()?;
+                let epoch = controls.epoch(source);
+                let mut child=OwnedChild(spec.command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|_|"Audio helper could not start. Check installed utilities, the complete app bundle and recording permissions.")?);
+                let stdout = child
+                    .0
+                    .stdout
+                    .take()
+                    .ok_or("Audio helper output pipe unavailable")?;
+                let stderr = child
+                    .0
+                    .stderr
+                    .take()
+                    .ok_or("Audio helper diagnostic pipe unavailable")?;
+                let (sender, receiver) = mpsc::sync_channel(2);
+                let reading = thread::spawn(move || read_packets(stdout, sender));
+                let marked = Arc::new(AtomicBool::new(false));
+                let overflow = Arc::new(AtomicBool::new(false));
+                let marked_reader = Arc::clone(&marked);
+                let overflow_reader = Arc::clone(&overflow);
+                let diagnostics = thread::spawn(move || {
+                    let mut input = stderr;
+                    let mut buffer = [0_u8; 4096];
+                    let mut tail = Vec::with_capacity(8192);
+                    let mut count = 0_usize;
+                    while let Ok(read) = input.read(&mut buffer) {
+                        if read == 0 {
+                            break;
+                        }
+                        count = count.saturating_add(read);
+                        if count > 65536 {
+                            overflow_reader.store(true, Ordering::Release);
+                        }
+                        tail.extend_from_slice(&buffer[..read]);
+                        if tail.windows(READY.len()).any(|value| value == READY) {
+                            marked_reader.store(true, Ordering::Release);
+                        }
+                        if tail.len() > READY.len() {
+                            tail.drain(..tail.len() - READY.len());
+                        }
                     }
-                }
-                if stopping.is_some_and(|at| at.elapsed() > Duration::from_secs(2)) {
-                    let _ = child.0.kill();
-                }
-                if overflow.load(Ordering::Acquire) {
-                    return Err("Audio helper exceeded its diagnostic output limit".into());
-                }
-                match receiver.recv_timeout(Duration::from_millis(100)) {
-                    Ok(Packet::Data(bytes)) => {
-                        pcm.clear();
-                        let mut index = 0;
-                        if let Some(low) = carry.take() {
-                            if let Some(high) = bytes.first() {
-                                pcm.push(i16::from_le_bytes([low, *high]));
-                                index = 1;
+                });
+                let start = Instant::now();
+                // Every restart stays on the same monotonic meeting clock. A five-minute
+                // startup clamp would otherwise compress a later resume of a long meeting.
+                let offset = controls.elapsed_samples();
+                let mut changed_epoch = false;
+                let pump = (|| -> Result<()> {
+                    let mut carry = None;
+                    let mut pcm = Vec::with_capacity(PACKET / 2 + 1);
+                    let mut received = false;
+                    let mut epoch_ready = false;
+                    let mut waiting_reported = false;
+                    let mut late_reported = false;
+                    let mut stopping = None;
+                    loop {
+                        if controls.changed(source, epoch) || controls.suppressed(source) {
+                            // Never unmute a previous helper's buffered pipe: retire it and its
+                            // bounded reader before any new epoch becomes eligible for speech.
+                            changed_epoch = true;
+                            break;
+                        }
+                        if stop.load(Ordering::Acquire) && stopping.is_none() {
+                            stopping = Some(Instant::now());
+                            if spec.graceful_stdin {
+                                drop(child.0.stdin.take());
                             } else {
-                                carry = Some(low);
+                                let _ = child.0.kill();
                             }
                         }
-                        while index + 1 < bytes.len() {
-                            pcm.push(i16::from_le_bytes([bytes[index], bytes[index + 1]]));
-                            index += 2;
+                        if stopping.is_some_and(|at| at.elapsed() > Duration::from_secs(2)) {
+                            let _ = child.0.kill();
                         }
-                        if index < bytes.len() {
-                            carry = Some(bytes[index]);
+                        if overflow.load(Ordering::Acquire) {
+                            return Err("Audio helper exceeded its diagnostic output limit".into());
                         }
-                        if !pcm.is_empty() {
-                            if !received {
-                                let lead = offset
-                                    + (start.elapsed().as_secs_f64() * f64::from(SAMPLE_RATE))
-                                        as u64;
-                                let target = lead.saturating_sub(pcm.len() as u64);
-                                if target > 8000 {
-                                    store.warn(&format!("{source}: the source started late; leading silence is estimated and can contain missing audio."))?;
+                        match receiver.recv_timeout(Duration::from_millis(100)) {
+                            Ok(Packet::Data(bytes)) => {
+                                pcm.clear();
+                                let mut index = 0;
+                                if let Some(low) = carry.take() {
+                                    if let Some(high) = bytes.first() {
+                                        pcm.push(i16::from_le_bytes([low, *high]));
+                                        index = 1;
+                                    } else {
+                                        carry = Some(low);
+                                    }
                                 }
-                                pad_estimated(&mut writer, target)?;
-                                received = true;
-                            }
-                            writer.append(&pcm)?;
-                            if !announced {
-                                ready
-                                    .send(Ok(()))
-                                    .map_err(|_| "Capture controller closed")?;
-                                announced = true;
-                            }
-                        }
-                    }
-                    Ok(Packet::End) | Err(mpsc::RecvTimeoutError::Disconnected) => {
-                        if stopping.is_none() {
-                            return Err("Audio helper stopped unexpectedly; check the selected device and recording permissions".into());
-                        }
-                        break;
-                    }
-                    Ok(Packet::Failed) => {
-                        return Err("Audio helper PCM pipe failed; saved audio is retained".into())
-                    }
-                    Err(mpsc::RecvTimeoutError::Timeout) => {
-                        if !announced
-                            && ((spec.readiness_marker && marked.load(Ordering::Acquire))
-                                || (!spec.readiness_marker
-                                    && start.elapsed() > Duration::from_millis(250)))
-                            && child.0.try_wait()?.is_none()
-                        {
-                            ready
-                                .send(Ok(()))
-                                .map_err(|_| "Capture controller closed")?;
-                            announced = true;
-                        }
-                        if !announced && start.elapsed() > Duration::from_secs(55) {
-                            return Err("Recording permission or the first audio packet did not arrive; check system permissions and start again".into());
-                        }
-                        if !received
-                            && start.elapsed() > Duration::from_secs(2)
-                            && !waiting_reported
-                        {
-                            store.notice(&format!("{source}: waiting for the first actual audio packet. Check permissions or play a test sound; no received audio has been confirmed yet."))?;
-                            waiting_reported = true;
-                        }
-                        if received {
-                            let target = offset
-                                + ((start.elapsed().as_secs_f64() - 0.5).max(0.0)
-                                    * f64::from(SAMPLE_RATE))
-                                    as u64;
-                            if target > writer.written_samples() {
-                                if !late_reported {
-                                    store.notice(&format!("{source}: gaps without packets are represented as estimated silence; late real packets are retained and timestamps can drift."))?;
-                                    late_reported = true;
+                                while index + 1 < bytes.len() {
+                                    pcm.push(i16::from_le_bytes([bytes[index], bytes[index + 1]]));
+                                    index += 2;
                                 }
-                                pad_estimated(&mut writer, target)?;
+                                if index < bytes.len() {
+                                    carry = Some(bytes[index]);
+                                }
+                                if !pcm.is_empty() {
+                                    if !received {
+                                        let lead = offset
+                                            + (start.elapsed().as_secs_f64()
+                                                * f64::from(SAMPLE_RATE))
+                                                as u64;
+                                        let target = lead.saturating_sub(pcm.len() as u64);
+                                        if target.saturating_sub(writer.written_samples()) > 8000 {
+                                            if epoch == 0 {
+                                                store.warn(&format!("{source}: the source started late; leading silence is estimated and can contain missing audio."))?;
+                                            } else {
+                                                store.notice(&format!("{source}: capture resumed with estimated startup silence. This silence is intentional control timing, not recovered speech."))?;
+                                            }
+                                        }
+                                        pad_estimated(&mut writer, target)?;
+                                        received = true;
+                                    }
+                                    controls.write(source, epoch, &mut writer, &pcm)?;
+                                    epoch_ready = true;
+                                    if !announced {
+                                        ready
+                                            .send(Ok(()))
+                                            .map_err(|_| "Capture controller closed")?;
+                                        announced = true;
+                                    }
+                                }
+                            }
+                            Ok(Packet::End) | Err(mpsc::RecvTimeoutError::Disconnected) => {
+                                if stopping.is_none() {
+                                    return Err("Audio helper stopped unexpectedly; check the selected device and recording permissions".into());
+                                }
+                                break;
+                            }
+                            Ok(Packet::Failed) => {
+                                return Err(
+                                    "Audio helper PCM pipe failed; saved audio is retained".into()
+                                )
+                            }
+                            Err(mpsc::RecvTimeoutError::Timeout) => {
+                                if !epoch_ready
+                                    && ((spec.readiness_marker && marked.load(Ordering::Acquire))
+                                        || (!spec.readiness_marker
+                                            && start.elapsed() > Duration::from_millis(250)))
+                                    && child.0.try_wait()?.is_none()
+                                {
+                                    if !announced {
+                                        ready
+                                            .send(Ok(()))
+                                            .map_err(|_| "Capture controller closed")?;
+                                        announced = true;
+                                    }
+                                    epoch_ready = true;
+                                }
+                                if !epoch_ready && start.elapsed() > Duration::from_secs(55) {
+                                    return Err("Recording permission or the first audio packet did not arrive; check system permissions and start again".into());
+                                }
+                                if !received
+                                    && start.elapsed() > Duration::from_secs(2)
+                                    && !waiting_reported
+                                {
+                                    store.notice(&format!("{source}: waiting for the first actual audio packet. Check permissions or play a test sound; no received audio has been confirmed yet."))?;
+                                    waiting_reported = true;
+                                }
+                                if received {
+                                    let target = offset
+                                        + ((start.elapsed().as_secs_f64() - 0.5).max(0.0)
+                                            * f64::from(SAMPLE_RATE))
+                                            as u64;
+                                    if target > writer.written_samples() {
+                                        if !late_reported {
+                                            store.notice(&format!("{source}: gaps without packets are represented as estimated silence; late real packets are retained and timestamps can drift."))?;
+                                            late_reported = true;
+                                        }
+                                        pad_estimated(&mut writer, target)?;
+                                    }
+                                }
                             }
                         }
+                        writer.checkpoint_if_due()?;
+                        if !received && child.0.try_wait()?.is_some() {
+                            return Err("Audio helper exited before producing audio; check recording permissions and the selected device".into());
+                        }
                     }
+                    if carry.is_some() && !changed_epoch {
+                        store.warn(&format!("{source}: an incomplete final PCM byte was retained only in the helper pipe and could not form an audio sample."))?;
+                    }
+                    Ok(())
+                })();
+                // Stop only our child; continue draining its bounded pipe before finalization.
+                let _ = child.0.kill();
+                let _ = child.0.wait();
+                drop(receiver);
+                let _ = reading.join();
+                let _ = diagnostics.join();
+                pump?;
+                if !changed_epoch {
+                    break;
                 }
-                writer.checkpoint_if_due()?;
-                if !received && child.0.try_wait()?.is_some() {
-                    return Err("Audio helper exited before producing audio; check recording permissions and the selected device".into());
-                }
-            }
-            if carry.is_some() {
-                store.warn(&format!("{source}: an incomplete final PCM byte was retained only in the helper pipe and could not form an audio sample."))?;
+                writer.finish()?;
             }
             Ok(())
         })();
-        // Stop only our child; continue draining its bounded pipe before finalization.
-        let _ = child.0.kill();
-        let _ = child.0.wait();
-        drop(receiver);
-        let _ = reading.join();
-        let _ = diagnostics.join();
-        let finish = writer.finish();
-        finish?;
-        pump
+        if controls.suppressed(source) && epochs_result.is_ok() {
+            pad_estimated(&mut writer, controls.elapsed_samples())?;
+        }
+        writer.finish()?;
+        epochs_result
     })();
     if !announced {
         if let Err(error) = &result {
@@ -310,6 +369,119 @@ fn pad_estimated(writer: &mut PcmWriter, target: u64) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn synthetic_helper_mute_restarts_the_pipe_and_preserves_silent_timeline_sections() {
+        let root = tempfile::tempdir().unwrap();
+        let store = SessionStore::create(
+            root.path(),
+            "Synthetic helper control",
+            "m",
+            "s",
+            Some("mic"),
+        )
+        .unwrap();
+        let controls = Arc::new(CaptureControls::new(&store).unwrap());
+        controls.set_has_microphone(true);
+        let value = root.path().join("synthetic-helper-value.txt");
+        std::fs::write(&value, b"11").unwrap();
+        let stop = Arc::new(AtomicBool::new(false));
+        let _stop = StopOnExit(stop.clone());
+        let (ready, started) = mpsc::sync_channel(1);
+        let thread_store = store.clone();
+        let thread_controls = controls.clone();
+        let thread_stop = stop.clone();
+        let mut command = python();
+        command.args(["-c", "import pathlib,sys,time,struct\nn=int(pathlib.Path(sys.argv[1]).read_text())\nsys.stderr.write('HANDYMEETING_AUDIO_READY\\n');sys.stderr.flush()\nwhile True:\n sys.stdout.buffer.write(struct.pack('<h',n)*320);sys.stdout.buffer.flush();time.sleep(0.02)"]).arg(value.clone());
+        let worker = thread::spawn(move || {
+            record_controlled(
+                thread_store,
+                "microphone",
+                thread_stop,
+                ready,
+                HelperSpec {
+                    command,
+                    readiness_marker: true,
+                    graceful_stdin: false,
+                },
+                thread_controls,
+            )
+        });
+        started
+            .recv_timeout(Duration::from_secs(30))
+            .unwrap()
+            .unwrap();
+        let has_sample = |expected: i16| {
+            store
+                .snapshot()
+                .unwrap()
+                .parts
+                .iter()
+                .filter(|p| p.source == "microphone" && p.confirmed_sample_count > 0)
+                .any(|part| {
+                    hound::WavReader::open(store.audio_path(part).unwrap())
+                        .ok()
+                        .is_some_and(|mut reader| {
+                            reader
+                                .samples::<i16>()
+                                .take(part.confirmed_sample_count as usize)
+                                .any(|s| s.is_ok_and(|s| s == expected))
+                        })
+                })
+        };
+        let initial_deadline = Instant::now() + Duration::from_secs(10);
+        while !has_sample(11) {
+            assert!(Instant::now() < initial_deadline);
+            thread::sleep(Duration::from_millis(10));
+        }
+        controls.set_microphone_muted(true).unwrap();
+        // The old helper read 11 once at process startup. A fresh helper would read 99;
+        // while muted neither is allowed to become confirmed speech.
+        std::fs::write(&value, b"99").unwrap();
+        thread::sleep(Duration::from_millis(700));
+        std::fs::write(&value, b"21").unwrap();
+        controls.set_microphone_muted(false).unwrap();
+        let resumed_deadline = Instant::now() + Duration::from_secs(10);
+        while !has_sample(21) {
+            assert!(Instant::now() < resumed_deadline);
+            thread::sleep(Duration::from_millis(10));
+        }
+        stop.store(true, Ordering::Release);
+        worker.join().unwrap().unwrap();
+        let data = store.snapshot().unwrap();
+        assert!(
+            data.parts.iter().any(|p| p.source == "microphone"
+                && !p.has_signal
+                && p.confirmed_sample_count >= 3200),
+            "Ignored interval must be an explicitly silent section, independently skippable by ASR"
+        );
+        let mut samples = vec![];
+        for part in data.parts.iter().filter(|p| p.source == "microphone") {
+            samples.extend(
+                hound::WavReader::open(store.audio_path(part).unwrap())
+                    .unwrap()
+                    .samples::<i16>()
+                    .map(std::result::Result::unwrap),
+            );
+        }
+        assert!(!samples.contains(&99));
+        let first_new = samples.iter().position(|s| *s == 21).unwrap();
+        assert!(
+            samples[first_new..].iter().all(|s| [0, 21].contains(s)),
+            "No buffered old-epoch speech may arrive after the new helper epoch"
+        );
+        let log = super::super::controls::read_capture_control_events(store.folder())
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            log.events
+                .iter()
+                .filter(|e| e.kind == "microphone-mute")
+                .count(),
+            2
+        );
+        assert!(!log.incomplete_tail);
+    }
     struct StopOnExit(Arc<AtomicBool>);
     impl Drop for StopOnExit {
         fn drop(&mut self) {

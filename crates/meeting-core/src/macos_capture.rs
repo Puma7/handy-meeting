@@ -5,6 +5,7 @@
 //! `--track microphone --device UID`. The `default` entries keep following the
 //! system's current devices. Device selection was not tested on Mac hardware
 //! when it was added; see docs/RUST_PORTABLE.md.
+use super::controls::CaptureControls;
 use super::portable::{self, HelperSpec};
 use crate::{AudioDevice, Result, SessionStore};
 use serde::Deserialize;
@@ -134,11 +135,12 @@ pub(super) fn record(
     device_id: Option<String>,
     stop: Arc<AtomicBool>,
     ready: SyncSender<std::result::Result<(), String>>,
+    controls: Arc<CaptureControls>,
 ) -> Result<()> {
     let arguments = track_arguments(source, device_id.as_deref())?;
     let mut command = Command::new(helper()?);
     command.args(arguments);
-    portable::record(
+    portable::record_controlled(
         store,
         source,
         stop,
@@ -148,6 +150,7 @@ pub(super) fn record(
             readiness_marker: true,
             graceful_stdin: true,
         },
+        controls,
     )
 }
 

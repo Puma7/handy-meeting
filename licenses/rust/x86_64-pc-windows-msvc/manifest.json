@@ -1,8 +1,8 @@
 {
   "Target": "x86_64-pc-windows-msvc",
-  "CargoLockSHA256": "f0cf24756e13e08144f243dbf91147cbcd50b917cf6cf11857835813b7441f01",
+  "CargoLockSHA256": "45b85d79cb641cc99bc42ecba03483e2f1d9f7c35b72757dfc33710d3f4b809e",
   "Scope": "Active Cargo resolve nodes, including build dependencies, filtered to this target; excludes workspace packages.",
-  "PackageCount": 335,
+  "PackageCount": 344,
   "Packages": [
     {
       "Name": "adler2",
@@ -3721,6 +3721,22 @@
       ]
     },
     {
+      "Name": "rfd",
+      "Version": "0.16.1",
+      "SPDX": "MIT",
+      "Repository": "https://github.com/PolyMeilex/rfd",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/rfd/0.16.1/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE",
+          "File": "rfd-0.16.1-LICENSE.txt",
+          "SHA256": "65fc947f4bac882a2cd104ef73c246b1b037059df9f2b3a58b7f77f0b9e56071",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
       "Name": "ring",
       "Version": "0.17.14",
       "SPDX": "Apache-2.0 AND ISC",
@@ -4800,6 +4816,80 @@
       ]
     },
     {
+      "Name": "tauri-plugin",
+      "Version": "2.6.3",
+      "SPDX": "Apache-2.0 OR MIT",
+      "Repository": "https://github.com/tauri-apps/tauri",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/tauri-plugin/2.6.3/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE_MIT",
+          "File": "tauri-plugin-2.6.3-LICENSE_MIT.txt",
+          "SHA256": "9dd42ea92cff2ede5cd477cbfcce051b2d0115c0ac7f368ee88cb545055dff1d",
+          "Source": "upstream-license",
+          "SourceURL": "https://raw.githubusercontent.com/tauri-apps/tauri/6f6ab1207bb3923c2721fbc67d2fdb1c8deb0c7a/LICENSE_MIT",
+          "SourceNote": "Original MIT option from this crate archive's exact .cargo_vcs_info.json revision; the build-helper crate omits a standalone notice."
+        }
+      ]
+    },
+    {
+      "Name": "tauri-plugin-dialog",
+      "Version": "2.7.1",
+      "SPDX": "Apache-2.0 OR MIT",
+      "Repository": "https://github.com/tauri-apps/plugins-workspace",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/tauri-plugin-dialog/2.7.1/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE_APACHE-2.0",
+          "File": "tauri-plugin-dialog-2.7.1-LICENSE_APACHE-2.0.txt",
+          "SHA256": "0cec06e0e55fbc3dc5cee4fca9b607f66cb8f4e4dbcf3b3c013594dd156732e9",
+          "Source": "provided-crate-file"
+        },
+        {
+          "OriginalFilename": "LICENSE_MIT",
+          "File": "tauri-plugin-dialog-2.7.1-LICENSE_MIT.txt",
+          "SHA256": "89ff9689dcf9dd53968785d05a26f7898bb169dbfcada8d032b3e68cf0d55607",
+          "Source": "provided-crate-file"
+        },
+        {
+          "OriginalFilename": "LICENSE.spdx",
+          "File": "tauri-plugin-dialog-2.7.1-LICENSE.spdx.txt",
+          "SHA256": "eb8a6c84630461b352badcab1dbe5d0168c56d377358b2b8c86b51003272d5ef",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
+      "Name": "tauri-plugin-fs",
+      "Version": "2.5.2",
+      "SPDX": "Apache-2.0 OR MIT",
+      "Repository": "https://github.com/tauri-apps/plugins-workspace",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/tauri-plugin-fs/2.5.2/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE_APACHE-2.0",
+          "File": "tauri-plugin-fs-2.5.2-LICENSE_APACHE-2.0.txt",
+          "SHA256": "0cec06e0e55fbc3dc5cee4fca9b607f66cb8f4e4dbcf3b3c013594dd156732e9",
+          "Source": "provided-crate-file"
+        },
+        {
+          "OriginalFilename": "LICENSE_MIT",
+          "File": "tauri-plugin-fs-2.5.2-LICENSE_MIT.txt",
+          "SHA256": "89ff9689dcf9dd53968785d05a26f7898bb169dbfcada8d032b3e68cf0d55607",
+          "Source": "provided-crate-file"
+        },
+        {
+          "OriginalFilename": "LICENSE.spdx",
+          "File": "tauri-plugin-fs-2.5.2-LICENSE.spdx.txt",
+          "SHA256": "eb8a6c84630461b352badcab1dbe5d0168c56d377358b2b8c86b51003272d5ef",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
       "Name": "tauri-runtime",
       "Version": "2.11.3",
       "SPDX": "Apache-2.0 OR MIT",
@@ -5212,6 +5302,28 @@
       ]
     },
     {
+      "Name": "toml",
+      "Version": "1.0.6+spec-1.1.0",
+      "SPDX": "MIT OR Apache-2.0",
+      "Repository": "https://github.com/toml-rs/toml",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/toml/1.0.6+spec-1.1.0/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE-APACHE",
+          "File": "toml-1.0.6_spec-1.1.0-LICENSE-APACHE.txt",
+          "SHA256": "c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08",
+          "Source": "provided-crate-file"
+        },
+        {
+          "OriginalFilename": "LICENSE-MIT",
+          "File": "toml-1.0.6_spec-1.1.0-LICENSE-MIT.txt",
+          "SHA256": "6efb0476a1cc085077ed49357026d8c173bf33017278ef440f222fb9cbcb66e6",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
       "Name": "toml_datetime",
       "Version": "0.7.5+spec-1.1.0",
       "SPDX": "MIT OR Apache-2.0",
@@ -5228,6 +5340,28 @@
         {
           "OriginalFilename": "LICENSE-MIT",
           "File": "toml_datetime-0.7.5_spec-1.1.0-LICENSE-MIT.txt",
+          "SHA256": "6efb0476a1cc085077ed49357026d8c173bf33017278ef440f222fb9cbcb66e6",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
+      "Name": "toml_datetime",
+      "Version": "1.1.2+spec-1.1.0",
+      "SPDX": "MIT OR Apache-2.0",
+      "Repository": "https://github.com/toml-rs/toml",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/toml_datetime/1.1.2+spec-1.1.0/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "LICENSE-APACHE",
+          "File": "toml_datetime-1.1.2_spec-1.1.0-LICENSE-APACHE.txt",
+          "SHA256": "249fdb6694467dd615b259f7ddde07be3f8ae5a72cecebb0e24f6629af4215fe",
+          "Source": "provided-crate-file"
+        },
+        {
+          "OriginalFilename": "LICENSE-MIT",
+          "File": "toml_datetime-1.1.2_spec-1.1.0-LICENSE-MIT.txt",
           "SHA256": "6efb0476a1cc085077ed49357026d8c173bf33017278ef440f222fb9cbcb66e6",
           "Source": "provided-crate-file"
         }
@@ -6210,6 +6344,28 @@
       ]
     },
     {
+      "Name": "windows_x86_64_msvc",
+      "Version": "0.53.1",
+      "SPDX": "MIT OR Apache-2.0",
+      "Repository": "https://github.com/microsoft/windows-rs",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/windows_x86_64_msvc/0.53.1/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "license-apache-2.0",
+          "File": "windows_x86_64_msvc-0.53.1-license-apache-2.0.txt",
+          "SHA256": "c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b",
+          "Source": "provided-crate-file"
+        },
+        {
+          "OriginalFilename": "license-mit",
+          "File": "windows_x86_64_msvc-0.53.1-license-mit.txt",
+          "SHA256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
       "Name": "windows-collections",
       "Version": "0.2.0",
       "SPDX": "MIT OR Apache-2.0",
@@ -6607,6 +6763,28 @@
     },
     {
       "Name": "windows-sys",
+      "Version": "0.60.2",
+      "SPDX": "MIT OR Apache-2.0",
+      "Repository": "https://github.com/microsoft/windows-rs",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/windows-sys/0.60.2/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "license-apache-2.0",
+          "File": "windows-sys-0.60.2-license-apache-2.0.txt",
+          "SHA256": "c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b",
+          "Source": "provided-crate-file"
+        },
+        {
+          "OriginalFilename": "license-mit",
+          "File": "windows-sys-0.60.2-license-mit.txt",
+          "SHA256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
+      "Name": "windows-sys",
       "Version": "0.61.2",
       "SPDX": "MIT OR Apache-2.0",
       "Repository": "https://github.com/microsoft/windows-rs",
@@ -6644,6 +6822,28 @@
         {
           "OriginalFilename": "license-mit",
           "File": "windows-targets-0.52.6-license-mit.txt",
+          "SHA256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+          "Source": "provided-crate-file"
+        }
+      ]
+    },
+    {
+      "Name": "windows-targets",
+      "Version": "0.53.5",
+      "SPDX": "MIT OR Apache-2.0",
+      "Repository": "https://github.com/microsoft/windows-rs",
+      "Source": "registry+https://github.com/rust-lang/crates.io-index",
+      "SourceArchive": "https://crates.io/api/v1/crates/windows-targets/0.53.5/download",
+      "LicenseFiles": [
+        {
+          "OriginalFilename": "license-apache-2.0",
+          "File": "windows-targets-0.53.5-license-apache-2.0.txt",
+          "SHA256": "c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b",
+          "Source": "provided-crate-file"
+        },
+        {
+          "OriginalFilename": "license-mit",
+          "File": "windows-targets-0.53.5-license-mit.txt",
           "SHA256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
           "Source": "provided-crate-file"
         }

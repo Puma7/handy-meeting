@@ -133,7 +133,12 @@ impl Jobs {
         false
     }
     /// `rebuild` is a user request: an index SQLite cannot read is moved aside and recreated.
-    pub fn start_scan(self: &Arc<Self>, root: PathBuf, rebuild: bool) -> Result<String, String> {
+    pub fn start_scan(
+        self: &Arc<Self>,
+        root: PathBuf,
+        rebuild: bool,
+        lease: Option<crate::operations::Lease>,
+    ) -> Result<String, String> {
         let id = meeting_notes::new_job_id();
         let cancel = Arc::new(AtomicBool::new(false));
         let started = Instant::now();
@@ -168,6 +173,7 @@ impl Jobs {
         let jobs = self.clone();
         let owned = id.clone();
         let spawn = std::thread::Builder::new().name("meeting-search-index".into()).spawn(move || {
+            let _lease = lease;
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> meeting_core::Result<()> {
                 let sessions = root.join("sessions");
                 let sessions = metadata::checked_directory(&sessions)?;
@@ -345,10 +351,10 @@ mod clock_tests {
         let damaged = b"synthetic unreadable index ".repeat(300);
         fs::write(folder.join("library.sqlite3"), &damaged).unwrap();
         let jobs = Arc::new(Jobs::default());
-        jobs.start_scan(root.clone(), false).unwrap();
+        jobs.start_scan(root.clone(), false, None).unwrap();
         assert_eq!(finished(&jobs).status, "failed");
         assert_eq!(fs::read(folder.join("library.sqlite3")).unwrap(), damaged);
-        jobs.start_scan(root.clone(), true).unwrap();
+        jobs.start_scan(root.clone(), true, None).unwrap();
         assert_eq!(finished(&jobs).status, "complete");
         let aside: Vec<_> = fs::read_dir(&folder)
             .unwrap()

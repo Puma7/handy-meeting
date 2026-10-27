@@ -11,17 +11,31 @@ pub(crate) async fn edit_meeting_metadata(
     pinned: bool,
 ) -> AppResult<meeting_core::metadata::Metadata> {
     let service = Arc::clone(&service);
-    blocking(move||{
-        let data=service.data(&meeting_id)?;
-        let mut meta=meeting_core::metadata::edit(&service.root,&meeting_id,expected_revision,title,pinned)
-            .map_err(|_|"Meeting labels could not be saved. Reload the meeting; originals are preserved. / Meetingname oder VIP-Markierung konnten nicht gespeichert werden. Bitte die Sitzung neu laden.")?;
-        if data.read_only&&!data.id.starts_with("legacy-"){meta.audio_removed=true;}
-        if library_service::update(&service.root,&data).is_err(){
-            if let Ok(mut state)=service.lock(){state.error=Some("Meeting labels were saved. Please refresh the local search index. / Meetingbezeichnungen gespeichert. Bitte den lokalen Suchindex aktualisieren.".into());}
-        }
-        Ok(meta)
-    }).await
+    blocking(move || edit_metadata(&service, &meeting_id, expected_revision, title, pinned)).await
 }
+pub(crate) fn edit_metadata(
+    service: &Service,
+    meeting_id: &str,
+    expected_revision: u64,
+    title: Option<String>,
+    pinned: bool,
+) -> AppResult<meeting_core::metadata::Metadata> {
+    let _lease = service.reserve_operation(crate::operations::Kind::Mutation)?;
+
+    let data = service.data(meeting_id)?;
+    let mut meta=meeting_core::metadata::edit(&service.root,meeting_id,expected_revision,title,pinned)
+            .map_err(|_|"Meeting labels could not be saved. Reload the meeting; originals are preserved. / Meetingname oder VIP-Markierung konnten nicht gespeichert werden. Bitte die Sitzung neu laden.")?;
+    if data.read_only && !data.id.starts_with("legacy-") {
+        meta.audio_removed = true;
+    }
+    if library_service::update(&service.root, &data).is_err() {
+        if let Ok(mut state) = service.lock() {
+            state.error=Some("Meeting labels were saved. Please refresh the local search index. / Meetingbezeichnungen gespeichert. Bitte den lokalen Suchindex aktualisieren.".into());
+        }
+    }
+    Ok(meta)
+}
+
 #[tauri::command]
 pub(crate) async fn search_meetings(
     service: State<'_, Arc<Service>>,
@@ -35,19 +49,10 @@ pub(crate) async fn search_meetings(
 // Runs off the UI thread: it may wait on the recording transition lock or on disk.
 #[tauri::command(async)]
 pub(crate) fn rebuild_search_index(service: State<'_, Arc<Service>>) -> AppResult<String> {
-    let _gate = service
-        .transition
-        .lock()
-        .map_err(|_| "Recording control unavailable")?;
-    if service.lock()?.transitioning
-        || service
-            .maintenance_jobs
-            .snapshot()
-            .is_some_and(|p| p.status == "running")
-    {
-        return Err("Finish archive maintenance before updating the search index".into());
-    }
-    service.library_jobs.start_scan(service.root.clone(), true)
+    let lease = service.reserve_operation(crate::operations::Kind::Index)?;
+    service
+        .library_jobs
+        .start_scan(service.root.clone(), true, Some(lease))
 }
 #[tauri::command]
 pub(crate) fn get_library_progress(

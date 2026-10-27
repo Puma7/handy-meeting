@@ -134,6 +134,54 @@ it("reports export failure without claiming success or altering the selected tra
   expect(screen.getByText(meeting.parts[479].text!)).toBeTruthy();
 });
 
+it("exports Markdown and JSON for the selected historical session without shortening or rewriting its text", async () => {
+  const { api, other } = fixture();
+  render(<App api={api} />);
+  await screen.findByRole("button", { name: de.openFolder });
+  await userEvent.click(screen.getByRole("button", { name: de.history }));
+  await userEvent.click(screen.getAllByRole("button", { name: de.open })[1]);
+  await screen.findByRole("heading", { name: de.meetingDetail });
+  const format = screen.getByRole("combobox", { name: de.exportFormat });
+  for (const selected of ["md", "json"] as const) {
+    await userEvent.selectOptions(format, selected);
+    await userEvent.click(
+      screen.getByRole("button", { name: de.exportTranscript }),
+    );
+    await waitFor(() =>
+      expect(api.exportTranscript).toHaveBeenCalledWith(
+        other.id,
+        "de",
+        selected,
+      ),
+    );
+  }
+  expect(screen.getByText(other.parts[0].text!)).toBeTruthy();
+  expect(screen.getByText(other.parts[479].text!)).toBeTruthy();
+  expect(document.querySelector(".transcript-part img")).toBeNull();
+});
+
+it("does not leave an earlier success message after a later export fails", async () => {
+  const { api } = fixture();
+  render(<App api={api} />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: de.exportTranscript }),
+  );
+  await screen.findByText(/exports\/transcript-synthetic.txt/);
+  vi.mocked(api.exportTranscript).mockRejectedValue(
+    "Synthetic disk write failure",
+  );
+  await userEvent.selectOptions(
+    screen.getByRole("combobox", { name: de.exportFormat }),
+    "json",
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: de.exportTranscript }),
+  );
+  await screen.findByRole("alert");
+  expect(screen.queryByText(/Transkript gespeichert:/)).toBeNull();
+  expect(screen.getByText(meeting.parts[479].text!)).toBeTruthy();
+});
+
 it("keeps background-job ownership, truthful confirmed progress and exact open/cancel actions in the compact panel", async () => {
   const progress: NotesProgress = {
     jobId: "own-job",

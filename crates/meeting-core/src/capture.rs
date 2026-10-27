@@ -1,5 +1,11 @@
 use crate::{AudioDevice, CaptureSnapshot, Result, SessionStore};
 use serde::{Deserialize, Serialize};
+#[path = "capture_controls.rs"]
+mod controls;
+use controls::CaptureControls;
+pub use controls::{
+    read_capture_control_events, CaptureControlEvent, CaptureControlLog, CaptureControlSnapshot,
+};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -45,6 +51,7 @@ pub struct CaptureController {
     stop: Arc<AtomicBool>,
     tracks: Vec<(&'static str, JoinHandle<()>)>,
     store: SessionStore,
+    controls: Arc<CaptureControls>,
 }
 
 impl CaptureController {
@@ -57,10 +64,12 @@ impl CaptureController {
         #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
         {
             let stop = Arc::new(AtomicBool::new(false));
+            let controls = Arc::new(CaptureControls::new(&store)?);
             let mut controller = Self {
                 stop,
                 tracks: vec![],
                 store,
+                controls,
             };
             if let Err(error) = controller.start_track("system", options.output_id) {
                 controller.stop()?;
@@ -72,6 +81,8 @@ impl CaptureController {
                     controller.store.warn(&format!(
                         "Microphone could not start: {error}. System audio continues."
                     ))?;
+                } else {
+                    controller.controls.set_has_microphone(true);
                 }
             }
             Ok(controller)
@@ -82,9 +93,10 @@ impl CaptureController {
     fn start_track(&mut self, source: &'static str, device_id: Option<String>) -> Result<()> {
         let stop = Arc::clone(&self.stop);
         let store = self.store.clone();
+        let controls = Arc::clone(&self.controls);
         let (ready, result) = mpsc::sync_channel(1);
         let track = thread::Builder::new().name(format!("meeting-{source}-capture")).spawn(move || {
-            if let Err(error) = platform::record(store.clone(), source, device_id, stop, ready) {
+            if let Err(error) = platform::record(store.clone(), source, device_id, stop, ready, controls) {
                 let _ = store.warn(&format!("{source}: capture stopped: {error}. Saved audio is retained; check the device before recording again."));
             }
         })?;
@@ -107,6 +119,30 @@ impl CaptureController {
     pub fn is_running(&self) -> bool {
         !self.stop.load(Ordering::Acquire)
             && self.tracks.iter().any(|(_, track)| !track.is_finished())
+    }
+
+    pub fn controls(&self) -> CaptureControlSnapshot {
+        let mut snapshot = self.controls.snapshot();
+        snapshot.has_microphone = !self.stop.load(Ordering::Acquire)
+            && self
+                .tracks
+                .iter()
+                .any(|(source, track)| *source == "microphone" && !track.is_finished());
+        snapshot
+    }
+
+    pub fn set_paused(&self, paused: bool) -> Result<()> {
+        if !self.is_running() {
+            return Err("No capture is running".into());
+        }
+        self.controls.set_paused(paused)
+    }
+
+    pub fn set_microphone_muted(&self, muted: bool) -> Result<()> {
+        if !self.is_running() || self.stopped_tracks().contains(&"microphone") {
+            return Err("No microphone capture is running".into());
+        }
+        self.controls.set_microphone_muted(muted)
     }
 
     /// Tracks ("system", "microphone") whose capture ended before an explicit stop, while
@@ -172,6 +208,7 @@ mod tests {
         let mut controller = CaptureController {
             stop,
             tracks: vec![("system", system), ("microphone", microphone)],
+            controls: Arc::new(CaptureControls::new(&store).unwrap()),
             store,
         };
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);

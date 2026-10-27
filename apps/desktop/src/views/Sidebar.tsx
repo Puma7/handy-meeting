@@ -39,7 +39,7 @@ export default function Sidebar({
       <div className="brand">
         <img src="/handymeeting.svg" width="34" height="34" alt="" />
         <div>
-          <strong>HandyMeeting</strong>
+          <strong>Meeting for Handy</strong>
           {app?.version && <small>{app.version}</small>}
         </div>
       </div>

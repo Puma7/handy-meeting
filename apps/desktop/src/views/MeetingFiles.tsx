@@ -1,5 +1,7 @@
 import { Download, FolderOpen } from "lucide-react";
 import type { MessageKey } from "../i18n";
+import { useState } from "react";
+import type { TranscriptFormat } from "../types";
 
 export default function MeetingFiles({
   t,
@@ -11,11 +13,26 @@ export default function MeetingFiles({
   t: Record<MessageKey, string>;
   disabled: boolean;
   onOpenFolder: () => void;
-  onExport: () => void;
+  onExport: (format: TranscriptFormat) => void;
   savedFile: string | null;
 }) {
+  const [format, setFormat] = useState<TranscriptFormat>("txt");
   return (
     <>
+      <label className="transcript-format">
+        {t.exportFormat}
+        <select
+          value={format}
+          disabled={disabled}
+          onChange={(event) =>
+            setFormat(event.target.value as TranscriptFormat)
+          }
+        >
+          <option value="txt">Text (.txt)</option>
+          <option value="md">Markdown (.md)</option>
+          <option value="json">JSON (.json)</option>
+        </select>
+      </label>
       <button
         className="secondary"
         disabled={disabled}
@@ -29,7 +46,7 @@ export default function MeetingFiles({
         className="secondary"
         disabled={disabled}
         title={t.exportTranscriptHelp}
-        onClick={onExport}
+        onClick={() => onExport(format)}
       >
         <Download size={16} />
         <span>{t.exportTranscript}</span>

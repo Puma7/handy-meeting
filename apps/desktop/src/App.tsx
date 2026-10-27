@@ -5,7 +5,8 @@ import { SPEAKER_NAME_TEMPLATE } from "./speaker-proposals";
 import HistorySearch from "./views/HistorySearch";
 import LibraryStatus from "./views/LibraryStatus";
 import UpdatePanel from "./views/UpdatePanel";
-import RetentionPanel from "./views/RetentionPanel";
+import SettingsView from "./views/SettingsView";
+import HistoryList from "./views/HistoryList";
 import MaintenanceStatus from "./views/MaintenanceStatus";
 import NotesView from "./views/NotesView";
 import ResumeAnalysisDialog from "./views/ResumeAnalysisDialog";
@@ -20,10 +21,9 @@ import { useTemplateLibrary } from "./useTemplateLibrary";
 import { useLocalTextModels } from "./useLocalTextModels";
 import { useNotesJob } from "./useNotesJob";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FolderClock, RefreshCw, X } from "lucide-react";
+import { RefreshCw, X } from "lucide-react";
 import { desktopApi, errorMessage } from "./api";
 import {
-  clock,
   defaultMeetingTitle,
   meetingLabel,
   defaultTemplate,
@@ -107,7 +107,6 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     meetingId: string;
     file: string | null;
   } | null>(null);
-  const [legacyManifest, setLegacyManifest] = useState("");
   const [title, setTitle] = useState(""),
     [modelId, setModelId] = useState(""),
     [systemId, setSystemId] = useState(""),
@@ -438,7 +437,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     }
   }, [api]);
   const refreshModels = useCallback(
-    async (automatic: boolean) => {
+    async (automatic: boolean, selectedPath?: string) => {
       const current = latestRuntime.current;
       const blocked = (state: AppState | null) =>
         Boolean(
@@ -478,7 +477,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         const handy = await api.refreshHandy(
           automatic
             ? (fresh.handy?.executable ?? null)
-            : handyPath.trim() || null,
+            : (selectedPath ?? (handyPath.trim() || null)),
         );
         if (!mounted.current) return;
         requestSequence.current++;
@@ -1164,6 +1163,27 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
               catchingUp ||
               (app?.transitioning ?? false)
             }
+            controlsAvailable={Boolean(
+              api.setCapturePaused && api.setMicrophoneMuted,
+            )}
+            onPause={(paused) => {
+              const id = app?.activeMeeting?.id;
+              if (!id || !api.setCapturePaused) return;
+              void action(async () => {
+                const state = await api.setCapturePaused!(id, paused);
+                requestSequence.current++;
+                setApp(state);
+              });
+            }}
+            onMute={(muted) => {
+              const id = app?.activeMeeting?.id;
+              if (!id || !api.setMicrophoneMuted) return;
+              void action(async () => {
+                const state = await api.setMicrophoneMuted!(id, muted);
+                requestSequence.current++;
+                setApp(state);
+              });
+            }}
             isStopping={isStopping}
             connected={connected}
             title={title}
@@ -1176,11 +1196,15 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
                 if (liveMeeting) await api.openMeetingFolder(liveMeeting.id);
               })
             }
-            onExport={() =>
+            onExport={(format) =>
               void action(async () => {
                 if (liveMeeting) {
                   const id = liveMeeting.id;
-                  const file = await api.exportTranscript(id, locale);
+                  setFileExport(null);
+                  const file =
+                    format === "txt"
+                      ? await api.exportTranscript(id, locale)
+                      : await api.exportTranscript(id, locale, format);
                   setFileExport({ id, file });
                 }
               })
@@ -1238,10 +1262,14 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             onOpenFolder={() =>
               void action(() => api.openMeetingFolder(meeting.id))
             }
-            onExport={() =>
+            onExport={(format) =>
               void action(async () => {
                 const id = meeting.id;
-                const file = await api.exportTranscript(id, locale);
+                setFileExport(null);
+                const file =
+                  format === "txt"
+                    ? await api.exportTranscript(id, locale)
+                    : await api.exportTranscript(id, locale, format);
                 setFileExport({ id, file });
               })
             }
@@ -1264,230 +1292,67 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
           />
         )}
         {page === "history" && !api.searchMeetings && (
-          <section className="history-panel">
-            <div className="section-heading">
-              <h2>{t.storage}</h2>
-              <button
-                className="secondary"
-                disabled={busy || !connected}
-                onClick={() => void action(refreshHistory)}
-              >
-                <RefreshCw size={15} />
-                {t.refresh}
-              </button>
-            </div>
-            {history.length ? (
-              <div className="session-list">
-                {history.map((item) => (
-                  <div className="session-row" key={item.id}>
-                    <div>
-                      <strong>{item.title}</strong>
-                      <p>
-                        {new Date(item.startedAt).toLocaleString(
-                          locale === "de" ? "de-DE" : "en-GB",
-                        )}{" "}
-                        · {clock(item.durationMs)} · {statusName(item.status)}
-                      </p>
-                    </div>
-                    <button
-                      className="secondary"
-                      disabled={busy}
-                      onClick={() => void openMeeting(item.id)}
-                    >
-                      {t.open}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="empty">
-                <FolderClock size={30} />
-                <p>{t.emptyHistory}</p>
-              </div>
-            )}
-          </section>
-        )}
-        {page === "settings" && (
-          <div className="settings-sections">
-            {!preferences.persistable && (
-              <div className="notice warning">{t.preferencesError}</div>
-            )}
-            <section>
-              <h2>{t.installation}</h2>
-              <p>{t.executableHelp}</p>
-              <label>
-                {t.executable}
-                <input
-                  value={handyPath}
-                  onChange={(event) => setHandyPath(event.target.value)}
-                  disabled={
-                    recording ||
-                    busy ||
-                    refreshingHandy ||
-                    catchingUp ||
-                    (app?.transitioning ?? false)
-                  }
-                  placeholder={
-                    locale === "de"
-                      ? "Automatisch erkennen"
-                      : "Detect automatically"
-                  }
-                />
-              </label>
-              <div className="settings-actions">
-                <span>
-                  {t.version}:{" "}
-                  {app?.handy?.version ??
-                    (app?.handy?.executable
-                      ? t.handyVersionMissing
-                      : t.notFound)}
-                </span>
-                <button
-                  className="secondary"
-                  disabled={
-                    !connected ||
-                    busy ||
-                    recording ||
-                    refreshingHandy ||
-                    catchingUp ||
-                    (app?.transitioning ?? false)
-                  }
-                  onClick={() => void action(() => refreshModels(false))}
-                >
-                  <RefreshCw size={15} />
-                  {t.refresh}
-                </button>
-              </div>
-              <p className="muted">{app?.handy?.executable}</p>
-            </section>
-            <section>
-              <h2>{t.theme}</h2>
-              <div className="settings-grid">
-                <label>
-                  {t.language}
-                  <select
-                    value={locale}
-                    onChange={(event) =>
-                      setLocale(event.target.value as Locale)
-                    }
-                  >
-                    <option value="de">Deutsch</option>
-                    <option value="en">English</option>
-                  </select>
-                </label>
-                <label>
-                  {t.theme}
-                  <select
-                    value={theme}
-                    onChange={(event) => setTheme(event.target.value as Theme)}
-                  >
-                    <option value="system">{t.systemTheme}</option>
-                    <option value="light">{t.light}</option>
-                    <option value="dark">{t.dark}</option>
-                  </select>
-                </label>
-              </div>
-            </section>
-            <section>
-              <h2>{t.system}</h2>
-              <button
-                className="secondary"
-                disabled={recording || busy || !connected}
-                onClick={() => void action(refreshDevices)}
-              >
-                <RefreshCw size={15} />
-                {t.refreshDevices}
-              </button>
-            </section>
-            <section>
-              <h2>{t.storage}</h2>
-              <p>{t.legacyHelp}</p>
-              {app?.dataDirectory && (
-                <code className="storage-path">{app.dataDirectory}</code>
-              )}
-            </section>
-          </div>
-        )}
-        {page === "settings" && (
-          <UpdatePanel
-            api={api}
+          <HistoryList
+            history={history}
             locale={locale}
-            blocked={Boolean(
-              app?.recording ||
-                app?.transitioning ||
-                app?.notesRunning ||
-                liveMeeting?.status === "catching-up",
-            )}
-          />
-        )}
-        {page === "settings" && api.rebuildSearchIndex && (
-          <section className="legacy-panel">
-            <h2>
-              {locale === "de" ? "Lokaler Suchindex" : "Local search index"}
-            </h2>
-            <p className="muted">
-              {locale === "de"
-                ? "Der Suchindex beschleunigt große Historien. Er wird lokal aus deinen Sitzungen aufgebaut; Originale werden nicht geändert."
-                : "The local index speeds up large histories. Rebuilding never changes original sessions."}
-            </p>
-            <button
-              className="secondary"
-              onClick={() =>
-                void api
-                  .rebuildSearchIndex?.()
-                  .catch((e) => setError(errorMessage(e)))
-              }
-            >
-              <RefreshCw size={15} />
-              {locale === "de"
-                ? "Suchindex aktualisieren"
-                : "Update search index"}
-            </button>
-          </section>
-        )}
-        {page === "settings" && (
-          <RetentionPanel
-            api={api}
-            locale={locale}
-            models={app?.handy?.models ?? []}
+            t={t}
+            busy={busy}
+            connected={connected}
+            onRefresh={() => void action(refreshHistory)}
+            onOpen={(id) => void openMeeting(id)}
+            statusName={statusName}
           />
         )}
         {page === "settings" && (
-          <section className="legacy-panel">
-            <h2>{t.legacy}</h2>
-            <p className="muted">{t.legacyHelp}</p>
-            <label>
-              {x.manifest}
-              <input
-                value={legacyManifest}
-                onChange={(event) => setLegacyManifest(event.target.value)}
-                autoComplete="off"
-                placeholder="session.json"
-              />
-            </label>
-            <button
-              className="secondary"
-              disabled={
-                busy || recording || !connected || !legacyManifest.trim()
-              }
-              onClick={() =>
-                void action(async () => {
-                  const imported = await api.importLegacy(
-                    legacyManifest.trim(),
-                  );
-                  selectedRef.current = imported.id;
-                  fullMeetingRef.current = imported.id;
-                  setMeeting(imported);
-                  setAnalyses([]);
-                  setResultId("");
-                  setPage("detail");
-                  await refreshHistory();
-                })
-              }
-            >
-              {x.importSession}
-            </button>
-          </section>
+          <SettingsView
+            api={api}
+            app={app}
+            locale={locale}
+            theme={theme}
+            t={t}
+            busy={busy}
+            connected={connected}
+            refreshingHandy={refreshingHandy}
+            blocked={
+              recording ||
+              isStopping ||
+              catchingUp ||
+              Boolean(app?.transitioning)
+            }
+            preferencesPersistable={preferences.persistable}
+            handyPath={handyPath}
+            onLocale={setLocale}
+            onTheme={setTheme}
+            onRefreshHandy={() => void action(() => refreshModels(false))}
+            onRefreshDevices={() => void action(refreshDevices)}
+            onChooseHandy={() =>
+              void action(async () => {
+                const selected = await api.chooseHandyExecutable?.();
+                if (!selected) return;
+                setHandyPath(selected);
+                await refreshModels(false, selected);
+              })
+            }
+            onRebuildIndex={() =>
+              void api
+                .rebuildSearchIndex?.()
+                .catch((e) => setError(errorMessage(e)))
+            }
+            onImportLegacy={() =>
+              void action(async () => {
+                const selected = await api.chooseLegacyManifest?.();
+                if (!selected) return;
+                const imported = await api.importLegacy(selected);
+                selectedRef.current = imported.id;
+                fullMeetingRef.current = imported.id;
+                setMeeting(imported);
+                setAnalyses([]);
+                setResultId("");
+                setPage("detail");
+                await refreshHistory();
+              })
+            }
+          />
         )}
         {page === "notes" && skippedRuns.length > 0 && (
           <div className="notice warning" role="status">

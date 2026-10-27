@@ -29,14 +29,30 @@ pub(crate) async fn save_retention_policy(
     policy: meeting_core::retention::Policy,
 ) -> AppResult<meeting_core::retention::Policy> {
     let service = Arc::clone(&service);
-    blocking(move||meeting_core::retention::save_policy(&service.root,expected_revision,policy).map_err(|_|"Aufräumregeln nicht gespeichert. Unangetasteten Zeitraum, Altersgrenzen und geänderte Einstellungen prüfen. / Retention settings were not saved; check untouched period, age limits and concurrent changes.".into())).await
+    blocking(move || save_policy(&service, expected_revision, policy)).await
 }
+pub(crate) fn save_policy(
+    service: &Service,
+    expected_revision: u64,
+    policy: meeting_core::retention::Policy,
+) -> AppResult<meeting_core::retention::Policy> {
+    let _lease = service.reserve_operation(crate::operations::Kind::Mutation)?;
+    if let Some(path) = policy.ffmpeg_executable.as_deref() {
+        service
+            .selections
+            .verify(crate::path_selection::Purpose::Ffmpeg, path)?;
+    }
+    meeting_core::retention::save_policy(&service.root,expected_revision,policy).map_err(|_|"Aufräumregeln nicht gespeichert. Unangetasteten Zeitraum, Altersgrenzen und geänderte Einstellungen prüfen. / Retention settings were not saved; check untouched period, age limits and concurrent changes.".into())
+}
+
 #[tauri::command]
 pub(crate) fn preview_retention(service: State<'_, Arc<Service>>) -> AppResult<String> {
     let owned = Arc::clone(&service);
+    let lease = service.reserve_operation(crate::operations::Kind::Index)?;
     service
         .maintenance_jobs
         .start_work("cleanup-preview", move |id, jobs, cancel| {
+            let _lease = lease;
             let mut plan = meeting_core::retention::preview(
                 &owned.root,
                 chrono_now(),
@@ -98,42 +114,26 @@ pub(crate) fn cancel_maintenance(service: State<'_, Arc<Service>>, job_id: Strin
     service.maintenance_jobs.cancel(&job_id)
 }
 /// Reserve all operations that could move sources before starting the background job.
-struct MaintenanceGuard(Arc<Service>);
+struct MaintenanceGuard {
+    service: Arc<Service>,
+    _lease: crate::operations::Lease,
+}
 impl Drop for MaintenanceGuard {
     fn drop(&mut self) {
-        if let Ok(mut inner) = self.0.lock() {
+        if let Ok(mut inner) = self.service.lock() {
             inner.transitioning = false;
         }
     }
 }
 fn reserve(service: &Arc<Service>) -> AppResult<MaintenanceGuard> {
-    let _gate = service
-        .transition
-        .lock()
-        .map_err(|_| "Recording control unavailable")?;
-    service.reap_finished()?;
+    let lease = service.reserve_operation(crate::operations::Kind::Maintenance)?;
     let mut inner = service.lock()?;
-    if inner.active.is_some()
-        || inner.transitioning
-        || service.notes_jobs.running()
-        || service
-            .speaker_jobs
-            .snapshot()
-            .is_some_and(|p| p.status == "running")
-        || service
-            .library_jobs
-            .snapshot()
-            .is_some_and(|p| p.status == "running")
-        || service
-            .maintenance_jobs
-            .snapshot()
-            .is_some_and(|p| p.status == "running")
-    {
-        return Err("Finish recording, recognition, analysis, speaker experiments and search indexing first. / Bitte Aufnahme, Erkennung, Auswertung, Sprecherexperimente und Indexierung zuerst abschließen.".into());
-    }
     inner.view = None;
     inner.transitioning = true;
-    Ok(MaintenanceGuard(service.clone()))
+    Ok(MaintenanceGuard {
+        service: service.clone(),
+        _lease: lease,
+    })
 }
 #[tauri::command]
 pub(crate) async fn list_archives(
@@ -280,6 +280,7 @@ pub(crate) fn apply_retention(
                 let data=meeting_core::archive::read_archived_transcript(&source)?.ok_or("Archived transcript unavailable")?;crate::library_service::update(&owned.root,&data)?;},
             Action::ConvertAudio=>{
                 let path=policy.ffmpeg_executable.as_ref().ok_or("Choose a separately installed FFmpeg executable in retention settings first")?;
+                owned.selections.verify(crate::path_selection::Purpose::Ffmpeg,path)?;
                 let tool=meeting_core::audio_codec::AudioTool::inspect(path,cancel)?;
                 let store=meeting_core::SessionStore::open(&source)?;let data=store.snapshot()?;
                 if data.status!="complete"||data.read_only||data.capture_incomplete{return Err("Restore archived audio and finish the meeting before converting".into());}
@@ -402,7 +403,9 @@ pub(crate) fn transcribe_audio_copy(
         let copy:AudioCopy=read_record(&catalog.join(format!("{run_id}.json")))?;
         if copy.run_id!=run_id{return Err("Audio-copy identity mismatch".into());}crate::validate_id(&copy.meeting_id)?;
         let policy=meeting_core::retention::read_policy(&owned.root)?;
-        let tool=meeting_core::audio_codec::AudioTool::inspect(policy.ffmpeg_executable.as_ref().ok_or("Choose the separately installed FFmpeg tool first")?,cancel)?;
+        let selected=policy.ffmpeg_executable.as_ref().ok_or("Choose the separately installed FFmpeg tool first")?;
+        owned.selections.verify(crate::path_selection::Purpose::Ffmpeg, selected)?;
+        let tool=meeting_core::audio_codec::AudioTool::inspect(selected,cancel)?;
         let source=meeting_core::metadata::checked_directory(&owned.root.join("sessions").join(&copy.meeting_id)).map_err(|_|"Restore the archived whole meeting before using its compact audio copies")?;
         let data=match meeting_core::archive::read_archived_transcript(&source)?{Some(v)=>v,None=>meeting_core::inspect_manifest(&source)?};
         let copies=meeting_core::metadata::checked_directory(&source.join("converted-audio"))?;

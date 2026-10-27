@@ -92,12 +92,19 @@ export interface AppState {
   handy: HandyStatus | null;
   activeMeeting: Meeting | null;
   recording: boolean;
+  captureControl?: CaptureControl | null;
   transitioning?: boolean;
   error?: string | null;
   dataDirectory?: string;
   notesRunning?: boolean;
   agent?: AgentState | null;
 }
+export interface CaptureControl {
+  paused: boolean;
+  microphoneMuted: boolean;
+  hasMicrophone: boolean;
+}
+export type TranscriptFormat = "txt" | "md" | "json";
 export interface AgentState {
   connected: boolean;
   label: string;
@@ -311,6 +318,11 @@ export interface DesktopApi {
   getLibraryProgress?(): Promise<LibraryProgress | null>;
   cancelLibraryJob?(jobId: string): Promise<boolean>;
   getAppState(): Promise<AppState>;
+  setCapturePaused?(meetingId: string, paused: boolean): Promise<AppState>;
+  setMicrophoneMuted?(meetingId: string, muted: boolean): Promise<AppState>;
+  chooseHandyExecutable?(): Promise<string | null>;
+  chooseFfmpegExecutable?(): Promise<string | null>;
+  chooseLegacyManifest?(): Promise<string | null>;
   refreshHandy(executable: string | null): Promise<HandyStatus>;
   listDevices(): Promise<AudioDevice[]>;
   startMeeting(request: StartRequest): Promise<Meeting>;
@@ -328,7 +340,11 @@ export interface DesktopApi {
   notesMarkdown(meetingId: string, analysisId: string): Promise<string>;
   copyText(text: string): Promise<void>;
   openMeetingFolder(id: string): Promise<void>;
-  exportTranscript(id: string, locale: Locale): Promise<string>;
+  exportTranscript(
+    id: string,
+    locale: Locale,
+    format?: TranscriptFormat,
+  ): Promise<string>;
   listTemplates(): Promise<TemplateLibrary>;
   saveTemplates(library: TemplateLibrary): Promise<TemplateLibrary>;
   importTemplates(templates: AnalysisTemplate[]): Promise<TemplateLibrary>;

@@ -98,7 +98,7 @@ Die erste Version soll eine Frage zuverlässig beantworten: Kann ich ein langes 
 | --- | --- | --- |
 | P0 | Systemaudio aufnehmen | Ausgabe des ausgewählten Audiogeräts erfassen, auch bei Kopfhörern |
 | P0 | Eigene Stimme ergänzen | Mikrofon als eigene, ausdrücklich aktivierte Spur hinzufügen |
-| P0 | Sitzung steuern | Start, Pause, Fortsetzen und Ende mit sichtbarem Aufnahmestatus (Stand 1.0.3: Start, Ende und Wiederaufnahme der Erkennung umgesetzt; Pause/Fortsetzen der Aufnahme noch offen) |
+| P0 | Sitzung steuern | Start, Pause, Fortsetzen und Ende mit sichtbarem Aufnahmestatus (Stand 1.0.4: Start, Pause/Fortsetzen, getrennte App-Mikrofonstummschaltung, Ende und Wiederaufnahme der Erkennung im Folge-PR umgesetzt; echte Geräte-/Abbruch-/Langzeitprüfung bleibt erforderlich) |
 | P0 | Lokal transkribieren | Ausgewähltes lokales Modell; bei Fehlern Aufnahme erhalten und Verarbeitung nachholen |
 | P0 | Vollständigkeit anzeigen | Verarbeitete Abschnitte, Rückstand und Unterbrechungen sichtbar machen |
 | P0 | Sitzungen speichern | Titel, Datum, Dauer, Audioquellen, Transkript und Bearbeitungsstatus |
@@ -127,7 +127,7 @@ Vor dem Start zeigen zwei Pegelanzeigen, ob beide Quellen ankommen. Die Auswahl 
 
 Die Spuren bleiben getrennt. So ist zunächst eine ehrliche Zuordnung „Lokales Mikrofon“ und „Meeting-Audio“ möglich. Das sind Quellenbezeichnungen, keine automatische Personenidentifikation. Ein Mikrofon kann mehrere Menschen im Raum aufnehmen.
 
-**Stummschaltung:** Ein in Teams oder Zoom stummgeschaltetes Mikrofon kann von der Companion App weiterhin aufgenommen werden. Die App braucht deshalb eine eigene gut sichtbare Mikrofon-Stummschaltung und Pause. Sie darf den Meeting-Mute-Status nicht ohne verlässliche Integration voraussetzen. Stand 1.0.3: noch nicht umgesetzt; bis dahin lässt sich das Mikrofon nur beim Start abwählen.
+**Stummschaltung:** Ein in Teams oder Zoom stummgeschaltetes Mikrofon kann von der Companion App weiterhin aufgenommen werden. Die App braucht deshalb eine eigene gut sichtbare Mikrofon-Stummschaltung und Pause. Sie darf den Meeting-Mute-Status nicht ohne verlässliche Integration voraussetzen. Stand 1.0.4: Pause und getrennte App-Stummschaltung im Folge-PR umgesetzt; andere Apps bleiben unverändert.
 
 **Echo:** Bei Lautsprecherbetrieb landet der Ton der anderen Teilnehmer oft zusätzlich im Mikrofon. Zwei unabhängige Transkriptionen können dann doppelte Beiträge liefern. Kopfhörer sind der erste verlässlich unterstützte Betriebsfall. Lautsprecherbetrieb wird erst nach geprüfter Echounterdrückung als gleichwertig unterstützt. Unklare Dopplungen dürfen nicht pauschal aus dem Original gelöscht werden.
 
@@ -168,7 +168,7 @@ Die laufende App besteht aus der Oberfläche mit Sitzungsverwaltung und einem vo
 | asr_worker | Gepinnte transcribe.cpp-Version laden und mit vorhandenen Modellen ausführen |
 | model_adapter | Kompatible Modelldateien finden, auswählen und deren Fähigkeiten prüfen |
 | transcript_store | Segmente, Quellen, Revisionen und Korrekturen in SQLite speichern |
-| export | Markdown, Text und JSON erzeugen (Stand 1.0.3: Transkript als TXT, Auswertungen als TXT und Markdown; strukturiertes JSON noch offen) |
+| export | Markdown, Text und JSON erzeugen (Stand 1.0.4: vollständige Transkript-Snapshots als TXT, abgesichertes Markdown und strukturiertes JSON im Folge-PR umgesetzt; Abschnittszeiten bleiben keine Wortzeiten) |
 | postprocess | Optional einen lokalen Textmodell-Anbieter verwenden |
 
 Handys aktueller Code isoliert transcribe.cpp ebenfalls in einem Unterprozess. Das ist ein gutes Vorbild für Abbruch, Neustart und CPU-Fallback; sein internes Protokoll bleibt jedoch eine interne Implementierung. Die Companion App bindet nicht an versteckte Startparameter oder private Protokoll-Details einer installierten Handy-Version. [Handys Engine-Supervisor](https://github.com/cjpais/Handy/blob/0e5e9ca9363bcd41c0bd6244b2798f3022f5317d/src-tauri/src/engine_supervisor/mod.rs).
@@ -425,3 +425,8 @@ Die drei Sprecherfunktionen werden auf ausdrückliche Nutzerpräzisierung unabh�
 Für neue Aufräumfunktionen gilt: standardmäßig aus; getrennte Konfiguration für Audio und komplette Sitzungen; Vorschau des genauen Umfangs, ausdrückliche Bestätigung und erneute Prüfung des geschützten Zustands vor jedem Eingriff. Angeheftete, aktive, unvollständige und nicht vertrauenswürdig gelesene Sitzungen sind geschützt. Normale Audioaufbewahrung entfernt keine Transkripte oder Auswertungsfassungen. Während dieser Implementierung werden keine vorhandenen Nutzerdateien bereinigt.
 
 Stand 27.10.2026: Alle oben genannten Erweiterungen sind im unveröffentlichten 1.0.2-Entwicklungsstand implementiert und mit automatischen sowie synthetischen Prüfungen abgedeckt (siehe BUILD_STATUS.md und TEST_REPORT.md). Offen sind weiterhin Freigabeprüfungen: Code-/Sicherheitsreview, Installer-/Paket-CI auf allen Zielen, echte Geräte- und Zweistundentests je Plattform, Signierung sowie positive Tests mit kompatiblen Sprechermodellen. Umgesetzt heißt damit nicht freigegeben. Der private Abgleich mit Quellenzitaten und Einzelständen liegt außerhalb des Quell-Exports im Arbeitsledger .build/release-1.0.2/state.json. Version1.0.2 wird erst nach diesem Abgleich und den passenden Nachweisen gebaut/veröffentlicht; frühere Release-Tags, Pakete und Nutzerprogramme bleiben erhalten.
+
+
+## Folge-PR nach #26: Meeting for Handy 1.0.4
+
+Softwareumfang: Aufnahmepause/Fortsetzen, unabhängige App-Mikrofonstummschaltung, konservative Windows-Mikrofon-Zeitlücken, vollständige TXT/Markdown/JSON-Snapshots, native zweck-/pfad-/hashgebundene Dateiauswahl, gemeinsame Vorgangsfreigabe und getrennte Module für Archiv, Oberfläche und native Ablaufsteuerung. Originale und alte Kennungen bleiben erhalten. Steuerungsereignisse sind keine Gesprächsaussagen; fehlender Ton bleibt als Stille/Unterbrechung kenntlich. Echte Windows-Abbruch-/Langzeitmessungen, Mac-/Linux-Geräteprüfungen, Agent-Zustimmung an echten Geräten, die ursprüngliche GPU-Ursache und eine Upstream-Vereinbarung bleiben ohne Nachweis offen. Am 27.10.2026 hat der Nutzer ausschließlich den Windows-PC und eventuell WSL als verfügbare Testumgebung bestätigt; reale Macs/Linux-Geräte stehen nicht zur Verfügung.

@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "HandyMeeting",
-  "version": "1.0.3",
+  "productName": "Meeting for Handy",
+  "version": "1.0.4",
   "identifier": "org.handymeeting.beta",
   "build": {
     "frontendDist": "../dist",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "HandyMeeting",
+        "title": "Meeting for Handy",
         "width": 1180,
         "height": 820,
         "minWidth": 800,
@@ -32,7 +32,7 @@
       "../../../assets/handymeeting.ico",
       "../../../assets/handymeeting.png"
     ],
-    "copyright": "HandyMeeting contributors",
+    "copyright": "Meeting for Handy contributors",
     "shortDescription": "Independent local meeting companion for Handy"
   }
 }

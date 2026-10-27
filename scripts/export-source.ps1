@@ -11,6 +11,7 @@ $version=(Get-Content -LiteralPath (Join-Path $root 'apps/desktop/package.json')
 if ($version -notmatch '^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$') { throw 'Invalid source export version.' }
 $names+='HandyMeeting 1.0.0 starten.cmd'
 $names+=('HandyMeeting ' + $version + ' starten.cmd')
+$names+=('Meeting for Handy ' + $version + ' starten.cmd')
 foreach ($name in $names) { $path=Join-Path $root $name; if (Test-Path -LiteralPath $path -PathType Leaf) { $files+=Get-Item -LiteralPath $path } }
 foreach ($folder in $roots) {
  $path=Join-Path $root $folder

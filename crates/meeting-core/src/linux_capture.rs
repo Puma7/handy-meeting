@@ -1,4 +1,5 @@
 //! Reuses the installed PulseAudio-compatible utilities, including PipeWire-Pulse.
+use super::controls::CaptureControls;
 use super::portable::{self, HelperSpec};
 use crate::{AudioDevice, Result, SessionStore};
 use serde_json::Value;
@@ -97,6 +98,7 @@ pub(super) fn record(
     device_id: Option<String>,
     stop: Arc<AtomicBool>,
     ready: SyncSender<std::result::Result<(), String>>,
+    controls: Arc<CaptureControls>,
 ) -> Result<()> {
     let device = device_id.filter(|id| !id.is_empty()).unwrap_or_else(|| {
         if source == "system" {
@@ -119,7 +121,7 @@ pub(super) fn record(
             "--latency-msec=100",
         ])
         .arg(format!("--device={device}"));
-    portable::record(
+    portable::record_controlled(
         store,
         source,
         stop,
@@ -129,6 +131,7 @@ pub(super) fn record(
             readiness_marker: false,
             graceful_stdin: false,
         },
+        controls,
     )
 }
 

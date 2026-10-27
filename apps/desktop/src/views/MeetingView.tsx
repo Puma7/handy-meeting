@@ -14,6 +14,7 @@ import type {
   HandyModel,
   Meeting,
   AudioPart,
+  TranscriptFormat,
 } from "../types";
 import type { MessageKey, extraDe } from "../i18n";
 import { clock } from "../domain";
@@ -21,6 +22,7 @@ import TranscriptBody from "./TranscriptBody";
 import { useEffect, useState } from "react";
 import SessionWarnings from "./SessionWarnings";
 import MeetingFiles from "./MeetingFiles";
+import RecordingControls from "./RecordingControls";
 type Props = {
   t: Record<MessageKey, string>;
   x: Record<keyof typeof extraDe, string>;
@@ -34,7 +36,10 @@ type Props = {
   defaultTitle: string;
   onAnalyse: () => void;
   onOpenFolder: () => void;
-  onExport: () => void;
+  onExport: (format: TranscriptFormat) => void;
+  onPause: (paused: boolean) => void;
+  onMute: (muted: boolean) => void;
+  controlsAvailable: boolean;
   savedFile: string | null;
   modelId: string;
   systemId: string;
@@ -72,6 +77,9 @@ export default function MeetingView({
   onAnalyse,
   onOpenFolder,
   onExport,
+  onPause,
+  onMute,
+  controlsAvailable,
   savedFile,
   modelId,
   systemId,
@@ -96,6 +104,10 @@ export default function MeetingView({
   copyFullTranscript,
 }: Props) {
   const [setupOpen, setSetupOpen] = useState(!meeting && !recording);
+  const agentOwnsCapture = Boolean(
+    app?.agent?.activeCapture &&
+      app.agent.ownedSessionId === app.activeMeeting?.id,
+  );
   useEffect(() => {
     if (meeting) setSetupOpen(false);
   }, [recording, meeting?.id]);
@@ -226,7 +238,13 @@ export default function MeetingView({
           </div>
         </details>
         <div className="record-controls full">
-          <span className={recording ? "state recording" : "state"}>
+          <span
+            className={
+              recording && !app?.captureControl?.paused
+                ? "state recording"
+                : "state"
+            }
+          >
             <span className="state-dot" />
             {isStopping
               ? t.stopping
@@ -237,7 +255,11 @@ export default function MeetingView({
                     ))
                 ? t.busy
                 : recording
-                  ? t.recording
+                  ? app?.captureControl?.paused
+                    ? locale === "de"
+                      ? "Aufnahme pausiert"
+                      : "Recording paused"
+                    : t.recording
                   : connected && modelId && systemId
                     ? t.ready
                     : t.choose}
@@ -274,6 +296,22 @@ export default function MeetingView({
             </button>
           )}
         </div>
+        {recording && controlsAvailable && app?.captureControl && (
+          <RecordingControls
+            control={app.captureControl}
+            locale={locale}
+            disabled={busy || isStopping || !connected || agentOwnsCapture}
+            onPause={onPause}
+            onMute={onMute}
+          />
+        )}
+        {recording && agentOwnsCapture && (
+          <p className="notice warning" role="status">
+            {locale === "de"
+              ? "Diese Aufnahme gehört zur freigegebenen Agentensitzung. Entziehe zuerst die Agentenfreigabe, bevor du eine eigene Aufnahme steuerst."
+              : "This recording belongs to the approved agent session. Revoke agent access before controlling a new manual recording."}
+          </p>
+        )}
       </section>
       {meeting && (
         <div className="session-progress">

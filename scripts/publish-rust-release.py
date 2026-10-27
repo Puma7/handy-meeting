@@ -159,7 +159,7 @@ def publish(folder, repository, tag, commit, notes, make_public, release_id=None
             raise ValueError('Release bundle changed before upload')
     existing = find_release(repository, tag, release_id)
     if existing is None:
-        gh('release', 'create', tag, '-R', repository, '--verify-tag', '--target', commit, '--draft', '--title', 'HandyMeeting ' + tag[1:], '--notes-file', notes)
+        gh('release', 'create', tag, '-R', repository, '--verify-tag', '--target', commit, '--draft', '--title', 'Meeting for Handy ' + tag[1:], '--notes-file', notes)
         existing = find_release(repository, tag)
         if existing is None:
             raise ValueError('Created draft could not be located; inspect before retrying')

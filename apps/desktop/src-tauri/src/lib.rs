@@ -1,5 +1,7 @@
 mod agent;
+mod app_commands;
 mod asr;
+mod cli;
 mod credential_commands;
 mod credential_service;
 mod library_commands;
@@ -8,7 +10,10 @@ mod meeting_files;
 mod name_reference;
 mod notes_commands;
 mod notes_service;
+mod operations;
+mod path_selection;
 mod retention_commands;
+mod session_service;
 mod speaker_commands;
 mod speaker_jobs;
 mod template_commands;
@@ -19,9 +24,8 @@ use handy_bridge::{HandyBridge, ModelCatalog};
 use meeting_core::{AudioDevice, CaptureController, CaptureOptions, SessionData, SessionStore};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{hash_map::DefaultHasher, HashMap},
+    collections::HashMap,
     fs::{self, OpenOptions},
-    hash::{Hash, Hasher},
     io::Write,
     path::{Path, PathBuf},
     sync::{
@@ -30,7 +34,7 @@ use std::{
     },
     thread::JoinHandle,
 };
-use tauri::{Emitter, Manager, State};
+use tauri::{Emitter, Manager};
 type AppResult<T> = Result<T, String>;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -111,6 +115,7 @@ struct AppView {
     handy: Option<HandyStatus>,
     active_meeting: Option<MeetingView>,
     recording: bool,
+    capture_control: Option<meeting_core::CaptureControlSnapshot>,
     error: Option<String>,
     data_directory: String,
     notes_running: bool,
@@ -118,6 +123,7 @@ struct AppView {
     agent: Option<agent::View>,
 }
 struct Active {
+    _operation: Option<operations::Lease>,
     owner: Option<String>,
     store: SessionStore,
     capture: Option<CaptureController>,
@@ -139,6 +145,8 @@ struct Service {
     root: PathBuf,
     inner: Mutex<Inner>,
     transition: Mutex<()>,
+    operations: operations::Gate,
+    selections: path_selection::Selections,
     refresh_gate: Mutex<()>,
     notes_jobs: notes_service::NotesJobs,
     library_jobs: Arc<library_service::Jobs>,
@@ -199,6 +207,8 @@ impl Service {
             root,
             inner: Mutex::new(inner),
             transition: Mutex::new(()),
+            operations: operations::Gate::default(),
+            selections: path_selection::Selections::default(),
             refresh_gate: Mutex::new(()),
             notes_jobs: notes_service::NotesJobs::default(),
             library_jobs: Arc::new(library_service::Jobs::default()),
@@ -211,6 +221,22 @@ impl Service {
         self.inner.lock().map_err(|_| {
             "Der Anwendungszustand ist gesperrt. Gesicherte Sitzungen bleiben erhalten.".into()
         })
+    }
+    fn try_transition(&self) -> AppResult<MutexGuard<'_, ()>> {
+        self.transition.try_lock().map_err(|error| match error {
+            std::sync::TryLockError::WouldBlock => "A recording transition is running. Try again shortly. / Die Aufnahmesteuerung arbeitet noch. Bitte kurz warten.".into(),
+            std::sync::TryLockError::Poisoned(_) => "Recording control is unavailable. Saved data is preserved. / Aufnahmesteuerung ist gesperrt; gesicherte Daten bleiben erhalten.".into(),
+        })
+    }
+    fn reserve_operation(&self, kind: operations::Kind) -> AppResult<operations::Lease> {
+        let _transition = self.try_transition()?;
+        self.reap_finished()?;
+        let inner = self.lock()?;
+        // The active check also covers restored older/test-owned sessions without a lease.
+        if inner.transitioning || kind.exclusive() && inner.active.is_some() {
+            return Err("Finish the active recording or operation first. / Bitte die laufende Aufnahme oder den Vorgang zuerst abschließen.".into());
+        }
+        self.operations.try_acquire(kind)
     }
     fn state(&self) -> AppResult<AppView> {
         let inner = self.lock()?;
@@ -238,6 +264,11 @@ impl Service {
             None
         };
         let recording = inner.active.as_ref().is_some_and(|a| a.capture.is_some());
+        let capture_control = inner
+            .active
+            .as_ref()
+            .and_then(|a| a.capture.as_ref())
+            .map(CaptureController::controls);
         let capture = inner.active.as_ref().and_then(|a| a.capture.as_ref());
         let capture_failed = capture.is_some_and(|c| !c.is_running());
         let stopped_tracks = capture.map(|c| c.stopped_tracks()).unwrap_or_default();
@@ -264,6 +295,7 @@ impl Service {
             handy: inner.handy.clone(),
             active_meeting,
             recording,
+            capture_control,
             error,
             data_directory: self.root.to_string_lossy().into_owned(),
             notes_running: self.notes_jobs.running(),
@@ -287,6 +319,10 @@ impl Service {
             // A chosen path is recorded below either way, but only a Handy program is started.
             if path.as_deref().is_some_and(|p| !plausible_handy_path(p)) {
                 return Err("Bitte die Handy-Programmdatei auswählen (handy, Handy.exe, Handy.app oder eine Handy-AppImage). / Choose the Handy program itself.".to_string());
+            }
+            if let Some(path) = path.as_deref() {
+                self.selections
+                    .verify(path_selection::Purpose::Handy, path)?;
             }
             let bridge = HandyBridge::discover(path.as_deref()).map_err(|e| e.to_string())?;
             let catalog = bridge.refresh().map_err(|e| e.to_string())?;
@@ -326,6 +362,10 @@ impl Service {
         }
         match &attempt {
             Ok((bridge, _, status)) => {
+                if !explicitly_selected && path.is_none() {
+                    self.selections
+                        .remember_discovered_handy(bridge.executable())?;
+                }
                 inner.executable = Some(bridge.executable().to_owned());
                 inner.handy = Some(status.clone());
                 inner.error = None;
@@ -344,15 +384,50 @@ impl Service {
     fn start(&self, request: StartRequest) -> AppResult<MeetingView> {
         self.start_for(request, None)
     }
+    fn set_capture_control(
+        &self,
+        meeting_id: &str,
+        paused: Option<bool>,
+        muted: Option<bool>,
+    ) -> AppResult<AppView> {
+        let _transition = self.try_transition()?;
+        {
+            let inner = self.lock()?;
+            let active = inner
+                .active
+                .as_ref()
+                .ok_or("There is no active recording. / Es läuft keine Aufnahme.")?;
+            let current = active
+                .store
+                .preview_snapshot(0)
+                .map_err(|_| "The active session cannot be read")?;
+            if current.id != meeting_id {
+                return Err("This recording is no longer active; reload its state. / Diese Aufnahme ist nicht mehr aktiv. Bitte neu laden.".into());
+            }
+            if active.owner.is_some() {
+                return Err("Revoke agent recording control before using manual pause or mute. / Bitte die Agenten-Aufnahmesteuerung vor manueller Pause oder Stummschaltung widerrufen.".into());
+            }
+            let capture = active.capture.as_ref().ok_or("Audio has ended; only recognition remains. / Audioaufnahme ist beendet; die Erkennung wird nachgeholt.")?;
+            if let Some(paused) = paused {
+                capture
+                    .set_paused(paused)
+                    .map_err(|error| error.to_string())?;
+            }
+            if let Some(muted) = muted {
+                capture
+                    .set_microphone_muted(muted)
+                    .map_err(|error| error.to_string())?;
+            }
+        }
+        self.state()
+    }
     fn start_for(&self, request: StartRequest, owner: Option<String>) -> AppResult<MeetingView> {
-        let _gate = self
-            .transition
-            .lock()
-            .map_err(|_| "Aufnahmesteuerung ist gesperrt.")?;
+        let _gate = self.try_transition()?;
         self.reap_finished()?;
         if let Some(owner) = owner.as_deref() {
             self.agent.start_permitted(owner)?;
         }
+        let lease = self.operations.try_acquire(operations::Kind::Recording)?;
         {
             let mut inner = self.lock()?;
             if inner.active.is_some() || inner.transitioning {
@@ -363,7 +438,7 @@ impl Service {
             }
             inner.transitioning = true;
         }
-        let result = self.start_inner(request, owner);
+        let result = self.start_inner(request, owner, lease);
         let mut inner = self.lock()?;
         inner.transitioning = false;
         if let Err(error) = &result {
@@ -371,7 +446,12 @@ impl Service {
         }
         result
     }
-    fn start_inner(&self, request: StartRequest, owner: Option<String>) -> AppResult<MeetingView> {
+    fn start_inner(
+        &self,
+        request: StartRequest,
+        owner: Option<String>,
+        lease: operations::Lease,
+    ) -> AppResult<MeetingView> {
         if request.title.chars().count() > 200 || request.model_id.len() > 4096 {
             return Err("Titel oder Modellkennung ist zu lang.".into());
         }
@@ -437,6 +517,7 @@ impl Service {
         let mut inner = self.lock()?;
         inner.error = None;
         inner.active = Some(Active {
+            _operation: Some(lease),
             owner,
             store,
             capture: Some(capture),
@@ -449,10 +530,7 @@ impl Service {
         self.stop_for(None, None)
     }
     fn stop_for(&self, owner: Option<&str>, session: Option<&str>) -> AppResult<MeetingView> {
-        let _gate = self
-            .transition
-            .lock()
-            .map_err(|_| "Aufnahmesteuerung ist gesperrt.")?;
+        let _gate = self.try_transition()?;
         let mut active = {
             let mut inner = self.lock()?;
             if owner.is_some()
@@ -621,63 +699,8 @@ impl Service {
         }
         Ok(true)
     }
-    fn data(&self, id: &str) -> AppResult<SessionData> {
-        if self
-            .maintenance_jobs
-            .snapshot()
-            .is_some_and(|p| p.status == "running" && p.kind != "cleanup-preview")
-            && self.lock()?.transitioning
-        {
-            return Err(
-                "Archive maintenance is running; wait or cancel before opening this meeting".into(),
-            );
-        }
-        if valid_legacy_id(id) {
-            let path = self
-                .lock()?
-                .legacy
-                .get(id)
-                .cloned()
-                .ok_or("Dieser Importverweis ist nicht bekannt.")?;
-            let mut data=meeting_core::read_legacy(&path).map_err(|_|"Die ursprüngliche Sitzung konnte nicht gelesen werden. Originaldateien bleiben unverändert.")?;
-            data.id = id.into();
-            return Ok(data);
-        }
-        validate_id(id)?;
-        {
-            let inner = self.lock()?;
-            for store in inner
-                .active
-                .as_ref()
-                .map(|a| &a.store)
-                .into_iter()
-                .chain(inner.view.iter())
-            {
-                let data = store
-                    .snapshot()
-                    .map_err(|_| "Sitzungsstand konnte nicht gelesen werden.")?;
-                if data.id == id {
-                    return Ok(data);
-                }
-            }
-        }
-        let folder = self.root.join("sessions").join(id);
-        if let Some(data)=meeting_core::archive::read_archived_transcript(&folder).map_err(|_|"Der archivierte Transkriptstand konnte nicht gegen seine Originalquellen geprüft werden. Vorhandene Dateien bleiben erhalten. / Archived transcript provenance check failed; original files are preserved.")? { return Ok(data); }
-        let store=SessionStore::open(&folder).map_err(|_|"Sitzung konnte nicht geöffnet werden. Originaldateien bleiben erhalten; eine andere Instanz könnte sie verwenden.")?;
-        let data = store
-            .snapshot()
-            .map_err(|_| "Sitzungsstand konnte nicht gelesen werden.")?;
-        if data.id != id {
-            return Err("Sitzungskennung und Ordner stimmen nicht überein. Die Originaldateien bleiben erhalten.".into());
-        }
-        self.lock()?.view = Some(store);
-        Ok(data)
-    }
     fn resume(&self, id: String) -> AppResult<MeetingView> {
-        let _gate = self
-            .transition
-            .lock()
-            .map_err(|_| "Aufnahmesteuerung ist gesperrt.")?;
+        let _gate = self.try_transition()?;
         self.reap_finished()?;
         let unavailable = {
             let inner = self.lock()?;
@@ -686,6 +709,7 @@ impl Service {
         if unavailable {
             return Err("Bitte zuerst die laufende Sitzung abschließen.".into());
         }
+        let lease = self.operations.try_acquire(operations::Kind::Recording)?;
         if valid_legacy_id(&id) {
             return Err("Originalsitzungen werden in dieser Beta ausschließlich gelesen. Zum Nachholen die bisherige Version verwenden.".into());
         }
@@ -742,6 +766,7 @@ impl Service {
             })
             .collect();
         self.lock()?.active = Some(Active {
+            _operation: Some(lease),
             owner: None,
             store: store.clone(),
             capture: None,
@@ -754,82 +779,6 @@ impl Service {
                 .map_err(|_| "Sitzungsstand nicht lesbar.")?,
             false,
         ))
-    }
-    fn import(&self, manifest: String) -> AppResult<MeetingView> {
-        let path = PathBuf::from(manifest);
-        let mut data=meeting_core::read_legacy(&path).map_err(|_|"Bitte eine gültige session.json der bisherigen Version auswählen. Originaldateien werden ausschließlich gelesen.")?;
-        let path = path
-            .canonicalize()
-            .map_err(|_| "Originalsitzung wurde nicht gefunden.")?;
-        let mut hash = DefaultHasher::new();
-        path.hash(&mut hash);
-        let id = format!("legacy-{:016x}", hash.finish());
-        let mapping = self.root.join("legacy-map").join(format!("{id}.json"));
-        if !mapping.exists() {
-            create_json(&mapping, &path)?;
-        }
-        self.lock()?.legacy.insert(id.clone(), path);
-        data.id = id;
-        Ok(self.meeting_view(data, false))
-    }
-    fn history(&self) -> AppResult<Vec<MeetingView>> {
-        // Only an index this process has fully scanned is complete; while a scan runs, failed
-        // or was cancelled, the session folders themselves are the history.
-        let index_complete = self.root.join("library-index/library.sqlite3").exists()
-            && self
-                .library_jobs
-                .snapshot()
-                .is_some_and(|p| p.status == "complete");
-        let mut sessions = if index_complete {
-            let mut all = Vec::new();
-            loop {
-                let page = library_service::search(&self.root, "", all.len() as u64, 100)?;
-                let count = page.items.len();
-                for item in page.items {
-                    all.push(item.session_summary().map_err(|_| {
-                        "The local history index is invalid; originals are preserved"
-                    })?);
-                }
-                if count == 0 || all.len() as u64 >= page.total {
-                    break all;
-                }
-            }
-        } else {
-            meeting_core::list_sessions(&self.root.join("sessions"))
-                .map_err(|_| "Sitzungshistorie konnte nicht gelesen werden.")?
-        };
-        let (current, legacy) = {
-            let inner = self.lock()?;
-            (
-                inner
-                    .active
-                    .as_ref()
-                    .map(|a| a.store.clone())
-                    .or(inner.view.clone()),
-                inner.legacy.clone(),
-            )
-        };
-        if let Some(current) = current {
-            if let Ok(data) = current.snapshot() {
-                sessions.retain(|old| old.id != data.id);
-                sessions.push(data);
-            }
-        }
-        for (id, path) in legacy {
-            if let Ok(mut data) = meeting_core::read_legacy(&path) {
-                data.id = id;
-                sessions.push(data);
-            }
-        }
-        sessions.sort_by(|a, b| b.started_at.cmp(&a.started_at));
-        Ok(sessions
-            .into_iter()
-            .map(|mut data| {
-                data.parts.clear();
-                data.warnings.clear();
-                self.meeting_view(data, false)
-            })
-            .collect())
     }
     fn analyze(&self, request: NotesRequest) -> AppResult<meeting_notes::Analysis> {
         notes_service::analyze(self, request)
@@ -953,166 +902,6 @@ async fn blocking<T: Send + 'static>(
                 .to_string()
         })?
 }
-#[tauri::command]
-async fn get_app_state(service: State<'_, Arc<Service>>) -> AppResult<AppView> {
-    let service = Arc::clone(&service);
-    blocking(move || {
-        // A finished catch-up after stop or resume is collected here, so it never keeps
-        // reporting active work. A failed collection is retried on the next poll.
-        let _ = service.reap_when_idle();
-        service.state()
-    })
-    .await
-}
-#[tauri::command]
-async fn refresh_handy(
-    service: State<'_, Arc<Service>>,
-    executable: Option<String>,
-) -> AppResult<HandyStatus> {
-    let service = Arc::clone(&service);
-    blocking(move || match service.refresh(executable) {
-        Ok((_, _, status)) => Ok(status),
-        Err(_) => service
-            .lock()?
-            .handy
-            .clone()
-            .ok_or("Handy konnte nicht gelesen werden.".into()),
-    })
-    .await
-}
-#[tauri::command]
-async fn list_devices() -> AppResult<Vec<AudioDevice>> {
-    blocking(|| {
-        meeting_core::list_devices()
-            .map_err(|e| format!("Audiogeräte konnten nicht aufgelistet werden: {e} / Audio devices could not be listed."))
-    })
-    .await
-}
-#[tauri::command]
-async fn start_meeting(
-    service: State<'_, Arc<Service>>,
-    request: StartRequest,
-) -> AppResult<MeetingView> {
-    let service = Arc::clone(&service);
-    blocking(move || service.start(request)).await
-}
-#[tauri::command]
-async fn stop_meeting(service: State<'_, Arc<Service>>) -> AppResult<MeetingView> {
-    let service = Arc::clone(&service);
-    blocking(move || service.stop()).await
-}
-#[tauri::command]
-async fn agent_decide_recording(
-    service: State<'_, Arc<Service>>,
-    request_id: String,
-    approve: bool,
-    request: Option<StartRequest>,
-) -> AppResult<()> {
-    let service = Arc::clone(&service);
-    blocking(move || service.decide_agent(&request_id, approve, request)).await
-}
-#[tauri::command]
-fn agent_revoke(service: State<'_, Arc<Service>>) -> AppResult<()> {
-    service.agent.revoke();
-    Ok(())
-}
-#[tauri::command]
-async fn list_meetings(service: State<'_, Arc<Service>>) -> AppResult<Vec<MeetingView>> {
-    let service = Arc::clone(&service);
-    blocking(move || service.history()).await
-}
-#[tauri::command]
-async fn get_meeting(service: State<'_, Arc<Service>>, id: String) -> AppResult<MeetingView> {
-    let service = Arc::clone(&service);
-    blocking(move || service.data(&id).map(|d| service.meeting_view(d, false))).await
-}
-#[tauri::command]
-async fn resume_meeting(service: State<'_, Arc<Service>>, id: String) -> AppResult<MeetingView> {
-    let service = Arc::clone(&service);
-    blocking(move || service.resume(id)).await
-}
-#[tauri::command]
-async fn import_legacy(
-    service: State<'_, Arc<Service>>,
-    manifest: String,
-) -> AppResult<MeetingView> {
-    let service = Arc::clone(&service);
-    blocking(move || service.import(manifest)).await
-}
-#[tauri::command]
-async fn copy_text(text: String) -> AppResult<()> {
-    blocking(move || {
-        if text.len() > 32 * 1024 * 1024 {
-            return Err(
-                "Der Text ist zum Kopieren zu groß. Bitte den gespeicherten Export verwenden."
-                    .into(),
-            );
-        }
-        let mut clipboard =
-            arboard::Clipboard::new().map_err(|_| "Die Zwischenablage ist nicht verfügbar.")?;
-        clipboard
-            .set_text(text)
-            .map_err(|_| "Text konnte nicht in die Zwischenablage kopiert werden.".into())
-    })
-    .await
-}
-#[tauri::command]
-async fn open_meeting_folder(service: State<'_, Arc<Service>>, id: String) -> AppResult<()> {
-    let service = Arc::clone(&service);
-    blocking(move || {
-        // Resolve through the known session identity, never a frontend-supplied path.
-        service.data(&id)?;
-        let folder = if valid_legacy_id(&id) {
-            let manifest = service
-                .lock()?
-                .legacy
-                .get(&id)
-                .cloned()
-                .ok_or("Unknown imported session")?;
-            manifest
-                .parent()
-                .ok_or("Session folder missing")?
-                .to_owned()
-        } else {
-            meeting_files::session_folder(&service.root, &id)?
-        };
-        meeting_files::open_folder(&folder)
-    })
-    .await
-}
-#[tauri::command]
-async fn export_transcript(
-    service: State<'_, Arc<Service>>,
-    id: String,
-    locale: String,
-) -> AppResult<String> {
-    let service = Arc::clone(&service);
-    blocking(move || {
-        let data = service.data(&id)?;
-        if data.read_only {
-            return Err("Diese Originalsitzung ist schreibgeschützt. Das Transkript kann weiterhin vollständig kopiert werden. / This original session is read-only; the full transcript can still be copied.".into());
-        }
-        let folder = meeting_files::session_folder(&service.root, &id)?;
-        meeting_files::save_transcript(&folder, &data, &locale)
-    }).await
-}
-#[tauri::command]
-async fn generate_notes(
-    service: State<'_, Arc<Service>>,
-    request: NotesRequest,
-) -> AppResult<meeting_notes::Analysis> {
-    let service = Arc::clone(&service);
-    blocking(move || service.analyze(request)).await
-}
-#[tauri::command]
-async fn list_analyses(
-    service: State<'_, Arc<Service>>,
-    meeting_id: String,
-) -> AppResult<meeting_notes::AnalysisListing> {
-    let service = Arc::clone(&service);
-    // Each result is checked on its own: damaged files are reported as skipped, earlier prompt versions stay listed read-only.
-    blocking(move||{if valid_legacy_id(&meeting_id){return Ok(Default::default());}validate_id(&meeting_id)?;let root=service.root.join("sessions").join(&meeting_id).join("analyses");if !root.exists(){return Ok(Default::default());}meeting_notes::list_analyses(&root,&meeting_id).map_err(|_|"Gespeicherte Auswertungen konnten nicht gelesen werden. Originaldateien bleiben erhalten.".into())}).await
-}
 
 pub fn run() {
     let root = std::env::var_os("HANDYMEETING_DATA_DIR")
@@ -1121,541 +910,19 @@ pub fn run() {
         .expect("Lokaler Anwendungsordner ist nicht verfügbar.");
     let service =
         Arc::new(Service::new(root).expect("Lokale Sitzungsablage konnte nicht geöffnet werden."));
-    tauri::Builder::default().manage(service).setup(|app| {
+    tauri::Builder::default().plugin(tauri_plugin_dialog::init()).manage(service).setup(|app| {
         let service=Arc::clone(app.state::<Arc<Service>>().inner());
-        let _=service.library_jobs.start_scan(service.root.clone(), false);
+        if let Ok(lease)=service.reserve_operation(operations::Kind::Index){let _=service.library_jobs.start_scan(service.root.clone(), false, Some(lease));}
         if std::env::args().skip(1).eq(["--agent", "serve"]) { agent::start_stdio(Arc::clone(&service)).map_err(std::io::Error::other)?; }
         tauri::async_runtime::spawn_blocking(move|| {let _=service.refresh(None);});
         Ok(())
-    }).invoke_handler(tauri::generate_handler![get_app_state,retention_commands::list_audio_copies,retention_commands::transcribe_audio_copy,retention_commands::compact_archive,retention_commands::list_archives,retention_commands::list_unfinished_deletions,retention_commands::resume_permanent_deletion,retention_commands::restore_archive,retention_commands::apply_retention,retention_commands::get_retention_policy,retention_commands::save_retention_policy,retention_commands::preview_retention,retention_commands::get_retention_plan,retention_commands::get_maintenance_progress,retention_commands::cancel_maintenance,library_commands::edit_meeting_metadata,library_commands::search_meetings,library_commands::rebuild_search_index,library_commands::get_library_progress,library_commands::cancel_library_job,speaker_commands::get_speaker_labels,speaker_commands::save_speaker_labels,speaker_commands::start_speaker_experiment,speaker_commands::get_speaker_progress,speaker_commands::get_speaker_sections,speaker_commands::cancel_speaker_experiment,update_commands::check_for_update,update_commands::download_update,update_commands::get_update_progress,update_commands::cancel_update,update_commands::install_update,update_commands::open_release_page,refresh_handy,list_devices,start_meeting,stop_meeting,agent_decide_recording,agent_revoke,list_meetings,get_meeting,resume_meeting,import_legacy,copy_text,open_meeting_folder,export_transcript,generate_notes,list_analyses,notes_commands::list_unfinished_analyses,notes_commands::list_text_models,notes_commands::get_notes_progress,notes_commands::cancel_notes,notes_commands::notes_markdown,template_commands::list_templates,template_commands::save_templates,template_commands::import_templates,credential_commands::credential_status,credential_commands::save_credential,credential_commands::remove_credential])
+    }).invoke_handler(tauri::generate_handler![path_selection::choose_handy_executable,path_selection::choose_ffmpeg_executable,path_selection::choose_legacy_manifest,app_commands::get_app_state,retention_commands::list_audio_copies,retention_commands::transcribe_audio_copy,retention_commands::compact_archive,retention_commands::list_archives,retention_commands::list_unfinished_deletions,retention_commands::resume_permanent_deletion,retention_commands::restore_archive,retention_commands::apply_retention,retention_commands::get_retention_policy,retention_commands::save_retention_policy,retention_commands::preview_retention,retention_commands::get_retention_plan,retention_commands::get_maintenance_progress,retention_commands::cancel_maintenance,library_commands::edit_meeting_metadata,library_commands::search_meetings,library_commands::rebuild_search_index,library_commands::get_library_progress,library_commands::cancel_library_job,speaker_commands::get_speaker_labels,speaker_commands::save_speaker_labels,speaker_commands::start_speaker_experiment,speaker_commands::get_speaker_progress,speaker_commands::get_speaker_sections,speaker_commands::cancel_speaker_experiment,update_commands::check_for_update,update_commands::download_update,update_commands::get_update_progress,update_commands::cancel_update,update_commands::install_update,update_commands::open_release_page,app_commands::refresh_handy,app_commands::list_devices,app_commands::start_meeting,app_commands::stop_meeting,app_commands::set_capture_paused,app_commands::set_microphone_muted,app_commands::agent_decide_recording,app_commands::agent_revoke,app_commands::list_meetings,app_commands::get_meeting,app_commands::resume_meeting,app_commands::import_legacy,app_commands::copy_text,app_commands::open_meeting_folder,app_commands::export_transcript,app_commands::generate_notes,app_commands::list_analyses,notes_commands::list_unfinished_analyses,notes_commands::list_text_models,notes_commands::get_notes_progress,notes_commands::cancel_notes,notes_commands::notes_markdown,template_commands::list_templates,template_commands::save_templates,template_commands::import_templates,credential_commands::credential_status,credential_commands::save_credential,credential_commands::remove_credential])
     .on_window_event(|window,event|{if let tauri::WindowEvent::CloseRequested{api,..}=event{let service=window.state::<Arc<Service>>();let blocked=service.lock().is_ok_and(|inner|inner.transitioning||inner.active.as_ref().is_some_and(|a|a.capture.is_some()));if blocked{api.prevent_close();if let Ok(mut inner)=service.lock(){inner.error=Some(if inner.transitioning { "Ein Vorgang läuft noch. Bitte warten, bis Audioabschluss und Verarbeitung beendet sind.".into() } else { "Bitte zuerst „Meeting beenden“ wählen. Audio wird gesichert und offene Abschnitte werden verarbeitet.".into() });}let _=window.emit("recording-close-blocked",());}}})
     .run(tauri::generate_context!()).expect("HandyMeeting konnte nicht gestartet werden.");
 }
 pub fn run_cli(args: &[String]) -> Option<AppResult<()>> {
-    match args.first().map(String::as_str) {
-        Some("--agent-protocol-check-stdio") => Some(if args.len() == 1 {
-            agent::check_stdio()
-        } else {
-            Err("The synthetic protocol check accepts no arguments".into())
-        }),
-        Some("--credential-checks") => Some((|| {
-            if args.len() != 2 {
-                return Err("Exactly one new credential-check directory is required".into());
-            }
-            credential_service::native_checks(Path::new(&args[1]))
-        })()),
-        Some("--companion-capabilities") => Some((|| {
-            let version = match &args[1..] {
-                [] => 1,
-                [flag, value] if flag == "--contract-version" => value
-                    .parse::<u32>()
-                    .map_err(|_| "Invalid contract version")?,
-                _ => return Err("Use --companion-capabilities [--contract-version 1]".into()),
-            };
-            if version != 1 {
-                return Err("Unsupported companion contract version".into());
-            }
-            let bridge = HandyBridge::discover(None).map_err(|error| error.to_string())?;
-            let catalog = bridge.refresh().map_err(|error| error.to_string())?;
-            let capabilities = handy_bridge::companion_capabilities(
-                version,
-                &catalog,
-                handy_bridge::installed_version(bridge.executable()),
-            )
-            .map_err(|error| error.to_string())?;
-            println!(
-                "{}",
-                serde_json::to_string(&capabilities).map_err(|_| "Capabilities unavailable")?
-            );
-            Ok(())
-        })()),
-        Some("--agent") if args == ["--agent", "serve"] => None,
-        Some("--agent") => Some((|| {
-            if args != ["--agent", "capabilities"] {
-                return Err("Use --agent capabilities or --agent serve; recording requires visible in-app consent.".into());
-            }
-            println!("{}", agent::capabilities());
-            Ok(())
-        })()),
-        Some("--asr-worker") => Some(asr::worker_main(&args[1..])),
-        Some("--speaker-worker") => Some(speaker_jobs::worker_main(&args[1..])),
-        Some("--synthetic-smoke") => Some(asr::synthetic_smoke(&args[1..])),
-        Some("--list-text-models") => Some((|| {
-            if args.len() != 2 {
-                return Err("Genau eine lokale KI-Adresse wird benötigt.".into());
-            }
-            let models = meeting_notes::local_model_ids(&args[1]).map_err(|e| e.to_string())?;
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&models)
-                    .map_err(|_| "Modellliste konnte nicht ausgegeben werden.")?
-            );
-            Ok(())
-        })()),
-        Some("--speaker-name-reference-check") => Some(name_reference::check(&args[1..])),
-        Some("--model-probe") => Some((|| {
-            if args.len() != 3 {
-                return Err("Invalid model probe arguments".into());
-            }
-            let _ = handy_bridge::native::NativeEngine::load(
-                Path::new(&args[1]),
-                true,
-                Some(Path::new(&args[2])),
-            )
-            .map_err(|e| e.to_string())?;
-            Ok(())
-        })()),
-        Some("--integration-checks") => Some(integration_checks(args.get(1).map(String::as_str))),
-        Some("--release-checks") => {
-            Some(application_checks(args.get(1).map(String::as_str), false))
-        }
-        _ => None,
-    }
-}
-fn integration_checks(output: Option<&str>) -> AppResult<()> {
-    application_checks(output, true)
-}
-
-/// Release mode never discovers Handy, enumerates devices, loads weights or
-/// creates a window. Installed-metadata mode adds read-only local queries.
-fn application_checks(output: Option<&str>, include_installed: bool) -> AppResult<()> {
-    let output = PathBuf::from(output.ok_or("Integration check output directory is required")?);
-    if output.exists() {
-        return Err("Integration check output already exists; preserve previous evidence.".into());
-    }
-    fs::create_dir_all(&output).map_err(|_| "Cannot create integration check directory")?;
-    let service = Service::new(output.join("application-data"))?;
-    let installed = if include_installed {
-        let (_, catalog, _) = service.refresh(None)?;
-        let devices =
-            meeting_core::list_devices().map_err(|_| "Read-only device enumeration failed")?;
-        Some((
-            catalog.models.len(),
-            catalog.installed_streaming_models().count(),
-            devices.len(),
-        ))
-    } else {
-        None
-    };
-    let runtime = handy_bridge::native::runtime_identity();
-    if runtime.compiled_version != "0.4.1"
-        || runtime.loaded_version != "0.4.1"
-        || runtime.public_header_hash.is_empty()
-    {
-        return Err("Packaged native runtime does not match the pinned 0.4.1 bindings".into());
-    }
-    let legacy = output.join("legacy-fixture");
-    fs::create_dir_all(legacy.join("audio"))
-        .map_err(|_| "Cannot create synthetic legacy fixture")?;
-    let mut parts = vec![];
-    for index in 0..25 {
-        let start = index * 16_000;
-        let file = format!("system-{start:012}.wav");
-        fs::write(
-            legacy.join("audio").join(&file),
-            b"synthetic existing audio fixture",
-        )
-        .map_err(|_| "Cannot create fixture")?;
-        parts.push(serde_json::json!({"File":file,"Source":"system","StartSample":start,"SampleCount":16000,"HasSignal":true,"AudioClosed":true,"Status":"complete","Text":format!("Originalabschnitt {index}: Dieser Text bleibt unverändert."),"ModelId":"synthetic-fixture","ProcessedSamples":16000}));
-    }
-    let manifest = legacy.join("session.json");
-    create_json(
-        &manifest,
-        &serde_json::json!({"SchemaVersion":1,"Id":"0123456789abcdef0123456789abcdef","Title":"Synthetische Originalfassung","StartedAt":"2026-10-25T00:00:00+00:00","EndedAt":"2026-10-25T00:00:25+00:00","Status":"complete","ModelId":"synthetic-fixture","ChunkSeconds":30,"DurationMs":25000,"Parts":parts}),
-    )?;
-    let before = fs::read(&manifest).map_err(|_| "Cannot read fixture")?;
-    let imported = service.import(manifest.to_string_lossy().into_owned())?;
-    if !imported.data.read_only
-        || !imported.data.id.starts_with("legacy-")
-        || imported.data.parts.len() != 25
-    {
-        return Err("Legacy read-only import invariant failed".into());
-    }
-    let full = service.data(&imported.data.id)?;
-    let preview = meeting_view(full.clone(), true);
-    if preview.data.parts.len() != 16
-        || !preview.live_preview_limited
-        || preview.saved_audio_ms.system != 25000
-    {
-        return Err("Bounded preview or global saved-audio calculation failed".into());
-    }
-    if serde_json::to_string(&meeting_view(full.clone(), false))
-        .map_err(|_| "Cannot serialize full copy")?
-        .matches("Originalabschnitt")
-        .count()
-        != 25
-    {
-        return Err("Full transcript copy lost older sections".into());
-    }
-    let sources = note_sources(&full)?;
-    if sources.len() != 25 || sources[0].id != "S00001" {
-        return Err("Stable source mapping failed".into());
-    }
-    if fs::read(&manifest).map_err(|_| "Cannot reread fixture")? != before {
-        return Err("Legacy original was modified".into());
-    }
-    for part in &full.parts {
-        if fs::read(legacy.join("audio").join(&part.file))
-            .map_err(|_| "Cannot reread synthetic audio fixture")?
-            != b"synthetic existing audio fixture"
-        {
-            return Err("Legacy synthetic audio original was modified".into());
-        }
-    }
-    if service.data("../../outside").is_ok() {
-        return Err("Session traversal was accepted".into());
-    }
-    let reloaded = Service::new(service.root.clone())?;
-    if reloaded.data(&imported.data.id)?.parts.len() != 25 {
-        return Err("Explicit legacy mapping did not survive restart".into());
-    }
-    let _ = service.state()?;
-    create_json(
-        &output.join(if include_installed {
-            "integration-checks.json"
-        } else {
-            "release-checks.json"
-        }),
-        &serde_json::json!({"success":true,"applicationVersion":VERSION,"checks":8,"syntheticChecks":7,"nativeRuntimeChecks":1,"checkNames":["native-runtime-abi","read-only-legacy-import","bounded-preview-global-progress","full-transcript-copy","stable-source-ids","original-manifest-and-audio-bytes","session-path-traversal","import-mapping-after-restart"],"installedMetadataQueried":include_installed,"installedHandyModelCount":installed.map(|s|s.0),"installedStreamingModels":installed.map(|s|s.1),"audioDeviceCount":installed.map(|s|s.2),"legacyOriginalUnchanged":true,"legacyMappingSurvivedRestart":true,"previewParts":16,"fullCopyParts":25,"stableSourceCount":sources.len(),"nativeRuntimeMatchesPinnedBindings":true,"nativeRuntime":runtime,"synthetic":true,"realCaptureOpened":false}),
-    )
+    cli::run_cli(args)
 }
 
 #[cfg(test)]
-mod service_tests {
-    use super::*;
-
-    fn fixture_root(label: &str) -> PathBuf {
-        let nonce = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        std::env::temp_dir().join(format!(
-            "handymeeting-{label}-{}-{nonce}",
-            std::process::id()
-        ))
-    }
-
-    #[test]
-    fn only_handy_named_programs_are_accepted_as_explicit_executables() {
-        for ok in [
-            "/usr/bin/handy",
-            "C:/Program Files/Handy/Handy.exe",
-            "/Applications/Handy.app",
-            "/home/u/Applications/Handy_0.9.8_amd64.AppImage",
-        ] {
-            assert!(plausible_handy_path(Path::new(ok)), "{ok}");
-        }
-        for bad in [
-            "/bin/sh",
-            "C:/Windows/System32/cmd.exe",
-            "/tmp/handy.sh",
-            "/tmp/payload",
-        ] {
-            assert!(!plausible_handy_path(Path::new(bad)), "{bad}");
-        }
-    }
-    #[test]
-    fn invalid_explicit_installation_never_reverts_to_an_earlier_executable() {
-        let root = fixture_root("installation-choice");
-        let service = Service::new(root.clone()).unwrap();
-        service.lock().unwrap().executable = Some(root.join("previous-handy.exe"));
-        let selected = root.join("new-installation-missing.exe");
-        assert!(service
-            .refresh(Some(selected.to_string_lossy().into_owned()))
-            .is_err());
-        assert_eq!(
-            service.lock().unwrap().executable.as_deref(),
-            Some(selected.as_path())
-        );
-        assert!(service.refresh(None).is_err());
-        assert_eq!(
-            service.lock().unwrap().executable.as_deref(),
-            Some(selected.as_path())
-        );
-        assert!(service
-            .lock()
-            .unwrap()
-            .handy
-            .as_ref()
-            .unwrap()
-            .models
-            .is_empty());
-    }
-
-    #[test]
-    fn mismatching_session_folder_identity_is_rejected_without_rewriting_it() {
-        let root = fixture_root("session-identity");
-        let service = Service::new(root).unwrap();
-        let store = SessionStore::create(
-            &service.root.join("sessions"),
-            "Synthetic identity fixture",
-            "fixture-model",
-            "fixture-output",
-            None,
-        )
-        .unwrap();
-        let id = store.snapshot().unwrap().id;
-        let manifest = store.folder().join("session.json");
-        drop(store);
-        let mut value: serde_json::Value =
-            serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
-        value["id"] = serde_json::json!("ffffffffffffffffffffffffffffffff");
-        let bytes = serde_json::to_vec_pretty(&value).unwrap();
-        fs::write(&manifest, &bytes).unwrap();
-        assert!(service.data(&id).is_err());
-        assert_eq!(fs::read(&manifest).unwrap(), bytes);
-    }
-
-    #[test]
-    fn stop_returns_while_recognition_catches_up_and_a_poll_collects_it_later() {
-        let root = fixture_root("stop-catch-up");
-        let store = SessionStore::create(
-            &root.join("sessions"),
-            "Synthetic slow backlog",
-            "fixture-model",
-            "fixture-output",
-            None,
-        )
-        .unwrap();
-        let mut writer = meeting_core::PcmWriter::new(store.clone(), "system").unwrap();
-        writer.append(&[1_i16, 2, 3, 4]).unwrap();
-        writer.finish().unwrap();
-        drop(writer);
-        store.set_status("recorded").unwrap();
-        let service = Service::new(root.clone()).unwrap();
-        // A recognition worker that is still busy with the backlog when the user stops.
-        let (release, wait) = std::sync::mpsc::channel::<()>();
-        let worker = std::thread::spawn(move || {
-            let _ = wait.recv();
-        });
-        service.lock().unwrap().active = Some(Active {
-            owner: None,
-            store: store.clone(),
-            capture: None,
-            stop: Arc::new(AtomicBool::new(false)),
-            workers: vec![worker],
-        });
-        let started = std::time::Instant::now();
-        let view = service.stop().unwrap();
-        assert!(started.elapsed() < std::time::Duration::from_secs(5));
-        assert_eq!(view.data.status, "catching-up");
-        {
-            let inner = service.lock().unwrap();
-            assert!(!inner.transitioning, "stop must not hold the transition");
-            assert!(inner.active.as_ref().is_some_and(|a| a.capture.is_none()));
-        }
-        release.send(()).unwrap();
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-        while service.lock().unwrap().active.is_some() {
-            assert!(std::time::Instant::now() < deadline);
-            service.reap_finished().unwrap();
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
-        // Synthetic: the worker ended without recognising the open part, so the catch-up
-        // must give way to a resumable state instead of blocking new recordings.
-        let data = store.snapshot().unwrap();
-        assert_eq!(data.status, "recorded");
-        assert!(data
-            .warnings
-            .iter()
-            .any(|w| w.contains("resume to process them")));
-    }
-
-    #[test]
-    fn a_failed_catch_up_worker_leaves_a_resumable_session() {
-        let root = fixture_root("catch-up-panic");
-        let store = SessionStore::create(
-            &root.join("sessions"),
-            "Synthetic failed catch-up",
-            "fixture-model",
-            "fixture-output",
-            None,
-        )
-        .unwrap();
-        let mut writer = meeting_core::PcmWriter::new(store.clone(), "system").unwrap();
-        writer.append(&[1_i16, 2, 3, 4]).unwrap();
-        writer.finish().unwrap();
-        drop(writer);
-        store.set_status("catching-up").unwrap();
-        let service = Service::new(root.clone()).unwrap();
-        // Synthetic: a recognition worker that panics after the user stopped.
-        let worker = std::thread::spawn(|| panic!("synthetic recognition failure"));
-        while !worker.is_finished() {
-            std::thread::sleep(std::time::Duration::from_millis(1));
-        }
-        service.lock().unwrap().active = Some(Active {
-            owner: None,
-            store: store.clone(),
-            capture: None,
-            stop: Arc::new(AtomicBool::new(true)),
-            workers: vec![worker],
-        });
-        service.reap_finished().unwrap();
-        assert!(service.lock().unwrap().active.is_none());
-        let data = store.snapshot().unwrap();
-        assert_eq!(data.status, "recorded");
-        assert!(data.warnings.iter().any(|w| w.contains("unterbrochen")));
-        // Audio is untouched.
-        assert_eq!(data.parts[0].confirmed_sample_count, 4);
-    }
-
-    #[test]
-    fn a_failed_catch_up_status_write_is_retried_and_an_index_failure_is_reported() {
-        let root = fixture_root("catch-up-retry");
-        let store = SessionStore::create(
-            &root.join("sessions"),
-            "Synthetic blocked status write",
-            "fixture-model",
-            "fixture-output",
-            None,
-        )
-        .unwrap();
-        let mut writer = meeting_core::PcmWriter::new(store.clone(), "system").unwrap();
-        writer.append(&[1_i16, 2, 3, 4]).unwrap();
-        writer.finish().unwrap();
-        drop(writer);
-        store.set_status("catching-up").unwrap();
-        let service = Service::new(root.clone()).unwrap();
-        let worker = std::thread::spawn(|| {});
-        while !worker.is_finished() {
-            std::thread::sleep(std::time::Duration::from_millis(1));
-        }
-        service.lock().unwrap().active = Some(Active {
-            owner: None,
-            store: store.clone(),
-            capture: None,
-            stop: Arc::new(AtomicBool::new(true)),
-            workers: vec![worker],
-        });
-        // Polling leaves the session alone while a transition holds the gate.
-        {
-            let _gate = service.transition.lock().unwrap();
-            service.reap_when_idle().unwrap();
-            assert!(service.lock().unwrap().active.is_some());
-        }
-        // Synthetic: a directory in place of session.json makes the status write fail.
-        let manifest = store.folder().join("session.json");
-        let saved = std::fs::read(&manifest).unwrap();
-        std::fs::remove_file(&manifest).unwrap();
-        std::fs::create_dir(&manifest).unwrap();
-        assert!(service.reap_when_idle().is_err());
-        assert!(service.lock().unwrap().active.is_some());
-        assert_eq!(store.snapshot().unwrap().status, "catching-up");
-        std::fs::remove_dir(&manifest).unwrap();
-        std::fs::write(&manifest, saved).unwrap();
-        // Synthetic: a file in place of the index folder makes the search refresh fail.
-        let index = root.join("library-index");
-        assert!(!index.exists());
-        std::fs::write(&index, b"synthetic, blocks the search index").unwrap();
-        service.reap_when_idle().unwrap();
-        assert!(service.lock().unwrap().active.is_none());
-        let data = store.snapshot().unwrap();
-        assert_eq!(data.status, "recorded");
-        assert_eq!(data.parts[0].confirmed_sample_count, 4);
-        assert!(data.warnings.iter().any(|w| w.contains("Suchindex")));
-    }
-
-    #[test]
-    fn resume_finalizes_durable_final_text_after_host_exit_without_loading_a_model() {
-        for global_status in ["recorded", "catching-up"] {
-            let root = fixture_root("resume-final-checkpoint");
-            let store = SessionStore::create(
-                &root.join("sessions"),
-                "Synthetic host-exit window",
-                "fixture-model",
-                "fixture-output",
-                None,
-            )
-            .unwrap();
-            let mut writer = meeting_core::PcmWriter::new(store.clone(), "system").unwrap();
-            writer.append(&[1_i16, 2, 3, 4]).unwrap();
-            writer.finish().unwrap();
-            drop(writer);
-            store.set_status("recorded").unwrap();
-            let data = store.snapshot().unwrap();
-            let id = data.id.clone();
-            let part = &data.parts[0];
-            store
-                .append_transcript(meeting_core::TranscriptCheckpoint {
-                    sequence: 0,
-                    at: String::new(),
-                    file: part.file.clone(),
-                    model_id: data.model_id.clone(),
-                    full: "Bestätigter Originaltext.".into(),
-                    committed: "Bestätigter Originaltext.".into(),
-                    tentative: String::new(),
-                    processed_samples: part.confirmed_sample_count,
-                    final_text: true,
-                    revision_after_restart: false,
-                })
-                .unwrap();
-            if global_status == "catching-up" {
-                store.set_status("catching-up").unwrap();
-            }
-            let folder = store.folder().to_owned();
-            let audio = fs::read(folder.join("audio").join(&part.file)).unwrap();
-            let journal = fs::read(folder.join("transcript-journal.jsonl")).unwrap();
-            drop(store);
-            // Reopen the exact durable state a killed host leaves between its
-            // final checkpoint and global completion write. No capture occurs.
-            let service = Service::new(root.clone()).unwrap();
-            service.lock().unwrap().executable = Some(root.join("intentionally-missing-handy.exe"));
-            let resumed = service.resume(id.clone()).unwrap();
-            assert_eq!(resumed.data.status, "complete");
-            assert_eq!(
-                resumed.data.parts[0].text.as_deref(),
-                Some("Bestätigter Originaltext.")
-            );
-            assert!(service.lock().unwrap().handy.is_none());
-            assert!(service.lock().unwrap().active.is_none());
-            assert_eq!(
-                fs::read(folder.join("audio").join(&part.file)).unwrap(),
-                audio
-            );
-            assert_eq!(
-                fs::read(folder.join("transcript-journal.jsonl")).unwrap(),
-                journal
-            );
-            let persisted: serde_json::Value =
-                serde_json::from_slice(&fs::read(folder.join("session.json")).unwrap()).unwrap();
-            assert_eq!(persisted["status"], "complete");
-        }
-    }
-
-    #[test]
-    fn resume_does_not_finalize_failed_or_open_audio_parts() {
-        for (part_status, open) in [("error", false), ("complete", true)] {
-            let root = fixture_root("resume-incomplete");
-            let store = SessionStore::create(
-                &root.join("sessions"),
-                "Synthetic incomplete state",
-                "fixture-model",
-                "fixture-output",
-                None,
-            )
-            .unwrap();
-            let mut writer = meeting_core::PcmWriter::new(store.clone(), "system").unwrap();
-            writer.append(&[1_i16, 2, 3, 4]).unwrap();
-            if open {
-                writer.checkpoint().unwrap();
-            } else {
-                writer.finish().unwrap();
-            }
-            drop(writer);
-            store.set_status("recorded").unwrap();
-            let id = store.snapshot().unwrap().id;
-            let manifest = store.folder().join("session.json");
-            drop(store);
-            let mut value: serde_json::Value =
-                serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
-            value["parts"][0]["status"] = part_status.into();
-            value["parts"][0]["modelId"] = "fixture-model".into();
-            value["parts"][0]["processedSamples"] = 4.into();
-            fs::write(&manifest, serde_json::to_vec_pretty(&value).unwrap()).unwrap();
-            let service = Service::new(root.clone()).unwrap();
-            service.lock().unwrap().executable = Some(root.join("intentionally-missing-handy.exe"));
-            assert!(service.resume(id.clone()).is_err());
-            assert_eq!(service.data(&id).unwrap().status, "recorded");
-        }
-    }
-}
+mod service_tests;

@@ -140,7 +140,7 @@ def stage(rid, source_path, checks_path, helper=None, icon=None):
             raise RuntimeError("macOS packaging requires the compiled capture helper and generated icon")
         sha(helper)
         sha(icon)
-        app = work / "HandyMeeting.app"
+        app = work / "Meeting for Handy.app"
         program = app / "Contents/MacOS"
         resources = app / "Contents/Resources"
         program.mkdir(parents=True)
@@ -148,7 +148,7 @@ def stage(rid, source_path, checks_path, helper=None, icon=None):
         shutil.copyfile(helper, program / "HandyMeetingCapture")
         (program / "HandyMeetingCapture").chmod(0o755)
         shutil.copyfile(icon, resources / "HandyMeeting.icns")
-        info = {"CFBundleIdentifier": "org.handymeeting.beta", "CFBundleName": "HandyMeeting", "CFBundleExecutable": "HandyMeeting", "CFBundlePackageType": "APPL", "CFBundleShortVersionString": version().split("-")[0], "CFBundleVersion": version().split("-")[0], "LSMinimumSystemVersion": "15.0", "NSHighResolutionCapable": True, "CFBundleIconFile": "HandyMeeting.icns", "NSMicrophoneUsageDescription": "Record your microphone as a separate local meeting track.", "NSAudioCaptureUsageDescription": "Record meeting system audio locally. Audio is never sent to a cloud service."}
+        info = {"CFBundleIdentifier": "org.handymeeting.beta", "CFBundleName": "Meeting for Handy", "CFBundleDisplayName": "Meeting for Handy", "CFBundleExecutable": "HandyMeeting", "CFBundlePackageType": "APPL", "CFBundleShortVersionString": version().split("-")[0], "CFBundleVersion": version().split("-")[0], "LSMinimumSystemVersion": "15.0", "NSHighResolutionCapable": True, "CFBundleIconFile": "HandyMeeting.icns", "NSMicrophoneUsageDescription": "Record your microphone as a separate local meeting track.", "NSAudioCaptureUsageDescription": "Record meeting system audio locally. Audio is never sent to a cloud service."}
         (app / "Contents/Info.plist").write_bytes(plistlib.dumps(info))
     program.mkdir(parents=True, exist_ok=True)
     resources.mkdir(parents=True, exist_ok=True)
@@ -168,7 +168,7 @@ def stage(rid, source_path, checks_path, helper=None, icon=None):
     shutil.copyfile(sdk_folder / "SDK_PROVENANCE.json", resources / "SDK_PROVENANCE.json")
     shutil.copyfile(sdk_folder / "ABI_REPORT.json", resources / "ABI_REPORT.json")
     write(resources / "BUILD_PROVENANCE.json", {**receipt, "releaseChecks": proof, "realDeviceTested": False})
-    (resources / "START-HERE.txt").write_text("HandyMeeting " + version() + " portable build\n\nRequires a compatible Handy installation and locally installed streaming model.\nLinux uses PulseAudio/PipeWire-Pulse (pulseaudio-utils); macOS 15+ requires recording permissions.\nmacOS records the default system output; a microphone can be chosen (selection not yet tested on Mac hardware). Receipt times are approximate; silence without packets is estimated.\nReal-device capture and two-hour recovery tests are still required on each target.\nmacOS candidate packages are ad-hoc signed, not Developer-ID signed or notarized.\nSee https://github.com/Puma7/handy-meeting/blob/main/TEST_REPORT.md for measured limits.\n", encoding="utf-8")
+    (resources / "START-HERE.txt").write_text("Meeting for Handy " + version() + " portable build\n\nRequires a compatible Handy installation and locally installed streaming model.\nLinux uses PulseAudio/PipeWire-Pulse (pulseaudio-utils); macOS 15+ requires recording permissions.\nmacOS records the default system output; a microphone can be chosen (selection not yet tested on Mac hardware). Receipt times are approximate; silence without packets is estimated.\nReal-device capture and two-hour recovery tests are still required on each target.\nmacOS candidate packages are ad-hoc signed, not Developer-ID signed or notarized.\nSee https://github.com/Puma7/meeting-for-handy/blob/main/TEST_REPORT.md for measured limits.\n", encoding="utf-8")
     write(work / "stage-receipt.json", {**receipt, "app": str(app), "program": str(program), "resources": str(resources), "sdk": native, "releaseChecks": proof})
     print(work)
 
@@ -210,17 +210,17 @@ Version: {deb_version}
 Section: sound
 Priority: optional
 Architecture: amd64
-Maintainer: HandyMeeting contributors
+Maintainer: Meeting for Handy contributors
 Depends: {DEB_DEPENDS}
 Recommends: {DEB_RECOMMENDS}
 Suggests: pipewire-pulse | pulseaudio
-Description: HandyMeeting local meeting companion
+Description: Meeting for Handy local meeting companion
  Separate local system and microphone audio; reuses compatible Handy models.
  Target-device capture and long-session tests remain required.
 """
     desktop = f"""[Desktop Entry]
 Type=Application
-Name=HandyMeeting
+Name=Meeting for Handy
 Comment=Local meeting audio and transcript
 Exec={install_root}/HandyMeeting
 Icon=handymeeting

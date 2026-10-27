@@ -146,6 +146,19 @@ export default function RetentionPanel({
       setBusy(false);
     }
   }
+  async function chooseFfmpeg() {
+    if (!api.chooseFfmpegExecutable || !draft || busy || running) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const selected = await api.chooseFfmpegExecutable();
+      if (selected) setDraft({ ...draft, ffmpegExecutable: selected });
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
   async function apply() {
     if (!plan || selected === null || !candidate || !api.applyRetention) return;
     setBusy(true);
@@ -301,17 +314,22 @@ export default function RetentionPanel({
             {de
               ? "Separat installiertes FFmpeg · nur für optionale Formatumwandlung"
               : "Separately installed FFmpeg · only for optional format conversion"}
-            <input
-              value={draft.ffmpegExecutable ?? ""}
-              disabled={busy || running}
-              onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  ffmpegExecutable: e.target.value.trim() || null,
-                })
-              }
-            />
+            <input value={draft.ffmpegExecutable ?? ""} readOnly />
           </label>
+          <button
+            className="secondary"
+            disabled={busy || running || !api.chooseFfmpegExecutable}
+            onClick={() => void chooseFfmpeg()}
+          >
+            {de
+              ? "FFmpeg im Dateidialog auswählen …"
+              : "Choose FFmpeg in file dialog …"}
+          </button>
+          <p className="muted">
+            {de
+              ? "Die ausgewählte Programmdatei wird geprüft. Wähle und bestätige sie nach jedem App-Neustart sowie nach einem Austausch erneut, bevor du sie verwendest. Der gespeicherte Pfad allein ist keine neue Freigabe. Abbrechen lässt die bisherige Wahl unverändert."
+              : "The selected program is checked. Choose and confirm it again after each app restart or replacement before using it. The saved path alone does not grant renewed permission. Cancelling preserves the previous selection."}
+          </p>
           <button
             className="secondary"
             disabled={busy || running || !changed}

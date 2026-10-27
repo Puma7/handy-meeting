@@ -73,7 +73,7 @@ else
   mkdir "$image_root"
   cp -a "$app" "$image_root/"
   ln -s /Applications "$image_root/Applications"
-  hdiutil create -volname 'HandyMeeting' -srcfolder "$image_root" -format UDZO "$package"
+  hdiutil create -volname 'Meeting for Handy' -srcfolder "$image_root" -format UDZO "$package"
   hdiutil verify "$package"
   (cd packages && shasum -a 256 "$(basename "$package")") > "$package.sha256"
 fi

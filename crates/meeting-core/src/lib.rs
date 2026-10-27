@@ -13,7 +13,10 @@ pub mod retention;
 pub mod speakers;
 mod storage;
 
-pub use capture::{list_devices, CaptureController, CaptureOptions};
+pub use capture::{
+    list_devices, read_capture_control_events, CaptureControlEvent, CaptureControlLog,
+    CaptureControlSnapshot, CaptureController, CaptureOptions,
+};
 pub use model::{
     AudioDevice, AudioPart, CaptureSnapshot, SessionData, SessionProgress, TranscriptCheckpoint,
     TranscriptPage, TranscriptSlice,

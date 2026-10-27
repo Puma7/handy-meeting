@@ -188,8 +188,8 @@ async function stage() {
   for (const [name, file] of [...inputs].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) { payloadName(name); files.push({ path: name, sha256: await sha(file), bytes: (await fs.stat(file)).size }); }
   const manifest = { version: currentVersion, sourceFingerprintSHA256: checked.sourceFingerprintSHA256, executableSHA256: pending.executableSHA256, files };
   const manifestBytes = Buffer.from(JSON.stringify(manifest, null, 2) + '\n');
-  const launcherFile = `HandyMeeting ${currentVersion} starten.cmd`;
-  const launcher = Buffer.from(`@echo off\r\nif not exist "%~dp0${programDirectory}\\HandyMeeting.exe" (\r\n  echo Bitte das vollstaendige HandyMeeting-Paket entpacken.\r\n  pause\r\n  exit /b 1\r\n)\r\nstart "" "%~dp0${programDirectory}\\HandyMeeting.exe"\r\n`, 'ascii');
+  const launcherFile = `Meeting for Handy ${currentVersion} starten.cmd`;
+  const launcher = Buffer.from(`@echo off\r\nif not exist "%~dp0${programDirectory}\\HandyMeeting.exe" (\r\n  echo Bitte das vollstaendige Meeting-for-Handy-Paket entpacken.\r\n  pause\r\n  exit /b 1\r\n)\r\nstart "" "%~dp0${programDirectory}\\HandyMeeting.exe"\r\n`, 'ascii');
   // Check all conflicts before publishing a single new payload file.
   for (const file of files) { const target = inside(ROOT, programDirectory + '/' + file.path); if (await exists(target)) insist(await sha(target) === file.sha256, 'This version directory already contains different program bytes.'); }
   const manifestTarget = inside(ROOT, programDirectory + '/BUILD_MANIFEST.json');

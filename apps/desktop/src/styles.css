@@ -1544,6 +1544,27 @@ mark {
 .retention-panel .notes-statusbar {
   margin-top: 12px;
 }
+.capture-control-panel {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  margin-top: 12px;
+}
+.capture-control-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.capture-control-panel p {
+  margin: 10px 0 0;
+}
+.capture-control-help {
+  font-size: 0.86rem;
+}
+.transcript-format {
+  display: grid;
+  gap: 4px;
+  font-size: 0.85rem;
+}
 @media (max-width: 600px) {
   .retention-rule {
     grid-template-columns: minmax(0, 1fr);
