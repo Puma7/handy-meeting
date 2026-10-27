@@ -67,7 +67,7 @@ export default function UpdatePanel({
   const windows = (job?.platform ?? "windows") === "windows";
   const canDownload = job?.canDownload ?? windows;
   const releasePage =
-    job?.releaseUrl ?? "https://github.com/Puma7/handy-meeting/releases";
+    job?.releaseUrl ?? "https://github.com/Puma7/meeting-for-handy/releases";
   async function action(run: () => Promise<unknown>) {
     requesting.current = true;
     setRequest(true);

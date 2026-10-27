@@ -12,9 +12,9 @@ use std::{
     time::{Duration, Instant},
 };
 type Result<T> = std::result::Result<T, String>;
-const LATEST: &str = "https://api.github.com/repos/Puma7/handy-meeting/releases/latest";
+const LATEST: &str = "https://api.github.com/repos/Puma7/meeting-for-handy/releases/latest";
 const MAX_INSTALLER: u64 = 1024 * 1024 * 1024;
-const RELEASES: &str = "https://github.com/Puma7/handy-meeting/releases";
+const RELEASES: &str = "https://github.com/Puma7/meeting-for-handy/releases";
 /// Unfinished downloads never carry an executable extension.
 const PARTIAL_SUFFIX: &str = "-setup.partial";
 #[derive(Clone, Serialize, Default)]
@@ -511,7 +511,7 @@ impl Updater {
 mod tests {
     use super::*;
     fn release() -> Release {
-        Release{tag_name:"v1.0.2".into(),draft:false,prerelease:false,html_url:"https://github.com/Puma7/handy-meeting/releases/tag/v1.0.2".into(),assets:vec![Asset{name:"HandyMeeting-1.0.2-windows-x64-setup.exe".into(),size:123,digest:Some(format!("sha256:{}","a".repeat(64))),browser_download_url:"https://github.com/Puma7/handy-meeting/releases/download/v1.0.2/HandyMeeting-1.0.2-windows-x64-setup.exe".into()}]}
+        Release{tag_name:"v1.0.2".into(),draft:false,prerelease:false,html_url:"https://github.com/Puma7/meeting-for-handy/releases/tag/v1.0.2".into(),assets:vec![Asset{name:"HandyMeeting-1.0.2-windows-x64-setup.exe".into(),size:123,digest:Some(format!("sha256:{}","a".repeat(64))),browser_download_url:"https://github.com/Puma7/meeting-for-handy/releases/download/v1.0.2/HandyMeeting-1.0.2-windows-x64-setup.exe".into()}]}
     }
     const WINDOWS: Platform = Platform {
         os: "windows",
@@ -686,13 +686,33 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
     #[test]
+    fn a_release_listed_by_github_for_this_repository_is_accepted() {
+        // Shape and addresses as the GitHub API lists the published v1.0.1 release of
+        // Puma7/meeting-for-handy. The earlier repository name redirects, and the
+        // updater refuses both the redirect and a release page under another name.
+        let listed: Release = serde_json::from_str(
+            r#"{"tag_name":"v1.0.4","draft":false,"prerelease":false,
+                "html_url":"https://github.com/Puma7/meeting-for-handy/releases/tag/v1.0.4",
+                "assets":[{"name":"HandyMeeting-1.0.4-windows-x64-setup.exe","size":123,
+                  "digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "browser_download_url":"https://github.com/Puma7/meeting-for-handy/releases/download/v1.0.4/HandyMeeting-1.0.4-windows-x64-setup.exe"}]}"#,
+        )
+        .unwrap();
+        let found = candidate(listed, "1.0.3", WINDOWS).unwrap().unwrap();
+        assert_eq!(found.version, "1.0.4");
+        assert_eq!(
+            LATEST,
+            "https://api.github.com/repos/Puma7/meeting-for-handy/releases/latest"
+        );
+    }
+    #[test]
     fn release_page_stays_on_the_official_repository() {
         let updater = Updater::default();
         assert_eq!(updater.release_page().unwrap(), RELEASES);
         updater.inner.lock().unwrap().candidate = candidate(release(), "1.0.1", LINUX).unwrap();
         assert_eq!(
             updater.release_page().unwrap(),
-            "https://github.com/Puma7/handy-meeting/releases/tag/v1.0.2"
+            "https://github.com/Puma7/meeting-for-handy/releases/tag/v1.0.2"
         );
     }
     #[test]

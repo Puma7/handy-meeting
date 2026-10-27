@@ -1,42 +1,64 @@
-## HandyMeeting 1.0.1
+## Meeting for Handy 1.0.4
 
-A patch release of the independent Rust/Tauri meeting companion for Handy.
+A feature and reliability release of the independent Rust/Tauri meeting companion for Handy. It contains the unreleased 1.0.2 work and the 1.0.3 follow-ups.
 
-### Fixed in 1.0.1
+### New in 1.0.4
 
-- Windows setup now creates a fresh default destination when its parent folders do not yet exist. Existing program directories and user files remain protected. Native tests and actual CI installation cover this first-install layout.
-- Unfinished analysis work is discoverable after restarting the app, preserving original instructions and requiring fresh cloud consent. Backup-recoverable sessions remain visible in history.
-- Portable package proofs bind the final archive name, bytes and SHA-256.
-- Template UI tests use independent cases rather than one long combined workflow; no timeout increase or test retry is used.
+- Pause/resume recording and mute only the app microphone. Ignored audio becomes explicit silent sections; other apps are unchanged. Depending on the platform, the operating system may still display a recording indicator.
+- Full transcript snapshots as TXT, inert Markdown or structured JSON, with original section/source identifiers and explicit section-time semantics.
+- Native file choice and confirmation for local Handy/FFmpeg programs and imported sessions. Approvals bind purpose/path/SHA256 and expire when the app closes.
+- Conservative Windows microphone clock-gap alignment and explicit capture-control provenance; impossible clock jumps stop before padding. Missing audio is not recovered speech.
+- Shared operation leases and additional archive-marker/path protections while retaining live rename and all original data.
+- Visible name **Meeting for Handy**; existing internal data/key/bundle/executable/package identifiers remain compatible. Installer helpers respect execution policy.
+
+### Also included since 1.0.1
+
+- **Meeting library:** names, VIP flags and a rebuildable local search over meeting titles and transcripts. Search hits open the highlighted source section.
+- **Retention and archive:** disabled-by-default retention rules with a reviewed preview, verified archives, restore, FLAC/Opus audio copies and permanent deletion only after typed confirmation. Interrupted moves and deletions can be continued.
+- **Updates:** check official releases on request. Windows downloads the setup to a temporary file and installs it only after its size and SHA-256 match and you confirm. Linux and macOS open the release page. Installation waits for recordings and background jobs.
+- **Optional speaker experiments** with evidence-checked name suggestions. Original transcripts are never changed.
+- **macOS:** choose a real microphone (not yet tested on Mac hardware).
+
+### Recording and recovery
+
+- "Stop meeting" returns at once; remaining sections are recognized in the background ("catching up"). A recognition run that ends without a full result leaves a resumable session.
+- A track that stops while the other continues is reported on its own. Trustworthy Windows microphone gaps are marked with explicit silence; uncertain clocks are rejected and warnings remain visible.
+- When recognition continues on CPU after a GPU failure and decodes a section differently, the new text is kept as a marked revision; earlier text stays in the journal.
+- Opening a session closes every audio part at its confirmed prefix. Journals and the manifest are written outside the shared lock, so a slow disk does not delay audio capture.
+- The readable TXT copy retries briefly after a short file lock instead of staying out of date.
+- Dangling links are refused before session, archive, label, speaker and retention files are opened.
+
+### Analysis
+
+- Statements that fail the source checks are dropped and counted per section instead of failing the whole analysis. Analyses from earlier prompt versions stay readable and are marked; damaged saved runs no longer hide the list.
+
+### Platforms and installer
+
+- The Start menu link stays on the newest side-by-side Windows installation, including beta versions (beta.10 after beta.9).
+- Linux: versioned Handy AppImages in `~/Applications` are found (only ones that can run), and the DEB adds `/usr/bin/handymeeting`.
+- `localhost` reaches a local text-model server on IPv4 or IPv6 loopback without system DNS or proxies.
 
 ### Choose your download
 
 - **Windows 10/11 x64:** `windows-x64-setup.exe`, or extract the complete `windows-x64.zip`. WebView2 and Microsoft Visual C++ x64 are required; .NET is not needed.
 - **Ubuntu 22.04+ / Debian 12–13 x64:** install `linux-amd64.deb` with your package manager. PulseAudio or PipeWire-Pulse is required.
-- **Mac M-series / Apple Silicon:** `osx-arm64.dmg`, macOS 13+.
-- **Mac Intel:** `osx-x64.dmg`, macOS 13+.
+- **Mac M-series / Apple Silicon:** `osx-arm64.dmg`, macOS 15+.
+- **Mac Intel:** `osx-x64.dmg`, macOS 15+.
 
 Install Handy and a compatible downloaded streaming model first. The companion detects its model metadata and reuses the existing weights in its own local inference processes. For local summaries, additionally run a local text-model service such as LM Studio and choose a text model in the app.
 
-### Included
-
-- Separate system and optional microphone recording; recognition runs independently of audio saving.
-- Local session history, original transcript snapshots, complete TXT export and direct session-folder access.
-- Named analysis templates with editable processing tabs, original quotes and source navigation.
-- Local-first notes, explicit per-run cloud text consent and optional native OS credential storage.
-- Confirmed-step progress, elapsed time, cancellation, retained/resumable analysis work, German/English and light/dark themes.
-- Private local agent control with visible recording consent and exact session ownership; no MCP claim.
+Starting with this version, Meeting for Handy can find later releases itself (Settings → updates). Version 1.0.1 has no update check; install 1.0.4 manually once. Earlier program versions and all user data are preserved.
 
 ### Read before relying on a recording
 
-Mac/Linux device capture and a new full-app Rust two-hour run still need real-device validation. Earlier synthetic, C# and worker-only tests do not establish that result. Driver interruption warnings remain meaningful; confirmed checkpoint recovery is not a power-loss guarantee and an unconfirmed audio tail can be missing. Diarization and exact word timestamps are not implemented. Meeting notes remain reviewable AI drafts.
+Hardware, long-session and abort tests for the changed capture and recognition paths, Mac/Linux device capture and a new full-app Rust two-hour run still need real-device validation. The automated checks use synthetic data and virtual devices. Driver interruption warnings remain meaningful; confirmed checkpoint recovery is not a power-loss guarantee and an unconfirmed audio tail can be missing. Diarization and exact word timestamps are not implemented. Meeting notes remain reviewable AI drafts.
 
 Mac packages are **ad-hoc signed, not Apple-notarized**. Windows setup is **unsigned**. System trust checks can block these builds. Do not disable system protection to install them. Use short independently backed-up test sessions first.
 
-The retained dependency audit reports nine maintenance warnings and one existing GLib unsoundness warning. No dependency versions were silently updated for packaging; see the test report for the audit scope and limitations.
+A locked `cargo audit` check reports no known vulnerabilities; nine maintenance warnings and one existing GLib unsoundness warning are unchanged from 1.0.1. See the test report for scope and limits.
 
 SHA-256 sidecars, `SHA256SUMS.txt`, package proofs and `RELEASE_MANIFEST.json` accompany the complete matrix. The manifest records the exact source commit and fingerprint; it explicitly distinguishes automated checks from unperformed real-device/notarization checks. No models, recordings, settings or keys are included. Existing user data and earlier releases are preserved.
 
-[English guide](https://github.com/Puma7/handy-meeting/blob/main/README.md) · [Deutsche Anleitung](https://github.com/Puma7/handy-meeting/blob/main/README.de.md) · [Test evidence](https://github.com/Puma7/handy-meeting/blob/main/TEST_REPORT.md) · [Open issues](https://github.com/Puma7/handy-meeting/issues)
+[English guide](https://github.com/Puma7/meeting-for-handy/blob/main/README.md) · [Deutsche Anleitung](https://github.com/Puma7/meeting-for-handy/blob/main/README.de.md) · [Test evidence](https://github.com/Puma7/meeting-for-handy/blob/main/TEST_REPORT.md) · [Open issues](https://github.com/Puma7/meeting-for-handy/issues)
 
-HandyMeeting is independently developed and is not an official Handy product or an endorsed integration. MIT licensed; original dependency and installer notices are included.
+Meeting for Handy is independently developed and is not an official Handy product or an endorsed integration. MIT licensed; original dependency and installer notices are included.
