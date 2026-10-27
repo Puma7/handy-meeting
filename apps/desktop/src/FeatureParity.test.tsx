@@ -18,6 +18,9 @@ import type {
   Meeting,
   TemplateLibrary,
 } from "./types";
+// Full-App cases render the whole UI with its status polling. On slow CI runners
+// (macos-15-intel) they exceeded the 5 s default; focused component files keep it.
+vi.setConfig({ testTimeout: 15_000 });
 
 // Synthetic IPC fixtures: no audio devices, native files, keychains or provider requests.
 const meeting: Meeting = {

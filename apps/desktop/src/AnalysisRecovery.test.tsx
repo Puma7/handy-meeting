@@ -11,6 +11,9 @@ import type {
   NotesRequest,
   PendingAnalysis,
 } from "./types";
+// Full-App cases render the whole UI with its status polling. On slow CI runners
+// (macos-15-intel) they exceeded the 5 s default; focused component files keep it.
+vi.setConfig({ testTimeout: 15_000 });
 
 // Synthetic IPC only: neither this cloud-consent test nor local recovery contacts a provider.
 const meeting: Meeting = {
