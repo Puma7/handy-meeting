@@ -28,7 +28,7 @@ An independent **Rust + Tauri companion for [Handy](https://github.com/cjpais/Ha
 | Mac · Apple Silicon / M-series | Apple Silicon DMG | macOS 15+; recording permissions |
 | Mac · Intel | Intel DMG | macOS 15+; recording permissions |
 
-**Installer status:** the complete 1.0.1 release corrects the first-install Windows folder failure found in 1.0.0. Every complete release includes five packages and `RELEASE_MANIFEST.json`. Keep the versioned program folders separate; recordings and older installations are preserved.
+**Installer status:** the current public release is 1.0.1, which corrects the first-install Windows folder failure found in 1.0.0; 1.0.2 and 1.0.3 are in development. Every complete release includes five packages and `RELEASE_MANIFEST.json`. Keep the versioned program folders separate; recordings and older installations are preserved.
 
 **Future releases:** a matching version tag automatically starts the full Windows/Linux/Mac build matrix. Successful checks produce all five packages and their proofs in a release draft. Publish the populated draft to make the downloads public; publishing a release directly also starts this workflow. [Release procedure](docs/RELEASING.md).
 
