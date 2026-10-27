@@ -86,12 +86,16 @@ fn appimage_rank(name: &str, machine_arch: &str) -> Option<AppImageRank> {
         .filter(|&end| name.is_char_boundary(end))
         .filter(|&end| name[end..].eq_ignore_ascii_case(".AppImage"))
         .map(|end| &name[..end])?;
-    let rest = stem
-        .get(..6)
-        .filter(|prefix| {
-            prefix[..5].eq_ignore_ascii_case("handy") && matches!(&prefix[5..], "_" | "-")
-        })
-        .map(|_| &stem[6..])?;
+    // Byte checks: other AppImages may have non-ASCII names, and byte 5 being ASCII
+    // makes index 6 a character boundary.
+    let bytes = stem.as_bytes();
+    if bytes.len() < 6
+        || !bytes[..5].eq_ignore_ascii_case(b"handy")
+        || !matches!(bytes[5], b'_' | b'-')
+    {
+        return None;
+    }
+    let rest = &stem[6..];
     let mut version = rest;
     let mut arch_specific = false;
     for (token, arch) in APPIMAGE_ARCHES {
@@ -182,6 +186,11 @@ mod tests {
             "Handy_0.9.8_amd64 (1).AppImage",
             "Handy_0.9.8-beta/1.AppImage",
             "Handy_99999999999.AppImage",
+            // Unrelated non-ASCII names must be skipped, never split mid-character.
+            "中文.AppImage",
+            "Handé_1.0.0.AppImage",
+            "Handyé.AppImage",
+            "Handy_1.0.0_ä.AppImage",
         ] {
             assert!(appimage_rank(name, "x86_64").is_none(), "{name}");
         }

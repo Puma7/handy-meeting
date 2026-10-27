@@ -544,11 +544,29 @@ impl Service {
             }
         };
         if let Some(mut active) = finished {
+            let mut interrupted = false;
             for worker in active.workers.drain(..) {
-                let _ = worker.join();
+                interrupted |= worker.join().is_err();
             }
             self.lock()?.view = Some(active.store.clone());
-            Self::finalize_completed_recognition(&active.store)?;
+            if !Self::finalize_completed_recognition(&active.store)? {
+                // No worker remains: a catch-up that ended with open sections must not stay
+                // "catching-up", which blocks new recordings and the resume action.
+                let caught_up = active
+                    .store
+                    .preview_snapshot(0)
+                    .is_ok_and(|data| data.status == "catching-up");
+                if caught_up {
+                    active
+                        .store
+                        .set_status("recorded")
+                        .map_err(|_| "Sitzungsstatus konnte nicht gesichert werden.")?;
+                    let _ = active.store.notice("Die Erkennung wurde ohne vollständiges Ergebnis beendet. Audio ist gespeichert; offene Abschnitte können über Wiederaufnehmen nachgeholt werden. / Recognition ended with open sections. Audio is saved; resume to process them.");
+                }
+            }
+            if interrupted {
+                let _ = active.store.notice("Ein Erkennungsprozess wurde unterbrochen. Offene Abschnitte können später nachgeholt werden.");
+            }
             if let Ok(data) = active.store.snapshot() {
                 let _ = library_service::update(&self.root, &data);
             }
@@ -1406,6 +1424,52 @@ mod service_tests {
             service.reap_finished().unwrap();
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
+        // Synthetic: the worker ended without recognising the open part, so the catch-up
+        // must give way to a resumable state instead of blocking new recordings.
+        let data = store.snapshot().unwrap();
+        assert_eq!(data.status, "recorded");
+        assert!(data
+            .warnings
+            .iter()
+            .any(|w| w.contains("resume to process them")));
+    }
+
+    #[test]
+    fn a_failed_catch_up_worker_leaves_a_resumable_session() {
+        let root = fixture_root("catch-up-panic");
+        let store = SessionStore::create(
+            &root.join("sessions"),
+            "Synthetic failed catch-up",
+            "fixture-model",
+            "fixture-output",
+            None,
+        )
+        .unwrap();
+        let mut writer = meeting_core::PcmWriter::new(store.clone(), "system").unwrap();
+        writer.append(&[1_i16, 2, 3, 4]).unwrap();
+        writer.finish().unwrap();
+        drop(writer);
+        store.set_status("catching-up").unwrap();
+        let service = Service::new(root.clone()).unwrap();
+        // Synthetic: a recognition worker that panics after the user stopped.
+        let worker = std::thread::spawn(|| panic!("synthetic recognition failure"));
+        while !worker.is_finished() {
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        service.lock().unwrap().active = Some(Active {
+            owner: None,
+            store: store.clone(),
+            capture: None,
+            stop: Arc::new(AtomicBool::new(true)),
+            workers: vec![worker],
+        });
+        service.reap_finished().unwrap();
+        assert!(service.lock().unwrap().active.is_none());
+        let data = store.snapshot().unwrap();
+        assert_eq!(data.status, "recorded");
+        assert!(data.warnings.iter().any(|w| w.contains("unterbrochen")));
+        // Audio is untouched.
+        assert_eq!(data.parts[0].confirmed_sample_count, 4);
     }
 
     #[test]
