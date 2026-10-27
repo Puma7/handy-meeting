@@ -168,7 +168,7 @@ def stage(rid, source_path, checks_path, helper=None, icon=None):
     shutil.copyfile(sdk_folder / "SDK_PROVENANCE.json", resources / "SDK_PROVENANCE.json")
     shutil.copyfile(sdk_folder / "ABI_REPORT.json", resources / "ABI_REPORT.json")
     write(resources / "BUILD_PROVENANCE.json", {**receipt, "releaseChecks": proof, "realDeviceTested": False})
-    (resources / "START-HERE.txt").write_text("HandyMeeting " + version() + " portable build\n\nRequires a compatible Handy installation and locally installed streaming model.\nLinux uses PulseAudio/PipeWire-Pulse (pulseaudio-utils); macOS 15+ requires recording permissions.\nDefault audio devices only on macOS. Receipt times are approximate; silence without packets is estimated.\nReal-device capture and two-hour recovery tests are still required on each target.\nmacOS candidate packages are ad-hoc signed, not Developer-ID signed or notarized.\nSee https://github.com/Puma7/handy-meeting/blob/main/TEST_REPORT.md for measured limits.\n", encoding="utf-8")
+    (resources / "START-HERE.txt").write_text("HandyMeeting " + version() + " portable build\n\nRequires a compatible Handy installation and locally installed streaming model.\nLinux uses PulseAudio/PipeWire-Pulse (pulseaudio-utils); macOS 15+ requires recording permissions.\nmacOS records the default system output; a microphone can be chosen (selection not yet tested on Mac hardware). Receipt times are approximate; silence without packets is estimated.\nReal-device capture and two-hour recovery tests are still required on each target.\nmacOS candidate packages are ad-hoc signed, not Developer-ID signed or notarized.\nSee https://github.com/Puma7/handy-meeting/blob/main/TEST_REPORT.md for measured limits.\n", encoding="utf-8")
     write(work / "stage-receipt.json", {**receipt, "app": str(app), "program": str(program), "resources": str(resources), "sdk": native, "releaseChecks": proof})
     print(work)
 
@@ -193,6 +193,67 @@ def finalize(work, source_path, checks_path):
     # Keep the final payload manifest outside the sealed app: embedding it would
     # change its signature/hash and create a circular manifest. Provenance is inside.
     print(json.dumps({"work": str(work), "app": str(app), "program": receipt["program"], "version": receipt["applicationVersion"]}))
+
+
+DEB_DEPENDS = "libc6 (>= 2.35), libgcc-s1, libstdc++6, libgomp1, libgtk-3-0, libwebkit2gtk-4.1-0, libayatana-appindicator3-1, librsvg2-2, libxdo3, libvulkan1, pulseaudio-utils"
+# Opening exported files/links needs xdg-open; stored API keys need a Secret Service.
+DEB_RECOMMENDS = "xdg-utils, gnome-keyring"
+
+
+def debian_files(application_version):
+    """Exact text files and links of the DEB outside the copied application."""
+    install_root = "/opt/handymeeting/" + application_version
+    # Debian orders pre-releases before the final version.
+    deb_version = application_version.replace("-beta.", "~beta", 1)
+    control = f"""Package: handymeeting
+Version: {deb_version}
+Section: sound
+Priority: optional
+Architecture: amd64
+Maintainer: HandyMeeting contributors
+Depends: {DEB_DEPENDS}
+Recommends: {DEB_RECOMMENDS}
+Suggests: pipewire-pulse | pulseaudio
+Description: HandyMeeting local meeting companion
+ Separate local system and microphone audio; reuses compatible Handy models.
+ Target-device capture and long-session tests remain required.
+"""
+    desktop = f"""[Desktop Entry]
+Type=Application
+Name=HandyMeeting
+Comment=Local meeting audio and transcript
+Exec={install_root}/HandyMeeting
+Icon=handymeeting
+Terminal=false
+Categories=Audio;AudioVideo;Utility;
+"""
+    files = {"DEBIAN/control": control, "usr/share/applications/handymeeting.desktop": desktop}
+    links = {"usr/bin/handymeeting": install_root + "/HandyMeeting"}
+    return files, links
+
+
+def deb_metadata(work):
+    """Write the control file, desktop entry and command link into WORK/deb."""
+    work = controlled_path(work)
+    if work.parent != controlled_path(ROOT / ".build/rust-portable-package") or not work.name.startswith("linux-x64-"):
+        raise RuntimeError("Unexpected Debian staging directory")
+    receipt = read(work / "stage-receipt.json")
+    if receipt["rid"] != "linux-x64":
+        raise RuntimeError("Debian metadata belongs only to the Linux package")
+    stage = controlled_path(work / "deb")
+    files, links = debian_files(receipt["applicationVersion"])
+    for relative, text in files.items():
+        target = controlled_path(stage / relative)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with target.open("x", encoding="utf-8", newline="\n") as output:
+            output.write(text)
+    for relative, destination in links.items():
+        link = controlled_path(stage / relative)
+        if not (stage / destination.lstrip("/")).is_file():
+            raise RuntimeError("The command link target is not part of the staged package")
+        link.parent.mkdir(parents=True, exist_ok=True)
+        link.symlink_to(destination)
+    print(json.dumps({"files": sorted(files), "links": links}))
 
 
 def controlled_path(file):
@@ -279,7 +340,7 @@ def collect_proofs(rid, work=None):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["begin-release", "stage", "finalize", "bind-package", "collect-proofs"])
+    parser.add_argument("command", choices=["begin-release", "stage", "finalize", "bind-package", "collect-proofs", "deb-metadata"])
     parser.add_argument("target", help="RID, or staged work directory for finalize")
     parser.add_argument("source", nargs="?", type=pathlib.Path)
     parser.add_argument("checks", nargs="?", type=pathlib.Path)
@@ -290,6 +351,8 @@ if __name__ == "__main__":
         if args.target not in TARGETS:
             parser.error("Unknown platform RID")
         collect_proofs(args.target, args.source)
+    elif args.command == "deb-metadata":
+        deb_metadata(pathlib.Path(args.target))
     elif args.source is None:
         parser.error("This command requires a source fingerprint path")
     elif args.command == "bind-package":
