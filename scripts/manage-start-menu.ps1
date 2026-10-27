@@ -10,6 +10,13 @@ $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 $mutex=[Threading.Mutex]::new($false,('Local\HandyMeeting-StartMenu-'+$sid))
 $locked=$false
 $temporary=$null
+# Get-FileHash is a script-module function in Windows PowerShell 5.1 and fails to load under
+# the Restricted user policy; the ownership hash therefore uses .NET directly.
+function Get-LinkHash([string]$Path) {
+    $sha=[Security.Cryptography.SHA256]::Create()
+    $stream=[IO.File]::OpenRead($Path)
+    try {return [BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-','')} finally {$stream.Dispose();$sha.Dispose()}
+}
 try {
     try {$locked=$mutex.WaitOne(15000)} catch [Threading.AbandonedMutexException] {$locked=$true}
     if (-not $locked) {exit 3}
@@ -19,7 +26,7 @@ try {
     if ($exists -and $record -and $record.Link -eq $shortcut) {
         $file=Get-Item -LiteralPath $shortcut -Force
         if (($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0 -and -not $file.PSIsContainer) {
-            $owned=(Get-FileHash -LiteralPath $shortcut -Algorithm SHA256).Hash -eq $record.SHA256
+            $owned=[bool]$record.SHA256 -and (Get-LinkHash $shortcut) -eq $record.SHA256
         }
     }
     if ($Mode -eq 'uninstall') {
@@ -47,12 +54,14 @@ try {
     $link.Description='HandyMeeting'
     $link.Save()
     # The named mutex serializes cooperating installers; verify old bytes again.
-    if ($exists -and (Get-FileHash -LiteralPath $shortcut -Algorithm SHA256).Hash -ne $record.SHA256) {exit 3}
+    if ($exists -and (Get-LinkHash $shortcut) -ne $record.SHA256) {exit 3}
+    # Hash the new link before publishing, so an ownership record is never left without it.
+    $hash=Get-LinkHash $temporary
     Move-Item -LiteralPath $temporary -Destination $shortcut -Force
     New-Item -Path $owner -Force | Out-Null
-    New-ItemProperty -LiteralPath $owner -Name Link -Value $shortcut -PropertyType String -Force | Out-Null
+    New-ItemProperty -LiteralPath $owner -Name SHA256 -Value $hash -PropertyType String -Force | Out-Null
     New-ItemProperty -LiteralPath $owner -Name Target -Value $program -PropertyType String -Force | Out-Null
-    New-ItemProperty -LiteralPath $owner -Name SHA256 -Value (Get-FileHash -LiteralPath $shortcut -Algorithm SHA256).Hash -PropertyType String -Force | Out-Null
+    New-ItemProperty -LiteralPath $owner -Name Link -Value $shortcut -PropertyType String -Force | Out-Null
 } catch {exit 3} finally {
     # Only this script's own unpublished temporary link is removed.
     if ($temporary -and (Test-Path -LiteralPath $temporary)) {Remove-Item -LiteralPath $temporary -ErrorAction SilentlyContinue}
