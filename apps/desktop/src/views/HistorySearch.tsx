@@ -2,15 +2,18 @@ import { useEffect, useRef, useState } from "react";
 import { FolderClock, RefreshCw, Search, Pin, ArrowRight } from "lucide-react";
 import { errorMessage } from "../api";
 import { clock } from "../domain";
-import type { DesktopApi, Locale, SearchPage } from "../types";
+import type { DesktopApi, Locale, MeetingSummary, SearchPage } from "../types";
 export default function HistorySearch({
   api,
   locale,
   onOpen,
+  imported = [],
 }: {
   api: DesktopApi;
   locale: Locale;
   onOpen: (id: string, sourceId: string | null) => void;
+  /** Imported legacy meetings are read in place and are not part of the search index. */
+  imported?: MeetingSummary[];
 }) {
   const de = locale === "de";
   const [query, setQuery] = useState(""),
@@ -143,6 +146,33 @@ export default function HistorySearch({
           </p>
         )}
       </div>
+      {!query && imported.length > 0 && (
+        <div className="session-list">
+          <h3>
+            {de
+              ? "Importierte ältere Meetings · nicht durchsuchbar"
+              : "Imported earlier meetings · not searchable"}
+          </h3>
+          {imported.map((item) => (
+            <article className="session-row" key={item.id}>
+              <div>
+                <strong>{item.title}</strong>
+                <p>
+                  {new Date(item.startedAt).toLocaleString(locale)} ·{" "}
+                  {clock(item.durationMs)}
+                </p>
+              </div>
+              <button
+                className="secondary"
+                onClick={() => onOpen(item.id, null)}
+              >
+                <ArrowRight size={15} />
+                {de ? "Öffnen" : "Open"}
+              </button>
+            </article>
+          ))}
+        </div>
+      )}
       {page && page.total > 25 && (
         <div className="search-pages">
           <button

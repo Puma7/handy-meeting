@@ -144,7 +144,8 @@ pub(crate) async fn list_archives(
     let service = Arc::clone(&service);
     blocking(move||meeting_core::archive::list(&service.root,offset,limit).map_err(|_|"Archive list could not be read. Existing files are preserved; inspect the local archive folder. / Archivliste konnte nicht gelesen werden. Vorhandene Dateien bleiben erhalten.".into())).await
 }
-#[tauri::command]
+// Runs off the UI thread: it may wait on the recording transition lock or on disk.
+#[tauri::command(async)]
 pub(crate) fn restore_archive(
     service: State<'_, Arc<Service>>,
     archive_id: String,
@@ -168,7 +169,8 @@ pub(crate) fn restore_archive(
             Ok(())
         })
 }
-#[tauri::command]
+// Runs off the UI thread: it may wait on the recording transition lock or on disk.
+#[tauri::command(async)]
 pub(crate) fn compact_archive(
     service: State<'_, Arc<Service>>,
     archive_id: String,
@@ -192,7 +194,8 @@ pub(crate) fn compact_archive(
             )
         })
 }
-#[tauri::command]
+// Runs off the UI thread: it may wait on the recording transition lock or on disk.
+#[tauri::command(async)]
 pub(crate) fn apply_retention(
     service: State<'_, Arc<Service>>,
     plan_id: String,
@@ -225,7 +228,10 @@ pub(crate) fn apply_retention(
         let source=owned.root.join("sessions").join(&candidate.meeting_id);
         if !deleting && meeting_core::retention::manifest_fingerprint(&source)?!=candidate.original_manifest_sha256{return Err("Meeting files changed; create a new preview".into());}
         // One immutable preview can be applied once. A partial failure requires a fresh inventory.
-        crate::create_json(&folder.join(format!("{plan_id}.applied.json")),&serde_json::json!({"jobId":id,"candidateIndex":candidate_index,"confirmation":confirmation,"at":chrono::Utc::now().to_rfc3339()}))?;
+        const APPLIED:&str="Diese Vorschau wurde bereits angewendet. Bitte eine neue Vorschau erstellen. / This preview was already applied; create a new preview.";
+        let applied=folder.join(format!("{plan_id}.applied.json"));
+        if applied.exists(){return Err(APPLIED.into());}
+        crate::create_json(&applied,&serde_json::json!({"jobId":id,"candidateIndex":candidate_index,"confirmation":confirmation,"at":chrono::Utc::now().to_rfc3339()})).map_err(|e|if applied.exists(){APPLIED.to_string()}else{e})?;
         jobs.update_work(id,0,0);
         match candidate.action {
             Action::ArchiveMeeting=>{
@@ -341,7 +347,8 @@ struct Conversion {
     codec: meeting_core::audio_codec::Codec,
     parts: Vec<meeting_core::audio_codec::ConversionProof>,
 }
-#[tauri::command]
+// Runs off the UI thread: it may wait on the recording transition lock or on disk.
+#[tauri::command(async)]
 pub(crate) fn transcribe_audio_copy(
     service: State<'_, Arc<Service>>,
     run_id: String,

@@ -18,6 +18,7 @@ export default function MeetingDetail({
   onExport,
   savedFile,
   selectedFile,
+  speakers,
 }: {
   meeting: Meeting;
   locale: Locale;
@@ -31,6 +32,7 @@ export default function MeetingDetail({
   onExport: () => void;
   savedFile: string | null;
   selectedFile?: string | null;
+  speakers?: Record<string, string>;
 }) {
   const parts = [...meeting.parts]
     .sort(
@@ -88,6 +90,7 @@ export default function MeetingDetail({
         locale={locale}
         t={t}
         selectedFile={selectedFile}
+        speakers={speakers}
       />
     </section>
   );

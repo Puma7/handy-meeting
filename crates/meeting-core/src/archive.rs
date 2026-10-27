@@ -1735,9 +1735,9 @@ pub fn delete_archived_meeting(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{PcmWriter, TranscriptCheckpoint};
     #[cfg(windows)]
     use fs2::FileExt;
-    use crate::{PcmWriter, TranscriptCheckpoint};
     #[test]
     fn compact_archive_protects_changes_and_vip_and_resumes_after_cancellation() {
         let root = tempfile::tempdir().unwrap();

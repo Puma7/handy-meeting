@@ -14,11 +14,17 @@ export default function SpeakerLabels({
   meeting,
   locale,
   onPropose,
+  proposeDisabled = false,
+  onLabels,
 }: {
   api: DesktopApi;
   meeting: Meeting;
   locale: Locale;
   onPropose?: () => void;
+  /** True while an analysis runs; its mode, model and template must not change. */
+  proposeDisabled?: boolean;
+  /** Enabled assignments whose original text is unchanged, by source ID; empty when off. */
+  onLabels?: (meetingId: string, labels: Record<string, string>) => void;
 }) {
   const de = locale === "de";
   const [doc, setDoc] = useState<
@@ -66,6 +72,15 @@ export default function SpeakerLabels({
       active = false;
     };
   }, [api, meeting.id]);
+  useEffect(() => {
+    if (!onLabels) return;
+    const labels: Record<string, string> = {};
+    if (doc?.enabled)
+      for (const a of doc.assignments)
+        if (doc.sources[a.sourceId] === a.textSha256)
+          labels[a.sourceId] = a.name;
+    onLabels(meeting.id, labels);
+  }, [doc, meeting.id, onLabels]);
   if (!api.getSpeakerLabels || !api.saveSpeakerLabels) return null;
   const parts = meeting.parts.filter((p) => p.file && p.text?.trim());
   const selected = parts.find((p) => p.file === source);
@@ -106,7 +121,7 @@ export default function SpeakerLabels({
       {onPropose && (
         <button
           className="secondary"
-          disabled={busy || meeting.status !== "complete"}
+          disabled={busy || proposeDisabled || meeting.status !== "complete"}
           onClick={onPropose}
         >
           {de

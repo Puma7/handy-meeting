@@ -29,6 +29,8 @@ export default function RetentionPanel({
 }) {
   const de = locale === "de";
   const latestJob = useRef<string | null>(null);
+  // A remounted status bar reports the last finished preview; only a current one is shown.
+  const policyRevision = useRef<number | null>(null);
   const [policy, setPolicy] = useState<RetentionPolicy | null>(null),
     [draft, setDraft] = useState<RetentionPolicy | null>(null),
     [plan, setPlan] = useState<RetentionPlan | null>(null),
@@ -57,6 +59,9 @@ export default function RetentionPanel({
       active = false;
     };
   }, [api]);
+  useEffect(() => {
+    policyRevision.current = policy?.revision ?? null;
+  }, [policy]);
   const progress = useCallback(
     (value: LibraryProgress) => {
       latestJob.current = value.jobId;
@@ -66,6 +71,12 @@ export default function RetentionPanel({
           .getRetentionPlan?.(value.jobId)
           .then((p) => {
             if (latestJob.current !== value.jobId || p.id !== value.jobId)
+              return;
+            const age = Date.now() - Date.parse(p.createdAt);
+            if (
+              p.policyRevision !== policyRevision.current ||
+              !(age >= 0 && age <= 24 * 60 * 60 * 1000)
+            )
               return;
             setSelected(null);
             setAccepted(false);

@@ -700,13 +700,27 @@ impl Service {
         Ok(self.meeting_view(data, false))
     }
     fn history(&self) -> AppResult<Vec<MeetingView>> {
-        let mut sessions = if self.root.join("library-index/library.sqlite3").exists() {
-            library_service::search(&self.root, "", 0, 100)?
-                .items
-                .into_iter()
-                .map(|item| item.session_summary())
-                .collect::<meeting_core::Result<Vec<_>>>()
-                .map_err(|_| "The local history index is invalid; originals are preserved")?
+        // Only an index this process has fully scanned is complete; while a scan runs, failed
+        // or was cancelled, the session folders themselves are the history.
+        let index_complete = self.root.join("library-index/library.sqlite3").exists()
+            && self
+                .library_jobs
+                .snapshot()
+                .is_some_and(|p| p.status == "complete");
+        let mut sessions = if index_complete {
+            let mut all = Vec::new();
+            loop {
+                let page = library_service::search(&self.root, "", all.len() as u64, 100)?;
+                let count = page.items.len();
+                for item in page.items {
+                    all.push(item.session_summary().map_err(|_| {
+                        "The local history index is invalid; originals are preserved"
+                    })?);
+                }
+                if count == 0 || all.len() as u64 >= page.total {
+                    break all;
+                }
+            }
         } else {
             meeting_core::list_sessions(&self.root.join("sessions"))
                 .map_err(|_| "Sitzungshistorie konnte nicht gelesen werden.")?
@@ -876,7 +890,7 @@ async fn refresh_handy(
 async fn list_devices() -> AppResult<Vec<AudioDevice>> {
     blocking(|| {
         meeting_core::list_devices()
-            .map_err(|_| "Audiogeräte konnten nicht aufgelistet werden.".into())
+            .map_err(|e| format!("Audiogeräte konnten nicht aufgelistet werden: {e} / Audio devices could not be listed."))
     })
     .await
 }

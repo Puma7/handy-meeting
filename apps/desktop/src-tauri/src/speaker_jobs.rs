@@ -201,17 +201,26 @@ fn run(
     worker.call(Request::SpeakerIdentity { identity })?;
     let mut seen = HashSet::new();
     let mut count = 0u64;
+    let mut open_sections;
     loop {
         if cancel.load(Ordering::Acquire) {
             return Err("Optional speaker analysis cancelled. Confirmed speaker revisions, recordings and original text are retained. / Sprecherexperiment abgebrochen; bestätigte Fassungen und Originale bleiben erhalten.".into());
         }
+        // Read the recording state before the data: a section closed in between is then still
+        // in this snapshot. Stopping removes the active capture before its threads have joined
+        // and closed the final sections, so a running transition also counts as recording.
+        let recording = {
+            let inner = service.lock()?;
+            inner.transitioning
+                || inner.active.as_ref().is_some_and(|a| {
+                    a.capture.is_some()
+                        && a.store
+                            .preview_snapshot(0)
+                            .is_ok_and(|d| d.id == meeting_id)
+                })
+        };
         let data = service.data(meeting_id)?;
-        let recording = service.lock()?.active.as_ref().is_some_and(|a| {
-            a.capture.is_some()
-                && a.store
-                    .preview_snapshot(0)
-                    .is_ok_and(|d| d.id == meeting_id)
-        });
+        open_sections = data.parts.iter().filter(|p| !p.audio_closed).count();
         let parts: Vec<_> = data
             .parts
             .into_iter()
@@ -257,6 +266,10 @@ fn run(
             break;
         }
         std::thread::sleep(Duration::from_millis(200));
+    }
+    if open_sections > 0 {
+        // Never report a live run as complete while recorded audio is still unclosed.
+        return Err("Some recorded sections were not closed, so speaker sections are incomplete. Confirmed sections are kept. / Einige Aufnahmeabschnitte wurden nicht abgeschlossen; bestätigte Sprecherabschnitte bleiben erhalten.".into());
     }
     crate::create_json(
         &output.join("complete.json"),

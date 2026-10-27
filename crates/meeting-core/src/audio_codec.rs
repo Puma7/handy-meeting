@@ -244,16 +244,24 @@ impl AudioTool {
         args.push(output.as_os_str().into());
         run(&self.path, &args, cancel)?;
         let (samples, sha) = pcm_digest(&output)?;
+        // Same duration contract as `convert`: the proof's tolerance (0 for FLAC, at most one
+        // 20 ms Opus frame), with the hash checked on the untrimmed decoder output.
+        let allowed = if proof.codec == Codec::Flac { 0 } else { 320 };
         if samples != proof.decoded_samples
             || sha != proof.decoded_pcm_sha256
-            || samples != part.confirmed_sample_count
+            || proof.decoded_duration_tolerance_samples > allowed
+            || samples.abs_diff(part.confirmed_sample_count)
+                > proof.decoded_duration_tolerance_samples
             || proof.codec == Codec::Flac && sha != part.confirmed_sha256
         {
             return Err("Decoded copy failed its saved PCM or exact duration check; original session retained".into());
         }
         let mut reader = hound::WavReader::open(output)?;
         let pcm: std::result::Result<Vec<i16>, _> = reader.samples::<i16>().collect();
-        Ok(pcm?)
+        let mut pcm = pcm?;
+        // Section times stay those of the confirmed original.
+        pcm.resize(part.confirmed_sample_count as usize, 0);
+        Ok(pcm)
     }
     pub fn inspect(path: &Path, cancel: &AtomicBool) -> Result<Self> {
         let path = path.canonicalize()?;

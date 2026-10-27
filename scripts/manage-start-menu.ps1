@@ -1,4 +1,5 @@
-# A failed ownership check preserves the existing shortcut. No execution-policy changes.
+# A failed ownership check preserves the existing shortcut. The installer passes a
+# process-scope -ExecutionPolicy only; persistent and Group Policy settings are untouched.
 param([Parameter(Mandatory)][ValidateSet('install','uninstall')][string]$Mode,[Parameter(Mandatory)][string]$InstallDirectory)
 $ErrorActionPreference='Stop'
 $program=[IO.Path]::GetFullPath((Join-Path $InstallDirectory 'HandyMeeting.exe'))
@@ -8,6 +9,7 @@ $owner='HKCU:\Software\HandyMeeting\StartMenuLink'
 $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 $mutex=[Threading.Mutex]::new($false,('Local\HandyMeeting-StartMenu-'+$sid))
 $locked=$false
+$temporary=$null
 try {
     try {$locked=$mutex.WaitOne(15000)} catch [Threading.AbandonedMutexException] {$locked=$true}
     if (-not $locked) {exit 3}
@@ -51,4 +53,8 @@ try {
     New-ItemProperty -LiteralPath $owner -Name Link -Value $shortcut -PropertyType String -Force | Out-Null
     New-ItemProperty -LiteralPath $owner -Name Target -Value $program -PropertyType String -Force | Out-Null
     New-ItemProperty -LiteralPath $owner -Name SHA256 -Value (Get-FileHash -LiteralPath $shortcut -Algorithm SHA256).Hash -PropertyType String -Force | Out-Null
-} catch {exit 3} finally {if ($locked){$mutex.ReleaseMutex()};$mutex.Dispose()}
+} catch {exit 3} finally {
+    # Only this script's own unpublished temporary link is removed.
+    if ($temporary -and (Test-Path -LiteralPath $temporary)) {Remove-Item -LiteralPath $temporary -ErrorAction SilentlyContinue}
+    if ($locked){$mutex.ReleaseMutex()};$mutex.Dispose()
+}

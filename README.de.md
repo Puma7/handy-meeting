@@ -61,7 +61,7 @@ Schlüssel bleiben standardmäßig nur für die App-Sitzung im Speicher. Freiwil
 
 Der bestehende lokale Anwendungsdatenpfad `HandyMeeting/RustBeta` bleibt aus Kompatibilitätsgründen erhalten. Die Windows-Deinstallation entfernt nur ihre aufgeführten Programmdateien und löscht Sitzungsordner nicht rekursiv. Alte Prototypen bleiben erhalten.
 
-Zwei Audiospuren sind keine Personenerkennung. Automatische Sprecherzuordnung, exakte Wortzeiten und belastbare Wörter-pro-Person-Statistiken sind nicht implementiert. KI-Ergebnisse bleiben überprüfbare Entwürfe. Lokale Agenten erhalten nur nach sichtbarer Freigabe Zugriff auf ihre eigene neue Aufnahme; Mikrofonfreigabe ist getrennt. Die Schnittstelle ist kein MCP-Server.
+Zwei Audiospuren sind keine Personenerkennung. Sprechernamen werden nur nach deiner ausdrücklichen Bestätigung zugeordnet. Die optionale nachträgliche Audiotrennung (Beta) und die Live-Sprecherabschnitte (experimentell) in 1.0.2 liefern neutrale Kennungen je Abschnitt, hängen von einem kompatiblen Modell ab und erkennen keine Personen. Exakte Wortzeiten und belastbare Wörter-pro-Person-Statistiken sind nicht implementiert. KI-Ergebnisse bleiben überprüfbare Entwürfe. Lokale Agenten erhalten nur nach sichtbarer Freigabe Zugriff auf ihre eigene neue Aufnahme; Mikrofonfreigabe ist getrennt. Die Schnittstelle ist kein MCP-Server.
 
 ## Im Handy-Ökosystem
 

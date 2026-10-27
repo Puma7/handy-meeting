@@ -697,6 +697,10 @@ main {
   color: var(--color-text);
   font-weight: 600;
 }
+.part-meta .speaker-label {
+  color: var(--color-text);
+  font-weight: 600;
+}
 .transcript-part p {
   font-size: 14px;
   white-space: pre-wrap;

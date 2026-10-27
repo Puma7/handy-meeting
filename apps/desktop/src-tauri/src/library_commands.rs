@@ -32,7 +32,8 @@ pub(crate) async fn search_meetings(
     let service = Arc::clone(&service);
     blocking(move || library_service::search(&service.root, &query, offset, limit)).await
 }
-#[tauri::command]
+// Runs off the UI thread: it may wait on the recording transition lock or on disk.
+#[tauri::command(async)]
 pub(crate) fn rebuild_search_index(service: State<'_, Arc<Service>>) -> AppResult<String> {
     let _gate = service
         .transition

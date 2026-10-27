@@ -652,8 +652,7 @@ export default function NotesView({
                 title={t.moveRight}
                 aria-label={t.moveRight}
                 disabled={
-                  stepsLocked ||
-                  template.steps.at(-1)?.id === selectedStep.id
+                  stepsLocked || template.steps.at(-1)?.id === selectedStep.id
                 }
                 onClick={() => moveStep(1)}
               >

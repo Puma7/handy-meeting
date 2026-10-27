@@ -148,7 +148,7 @@ def stage(rid, source_path, checks_path, helper=None, icon=None):
         shutil.copyfile(helper, program / "HandyMeetingCapture")
         (program / "HandyMeetingCapture").chmod(0o755)
         shutil.copyfile(icon, resources / "HandyMeeting.icns")
-        info = {"CFBundleIdentifier": "org.handymeeting.beta", "CFBundleName": "HandyMeeting", "CFBundleExecutable": "HandyMeeting", "CFBundlePackageType": "APPL", "CFBundleShortVersionString": version().split("-")[0], "CFBundleVersion": version().split("-")[0], "LSMinimumSystemVersion": "13.0", "NSHighResolutionCapable": True, "CFBundleIconFile": "HandyMeeting.icns", "NSMicrophoneUsageDescription": "Record your microphone as a separate local meeting track.", "NSAudioCaptureUsageDescription": "Record meeting system audio locally. Audio is never sent to a cloud service."}
+        info = {"CFBundleIdentifier": "org.handymeeting.beta", "CFBundleName": "HandyMeeting", "CFBundleExecutable": "HandyMeeting", "CFBundlePackageType": "APPL", "CFBundleShortVersionString": version().split("-")[0], "CFBundleVersion": version().split("-")[0], "LSMinimumSystemVersion": "15.0", "NSHighResolutionCapable": True, "CFBundleIconFile": "HandyMeeting.icns", "NSMicrophoneUsageDescription": "Record your microphone as a separate local meeting track.", "NSAudioCaptureUsageDescription": "Record meeting system audio locally. Audio is never sent to a cloud service."}
         (app / "Contents/Info.plist").write_bytes(plistlib.dumps(info))
     program.mkdir(parents=True, exist_ok=True)
     resources.mkdir(parents=True, exist_ok=True)
@@ -168,7 +168,7 @@ def stage(rid, source_path, checks_path, helper=None, icon=None):
     shutil.copyfile(sdk_folder / "SDK_PROVENANCE.json", resources / "SDK_PROVENANCE.json")
     shutil.copyfile(sdk_folder / "ABI_REPORT.json", resources / "ABI_REPORT.json")
     write(resources / "BUILD_PROVENANCE.json", {**receipt, "releaseChecks": proof, "realDeviceTested": False})
-    (resources / "START-HERE.txt").write_text("HandyMeeting " + version() + " portable build\n\nRequires a compatible Handy installation and locally installed streaming model.\nLinux uses PulseAudio/PipeWire-Pulse (pulseaudio-utils); macOS13+ requires recording permissions.\nDefault audio devices only on macOS. Receipt times are approximate; silence without packets is estimated.\nReal-device capture and two-hour recovery tests are still required on each target.\nmacOS candidate packages are ad-hoc signed, not Developer-ID signed or notarized.\nSee https://github.com/Puma7/handy-meeting/blob/main/TEST_REPORT.md for measured limits.\n", encoding="utf-8")
+    (resources / "START-HERE.txt").write_text("HandyMeeting " + version() + " portable build\n\nRequires a compatible Handy installation and locally installed streaming model.\nLinux uses PulseAudio/PipeWire-Pulse (pulseaudio-utils); macOS 15+ requires recording permissions.\nDefault audio devices only on macOS. Receipt times are approximate; silence without packets is estimated.\nReal-device capture and two-hour recovery tests are still required on each target.\nmacOS candidate packages are ad-hoc signed, not Developer-ID signed or notarized.\nSee https://github.com/Puma7/handy-meeting/blob/main/TEST_REPORT.md for measured limits.\n", encoding="utf-8")
     write(work / "stage-receipt.json", {**receipt, "app": str(app), "program": str(program), "resources": str(resources), "sdk": native, "releaseChecks": proof})
     print(work)
 

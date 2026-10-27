@@ -8,11 +8,14 @@ export default function TranscriptBody({
   locale,
   t,
   selectedFile,
+  speakers = {},
 }: {
   parts: AudioPart[];
   locale: Locale;
   t: Record<MessageKey, string>;
   selectedFile?: string | null;
+  /** Confirmed speaker labels by source ID; shown beside, never inside, the original text. */
+  speakers?: Record<string, string>;
 }) {
   const scrolledFile = useRef<string | null>(null);
   useEffect(() => {
@@ -57,6 +60,18 @@ export default function TranscriptBody({
                 {clock((part.startSample + part.sampleCount) / 16)}
               </span>
               <span>{trackName(part.source, locale)}</span>
+              {part.file && speakers[part.file] && (
+                <span
+                  className="speaker-label"
+                  title={
+                    locale === "de"
+                      ? "Von dir bestätigte Sprecherzuordnung"
+                      : "Speaker label you confirmed"
+                  }
+                >
+                  {speakers[part.file]}
+                </span>
+              )}
               {part.status !== "complete" && <span>{t.pending}</span>}
             </div>
             <p>{part.text}</p>

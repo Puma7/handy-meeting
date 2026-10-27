@@ -15,7 +15,8 @@ pub(crate) async fn download_update(
     let service = Arc::clone(&service);
     blocking(move || service.updater.download(&service.root)).await
 }
-#[tauri::command]
+// Runs off the UI thread: it may wait on the recording transition lock or on disk.
+#[tauri::command(async)]
 pub(crate) fn get_update_progress(
     service: State<'_, Arc<Service>>,
 ) -> AppResult<crate::updater::View> {

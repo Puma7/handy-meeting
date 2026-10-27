@@ -130,6 +130,24 @@ mod tests {
         });
     }
     #[test]
+    fn index_inspection_reads_confirmed_text_that_only_the_journal_holds() {
+        let root = tempfile::tempdir().unwrap();
+        let store =
+            SessionStore::create(root.path(), "Meeting", "fixture-model", "output", None).unwrap();
+        let mut writer = PcmWriter::new(store.clone(), "system").unwrap();
+        writer.append(&[1; 160]).unwrap();
+        writer.finish().unwrap();
+        checkpoint(&store, "Journal-only confirmed sentence.");
+        let folder = store.folder().to_owned();
+        let manifest = crate::inspect_manifest(&folder).unwrap();
+        assert!(manifest.parts.iter().all(|p| p.text.is_none()));
+        let replayed = crate::inspect_journals(&folder).unwrap();
+        assert_eq!(
+            replayed.parts[0].text.as_deref(),
+            Some("Journal-only confirmed sentence.")
+        );
+    }
+    #[test]
     fn explicit_status_update_rewrites_text_recovered_from_journals_after_a_crash() {
         let root = tempfile::tempdir().unwrap();
         let store =

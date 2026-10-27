@@ -196,6 +196,8 @@ impl LibraryIndex {
         }
         let expression = query
             .split_whitespace()
+            // A token without letters or digits becomes an empty FTS phrase that matches nothing.
+            .filter(|word| word.chars().any(char::is_alphanumeric))
             .take(20)
             .map(|word| format!("\"{}\"*", word.replace('"', "\"\"")))
             .collect::<Vec<_>>()
@@ -327,6 +329,8 @@ mod tests {
             .items
             .is_empty());
         assert!(index.search("Anna", 0, 101).is_err());
+        // Standalone punctuation such as a dash must not empty the whole AND query.
+        assert_eq!(index.search("Prüfbericht – /", 0, 20).unwrap().total, 1);
     }
     #[test]
     fn renamed_pinned_metadata_is_searchable_without_changing_the_source() {

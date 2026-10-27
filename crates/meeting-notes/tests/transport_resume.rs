@@ -779,3 +779,60 @@ fn cancellation_after_completion_commit_does_not_hide_the_finished_result() {
         "Reading the committed result must not repeat inference"
     );
 }
+
+fn name_reply(text: &str, owner: Option<&str>) -> Reply {
+    let answer = json!({"items":[{"text":text, "owner":owner, "due":null, "evidence":[{"sourceId":"S00001","quote":ORIGINAL}]}]});
+    Reply {
+        status: 200,
+        body:
+            json!({"choices":[{"finish_reason":"stop","message":{"content":answer.to_string()}}]})
+                .to_string(),
+        location: None,
+        pause: false,
+    }
+}
+
+#[test]
+fn invalid_name_candidate_batches_are_never_saved_and_never_block_resume() {
+    let root = tempfile::tempdir().unwrap();
+    let template = meeting_notes::name_candidates::template().unwrap();
+    // The literal name is missing from its quote: valid JSON evidence, invalid candidate.
+    let server = SyntheticHttp::new(vec![name_reply("Bernd", None)]);
+    assert!(analyze(
+        root.path(),
+        "synthetic-meeting",
+        sources(),
+        template.clone(),
+        connection(&server.endpoint),
+        None
+    )
+    .is_err());
+    let folder = run_folder(root.path());
+    let step = folder.join("step-0000-000000.json");
+    assert!(
+        !step.exists(),
+        "A rejected answer must fail at its own step"
+    );
+    // A batch saved by an earlier build before per-batch checks existed.
+    fs::write(
+        &step,
+        json!({"items":[{"text":"Bernd","owner":null,"due":null,"evidence":[{"sourceId":"S00001","quote":ORIGINAL}]}]}).to_string(),
+    )
+    .unwrap();
+    server.queue(name_reply("Anna", None));
+    let result = analyze(
+        root.path(),
+        "synthetic-meeting",
+        sources(),
+        template,
+        connection(&server.endpoint),
+        Some(only_run_id(&folder)),
+    )
+    .unwrap();
+    assert_eq!(result.sections[0].items[0].text, "Anna");
+    assert!(result.sections[0].items[0].owner.is_none());
+    assert!(
+        folder.join("step-0000-000000.rejected-0.json").is_file(),
+        "The rejected answer is kept as evidence"
+    );
+}

@@ -176,3 +176,51 @@ it("ignores late search responses and opens the source section of the current hi
   await userEvent.click(screen.getByRole("button", { name: "Open" }));
   expect(open).toHaveBeenCalledWith(meeting.id, "audio/system-0.wav");
 });
+it("shows enabled confirmed labels beside unchanged sections only", async () => {
+  const doc = {
+    revision: 2,
+    enabled: true,
+    assignments: [
+      {
+        sourceId: "audio/system-0.wav",
+        textSha256: "current",
+        name: "Confirmed participant",
+        evidence: "please read the report",
+      },
+      {
+        sourceId: "audio/other.wav",
+        textSha256: "older-text",
+        name: "Stale label",
+        evidence: "x",
+      },
+    ],
+    sources: { "audio/system-0.wav": "current", "audio/other.wav": "changed" },
+  };
+  const labels = vi.fn();
+  const api = {
+    getSpeakerLabels: vi.fn().mockResolvedValue(doc),
+    saveSpeakerLabels: vi.fn(),
+  } as unknown as DesktopApi;
+  const { rerender } = render(
+    <SpeakerLabels api={api} meeting={meeting} locale="en" onLabels={labels} />,
+  );
+  await waitFor(() =>
+    expect(labels).toHaveBeenLastCalledWith(meeting.id, {
+      "audio/system-0.wav": "Confirmed participant",
+    }),
+  );
+  (api.getSpeakerLabels as ReturnType<typeof vi.fn>).mockResolvedValue({
+    ...doc,
+    enabled: false,
+  });
+  rerender(
+    <SpeakerLabels
+      key="off"
+      api={api}
+      meeting={meeting}
+      locale="en"
+      onLabels={labels}
+    />,
+  );
+  await waitFor(() => expect(labels).toHaveBeenLastCalledWith(meeting.id, {}));
+});

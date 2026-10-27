@@ -402,37 +402,7 @@ impl SessionStore {
         // The audio journal is authoritative for acknowledged sample counts. Bytes beyond
         // that point are preserved on disk but never silently advertised as confirmed.
         let mut malformed = 0;
-        let mut seen_audio = std::collections::HashMap::<String, u64>::new();
-        read_lines::<AudioPart, _>(
-            &folder.join("audio-journal.jsonl"),
-            &mut malformed,
-            |part| {
-                validate_part(&part)?;
-                if seen_audio
-                    .insert(part.file.clone(), part.confirmed_sample_count)
-                    .is_some_and(|previous| part.confirmed_sample_count < previous)
-                {
-                    return Err("Audio journal moved backward".into());
-                }
-                if let Some(existing) = data.parts.iter_mut().find(|old| old.file == part.file) {
-                    if part.confirmed_sample_count < existing.confirmed_sample_count {
-                        return Ok(());
-                    }
-                    let text = existing.clone();
-                    *existing = part;
-                    existing.text = text.text;
-                    existing.committed_text = text.committed_text;
-                    existing.tentative_text = text.tentative_text;
-                    existing.processed_samples = text.processed_samples;
-                    existing.model_id = text.model_id;
-                    existing.status = text.status;
-                    existing.transcript_sequence = text.transcript_sequence;
-                } else {
-                    data.parts.push(part);
-                }
-                Ok(())
-            },
-        )?;
+        replay_audio_journal(folder, &mut data, &mut malformed)?;
         for part in &mut data.parts {
             validate_part(part)?;
             let audio = safe_audio_path(folder, &part.file)?;
@@ -442,27 +412,7 @@ impl SessionStore {
                 part.audio_closed = true;
             }
         }
-        read_lines::<TranscriptCheckpoint, _>(
-            &folder.join("transcript-journal.jsonl"),
-            &mut malformed,
-            |checkpoint| {
-                if let Some(part) = data
-                    .parts
-                    .iter_mut()
-                    .find(|part| part.file == checkpoint.file)
-                {
-                    validate_checkpoint(part, &checkpoint)?;
-                    if checkpoint.sequence >= part.transcript_sequence {
-                        validate_continuity(part, &checkpoint)?;
-                        apply_checkpoint(part, &checkpoint);
-                    }
-                    data.snapshot_sequence = data.snapshot_sequence.max(checkpoint.sequence);
-                } else {
-                    return Err("Text journal references unknown audio".into());
-                }
-                Ok(())
-            },
-        )?;
+        replay_transcript_journal(folder, &mut data, &mut malformed)?;
         if malformed > 0 {
             warn_data(&mut data, &format!("{malformed} unfinished journal line(s) retained; last confirmed data recovered."));
         }
@@ -660,6 +610,82 @@ pub fn inspect_manifest(folder: &Path) -> Result<SessionData> {
     if folder.file_name().and_then(|s| s.to_str()) != Some(data.id.as_str()) {
         return Err("Manifest identity differs from its session directory".into());
     }
+    Ok(data)
+}
+
+fn replay_audio_journal(
+    folder: &Path,
+    data: &mut SessionData,
+    malformed: &mut usize,
+) -> Result<()> {
+    let mut seen_audio = std::collections::HashMap::<String, u64>::new();
+    read_lines::<AudioPart, _>(&folder.join("audio-journal.jsonl"), malformed, |part| {
+        validate_part(&part)?;
+        if seen_audio
+            .insert(part.file.clone(), part.confirmed_sample_count)
+            .is_some_and(|previous| part.confirmed_sample_count < previous)
+        {
+            return Err("Audio journal moved backward".into());
+        }
+        if let Some(existing) = data.parts.iter_mut().find(|old| old.file == part.file) {
+            if part.confirmed_sample_count < existing.confirmed_sample_count {
+                return Ok(());
+            }
+            let text = existing.clone();
+            *existing = part;
+            existing.text = text.text;
+            existing.committed_text = text.committed_text;
+            existing.tentative_text = text.tentative_text;
+            existing.processed_samples = text.processed_samples;
+            existing.model_id = text.model_id;
+            existing.status = text.status;
+            existing.transcript_sequence = text.transcript_sequence;
+        } else {
+            data.parts.push(part);
+        }
+        Ok(())
+    })?;
+    Ok(())
+}
+fn replay_transcript_journal(
+    folder: &Path,
+    data: &mut SessionData,
+    malformed: &mut usize,
+) -> Result<()> {
+    read_lines::<TranscriptCheckpoint, _>(
+        &folder.join("transcript-journal.jsonl"),
+        malformed,
+        |checkpoint| {
+            if let Some(part) = data
+                .parts
+                .iter_mut()
+                .find(|part| part.file == checkpoint.file)
+            {
+                validate_checkpoint(part, &checkpoint)?;
+                if checkpoint.sequence >= part.transcript_sequence {
+                    validate_continuity(part, &checkpoint)?;
+                    apply_checkpoint(part, &checkpoint);
+                }
+                data.snapshot_sequence = data.snapshot_sequence.max(checkpoint.sequence);
+            } else {
+                return Err("Text journal references unknown audio".into());
+            }
+            Ok(())
+        },
+    )?;
+    Ok(())
+}
+/// Text-only, read-only journal replay for the derived search index: no lease, no audio
+/// verification and no writes. Opening the session remains the authoritative recovery.
+pub fn inspect_journals(folder: &Path) -> Result<SessionData> {
+    let mut data = inspect_manifest(folder)?;
+    if data.schema_version != 2 {
+        return Ok(data);
+    }
+    let mut malformed = 0;
+    replay_audio_journal(folder, &mut data, &mut malformed)?;
+    replay_transcript_journal(folder, &mut data, &mut malformed)?;
+    data.duration_ms = duration(&data.parts);
     Ok(data)
 }
 

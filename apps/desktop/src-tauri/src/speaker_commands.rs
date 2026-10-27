@@ -1,7 +1,8 @@
 use crate::{blocking, AppResult, Service};
 use std::sync::Arc;
 use tauri::State;
-#[tauri::command]
+// Runs off the UI thread: it may wait on the recording transition lock or on disk.
+#[tauri::command(async)]
 pub(crate) fn start_speaker_experiment(
     service: State<'_, Arc<Service>>,
     meeting_id: String,

@@ -93,6 +93,15 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     [liveMeeting, setLiveMeeting] = useState<Meeting | null>(null),
     [notesMeetingId, setNotesMeetingId] = useState(""),
     [notesMeetingLoading, setNotesMeetingLoading] = useState(false);
+  const [speakerLabels, setSpeakerLabels] = useState<{
+    meetingId: string;
+    labels: Record<string, string>;
+  } | null>(null);
+  const onSpeakerLabels = useCallback(
+    (meetingId: string, labels: Record<string, string>) =>
+      setSpeakerLabels({ meetingId, labels }),
+    [],
+  );
   const [searchSource, setSearchSource] = useState<{
     meetingId: string;
     file: string | null;
@@ -520,13 +529,19 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       setBusy(false);
     }
   }
-  async function openMeeting(id: string, nextPage: Page = "detail") {
+  async function openMeeting(
+    id: string,
+    nextPage: Page = "detail",
+    source: string | null = null,
+  ) {
     if (nextPage === "notes") {
       await openNotesFor(id);
       return;
     }
     await action(async () => {
       const item = await api.getMeeting(id);
+      // A search hit applies only to the meeting it opened; other opens clear it.
+      setSearchSource(source ? { meetingId: item.id, file: source } : null);
       selectedRef.current = item.id;
       fullMeetingRef.current = item.id;
       setMeeting(item);
@@ -1002,12 +1017,16 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             api={api}
             meeting={meeting}
             locale={locale}
+            proposeDisabled={notesBusy}
+            onLabels={onSpeakerLabels}
             onPropose={() => {
+              if (notesBusy) return;
               void action(async () => {
-                setMode("local");
-                setApiKey("");
-                setSavedKeyScope(null);
+                // Name suggestions run locally only; local settings stay as they are.
                 if (mode === "cloud") {
+                  setMode("local");
+                  setApiKey("");
+                  setSavedKeyScope(null);
                   setEndpoint("http://127.0.0.1:1234/v1/");
                   setTextModel("");
                 }
@@ -1213,16 +1232,20 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
               })
             }
             savedFile={fileExport?.id === meeting.id ? fileExport.file : null}
+            speakers={
+              speakerLabels?.meetingId === meeting.id
+                ? speakerLabels.labels
+                : undefined
+            }
           />
         )}
         {page === "history" && api.searchMeetings && (
           <HistorySearch
             api={api}
             locale={locale}
+            imported={history.filter((item) => item.id.startsWith("legacy-"))}
             onOpen={(id, file) => {
-              void openMeeting(id).then(() =>
-                setSearchSource({ meetingId: id, file }),
-              );
+              void openMeeting(id, "detail", file);
             }}
           />
         )}

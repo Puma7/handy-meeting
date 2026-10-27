@@ -97,13 +97,13 @@ Section "HandyMeeting" Main
   SetOverwrite off
   !include "${INSTALL_FILES}"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
-  nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -File "$INSTDIR\ManageStartMenu.ps1" -Mode install -InstallDirectory "$INSTDIR"'
+  nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -File "$INSTDIR\ManageStartMenu.ps1" -Mode install -InstallDirectory "$INSTDIR"'
   Pop $0
   Pop $1
   StrCmp $0 "0" shortcut_ready
   DetailPrint "Existing/custom Start menu links were preserved, or shortcut creation was blocked. HandyMeeting.exe remains available in the new program folder."
   shortcut_ready:
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-${APP_VERSION}" "DisplayName" "HandyMeeting"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-${APP_VERSION}" "DisplayName" "HandyMeeting ${APP_VERSION}"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-${APP_VERSION}" "DisplayVersion" "${APP_VERSION}"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-${APP_VERSION}" "Publisher" "HandyMeeting contributors"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-${APP_VERSION}" "InstallLocation" "$INSTDIR"
@@ -115,7 +115,7 @@ SectionEnd
 Section "Uninstall"
   SetShellVarContext current
   SetRegView 64
-  nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -File "$INSTDIR\ManageStartMenu.ps1" -Mode uninstall -InstallDirectory "$INSTDIR"'
+  nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -File "$INSTDIR\ManageStartMenu.ps1" -Mode uninstall -InstallDirectory "$INSTDIR"'
   Pop $0
   Pop $1
   !include "${UNINSTALL_FILES}"

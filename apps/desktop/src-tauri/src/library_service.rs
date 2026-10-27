@@ -199,7 +199,8 @@ impl Jobs {
                         {
                             return Ok(());
                         }
-                        let data = match meeting_core::archive::read_archived_transcript(&path)?{Some(data)=>data,None=>meeting_core::inspect_manifest(&path)?};
+                        // Confirmed text lives in the journals; the manifest alone can lag behind it.
+                        let data = match meeting_core::archive::read_archived_transcript(&path)?{Some(data)=>data,None=>meeting_core::inspect_journals(&path)?};
                         let meta = metadata::read(&root, &id)?;
                         index.upsert(&data, &meta, &fingerprint)
                         })();
@@ -253,6 +254,8 @@ fn fingerprint(folder: &Path, root: &Path, id: &str) -> meeting_core::Result<Str
     for path in [
         folder.join("session.json"),
         folder.join("session.json.bak"),
+        folder.join("audio-journal.jsonl"),
+        folder.join("transcript-journal.jsonl"),
         folder.join("audio-archive.json"),
         root.join("user-metadata").join(format!("{id}.json")),
     ] {

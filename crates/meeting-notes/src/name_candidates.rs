@@ -1,5 +1,5 @@
 //! Name mentions are review candidates, never confirmed speaker identities.
-use crate::{Analysis, Template};
+use crate::{Analysis, Fact, Template};
 use anyhow::{ensure, Result};
 pub const TEMPLATE_ID: &str = "speaker-name-candidates-v1";
 pub fn template() -> Result<Template> {
@@ -10,10 +10,17 @@ pub fn template() -> Result<Template> {
     Ok(value)
 }
 pub fn validate(analysis: &Analysis) -> Result<()> {
-    if analysis.template.id != TEMPLATE_ID {
+    for section in &analysis.sections {
+        validate_items(&analysis.template.id, &section.items)?;
+    }
+    Ok(())
+}
+/// Checked per answer batch, before it is saved, so one bad batch cannot block a resumed run.
+pub fn validate_items(template_id: &str, items: &[Fact]) -> Result<()> {
+    if template_id != TEMPLATE_ID {
         return Ok(());
     }
-    for item in analysis.sections.iter().flat_map(|s| &s.items) {
+    for item in items {
         ensure!(
             item.owner.is_none() && item.due.is_none(),
             "Namensvorschläge dürfen keine Zuständigen oder Termine zuweisen."
