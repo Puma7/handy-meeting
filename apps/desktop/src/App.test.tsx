@@ -73,7 +73,7 @@ function fakeApi(active: Meeting | null = null): DesktopApi {
     resumeMeeting: vi.fn().mockResolvedValue(active ?? meeting),
     importLegacy: vi.fn().mockResolvedValue({ ...meeting, readOnly: true }),
     generateNotes: vi.fn(),
-    listAnalyses: vi.fn().mockResolvedValue([]),
+    listAnalyses: vi.fn().mockResolvedValue({ analyses: [], skipped: [] }),
     listTextModels: vi.fn().mockResolvedValue(["synthetic-text-model"]),
     getNotesProgress: vi.fn().mockResolvedValue(null),
     cancelNotes: vi.fn().mockResolvedValue(false),
@@ -654,7 +654,10 @@ describe("migration frontend boundaries (synthetic IPC)", () => {
       ],
     };
     const api = fakeApi(meeting);
-    vi.mocked(api.listAnalyses).mockResolvedValue([result]);
+    vi.mocked(api.listAnalyses).mockResolvedValue({
+      analyses: [result],
+      skipped: [],
+    });
     render(<App api={api} />);
     await ready();
     await userEvent.click(

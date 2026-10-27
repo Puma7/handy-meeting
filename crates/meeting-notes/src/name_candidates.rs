@@ -17,25 +17,30 @@ pub fn validate(analysis: &Analysis) -> Result<()> {
 }
 /// Checked per answer batch, before it is saved, so one bad batch cannot block a resumed run.
 pub fn validate_items(template_id: &str, items: &[Fact]) -> Result<()> {
+    for item in items {
+        check_item(template_id, item)?;
+    }
+    Ok(())
+}
+/// Name rules for one statement; other templates are not affected.
+pub fn check_item(template_id: &str, item: &Fact) -> Result<()> {
     if template_id != TEMPLATE_ID {
         return Ok(());
     }
-    for item in items {
-        ensure!(
-            item.owner.is_none() && item.due.is_none(),
-            "Namensvorschläge dürfen keine Zuständigen oder Termine zuweisen."
-        );
-        ensure!(
-            !item.text.trim().is_empty()
-                && item.text.chars().count() <= 80
-                && !item.text.chars().any(char::is_control),
-            "Ungültiger Namensvorschlag."
-        );
-        ensure!(
-            !item.evidence.is_empty() && item.evidence.iter().all(|e| e.quote.contains(&item.text)),
-            "Jeder Namensvorschlag benötigt seinen wörtlichen Namen im Originalzitat."
-        );
-    }
+    ensure!(
+        item.owner.is_none() && item.due.is_none(),
+        "Namensvorschläge dürfen keine Zuständigen oder Termine zuweisen."
+    );
+    ensure!(
+        !item.text.trim().is_empty()
+            && item.text.chars().count() <= 80
+            && !item.text.chars().any(char::is_control),
+        "Ungültiger Namensvorschlag."
+    );
+    ensure!(
+        !item.evidence.is_empty() && item.evidence.iter().all(|e| e.quote.contains(&item.text)),
+        "Jeder Namensvorschlag benötigt seinen wörtlichen Namen im Originalzitat."
+    );
     Ok(())
 }
 #[cfg(test)]

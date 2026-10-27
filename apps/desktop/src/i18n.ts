@@ -70,6 +70,16 @@ export const de = {
   openAnalysisMeeting: "Zugehöriges Meeting öffnen",
   resumeAnalysis: "Gesicherte Auswertung fortsetzen",
   unfinishedAnalyses: "Unfertige Auswertungen",
+  skippedAnalyses:
+    "Einige gespeicherte Auswertungen werden nicht angezeigt, weil sie die Prüfung nicht bestehen, zu einer anderen Sitzung gehören oder ein unbekanntes Speicherformat haben. Die Dateien bleiben unverändert im Sitzungsordner erhalten:",
+  earlierPrompt: "Frühere Promptfassung",
+  readOnly: "nur lesbar",
+  earlierPromptPending:
+    "Dieser Arbeitsstand bleibt erhalten, wird aber nicht fortgesetzt. Bitte bei Bedarf eine neue Auswertung starten.",
+  earlierPromptResult:
+    "Diese Auswertung ist nur lesbar. Sie wird weder fortgesetzt noch mit neuen Ergebnissen gemischt.",
+  rejectedItems:
+    "KI-Aussagen wurden verworfen, weil ihr Beleg oder Umfang die Prüfung nicht bestand. Sie werden nicht angezeigt.",
   resumeAnalysisHelp:
     "Dieser Arbeitsstand verwendet seine ursprünglichen Quellen, Arbeitsaufträge, API-Adresse und sein ursprüngliches Modell. Bereits bestätigte Teilaufgaben werden wiederverwendet. Schlüssel und eine Cloud-Freigabe werden nicht aus der gespeicherten Sitzung übernommen.",
   resumeHelp:
@@ -384,6 +394,16 @@ export const en: Record<MessageKey, string> = {
   openAnalysisMeeting: "Open the associated meeting",
   resumeAnalysis: "Resume saved analysis",
   unfinishedAnalyses: "Unfinished analyses",
+  skippedAnalyses:
+    "Some saved analyses are not shown because they fail verification, belong to another meeting or use an unknown storage format. The files remain unchanged in the meeting folder:",
+  earlierPrompt: "Earlier prompt version",
+  readOnly: "read-only",
+  earlierPromptPending:
+    "This work state is kept but will not be continued. Start a new analysis if needed.",
+  earlierPromptResult:
+    "This analysis is read-only. It is neither continued nor mixed with new results.",
+  rejectedItems:
+    "AI statements were discarded because their evidence or volume failed verification. They are not shown.",
   resumeAnalysisHelp:
     "This run keeps its original sources, instructions, API address and model. Already confirmed subtasks are reused. Credentials and cloud approval are not restored from the saved session.",
   resumeHelp:

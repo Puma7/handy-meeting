@@ -58,6 +58,8 @@ function fixture(mode: "local" | "cloud") {
     },
     confirmedTasks: 1,
     totalTasks: 2,
+    promptVersion: "handymeeting-rust-notes-2",
+    resumable: true,
   };
   let finished = false;
   const api = {
@@ -71,12 +73,13 @@ function fixture(mode: "local" | "cloud") {
     listDevices: vi.fn().mockResolvedValue([]),
     listMeetings: vi.fn().mockResolvedValue([meeting]),
     getMeeting: vi.fn().mockResolvedValue(meeting),
-    listAnalyses: vi.fn().mockResolvedValue([]),
+    listAnalyses: vi.fn().mockResolvedValue({ analyses: [], skipped: [] }),
     getNotesProgress: vi.fn().mockResolvedValue(null),
     listTextModels: vi.fn().mockResolvedValue(["newer-model"]),
-    listUnfinishedAnalyses: vi.fn(async () =>
-      finished ? [] : [structuredClone(pending)],
-    ),
+    listUnfinishedAnalyses: vi.fn(async () => ({
+      items: finished ? [] : [structuredClone(pending)],
+      skipped: [],
+    })),
     generateNotes: vi.fn(async (_request: NotesRequest) => {
       finished = true;
       return {
@@ -99,7 +102,10 @@ it("keeps valid completed results accessible when unfinished discovery reports d
     sections: [{ ...pending.template.steps[0], items: [] }],
     sources: [],
   };
-  vi.mocked(api.listAnalyses).mockResolvedValue([completed]);
+  vi.mocked(api.listAnalyses).mockResolvedValue({
+    analyses: [completed],
+    skipped: [],
+  });
   vi.mocked(api.listUnfinishedAnalyses).mockRejectedValue(
     new Error("Synthetic damaged unfinished checkpoint retained"),
   );
@@ -204,9 +210,10 @@ for (const mode of ["local", "cloud"] as const) {
 
 it("rejects an unfinished run belonging to another meeting without offering resume", async () => {
   const { api, pending } = fixture("local");
-  vi.mocked(api.listUnfinishedAnalyses).mockResolvedValue([
-    { ...pending, meetingId: "another-meeting" },
-  ]);
+  vi.mocked(api.listUnfinishedAnalyses).mockResolvedValue({
+    items: [{ ...pending, meetingId: "another-meeting" }],
+    skipped: [],
+  });
   render(<App api={api} />);
   await userEvent.click(
     await screen.findByRole("button", { name: de.analyzeMeeting }),
@@ -214,6 +221,75 @@ it("rejects an unfinished run belonging to another meeting without offering resu
   await screen.findByText(de.wrongMeeting);
   expect(
     screen.queryByRole("region", { name: de.unfinishedAnalyses }),
+  ).toBeNull();
+  expect(api.generateNotes).not.toHaveBeenCalled();
+});
+
+it("lists an earlier prompt version read-only and reports skipped files without hiding valid work", async () => {
+  const { api, pending } = fixture("local");
+  const earlier: AnalysisResult = {
+    ...pending,
+    id: "3123456789abcdef0123456789abcdef",
+    template: { ...pending.template, name: "Earlier prompt output" },
+    sections: [
+      {
+        ...pending.template.steps[0],
+        items: [],
+        rejected: { quoteNotLiteral: 2 },
+      },
+    ],
+    sources: [],
+    promptVersion: "handymeeting-rust-notes-1",
+    currentPrompt: false,
+  };
+  vi.mocked(api.listAnalyses).mockResolvedValue({
+    analyses: [earlier],
+    skipped: [{ id: "4123456789abcdef0123456789abcdef", reason: "damaged" }],
+  });
+  vi.mocked(api.listUnfinishedAnalyses).mockResolvedValue({
+    items: [
+      {
+        ...pending,
+        promptVersion: "handymeeting-rust-notes-1",
+        resumable: false,
+      },
+    ],
+    skipped: [
+      { id: "5123456789abcdef0123456789abcdef", reason: "newerFormat" },
+    ],
+  });
+  render(<App api={api} />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: de.analyzeMeeting }),
+  );
+  const saved = await screen.findByRole("combobox", { name: de.earlier });
+  expect((saved as HTMLSelectElement).value).toBe(earlier.id);
+  expect(
+    within(saved).getByRole("option", {
+      name: /Earlier prompt output.*Frühere Promptfassung \(nur lesbar\)/,
+    }),
+  ).toBeTruthy();
+  expect(
+    screen.getByText(
+      /Frühere Promptfassung: handymeeting-rust-notes-1 · Diese Auswertung ist nur lesbar/,
+    ),
+  ).toBeTruthy();
+  expect(screen.getByText(`2 ${de.rejectedItems}`)).toBeTruthy();
+  expect(screen.getByText(de.skippedAnalyses)).toBeTruthy();
+  expect(
+    screen.getByText(
+      "4123456789abcdef0123456789abcdef, 5123456789abcdef0123456789abcdef",
+    ),
+  ).toBeTruthy();
+  const unfinished = screen.getByRole("region", {
+    name: de.unfinishedAnalyses,
+  });
+  expect(within(unfinished).getByText("Original instructions")).toBeTruthy();
+  expect(
+    within(unfinished).getByText(/handymeeting-rust-notes-1/),
+  ).toBeTruthy();
+  expect(
+    within(unfinished).queryByRole("button", { name: de.resumeAnalysis }),
   ).toBeNull();
   expect(api.generateNotes).not.toHaveBeenCalled();
 });
