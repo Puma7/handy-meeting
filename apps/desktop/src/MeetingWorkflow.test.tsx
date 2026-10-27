@@ -9,6 +9,9 @@ import { de, en } from "./i18n";
 import { renderTranscript } from "./domain";
 import { testServices } from "./test-services";
 import type { DesktopApi, Meeting, NotesProgress } from "./types";
+// Full-App cases render the whole UI with its status polling. On slow CI runners
+// (macos-15-intel) they exceeded the 5 s default; focused component files keep it.
+vi.setConfig({ testTimeout: 15_000 });
 
 // Synthetic IPC only. No device, clipboard, real file manager or model service is opened.
 const warning =

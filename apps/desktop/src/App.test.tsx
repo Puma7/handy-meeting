@@ -12,6 +12,9 @@ import App from "./App";
 import { testServices } from "./test-services";
 import { defaultTemplate, renderTranscript, validateLibrary } from "./domain";
 import type { AnalysisResult, AppState, DesktopApi, Meeting } from "./types";
+// Full-App cases render the whole UI with its status polling. On slow CI runners
+// (macos-15-intel) they exceeded the 5 s default; focused component files keep it.
+vi.setConfig({ testTimeout: 15_000 });
 
 // Synthetic IPC fixtures only. These tests never open an audio device or a model server.
 const meeting: Meeting = {
@@ -123,7 +126,7 @@ describe("migration frontend boundaries (synthetic IPC)", () => {
   });
   it("uses refreshed Handy models and excludes unsupported/uninstalled entries", async () => {
     const api = fakeApi();
-    vi.mocked(api.refreshHandy).mockResolvedValue({
+    const refreshed = {
       executable: "new-handy",
       version: "1.0.0",
       models: [
@@ -146,6 +149,15 @@ describe("migration frontend boundaries (synthetic IPC)", () => {
           supportsStreaming: true,
         },
       ],
+    };
+    // Like the backend, later status polls report the refreshed Handy models. A poll
+    // with the old list could otherwise replace them on a slow runner.
+    vi.mocked(api.refreshHandy).mockImplementation(async () => {
+      vi.mocked(api.getAppState).mockResolvedValue({
+        ...state(),
+        handy: refreshed,
+      });
+      return refreshed;
     });
     render(<App api={api} />);
     await ready();

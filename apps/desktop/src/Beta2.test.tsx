@@ -19,6 +19,9 @@ import type {
   NotesProgress,
   NotesRequest,
 } from "./types";
+// Full-App cases render the whole UI with its status polling. On slow CI runners
+// (macos-15-intel) they exceeded the 5 s default; focused component files keep it.
+vi.setConfig({ testTimeout: 15_000 });
 
 // Synthetic IPC only: no audio device, installed model, provider or clipboard is used.
 const first: Meeting = {
