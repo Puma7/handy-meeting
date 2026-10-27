@@ -5,9 +5,14 @@ use crate::{
     RESULT_SCHEMA,
 };
 use anyhow::{ensure, Context, Result};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::{collections::HashSet, fs, io::Write, path::Path};
+use std::{
+    collections::HashSet,
+    fs,
+    io::{Read, Write},
+    path::Path,
+};
 pub fn source_hash(sources: &[Source]) -> Result<String> {
     Ok(format!(
         "{:x}",
@@ -64,11 +69,30 @@ pub(crate) fn is_linked(metadata: &fs::Metadata) -> bool {
 /// Reads a finished result of any known prompt version. Callers that continue or extend work
 /// must compare `prompt_version` with [`PROMPT_VERSION`] themselves.
 pub fn read_analysis(path: &Path) -> Result<Analysis> {
+    let metadata = fs::symlink_metadata(path)?;
     ensure!(
-        fs::metadata(path)?.len() <= 64_000_000,
-        "Auswertungsdatei zu groß."
+        metadata.is_file() && !is_linked(&metadata) && metadata.len() <= 64_000_000,
+        "Auswertungsdatei ist nicht sicher lesbar oder zu groß."
     );
-    let result: Analysis = serde_json::from_slice(&fs::read(path)?)?;
+    let mut bytes = Vec::new();
+    fs::File::open(path)?
+        .take(64_000_001)
+        .read_to_end(&mut bytes)?;
+    ensure!(bytes.len() <= 64_000_000, "Auswertungsdatei zu groß.");
+    // Read the format label before assuming any of the current payload shapes.
+    // A newer file may no longer deserialize as today's Analysis at all.
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Header {
+        #[serde(default)]
+        result_schema: Option<u32>,
+    }
+    let header: Header = serde_json::from_slice(&bytes)?;
+    let schema = header.result_schema.unwrap_or(1);
+    if !(1..=RESULT_SCHEMA).contains(&schema) {
+        return Err(UnsupportedFormat(schema).into());
+    }
+    let result: Analysis = serde_json::from_slice(&bytes)?;
     validate_analysis(&result)?;
     Ok(result)
 }

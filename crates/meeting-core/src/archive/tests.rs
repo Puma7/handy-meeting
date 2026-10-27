@@ -1228,6 +1228,294 @@ fn a_dangling_audio_archive_receipt_link_is_refused_not_read_as_missing() {
         .file_type()
         .is_symlink());
 }
+
+/// Synthetic persistence failure after the real directory rename; no user files are used.
+fn interrupted_source_placement(root: &Path) -> Receipt {
+    let id = fixture(root);
+    let cancel = AtomicBool::new(false);
+    let receipt = create(root, &id, 0, "whole-meeting", &cancel, |_, _| {}).unwrap();
+    let before_source = source_inventory_bytes(&root.join("sessions").join(&id));
+    let zip = root
+        .join("archives")
+        .join(format!("{}.zip", receipt.archive_id));
+    let before_zip = fs::read(&zip).unwrap();
+    let error =
+        restore::move_source_with_placement_writer(root, &receipt, 0, &cancel, |path, record| {
+            if record["phase"] == "archived" {
+                Err(std::io::Error::other("synthetic final placement write failure").into())
+            } else {
+                atomic_json(path, record)
+            }
+        })
+        .unwrap_err();
+    assert!(error.to_string().contains("synthetic final placement"));
+    assert!(!root.join("sessions").join(&id).exists());
+    assert!(root
+        .join("archives")
+        .join(format!("{}.source", receipt.archive_id))
+        .is_dir());
+    assert_eq!(
+        source_inventory_bytes(
+            &root
+                .join("archives")
+                .join(format!("{}.source", receipt.archive_id))
+        ),
+        before_source,
+        "the real rename plus failed record write preserves every source byte"
+    );
+    assert_eq!(fs::read(&zip).unwrap(), before_zip);
+    receipt
+}
+
+fn source_inventory_bytes(folder: &Path) -> (Vec<(String, Vec<u8>)>, Vec<String>) {
+    let mut files = Vec::new();
+    let mut directories = Vec::new();
+    inventory(folder, folder, &mut files, &mut directories).unwrap();
+    let mut bytes: Vec<_> = files
+        .into_iter()
+        .map(|(name, path)| (name, fs::read(path).unwrap()))
+        .collect();
+    match fs::read(folder.join("session.lock")) {
+        Ok(lease) => bytes.push(("session/session.lock".into(), lease)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
+        Err(error) => panic!("Cannot inspect synthetic lease: {error}"),
+    }
+    bytes.sort_by(|a, b| a.0.cmp(&b.0));
+    directories.sort();
+    (bytes, directories)
+}
+
+#[test]
+fn source_move_recovers_when_final_placement_write_failed_after_rename() {
+    let root = tempfile::tempdir().unwrap();
+    let receipt = interrupted_source_placement(root.path());
+    let archives = root.path().join("archives");
+    let source = archives.join(format!("{}.source", receipt.archive_id));
+    let zip = archives.join(format!("{}.zip", receipt.archive_id));
+    let placement = archives.join(format!("{}.placement.json", receipt.archive_id));
+    let before_source = source_inventory_bytes(&source);
+    let before_zip = fs::read(&zip).unwrap();
+    let prepared = fs::read(&placement).unwrap();
+    let record: serde_json::Value = serde_json::from_slice(&prepared).unwrap();
+    assert_eq!(record["phase"], "prepared");
+    let recovered =
+        move_source_into_archive(root.path(), &receipt, 0, &AtomicBool::new(false)).unwrap();
+    assert_eq!(recovered, source.canonicalize().unwrap());
+    assert_eq!(source_inventory_bytes(&source), before_source);
+    assert_eq!(fs::read(&zip).unwrap(), before_zip);
+    assert_eq!(
+        fs::read(placement.with_extension("json.bak")).unwrap(),
+        prepared
+    );
+    let record: serde_json::Value = serde_json::from_slice(&fs::read(&placement).unwrap()).unwrap();
+    assert_eq!(record["phase"], "archived");
+    assert!(!archives
+        .join(format!("{}.placement.attempt-1.json", receipt.archive_id))
+        .exists());
+    assert!(!root
+        .path()
+        .join("sessions")
+        .join(&receipt.meeting_id)
+        .exists());
+}
+
+#[test]
+fn source_placement_recovery_preserves_mismatches_unknown_files_and_cancelled_work() {
+    for case in [
+        "archiveId",
+        "meetingId",
+        "archiveSHA256",
+        "phase",
+        "sourceCopyRetained",
+        "source-bytes",
+        "source-size",
+        "unknown-file",
+        "empty-directory",
+        "ambiguous-source",
+        "zip-bytes",
+        "pin",
+        "label-revision",
+        "cancelled",
+        "missing-lease",
+        "nonempty-lease",
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        let receipt = interrupted_source_placement(root.path());
+        let archives = root.path().join("archives");
+        let source = archives.join(format!("{}.source", receipt.archive_id));
+        let zip = archives.join(format!("{}.zip", receipt.archive_id));
+        let placement = archives.join(format!("{}.placement.json", receipt.archive_id));
+        let old_source = root.path().join("sessions").join(&receipt.meeting_id);
+        match case {
+            "source-bytes" | "source-size" => {
+                let manifest = verify(&zip, None, |_, _| {}).unwrap();
+                let file = source.join("audio").join(&manifest.session.parts[0].file);
+                let mut bytes = fs::read(&file).unwrap();
+                if case == "source-bytes" {
+                    bytes[0] ^= 1;
+                } else {
+                    bytes.push(1);
+                }
+                fs::write(file, bytes).unwrap();
+            }
+            "unknown-file" => fs::write(source.join("later-user-file"), b"Keep this edit").unwrap(),
+            "empty-directory" => fs::create_dir(source.join("later-user-folder")).unwrap(),
+            "ambiguous-source" => {
+                fs::create_dir(&old_source).unwrap();
+                fs::write(old_source.join("new-user-file"), b"Ambiguous newer source").unwrap();
+            }
+            "zip-bytes" => OpenOptions::new()
+                .append(true)
+                .open(&zip)
+                .unwrap()
+                .write_all(b"changed")
+                .unwrap(),
+            "pin" | "label-revision" => {
+                metadata::edit(
+                    root.path(),
+                    &receipt.meeting_id,
+                    0,
+                    Some("Newer title".into()),
+                    case == "pin",
+                )
+                .unwrap();
+            }
+            "missing-lease" => fs::remove_file(source.join("session.lock")).unwrap(),
+            "nonempty-lease" => {
+                fs::write(source.join("session.lock"), b"Unknown lease contents").unwrap()
+            }
+            "cancelled" => (),
+            field => {
+                let mut record: serde_json::Value =
+                    serde_json::from_slice(&fs::read(&placement).unwrap()).unwrap();
+                record[field] = if field == "sourceCopyRetained" {
+                    serde_json::json!(false)
+                } else {
+                    serde_json::json!("different")
+                };
+                fs::write(&placement, serde_json::to_vec(&record).unwrap()).unwrap();
+            }
+        }
+        let before_source = source_inventory_bytes(&source);
+        let before_zip = fs::read(&zip).unwrap();
+        let before_placement = fs::read(&placement).unwrap();
+        let cancel = AtomicBool::new(case == "cancelled");
+        assert!(
+            move_source_into_archive(root.path(), &receipt, 0, &cancel).is_err(),
+            "{case}"
+        );
+        assert_eq!(source_inventory_bytes(&source), before_source, "{case}");
+        assert_eq!(fs::read(&zip).unwrap(), before_zip, "{case}");
+        assert_eq!(fs::read(&placement).unwrap(), before_placement, "{case}");
+        assert!(!placement.with_extension("json.bak").exists(), "{case}");
+        if case == "ambiguous-source" {
+            assert_eq!(
+                fs::read(old_source.join("new-user-file")).unwrap(),
+                b"Ambiguous newer source"
+            );
+        } else {
+            assert!(!old_source.exists(), "{case}");
+        }
+    }
+}
+
+#[test]
+fn source_placement_recovery_obeys_operation_and_retained_session_leases() {
+    let root = tempfile::tempdir().unwrap();
+    let receipt = interrupted_source_placement(root.path());
+    let archives = root.path().join("archives");
+    let source = archives.join(format!("{}.source", receipt.archive_id));
+    let placement = archives.join(format!("{}.placement.json", receipt.archive_id));
+    let prepared = fs::read(&placement).unwrap();
+    let before_source = source_inventory_bytes(&source);
+    let operation = operation_lock(root.path()).unwrap();
+    assert!(move_source_into_archive(root.path(), &receipt, 0, &AtomicBool::new(false)).is_err());
+    drop(operation);
+    let labels = metadata::open_lock_file(
+        &root
+            .path()
+            .join("user-metadata")
+            .join(format!("{}.lock", receipt.meeting_id)),
+    )
+    .unwrap();
+    metadata::lock_soon(&labels).unwrap();
+    assert!(move_source_into_archive(root.path(), &receipt, 0, &AtomicBool::new(false)).is_err());
+    drop(labels);
+    // On Windows this keeps the external relocation lease even after closing the internal
+    // handle; recovery must not rely on the old session directory or its internal handle.
+    let retained_owner = SessionStore::open(&source)
+        .unwrap()
+        .into_relocation_guard()
+        .unwrap();
+    assert!(move_source_into_archive(root.path(), &receipt, 0, &AtomicBool::new(false)).is_err());
+    assert_eq!(fs::read(&placement).unwrap(), prepared);
+    assert_eq!(source_inventory_bytes(&source), before_source);
+    drop(retained_owner);
+    move_source_into_archive(root.path(), &receipt, 0, &AtomicBool::new(false)).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn source_placement_recovery_rejects_links_without_following_or_replacing_them() {
+    for linked in ["placement", "source", "source-file", "old-source"] {
+        let root = tempfile::tempdir().unwrap();
+        let receipt = interrupted_source_placement(root.path());
+        let archives = root.path().join("archives");
+        let source = archives.join(format!("{}.source", receipt.archive_id));
+        let placement = archives.join(format!("{}.placement.json", receipt.archive_id));
+        let old_source = root.path().join("sessions").join(&receipt.meeting_id);
+        let target = root.path().join("untouched-link-target");
+        let link = match linked {
+            "placement" => {
+                fs::rename(&placement, &target).unwrap();
+                std::os::unix::fs::symlink(&target, &placement).unwrap();
+                placement.clone()
+            }
+            "source" => {
+                fs::rename(&source, &target).unwrap();
+                std::os::unix::fs::symlink(&target, &source).unwrap();
+                source.clone()
+            }
+            "source-file" => {
+                fs::write(&target, b"Unrelated user text").unwrap();
+                let link = source.join("unknown-link");
+                std::os::unix::fs::symlink(&target, &link).unwrap();
+                link
+            }
+            "old-source" => {
+                std::os::unix::fs::symlink(&target, &old_source).unwrap();
+                old_source.clone()
+            }
+            _ => unreachable!(),
+        };
+        let zip = archives.join(format!("{}.zip", receipt.archive_id));
+        let before_zip = fs::read(&zip).unwrap();
+        let before_record = fs::read(&placement).unwrap();
+        let before_target = if target.is_file() {
+            Some(fs::read(&target).unwrap())
+        } else {
+            None
+        };
+        assert!(
+            move_source_into_archive(root.path(), &receipt, 0, &AtomicBool::new(false)).is_err(),
+            "{linked}"
+        );
+        assert!(
+            fs::symlink_metadata(&link)
+                .unwrap()
+                .file_type()
+                .is_symlink(),
+            "{linked}"
+        );
+        assert_eq!(fs::read(&placement).unwrap(), before_record, "{linked}");
+        assert_eq!(fs::read(&zip).unwrap(), before_zip, "{linked}");
+        if let Some(bytes) = before_target {
+            assert_eq!(fs::read(&target).unwrap(), bytes, "{linked}");
+        } else if linked == "old-source" {
+            assert!(!target.exists(), "a dangling link target is never created");
+        }
+    }
+}
 #[cfg(unix)]
 #[test]
 fn dangling_archive_lock_links_are_rejected_without_creating_their_targets() {

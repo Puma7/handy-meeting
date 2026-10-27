@@ -171,6 +171,17 @@ pub fn move_source_into_archive(
     expected_metadata: u64,
     cancel: &AtomicBool,
 ) -> Result<PathBuf> {
+    move_source_with_placement_writer(root, receipt, expected_metadata, cancel, |path, record| {
+        atomic_json(path, record)
+    })
+}
+pub(super) fn move_source_with_placement_writer(
+    root: &Path,
+    receipt: &Receipt,
+    expected_metadata: u64,
+    cancel: &AtomicBool,
+    mut write_placement: impl FnMut(&Path, &serde_json::Value) -> Result<()>,
+) -> Result<PathBuf> {
     let _operation = operation_lock(root)?;
     if receipt.kind != "whole-meeting"
         || !metadata::valid_id(&receipt.meeting_id)
@@ -200,14 +211,69 @@ pub fn move_source_into_archive(
         return Err("Archive source identity mismatch".into());
     }
     let sessions = metadata::checked_directory(&root.join("sessions"))?;
-    let source = metadata::checked_directory(&sessions.join(&receipt.meeting_id))?;
-    let store = SessionStore::open(&source)?;
+    let source = sessions.join(&receipt.meeting_id);
+    let destination = archives.join(format!("{}.source", receipt.archive_id));
+    let placement = archives.join(format!("{}.placement.json", receipt.archive_id));
+    if !absent(&destination)? {
+        // A failed final record write may leave the only source at its new location.
+        // Recover that narrow state before requiring the old session directory.
+        let mut record = prepared_placement(&placement, receipt)?;
+        if !absent(&source)? {
+            return Err(
+                "Both session and retained archive source exist; both were preserved".into(),
+            );
+        }
+        let retained = metadata::checked_directory(&destination)?;
+        // Do not create a missing or follow a replaced internal lease in a retained copy.
+        if regular(&retained.join("session.lock"))?.len() != 0 {
+            return Err(
+                "Changed lease file in retained copy; source and placement preserved".into(),
+            );
+        }
+        // Holds both the external relocation lease and the internal session lease until
+        // promotion, as well as the operation and label locks acquired above.
+        let _store = verified_source_copy(&retained, &manifest, cancel)?;
+        if cancel.load(Ordering::Acquire) {
+            return Err("Archive move cancelled; retained source and placement preserved".into());
+        }
+        if !absent(&source)? || prepared_placement(&placement, receipt)? != record {
+            return Err(
+                "Archive placement changed during verification; all sources preserved".into(),
+            );
+        }
+        record["phase"] = serde_json::json!("archived");
+        write_placement(&placement, &record)?;
+        return Ok(destination);
+    }
+    let source = metadata::checked_directory(&source)?;
+    let store = verified_source_copy(&source, &manifest, cancel)?;
+    retire_interrupted_placement(&archives, receipt, &placement, &destination)?;
+    let mut record = serde_json::json!({"archiveId":receipt.archive_id,"meetingId":receipt.meeting_id,"phase":"prepared","sourceCopyRetained":true,"archiveSHA256":receipt.archive_sha256});
+    write_placement(&placement, &record)?;
+    if cancel.load(Ordering::Acquire) {
+        return Err("Archive move cancelled; original source retained".into());
+    }
+    let relocation_guard = store.into_relocation_guard()?;
+    fs::rename(&source, &destination)?;
+    record["phase"] = serde_json::json!("archived");
+    write_placement(&placement, &record)?;
+    drop(relocation_guard);
+    Ok(destination)
+}
+
+/// Recheck the exact original inventory under a session lease without rewriting it.
+fn verified_source_copy(
+    source: &Path,
+    manifest: &Manifest,
+    cancel: &AtomicBool,
+) -> Result<SessionStore> {
+    let store = SessionStore::open(source)?;
     if !same_original_text(&store.snapshot()?, &manifest.session)? {
         return Err("Session changed after archiving; original source retained".into());
     }
     let mut files = Vec::new();
     let mut directories = Vec::new();
-    inventory(&source, &source, &mut files, &mut directories)?;
+    inventory(source, source, &mut files, &mut directories)?;
     files.sort_by(|a, b| a.0.cmp(&b.0));
     directories.sort();
     let mut expected_dirs = manifest.directories.clone();
@@ -229,20 +295,7 @@ pub fn move_source_into_archive(
             return Err("Source file changed; source folder retained".into());
         }
     }
-    let destination = archives.join(format!("{}.source", receipt.archive_id));
-    let placement = archives.join(format!("{}.placement.json", receipt.archive_id));
-    retire_interrupted_placement(&archives, receipt, &placement, &destination)?;
-    let mut record = serde_json::json!({"archiveId":receipt.archive_id,"meetingId":receipt.meeting_id,"phase":"prepared","sourceCopyRetained":true,"archiveSHA256":receipt.archive_sha256});
-    atomic_json(&placement, &record)?;
-    if cancel.load(Ordering::Acquire) {
-        return Err("Archive move cancelled; original source retained".into());
-    }
-    let relocation_guard = store.into_relocation_guard()?;
-    fs::rename(&source, &destination)?;
-    record["phase"] = serde_json::json!("archived");
-    atomic_json(&placement, &record)?;
-    drop(relocation_guard);
-    Ok(destination)
+    Ok(store)
 }
 /// Retained records of earlier move attempts that stopped after `prepared`.
 pub(super) const MAX_PLACEMENT_ATTEMPTS: usize = 100;
@@ -274,6 +327,21 @@ pub(super) fn retire_interrupted_placement(
     if absent(placement)? {
         return Ok(());
     }
+    prepared_placement(placement, receipt)?;
+    for number in 1..=MAX_PLACEMENT_ATTEMPTS {
+        let retained = placement_attempt(archives, &receipt.archive_id, number);
+        if absent(&retained)? {
+            fs::rename(placement, &retained)?;
+            #[cfg(unix)]
+            File::open(archives)?.sync_all()?;
+            return Ok(());
+        }
+    }
+    Err("Too many interrupted archive moves are retained; inspect them before moving again".into())
+}
+
+fn prepared_placement(placement: &Path, receipt: &Receipt) -> Result<serde_json::Value> {
+    let blocked = || "Existing archive placement preserved; inspect its previous operation";
     regular(placement)?;
     let mut bytes = Vec::new();
     File::open(placement)?.take(65537).read_to_end(&mut bytes)?;
@@ -285,17 +353,9 @@ pub(super) fn retire_interrupted_placement(
         || record["archiveId"].as_str() != Some(receipt.archive_id.as_str())
         || record["meetingId"].as_str() != Some(receipt.meeting_id.as_str())
         || record["archiveSHA256"].as_str() != Some(receipt.archive_sha256.as_str())
+        || record["sourceCopyRetained"].as_bool() != Some(true)
     {
         return Err(blocked().into());
     }
-    for number in 1..=MAX_PLACEMENT_ATTEMPTS {
-        let retained = placement_attempt(archives, &receipt.archive_id, number);
-        if absent(&retained)? {
-            fs::rename(placement, &retained)?;
-            #[cfg(unix)]
-            File::open(archives)?.sync_all()?;
-            return Ok(());
-        }
-    }
-    Err("Too many interrupted archive moves are retained; inspect them before moving again".into())
+    Ok(record)
 }

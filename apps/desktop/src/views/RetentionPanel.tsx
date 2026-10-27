@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { Archive } from "lucide-react";
 import { errorMessage } from "../api";
 import AudioCopiesPanel from "./AudioCopiesPanel";
@@ -18,6 +25,38 @@ type Rule =
   | "convertAfterDays"
   | "maxVisibleMeetings"
   | "deleteArchivesAfterDays";
+// Native grants last for this app session. Retain preview invalidations through
+// settings navigation without persisting program paths or confirmation text.
+interface PreviewValidity {
+  invalidated: Set<string>;
+  observed: Set<string>;
+  requireExplicitPreview: boolean;
+  allowedPreviewId: string | null;
+  generation: number;
+  listeners: Set<() => void>;
+}
+const previewValidityByApi = new WeakMap<DesktopApi, PreviewValidity>();
+function previewValidity(api: DesktopApi): PreviewValidity {
+  let validity = previewValidityByApi.get(api);
+  if (!validity) {
+    validity = {
+      invalidated: new Set<string>(),
+      observed: new Set<string>(),
+      requireExplicitPreview: false,
+      allowedPreviewId: null,
+      generation: 0,
+      listeners: new Set<() => void>(),
+    };
+    previewValidityByApi.set(api, validity);
+  }
+  return validity;
+}
+function previewIsValid(validity: PreviewValidity, id: string): boolean {
+  return (
+    !validity.invalidated.has(id) &&
+    (!validity.requireExplicitPreview || validity.allowedPreviewId === id)
+  );
+}
 export default function RetentionPanel({
   api,
   locale,
@@ -29,11 +68,25 @@ export default function RetentionPanel({
 }) {
   const de = locale === "de";
   const latestJob = useRef<string | null>(null);
+  const previewSession = useMemo(() => previewValidity(api), [api]);
+  const subscribe = useCallback(
+    (listener: () => void) => {
+      previewSession.listeners.add(listener);
+      return () => {
+        previewSession.listeners.delete(listener);
+      };
+    },
+    [previewSession],
+  );
+  const previewGeneration = useSyncExternalStore(
+    subscribe,
+    () => previewSession.generation,
+  );
   // A remounted status bar reports the last finished preview; only a current one is shown.
   const policyRevision = useRef<number | null>(null);
   const [policy, setPolicy] = useState<RetentionPolicy | null>(null),
     [draft, setDraft] = useState<RetentionPolicy | null>(null),
-    [plan, setPlan] = useState<RetentionPlan | null>(null),
+    [storedPlan, setPlan] = useState<RetentionPlan | null>(null),
     [job, setJob] = useState<LibraryProgress | null>(null),
     [error, setError] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
@@ -41,6 +94,13 @@ export default function RetentionPanel({
     [selected, setSelected] = useState<number | null>(null),
     [confirmation, setConfirmation] = useState(""),
     [accepted, setAccepted] = useState(false);
+  useEffect(() => {
+    latestJob.current = null;
+    setPlan(null);
+    setSelected(null);
+    setAccepted(false);
+    setConfirmation("");
+  }, [previewSession, previewGeneration]);
   useEffect(() => {
     if (!api.getRetentionPolicy) return;
     let active = true;
@@ -64,13 +124,21 @@ export default function RetentionPanel({
   }, [policy]);
   const progress = useCallback(
     (value: LibraryProgress) => {
-      latestJob.current = value.jobId;
       setJob(value);
+      if (value.kind === "cleanup-preview") {
+        previewSession.observed.add(value.jobId);
+        if (!previewIsValid(previewSession, value.jobId)) return;
+      }
+      latestJob.current = value.jobId;
       if (value.kind === "cleanup-preview" && value.status === "complete")
         void api
           .getRetentionPlan?.(value.jobId)
           .then((p) => {
-            if (latestJob.current !== value.jobId || p.id !== value.jobId)
+            if (
+              !previewIsValid(previewSession, value.jobId) ||
+              latestJob.current !== value.jobId ||
+              p.id !== value.jobId
+            )
               return;
             const age = Date.now() - Date.parse(p.createdAt);
             if (
@@ -84,11 +152,22 @@ export default function RetentionPanel({
             setPlan(p);
             setPage(0);
           })
-          .catch((e) => setError(errorMessage(e)));
+          .catch((e) => {
+            if (
+              !previewIsValid(previewSession, value.jobId) ||
+              latestJob.current !== value.jobId
+            )
+              return;
+            setError(errorMessage(e));
+          });
     },
-    [api],
+    [api, previewSession],
   );
   if (!api.getRetentionPolicy) return null;
+  const plan =
+    storedPlan && previewIsValid(previewSession, storedPlan.id)
+      ? storedPlan
+      : null;
   const candidate = selected === null ? null : plan?.candidates[selected];
   const deleting = candidate?.action === "delete-archived-meeting";
   const expectedDelete = candidate ? `DELETE ${candidate.meetingId}` : "";
@@ -134,8 +213,21 @@ export default function RetentionPanel({
     setAccepted(false);
     setConfirmation("");
     setError(null);
+    const generation = previewSession.generation;
+    const knownIds = new Set(previewSession.observed);
     try {
-      await api.previewRetention();
+      const id = await api.previewRetention();
+      if (previewSession.requireExplicitPreview) {
+        if (
+          generation !== previewSession.generation ||
+          knownIds.has(id) ||
+          previewSession.invalidated.has(id)
+        ) {
+          previewSession.invalidated.add(id);
+          return;
+        }
+        previewSession.allowedPreviewId = id;
+      }
       if (api.getMaintenanceProgress) {
         const value = await api.getMaintenanceProgress();
         if (value) progress(value);
@@ -152,7 +244,12 @@ export default function RetentionPanel({
     setError(null);
     try {
       const selected = await api.chooseFfmpegExecutable();
-      if (selected) setDraft({ ...draft, ffmpegExecutable: selected });
+      if (selected) {
+        // A confirmed native choice may approve new bytes even at the same path.
+        // An earlier preview and its consent cannot authorize this selection.
+        invalidatePreview();
+        setDraft({ ...draft, ffmpegExecutable: selected });
+      }
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -163,6 +260,22 @@ export default function RetentionPanel({
     if (!draft || busy || running) return;
     setDraft({ ...draft, ffmpegExecutable: null });
     setError(null);
+    invalidatePreview();
+  }
+  function invalidatePreview() {
+    // Keep rejected job IDs blocked when an old completion is reported again;
+    // only a new preview job may establish a new plan and confirmation.
+    for (const id of [plan?.id, latestJob.current])
+      if (id) previewSession.observed.add(id);
+    for (const id of previewSession.observed)
+      previewSession.invalidated.add(id);
+    // A chooser can finish after its original panel unmounts, before that panel
+    // ever learned a preview ID. Require a newly requested ID in every consumer.
+    previewSession.requireExplicitPreview = true;
+    previewSession.allowedPreviewId = null;
+    previewSession.generation++;
+    for (const listener of previewSession.listeners) listener();
+    latestJob.current = null;
     setPlan(null);
     setSelected(null);
     setAccepted(false);
@@ -170,6 +283,8 @@ export default function RetentionPanel({
   }
   async function apply() {
     if (!plan || selected === null || !candidate || !api.applyRetention) return;
+    // An already queued click may run before the invalidation render commits.
+    if (!previewIsValid(previewSession, plan.id)) return;
     setBusy(true);
     setError(null);
     try {
