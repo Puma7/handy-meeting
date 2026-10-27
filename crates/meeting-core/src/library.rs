@@ -312,29 +312,46 @@ fn unreadable_database(error: &(dyn std::error::Error + 'static)) -> bool {
         )
     })
 }
-/// Only regular index files are moved; a link or a missing folder stops the recovery.
+const INDEX_FILES: [&str; 3] = [
+    "library.sqlite3",
+    "library.sqlite3-wal",
+    "library.sqlite3-shm",
+];
+/// Only regular index files are moved; a link or a missing folder stops the recovery
+/// before any file moves. A failed move puts the already moved files back.
 fn set_aside_unreadable(root: &Path) -> Result<std::path::PathBuf> {
     let folder = metadata::checked_directory(&root.join("library-index"))?;
+    let mut present = Vec::new();
+    for name in INDEX_FILES {
+        match fs::symlink_metadata(folder.join(name)) {
+            Ok(meta) if meta.file_type().is_file() => present.push(name),
+            Ok(_) => return Err("Search index file is not a regular file".into()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
+            Err(e) => return Err(e.into()),
+        }
+    }
     let aside = folder.join(format!(
         "unreadable-{}-{}",
         chrono::Utc::now().format("%Y%m%dT%H%M%SZ"),
         uuid::Uuid::new_v4().simple()
     ));
     fs::create_dir(&aside)?;
-    for name in [
-        "library.sqlite3",
-        "library.sqlite3-wal",
-        "library.sqlite3-shm",
-    ] {
-        let file = folder.join(name);
-        match fs::symlink_metadata(&file) {
-            Ok(meta) if meta.file_type().is_file() => fs::rename(&file, aside.join(name))?,
-            Ok(_) => return Err("Search index file is not a regular file".into()),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
-            Err(e) => return Err(e.into()),
+    move_index_files(&folder, &aside, &present)?;
+    Ok(aside)
+}
+fn move_index_files(folder: &Path, aside: &Path, names: &[&str]) -> Result<()> {
+    for (done, name) in names.iter().enumerate() {
+        if let Err(error) = fs::rename(folder.join(name), aside.join(name)) {
+            for moved in &names[..done] {
+                // Best effort: a file that cannot be moved back stays intact in `aside`.
+                let _ = fs::rename(aside.join(moved), folder.join(moved));
+            }
+            // Removes only an empty folder; anything left in it is kept.
+            let _ = fs::remove_dir(aside);
+            return Err(error.into());
         }
     }
-    Ok(aside)
+    Ok(())
 }
 #[cfg(test)]
 mod tests {
@@ -431,6 +448,26 @@ mod tests {
         assert!(aside.unwrap().join("library.sqlite3").is_file());
         assert!(!index.damaged().unwrap());
         assert_eq!(index.search("", 0, 25).unwrap().total, 0);
+    }
+    #[test]
+    fn a_failed_move_puts_the_index_files_back() {
+        // Synthetic failure: a folder already occupies the WAL destination.
+        let root = tempfile::tempdir().unwrap();
+        let folder = root.path().join("library-index");
+        let aside = folder.join("unreadable-test");
+        fs::create_dir_all(aside.join("library.sqlite3-wal")).unwrap();
+        fs::write(folder.join("library.sqlite3"), b"db").unwrap();
+        fs::write(folder.join("library.sqlite3-wal"), b"wal").unwrap();
+        let names = ["library.sqlite3", "library.sqlite3-wal"];
+        assert!(move_index_files(&folder, &aside, &names).is_err());
+        assert_eq!(fs::read(folder.join("library.sqlite3")).unwrap(), b"db");
+        assert_eq!(
+            fs::read(folder.join("library.sqlite3-wal")).unwrap(),
+            b"wal"
+        );
+        // The occupied folder is not empty, so it is kept rather than removed.
+        assert!(aside.join("library.sqlite3-wal").is_dir());
+        assert!(!aside.join("library.sqlite3").exists());
     }
     #[cfg(unix)]
     #[test]
