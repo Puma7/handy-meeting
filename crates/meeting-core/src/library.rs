@@ -43,17 +43,42 @@ impl SearchHit {
 }
 
 impl LibraryIndex {
-    /// Opens the index for a user-requested rebuild. A database SQLite cannot read is
-    /// moved aside, never deleted, and a fresh index is created in its place. Returns the
+    /// Opens the index for a user-requested rebuild. A database SQLite cannot read, or one
+    /// that fails its integrity checks, is moved aside, never deleted, and a fresh index is created in its place. Returns the
     /// folder that now holds the unreadable files.
     pub fn open_for_rebuild(root: &Path) -> Result<(Self, Option<std::path::PathBuf>)> {
         match Self::open(root) {
-            Ok(index) => Ok((index, None)),
-            Err(error) if unreadable_database(error.as_ref()) => {
-                let aside = set_aside_unreadable(root)?;
-                Ok((Self::open(root)?, Some(aside)))
+            // A readable header can still hide damaged tables or FTS postings, and
+            // unchanged sessions are skipped by the scan, so check before reuse.
+            // The damaged connection is closed before its files are moved.
+            Ok(index) => {
+                if !index.damaged()? {
+                    return Ok((index, None));
+                }
             }
-            Err(error) => Err(error),
+            Err(error) if unreadable_database(error.as_ref()) => (),
+            Err(error) => return Err(error),
+        }
+        let aside = set_aside_unreadable(root)?;
+        Ok((Self::open(root)?, Some(aside)))
+    }
+    /// SQLite's quick check plus the FTS5 integrity check. Only corruption reports `true`.
+    fn damaged(&self) -> Result<bool> {
+        let quick: String = match self.db.query_row("PRAGMA quick_check", [], |r| r.get(0)) {
+            Ok(value) => value,
+            Err(error) if unreadable_database(&error) => return Ok(true),
+            Err(error) => return Err(error.into()),
+        };
+        if quick != "ok" {
+            return Ok(true);
+        }
+        match self.db.execute(
+            "INSERT INTO transcript_search(transcript_search) VALUES('integrity-check')",
+            [],
+        ) {
+            Ok(_) => Ok(false),
+            Err(error) if unreadable_database(&error) => Ok(true),
+            Err(error) => Err(error.into()),
         }
     }
     pub fn open(root: &Path) -> Result<Self> {
@@ -279,7 +304,7 @@ fn hit(row: &rusqlite::Row<'_>) -> rusqlite::Result<SearchHit> {
     })
 }
 
-fn unreadable_database(error: &(dyn std::error::Error + Send + Sync + 'static)) -> bool {
+fn unreadable_database(error: &(dyn std::error::Error + 'static)) -> bool {
     error.downcast_ref::<rusqlite::Error>().is_some_and(|e| {
         matches!(
             e.sqlite_error_code(),
@@ -380,6 +405,32 @@ mod tests {
         // A readable index is reused as it is.
         let (_, again) = LibraryIndex::open_for_rebuild(root.path()).unwrap();
         assert!(again.is_none());
+    }
+    #[test]
+    fn rebuild_replaces_an_index_whose_fts_postings_are_damaged() {
+        // Synthetic damage: the SQLite header is intact but FTS posting blocks are gone.
+        let root = tempfile::tempdir().unwrap();
+        let mut index = LibraryIndex::open(root.path()).unwrap();
+        let d = data("0123456789abcdef0123456789abcdef");
+        index
+            .upsert(&d, &metadata::Metadata::default(), "fixture")
+            .unwrap();
+        drop(index);
+        let path = root.path().join("library-index/library.sqlite3");
+        let raw = Connection::open(&path).unwrap();
+        assert!(
+            raw.execute("DELETE FROM transcript_search_data WHERE id > 10", [])
+                .unwrap()
+                > 0
+        );
+        drop(raw);
+        let reopened = LibraryIndex::open(root.path()).unwrap();
+        assert!(reopened.damaged().unwrap());
+        drop(reopened);
+        let (index, aside) = LibraryIndex::open_for_rebuild(root.path()).unwrap();
+        assert!(aside.unwrap().join("library.sqlite3").is_file());
+        assert!(!index.damaged().unwrap());
+        assert_eq!(index.search("", 0, 25).unwrap().total, 0);
     }
     #[cfg(unix)]
     #[test]
