@@ -1,30 +1,128 @@
 use crate::{AudioPart, Result, SessionData, SessionProgress, TranscriptCheckpoint, SAMPLE_RATE};
-use fs2::FileExt;
 use serde::{de::DeserializeOwned, Serialize};
+use sha2::Digest;
 use std::{
     fs::{self, File, OpenOptions},
     io::{BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{mpsc, Arc, Mutex},
 };
 use uuid::Uuid;
 
 const MAX_MANIFEST_BYTES: u64 = 32 * 1024 * 1024;
 const MAX_JOURNAL_LINE: usize = 2 * 1024 * 1024;
+/// Optional audio analysis may read only a closed, digest-verified bounded section.
+pub fn read_closed_audio(folder: &Path, part: &AudioPart) -> Result<Vec<f32>> {
+    reject_link(folder)?;
+    validate_part(part)?;
+    if !part.audio_closed
+        || part.confirmed_sample_count == 0
+        || part.confirmed_sample_count > u64::from(SAMPLE_RATE) * 120
+    {
+        return Err("Speaker analysis needs a closed audio section of at most two minutes".into());
+    }
+    let path = safe_audio_path(folder, &part.file)?;
+    crate::pcm::verify_confirmed(&path, part)?;
+    let mut pcm = Vec::with_capacity(part.confirmed_sample_count as usize);
+    while pcm.len() < part.confirmed_sample_count as usize {
+        let count = (part.confirmed_sample_count as usize - pcm.len()).min(SAMPLE_RATE as usize);
+        let next = crate::read_pcm_samples(&path, pcm.len() as u64, count)?;
+        if next.len() != count {
+            return Err("Confirmed audio ended early".into());
+        }
+        pcm.extend(next);
+    }
+    Ok(pcm)
+}
 
 struct Inner {
     data: SessionData,
-    _lease: File,
+    _lease: SessionLease,
+}
+pub(crate) struct SessionLease {
+    internal: Option<File>,
+    relocation: Option<File>,
+}
+pub(crate) struct RelocationGuard {
+    _internal: Option<File>,
+    _relocation: File,
 }
 
 /// Clones share one writer and one exclusive lease. New Rust sessions only.
 #[derive(Clone)]
 pub struct SessionStore {
     folder: PathBuf,
+    // Join the derived writer before releasing the last session lease.
+    mirror: Arc<TextMirror>,
     inner: Arc<Mutex<Inner>>,
 }
 
+struct TextMirror {
+    sender: Option<mpsc::SyncSender<()>>,
+    worker: Option<std::thread::JoinHandle<()>>,
+}
+const TXT_WARNING: &str = "Die lesbare TXT-Kopie konnte nicht aktualisiert werden. Originaljournale und bestätigte Texte bleiben erhalten. / The readable TXT copy could not be updated; confirmed journals are preserved.";
+impl Drop for TextMirror {
+    fn drop(&mut self) {
+        self.sender.take();
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
+    }
+}
+
 impl SessionStore {
+    fn from_parts(folder: PathBuf, data: SessionData, lease: SessionLease) -> Self {
+        let inner = Arc::new(Mutex::new(Inner {
+            data,
+            _lease: lease,
+        }));
+        let weak = Arc::downgrade(&inner);
+        let path = folder.clone();
+        // At most one pending notification. Each write uses the latest confirmed state.
+        let (sender, receiver) = mpsc::sync_channel(1);
+        let worker = std::thread::Builder::new()
+            .name("meeting-readable-text".into())
+            .spawn(move || {
+                while receiver.recv().is_ok() {
+                    // Hold a strong reference only while copying, so owner checks stay exact.
+                    let data = {
+                        let Some(inner) = weak.upgrade() else { break };
+                        let Ok(guard) = inner.lock() else { break };
+                        guard.data.clone()
+                    };
+                    // All filesystem work is outside the audio checkpoint lock.
+                    if crate::live_text::refresh(&path, &data).is_err() {
+                        if let Some(inner) = weak.upgrade() {
+                            if let Ok(mut guard) = inner.lock() {
+                                note_data(&mut guard.data, TXT_WARNING);
+                            }
+                        }
+                    }
+                }
+            })
+            .ok();
+        Self {
+            folder,
+            mirror: Arc::new(TextMirror {
+                sender: Some(sender),
+                worker,
+            }),
+            inner,
+        }
+    }
+    fn queue_text_mirror(&self) {
+        if let Some(sender) = self.mirror.sender.as_ref() {
+            if matches!(
+                sender.try_send(()),
+                Err(mpsc::TrySendError::Disconnected(()))
+            ) {
+                if let Ok(mut guard) = self.inner.lock() {
+                    note_data(&mut guard.data, TXT_WARNING);
+                }
+            }
+        }
+    }
     /// Bounded latest text revisions; no full-meeting clone or audio access.
     pub fn transcript_page(&self, after: u64, limit: usize) -> Result<crate::TranscriptPage> {
         if !(1..=8).contains(&limit) {
@@ -124,17 +222,43 @@ impl SessionStore {
             read_only: false,
         };
         atomic_json(&folder.join("session.json"), &data)?;
-        Ok(Self {
-            folder,
-            inner: Arc::new(Mutex::new(Inner {
-                data,
-                _lease: lease,
-            })),
-        })
+        Ok(Self::from_parts(folder, data, lease))
     }
 
     pub fn folder(&self) -> &Path {
         &self.folder
+    }
+    pub(crate) fn into_relocation_guard(mut self) -> Result<RelocationGuard> {
+        // As sole owner, finish the derived TXT writer first; it can briefly hold the session.
+        if let Some(mirror) = Arc::get_mut(&mut self.mirror) {
+            mirror.sender.take();
+            if let Some(worker) = mirror.worker.take() {
+                let _ = worker.join();
+            }
+        }
+        if Arc::strong_count(&self.inner) != 1 {
+            return Err(
+                "Other session readers or writers are still active; archive move stopped".into(),
+            );
+        }
+        let mut inner = self.inner.lock().map_err(|_| "Session lock was poisoned")?;
+        let internal = inner._lease.internal.take();
+        #[cfg(windows)]
+        let internal = {
+            drop(internal);
+            None
+        };
+        let guard = inner
+            ._lease
+            .relocation
+            .take()
+            .ok_or("Relocation lease unavailable")?;
+        drop(inner);
+        drop(self);
+        Ok(RelocationGuard {
+            _internal: internal,
+            _relocation: guard,
+        })
     }
     #[cfg(test)]
     pub(crate) fn test_owner_count(&self) -> usize {
@@ -277,37 +401,7 @@ impl SessionStore {
         // The audio journal is authoritative for acknowledged sample counts. Bytes beyond
         // that point are preserved on disk but never silently advertised as confirmed.
         let mut malformed = 0;
-        let mut seen_audio = std::collections::HashMap::<String, u64>::new();
-        read_lines::<AudioPart, _>(
-            &folder.join("audio-journal.jsonl"),
-            &mut malformed,
-            |part| {
-                validate_part(&part)?;
-                if seen_audio
-                    .insert(part.file.clone(), part.confirmed_sample_count)
-                    .is_some_and(|previous| part.confirmed_sample_count < previous)
-                {
-                    return Err("Audio journal moved backward".into());
-                }
-                if let Some(existing) = data.parts.iter_mut().find(|old| old.file == part.file) {
-                    if part.confirmed_sample_count < existing.confirmed_sample_count {
-                        return Ok(());
-                    }
-                    let text = existing.clone();
-                    *existing = part;
-                    existing.text = text.text;
-                    existing.committed_text = text.committed_text;
-                    existing.tentative_text = text.tentative_text;
-                    existing.processed_samples = text.processed_samples;
-                    existing.model_id = text.model_id;
-                    existing.status = text.status;
-                    existing.transcript_sequence = text.transcript_sequence;
-                } else {
-                    data.parts.push(part);
-                }
-                Ok(())
-            },
-        )?;
+        replay_audio_journal(folder, &mut data, &mut malformed)?;
         for part in &mut data.parts {
             validate_part(part)?;
             let audio = safe_audio_path(folder, &part.file)?;
@@ -317,27 +411,7 @@ impl SessionStore {
                 part.audio_closed = true;
             }
         }
-        read_lines::<TranscriptCheckpoint, _>(
-            &folder.join("transcript-journal.jsonl"),
-            &mut malformed,
-            |checkpoint| {
-                if let Some(part) = data
-                    .parts
-                    .iter_mut()
-                    .find(|part| part.file == checkpoint.file)
-                {
-                    validate_checkpoint(part, &checkpoint)?;
-                    if checkpoint.sequence >= part.transcript_sequence {
-                        validate_continuity(part, &checkpoint)?;
-                        apply_checkpoint(part, &checkpoint);
-                    }
-                    data.snapshot_sequence = data.snapshot_sequence.max(checkpoint.sequence);
-                } else {
-                    return Err("Text journal references unknown audio".into());
-                }
-                Ok(())
-            },
-        )?;
+        replay_transcript_journal(folder, &mut data, &mut malformed)?;
         if malformed > 0 {
             warn_data(&mut data, &format!("{malformed} unfinished journal line(s) retained; last confirmed data recovered."));
         }
@@ -352,13 +426,7 @@ impl SessionStore {
             data.status = "recorded".into();
         }
         data.duration_ms = duration(&data.parts);
-        let store = Self {
-            folder: folder.to_owned(),
-            inner: Arc::new(Mutex::new(Inner {
-                data,
-                _lease: lease,
-            })),
-        };
+        let store = Self::from_parts(folder.to_owned(), data, lease);
         // Recovery is journal-derived and read-only until another explicit update.
         Ok(store)
     }
@@ -431,6 +499,8 @@ impl SessionStore {
             .ok_or("Unknown audio part")?;
         apply_checkpoint(part, &checkpoint);
         guard.data.snapshot_sequence = next;
+        drop(guard);
+        self.queue_text_mirror();
         Ok(())
     }
 
@@ -455,6 +525,9 @@ impl SessionStore {
         }
         atomic_json(&self.folder.join("session.json"), &updated)?;
         guard.data = updated;
+        drop(guard);
+        // An explicit update reconciles text recovered from the journals after a crash.
+        self.queue_text_mirror();
         Ok(())
     }
 
@@ -524,6 +597,95 @@ pub fn list_sessions(root: &Path) -> Result<Vec<SessionData>> {
     }
     result.sort_by(|a, b| b.started_at.cmp(&a.started_at));
     Ok(result)
+}
+
+/// Read only a validated durable manifest for rebuilding the derived search index.
+/// Full recovery still requires opening the selected session and checking its journals/audio.
+pub fn inspect_manifest(folder: &Path) -> Result<SessionData> {
+    reject_link(folder)?;
+    let data: SessionData = read_json(&folder.join("session.json"))
+        .or_else(|_| read_json(&folder.join("session.json.bak")))?;
+    validate_data(&data)?;
+    if folder.file_name().and_then(|s| s.to_str()) != Some(data.id.as_str()) {
+        return Err("Manifest identity differs from its session directory".into());
+    }
+    Ok(data)
+}
+
+fn replay_audio_journal(
+    folder: &Path,
+    data: &mut SessionData,
+    malformed: &mut usize,
+) -> Result<()> {
+    let mut seen_audio = std::collections::HashMap::<String, u64>::new();
+    read_lines::<AudioPart, _>(&folder.join("audio-journal.jsonl"), malformed, |part| {
+        validate_part(&part)?;
+        if seen_audio
+            .insert(part.file.clone(), part.confirmed_sample_count)
+            .is_some_and(|previous| part.confirmed_sample_count < previous)
+        {
+            return Err("Audio journal moved backward".into());
+        }
+        if let Some(existing) = data.parts.iter_mut().find(|old| old.file == part.file) {
+            if part.confirmed_sample_count < existing.confirmed_sample_count {
+                return Ok(());
+            }
+            let text = existing.clone();
+            *existing = part;
+            existing.text = text.text;
+            existing.committed_text = text.committed_text;
+            existing.tentative_text = text.tentative_text;
+            existing.processed_samples = text.processed_samples;
+            existing.model_id = text.model_id;
+            existing.status = text.status;
+            existing.transcript_sequence = text.transcript_sequence;
+        } else {
+            data.parts.push(part);
+        }
+        Ok(())
+    })?;
+    Ok(())
+}
+fn replay_transcript_journal(
+    folder: &Path,
+    data: &mut SessionData,
+    malformed: &mut usize,
+) -> Result<()> {
+    read_lines::<TranscriptCheckpoint, _>(
+        &folder.join("transcript-journal.jsonl"),
+        malformed,
+        |checkpoint| {
+            if let Some(part) = data
+                .parts
+                .iter_mut()
+                .find(|part| part.file == checkpoint.file)
+            {
+                validate_checkpoint(part, &checkpoint)?;
+                if checkpoint.sequence >= part.transcript_sequence {
+                    validate_continuity(part, &checkpoint)?;
+                    apply_checkpoint(part, &checkpoint);
+                }
+                data.snapshot_sequence = data.snapshot_sequence.max(checkpoint.sequence);
+            } else {
+                return Err("Text journal references unknown audio".into());
+            }
+            Ok(())
+        },
+    )?;
+    Ok(())
+}
+/// Text-only, read-only journal replay for the derived search index: no lease, no audio
+/// verification and no writes. Opening the session remains the authoritative recovery.
+pub fn inspect_journals(folder: &Path) -> Result<SessionData> {
+    let mut data = inspect_manifest(folder)?;
+    if data.schema_version != 2 {
+        return Ok(data);
+    }
+    let mut malformed = 0;
+    replay_audio_journal(folder, &mut data, &mut malformed)?;
+    replay_transcript_journal(folder, &mut data, &mut malformed)?;
+    data.duration_ms = duration(&data.parts);
+    Ok(data)
 }
 
 /// Inspect existing v1 data without creating a lease, repairing a header or writing exports.
@@ -624,21 +786,63 @@ pub(crate) fn now() -> String {
 }
 fn warn_data(data: &mut SessionData, text: &str) {
     data.capture_incomplete = true;
+    note_data(data, text);
+}
+/// The readable TXT is derived from the journals; its failures never imply lost audio.
+fn note_data(data: &mut SessionData, text: &str) {
     if !data.warnings.iter().any(|old| old == text) {
         data.warnings.push(text.into());
     }
 }
 
-fn lease(folder: &Path) -> Result<File> {
+pub(crate) fn lease(folder: &Path) -> Result<SessionLease> {
+    reject_link(folder)?;
+    let parent = folder.parent().ok_or("Session has no storage parent")?;
+    reject_link(parent)?;
+    let locks = parent.join(".leases");
+    match fs::create_dir(&locks) {
+        Ok(()) => (),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => (),
+        Err(e) => return Err(e.into()),
+    }
+    reject_link(&locks)?;
+    if !locks.is_dir() {
+        return Err("Session lease storage is not an ordinary directory".into());
+    }
+    let key = format!(
+        "{:x}",
+        sha2::Sha256::digest(folder.canonicalize()?.to_string_lossy().as_bytes())
+    );
+    let relocation_path = locks.join(format!("{key}.lock"));
+    if relocation_path.exists() {
+        reject_link(&relocation_path)?;
+    }
+    let relocation = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(relocation_path)?;
+    // A child process started elsewhere can briefly inherit an open lease handle
+    // between fork and exec; a lease that stays held is still a hard error.
+    crate::metadata::lock_soon(&relocation)
+        .map_err(|_| "This session is already active in another process")?;
+    let path = folder.join("session.lock");
+    if path.exists() {
+        reject_link(&path)?;
+    }
     let file = OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .truncate(false)
-        .open(folder.join("session.lock"))?;
-    file.try_lock_exclusive()
+        .open(path)?;
+    crate::metadata::lock_soon(&file)
         .map_err(|_| "This session is already active in another process")?;
-    Ok(file)
+    Ok(SessionLease {
+        internal: Some(file),
+        relocation: Some(relocation),
+    })
 }
 fn read_json<T: DeserializeOwned>(path: &Path) -> Result<T> {
     reject_link(path)?;
@@ -823,7 +1027,7 @@ fn read_lines<T: DeserializeOwned, F: FnMut(T) -> Result<()>>(
     Ok(())
 }
 
-fn atomic_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
+pub(crate) fn atomic_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
     let parent = path.parent().ok_or("Metadata directory missing")?;
     let bytes = serde_json::to_vec_pretty(value)?;
     if bytes.len() as u64 > MAX_MANIFEST_BYTES {
@@ -915,5 +1119,28 @@ mod tests {
         assert_eq!(store.progress().unwrap().total_parts, 480);
         assert_eq!(store.progress().unwrap().complete_parts, 479);
         assert!(!store.recognition_complete().unwrap());
+    }
+
+    #[test]
+    fn briefly_inherited_lease_handle_does_not_fail_open_but_a_held_one_does() {
+        // Synthetic: a second handle stands in for a lease inherited by a child process
+        // between fork and exec.
+        use fs2::FileExt;
+        let root = tempfile::tempdir().unwrap();
+        let store = SessionStore::create(root.path(), "Lease", "m", "s", None).unwrap();
+        let folder = store.folder().to_owned();
+        drop(store);
+        let inherited = File::open(folder.join("session.lock")).unwrap();
+        inherited.try_lock_exclusive().unwrap();
+        let release = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            drop(inherited);
+        });
+        let reopened = SessionStore::open(&folder).unwrap();
+        release.join().unwrap();
+        // An owner that keeps the lease still blocks a second writer.
+        assert!(SessionStore::open(&folder).is_err());
+        drop(reopened);
+        assert!(SessionStore::open(&folder).is_ok());
     }
 }

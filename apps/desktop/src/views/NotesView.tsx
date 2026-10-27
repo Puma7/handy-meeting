@@ -149,6 +149,12 @@ export default function NotesView({
   }, [notesBusy, result?.id]);
   const templateLocked =
     notesBusy || libraryInvalid || libraryPending || !connected;
+  const builtIn = template.id === "speaker-name-candidates-v1";
+  // The shipped prompt carries the speaker evidence rule; duplicate it to change steps.
+  const stepsLocked = templateLocked || builtIn;
+  const editableTemplateCount = templates.filter(
+    (t) => t.id !== "speaker-name-candidates-v1",
+  ).length;
   const visibleSteps = result ? result.sections : template.steps;
   const activeId =
     (result ? resultSection?.id : selectedStep.id) ?? visibleSteps[0].id;
@@ -397,7 +403,7 @@ export default function NotesView({
               </button>
               <button
                 className="text-button"
-                disabled={templateLocked}
+                disabled={templateLocked || builtIn}
                 onClick={() => openTemplateAction("rename")}
               >
                 <Pencil size={14} />
@@ -405,8 +411,12 @@ export default function NotesView({
               </button>
               <button
                 className="text-button"
-                disabled={templateLocked || templates.length < 2}
-                title={templates.length < 2 ? t.lastTemplate : t.removeTemplate}
+                disabled={
+                  templateLocked || builtIn || editableTemplateCount < 2
+                }
+                title={
+                  editableTemplateCount < 2 ? t.lastTemplate : t.removeTemplate
+                }
                 onClick={() => openTemplateAction("delete")}
               >
                 <Trash2 size={14} />
@@ -558,14 +568,14 @@ export default function NotesView({
                         (step) => step.id === item.id,
                       );
                       if (saved) inspectStep(saved);
-                    } else if (!templateLocked) {
+                    } else if (!stepsLocked) {
                       setEditing({ ...(item as AnalysisStep) });
                       setEditingNew(false);
                     }
                   }
                 }}
                 onContextMenu={(event) => {
-                  if (result || templateLocked) return;
+                  if (result || stepsLocked) return;
                   event.preventDefault();
                   setEditing({ ...(item as AnalysisStep) });
                   setEditingNew(false);
@@ -578,7 +588,7 @@ export default function NotesView({
           {!result && (
             <button
               className="icon-button"
-              disabled={templateLocked || template.steps.length >= 100}
+              disabled={stepsLocked || template.steps.length >= 100}
               title={t.addTab}
               aria-label={t.addTab}
               onClick={() => {
@@ -616,7 +626,7 @@ export default function NotesView({
           <div className="step-actions">
             <button
               className="text-button"
-              disabled={templateLocked}
+              disabled={stepsLocked}
               onClick={() => {
                 setEditing({ ...selectedStep });
                 setEditingNew(false);
@@ -631,7 +641,7 @@ export default function NotesView({
                 title={t.moveLeft}
                 aria-label={t.moveLeft}
                 disabled={
-                  templateLocked || template.steps[0].id === selectedStep.id
+                  stepsLocked || template.steps[0].id === selectedStep.id
                 }
                 onClick={() => moveStep(-1)}
               >
@@ -642,8 +652,7 @@ export default function NotesView({
                 title={t.moveRight}
                 aria-label={t.moveRight}
                 disabled={
-                  templateLocked ||
-                  template.steps.at(-1)?.id === selectedStep.id
+                  stepsLocked || template.steps.at(-1)?.id === selectedStep.id
                 }
                 onClick={() => moveStep(1)}
               >
@@ -653,7 +662,7 @@ export default function NotesView({
                 className="icon-button"
                 title={t.removeTab}
                 aria-label={t.removeTab}
-                disabled={templateLocked || template.steps.length < 2}
+                disabled={stepsLocked || template.steps.length < 2}
                 onClick={async () => {
                   const steps = template.steps.filter(
                     (item) => item.id !== selectedStep.id,

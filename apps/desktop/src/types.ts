@@ -45,6 +45,46 @@ export interface Meeting {
   readOnly?: boolean;
   pendingAudioMs?: number;
   savedAudioMs?: { system: number; microphone: number };
+  userMetadata?: MeetingMetadata;
+  metadataError?: string | null;
+}
+export interface MeetingMetadata {
+  revision: number;
+  title: string | null;
+  pinned: boolean;
+  audioRemoved: boolean;
+}
+export interface SearchHit {
+  id: string;
+  title: string;
+  startedAt: string;
+  durationMs: number;
+  status: string;
+  modelId: string;
+  pinned: boolean;
+  audioRemoved: boolean;
+  metadataRevision: number;
+  sourceId: string | null;
+  startMs: number | null;
+  endMs: number | null;
+  excerpt: string;
+}
+export interface SearchPage {
+  items: SearchHit[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+export interface LibraryProgress {
+  jobId: string;
+  kind: string;
+  status: "running" | "complete" | "cancelled" | "failed";
+  confirmedTasks: number;
+  totalTasks: number;
+  elapsedMs: number;
+  skipped: number;
+  error: string | null;
+  cancelRequested: boolean;
 }
 export type MeetingSummary = Omit<Meeting, "parts" | "warnings">;
 export interface AppState {
@@ -175,6 +215,70 @@ export interface NotesProgress {
   cancelRequested: boolean;
 }
 export interface DesktopApi {
+  listAudioCopies?(offset: number): Promise<AudioCopy[]>;
+  transcribeAudioCopy?(
+    runId: string,
+    modelId: string,
+    confirmed: boolean,
+  ): Promise<string>;
+  compactArchive?(archiveId: string, confirmed: boolean): Promise<string>;
+  listArchives?(offset: number, limit: number): Promise<ArchivePage>;
+  restoreArchive?(archiveId: string, confirmed: boolean): Promise<string>;
+  listUnfinishedDeletions?(): Promise<UnfinishedDeletion[]>;
+  resumePermanentDeletion?(
+    logId: string,
+    confirmation: string,
+  ): Promise<string>;
+  applyRetention?(
+    planId: string,
+    candidateIndex: number,
+    confirmation: string,
+  ): Promise<string>;
+  getRetentionPolicy?(): Promise<RetentionPolicy>;
+  saveRetentionPolicy?(
+    expectedRevision: number,
+    policy: RetentionPolicy,
+  ): Promise<RetentionPolicy>;
+  previewRetention?(): Promise<string>;
+  getRetentionPlan?(jobId: string): Promise<RetentionPlan>;
+  getMaintenanceProgress?(): Promise<LibraryProgress | null>;
+  cancelMaintenance?(jobId: string): Promise<boolean>;
+  startSpeakerExperiment?(
+    meetingId: string,
+    modelId: string,
+    mode: "live" | "post-meeting",
+  ): Promise<string>;
+  getSpeakerProgress?(): Promise<SpeakerProgress | null>;
+  cancelSpeakerExperiment?(jobId: string): Promise<boolean>;
+  getSpeakerSections?(meetingId: string): Promise<SavedSpeakerSections | null>;
+  checkForUpdate?(): Promise<UpdateProgress>;
+  downloadUpdate?(): Promise<UpdateProgress>;
+  getUpdateProgress?(): Promise<UpdateProgress>;
+  cancelUpdate?(): Promise<void>;
+  installUpdate?(): Promise<void>;
+  getSpeakerLabels?(
+    meetingId: string,
+  ): Promise<SpeakerDocument & { sources: Record<string, string> }>;
+  saveSpeakerLabels?(
+    meetingId: string,
+    expectedRevision: number,
+    enabled: boolean,
+    assignments: SpeakerAssignment[],
+  ): Promise<SpeakerDocument>;
+  editMeetingMetadata?(
+    meetingId: string,
+    expectedRevision: number,
+    title: string | null,
+    pinned: boolean,
+  ): Promise<MeetingMetadata>;
+  searchMeetings?(
+    query: string,
+    offset: number,
+    limit: number,
+  ): Promise<SearchPage>;
+  rebuildSearchIndex?(): Promise<string>;
+  getLibraryProgress?(): Promise<LibraryProgress | null>;
+  cancelLibraryJob?(jobId: string): Promise<boolean>;
   getAppState(): Promise<AppState>;
   refreshHandy(executable: string | null): Promise<HandyStatus>;
   listDevices(): Promise<AudioDevice[]>;
@@ -218,4 +322,127 @@ export interface DesktopApi {
     request?: StartRequest,
   ): Promise<void>;
   agentRevoke(): Promise<void>;
+}
+export interface SpeakerAssignment {
+  sourceId: string;
+  textSha256: string;
+  name: string;
+  evidence: string;
+}
+export interface RetentionPolicy {
+  revision: number;
+  untouchedDays: number;
+  audioArchiveAfterDays: number | null;
+  archiveAfterDays: number | null;
+  convertAfterDays: number | null;
+  maxVisibleMeetings: number | null;
+  deleteArchivesAfterDays: number | null;
+  codec: "flac" | "opus";
+  ffmpegExecutable: string | null;
+}
+export interface RetentionCandidate {
+  meetingId: string;
+  title: string;
+  action:
+    | "archive-audio"
+    | "archive-meeting"
+    | "convert-audio"
+    | "delete-archived-meeting";
+  archiveId: string | null;
+  metadataRevision: number;
+  originalManifestSha256: string;
+  ageDays: number;
+  reason: string;
+}
+export interface RetentionPlan {
+  id: string;
+  policyRevision: number;
+  createdAt: string;
+  scanned: number;
+  protected: number;
+  unreadable: number;
+  candidates: RetentionCandidate[];
+  limited: boolean;
+}
+export interface SpeakerTurn {
+  startMs: number;
+  endMs: number;
+  speakerId: number;
+  confidence: number | null;
+}
+export interface SpeakerSection {
+  sourceId: string;
+  startMs: number;
+  durationMs: number;
+  audioSha256: string;
+  turns: SpeakerTurn[];
+}
+export interface SpeakerProgress {
+  jobId: string;
+  meetingId: string;
+  mode: string;
+  status: string;
+  stage: string;
+  modelId: string;
+  confirmedTasks: number;
+  totalTasks: number;
+  elapsedMs: number;
+  error: string | null;
+  cancelRequested: boolean;
+  lastSection: SpeakerSection | null;
+}
+export interface SavedSpeakerSections {
+  runId: string;
+  mode: string;
+  modelId: string;
+  sections: SpeakerSection[];
+}
+export interface UpdateProgress {
+  status: string;
+  version: string | null;
+  releaseUrl: string | null;
+  receivedBytes: number;
+  totalBytes: number;
+  elapsedMs: number;
+  error: string | null;
+  attempt?: number;
+}
+export interface SpeakerDocument {
+  revision: number;
+  enabled: boolean;
+  assignments: SpeakerAssignment[];
+}
+
+export interface ArchiveEntry {
+  receipt: {
+    archiveId: string;
+    meetingId: string;
+    kind: string;
+    archiveBytes: number;
+    originalBytes: number;
+    createdAt: string;
+  };
+  title: string;
+  sessionPresent: boolean;
+  sourceCopyRetained: boolean;
+}
+export interface UnfinishedDeletion {
+  logId: string;
+  meetingId: string;
+  deletedFiles: number;
+  totalFiles: number;
+  confirmedAt: string;
+}
+export interface ArchivePage {
+  items: ArchiveEntry[];
+  more: boolean;
+}
+
+export interface AudioCopy {
+  runId: string;
+  meetingId: string;
+  title: string;
+  codec: "flac" | "opus";
+  createdAt: string;
+  sections: number;
 }

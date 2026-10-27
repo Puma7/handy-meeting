@@ -1,4 +1,4 @@
-import { cleanup } from "@testing-library/react";
+import { cleanup, configure } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 // Node 26 exposes a global storage getter without a backing file. Keep these
 // synthetic tests isolated from both that getter and any real browser profile.
@@ -18,4 +18,6 @@ const storage: Storage = {
   },
 };
 vi.stubGlobal("localStorage", storage);
+// App start-up and status polling can take over 1 s on slow CI runners.
+configure({ asyncUtilTimeout: 3000 });
 afterEach(cleanup);

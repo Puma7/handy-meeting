@@ -104,8 +104,11 @@ pub fn read_pending_analysis(folder: &Path) -> Result<Option<PendingAnalysis>> {
                         && metadata.len() <= 4_000_000,
                     "Bestätigter Auswertungsabschnitt ist nicht sicher lesbar."
                 );
-                validate_answer(&fs::read_to_string(&path)?, sources, &step.kind)?;
-                confirmed_tasks += 1;
+                let parsed = validate_answer(&fs::read_to_string(&path)?, sources, &step.kind)?;
+                // A rejected name batch is requested again on resume, so it is not confirmed work.
+                if crate::name_candidates::validate_items(&snapshot.template.id, &parsed).is_ok() {
+                    confirmed_tasks += 1;
+                }
             }
         }
     }
@@ -124,6 +127,7 @@ pub fn read_pending_analysis(folder: &Path) -> Result<Option<PendingAnalysis>> {
 }
 pub(crate) fn validate_analysis(result: &Analysis) -> Result<()> {
     validate_template(&result.template)?;
+    crate::name_candidates::validate(result)?;
     ensure!(
         source_hash(&result.sources)? == result.source_hash
             && result.prompt_version == PROMPT_VERSION
@@ -177,6 +181,16 @@ pub fn analyze(
     )
 }
 
+fn set_aside_rejected(path: &Path) -> Result<()> {
+    for attempt in 0..1000 {
+        let target = path.with_extension(format!("rejected-{attempt}.json"));
+        if !target.exists() {
+            fs::rename(path, target)?;
+            return Ok(());
+        }
+    }
+    anyhow::bail!("Zu viele verworfene Antworten für diesen Arbeitsschritt.")
+}
 #[allow(clippy::too_many_arguments)]
 pub fn analyze_controlled(
     root: &Path,
@@ -283,10 +297,20 @@ pub fn analyze_controlled(
             progress.step_index = step_index + 1;
             progress.batch_index = batch_index + 1;
             let path = folder.join(format!("step-{step_index:04}-{batch_index:06}.json"));
-            let parsed = if path.exists() {
+            let mut resumed = None;
+            if path.exists() {
                 progress.stage = "validating".into();
                 on_progress(progress.clone());
-                validate_answer(&fs::read_to_string(&path)?, sources, &step.kind)?
+                let parsed = validate_answer(&fs::read_to_string(&path)?, sources, &step.kind)?;
+                if crate::name_candidates::validate_items(&analysis.template.id, &parsed).is_ok() {
+                    resumed = Some(parsed);
+                } else {
+                    // Keep the rejected answer as evidence and request this batch again.
+                    set_aside_rejected(&path)?;
+                }
+            }
+            let parsed = if let Some(parsed) = resumed {
+                parsed
             } else {
                 progress.stage = "requesting".into();
                 on_progress(progress.clone());
@@ -295,6 +319,7 @@ pub fn analyze_controlled(
                 progress.stage = "validating".into();
                 on_progress(progress.clone());
                 let parsed = validate_answer(&answer, sources, &step.kind)?;
+                crate::name_candidates::validate_items(&analysis.template.id, &parsed)?;
                 control.check()?;
                 progress.stage = "saving".into();
                 on_progress(progress.clone());
@@ -314,6 +339,7 @@ pub fn analyze_controlled(
         });
     }
     control.check()?;
+    validate_analysis(&analysis)?;
     create_export(
         &folder.join("result.txt"),
         render_text(&analysis).as_bytes(),

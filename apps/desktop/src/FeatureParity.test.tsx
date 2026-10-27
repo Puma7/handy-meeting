@@ -18,6 +18,9 @@ import type {
   Meeting,
   TemplateLibrary,
 } from "./types";
+// Full-App cases render the whole UI with its status polling. On slow CI runners
+// (macos-15-intel) they exceeded the 5 s default; focused component files keep it.
+vi.setConfig({ testTimeout: 15_000 });
 
 // Synthetic IPC fixtures: no audio devices, native files, keychains or provider requests.
 const meeting: Meeting = {
@@ -241,7 +244,9 @@ it("requires confirmation before removing a native preset and preserves other pr
     }),
   );
   await waitFor(() =>
-    expect(screen.queryByRole("option", { name: "Remove this preset" })).toBeNull(),
+    expect(
+      screen.queryByRole("option", { name: "Remove this preset" }),
+    ).toBeNull(),
   );
   expect((await api.listTemplates()).templates).toEqual([original]);
 });

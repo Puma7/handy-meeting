@@ -15,8 +15,8 @@ pub mod native;
 pub use companion::{companion_capabilities, CompanionCapabilities, COMPANION_CONTRACT_VERSION};
 pub use discovery::discover_handy;
 pub use identity::{
-    capture_model_identity, read_model_snapshot, verify_catalog_model, verify_model_identity,
-    ModelIdentity, RuntimeIdentity,
+    capture_model_identity, capture_optional_model_identity, read_model_snapshot,
+    verify_catalog_model, verify_model_identity, ModelIdentity, RuntimeIdentity,
 };
 #[cfg(feature = "native-asr")]
 pub use identity::{create_model_identity, verify_model_snapshot, write_model_snapshot};
@@ -198,6 +198,9 @@ impl HandyBridge {
 
     pub fn resolve_streaming_model(&self, model: &HandyModel) -> Result<ResolvedModel> {
         self.roots.resolve(model)
+    }
+    pub fn resolve_downloaded_model(&self, model: &HandyModel) -> Result<ResolvedModel> {
+        self.roots.resolve_downloaded(model)
     }
 
     pub fn identity(&self) -> Result<InstallationIdentity> {

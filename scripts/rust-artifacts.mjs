@@ -180,7 +180,7 @@ async function stage() {
   const currentVersion = await version();
   insist(currentVersion === pending.version, 'Release version changed.');
   const programDirectory = 'dist-rust-' + currentVersion;
-  const inputs = new Map([['HandyMeeting.exe', executable], ['LICENSE', inside(ROOT, 'LICENSE')], ['THIRD_PARTY_NOTICES.txt', inside(ROOT, 'THIRD_PARTY_NOTICES.txt')], ['HANDY_STYLE_NOTICE.md', inside(ROOT, 'apps/desktop/HANDY_STYLE_NOTICE.md')]]);
+  const inputs = new Map([['HandyMeeting.exe', executable], ['ManageStartMenu.ps1', inside(ROOT, 'scripts/manage-start-menu.ps1')], ['LICENSE', inside(ROOT, 'LICENSE')], ['THIRD_PARTY_NOTICES.txt', inside(ROOT, 'THIRD_PARTY_NOTICES.txt')], ['HANDY_STYLE_NOTICE.md', inside(ROOT, 'apps/desktop/HANDY_STYLE_NOTICE.md')]]);
   const native = await sdk();
   for (const file of native.Files) inputs.set(file.Name, inside(ROOT, SDK + '/bin/' + file.Name));
   for (const [source, destination] of [[SDK + '/licenses', 'native-licenses'], ['licenses/rust', 'licenses/rust'], ['licenses/frontend', 'licenses/frontend'], ['licenses/installer', 'licenses/installer']]) for (const file of await walk(inside(ROOT, source))) inputs.set(destination + '/' + unix(path.relative(inside(ROOT, source), file)), file);

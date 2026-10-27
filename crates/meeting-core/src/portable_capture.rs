@@ -438,6 +438,11 @@ mod tests {
             .map(|part| part.confirmed_sha256.clone())
             .collect();
         let folder = store.folder().to_owned();
+        // The derived TXT writer may still be copying the final status for a moment.
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while store.test_owner_count() != 1 && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(5));
+        }
         assert_eq!(
             store.test_owner_count(),
             1,
@@ -545,6 +550,11 @@ mod tests {
         assert!(before.parts[0].confirmed_sample_count >= 16000);
         let hash = before.parts[0].confirmed_sha256.clone();
         let folder = store.folder().to_owned();
+        // The derived TXT writer may still be copying the final status for a moment.
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while store.test_owner_count() != 1 && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(5));
+        }
         assert_eq!(
             store.test_owner_count(),
             1,

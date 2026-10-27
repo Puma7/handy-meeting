@@ -109,6 +109,105 @@ pub fn default_run_options() -> RunOptions {
     RunOptions::default()
 }
 
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SpeakerTurn {
+    pub start_ms: u64,
+    pub end_ms: u64,
+    pub speaker_id: u32,
+    pub confidence: Option<f32>,
+}
+/// Independent optional CPU model. A failure never controls the recording or ASR worker.
+pub struct NativeSpeakerEngine {
+    model: Model,
+    standalone: bool,
+}
+impl NativeSpeakerEngine {
+    pub fn load(path: &Path, backend_directory: &Path) -> Result<Self> {
+        verify_runtime()?;
+        transcribe_cpp::init_backends_with(Some(backend_directory), BackendMask::CPU)
+            .map_err(native_error)?;
+        let model = Model::load_with(
+            path,
+            &ModelOptions {
+                backend: Backend::Cpu,
+                ..Default::default()
+            },
+        )
+        .map_err(native_error)?;
+        let standalone = model.roles().contains(transcribe_cpp::Role::Diarize);
+        if standalone {
+            if model.diarize_info().map_err(native_error)?.sample_rate != 16_000 {
+                return Err(BridgeError::ModelUnavailable);
+            }
+        } else if !model.roles().contains(transcribe_cpp::Role::Asr)
+            || !model.supports(transcribe_cpp::Feature::Diarization)
+            || model
+                .capabilities()
+                .map_err(native_error)?
+                .native_sample_rate
+                != 16_000
+        {
+            return Err(BridgeError::Native("This installed model does not support local speaker separation. Choose a compatible diarization model; recording and normal transcription remain available.".into()));
+        }
+        Ok(Self { model, standalone })
+    }
+    pub fn run(&self, pcm: &[f32]) -> Result<Vec<SpeakerTurn>> {
+        if pcm.is_empty() || pcm.len() > 16_000 * 120 || pcm.iter().any(|v| !v.is_finite()) {
+            return Err(BridgeError::Native(
+                "Speaker audio section exceeds its safe limits".into(),
+            ));
+        }
+        let rows = if self.standalone {
+            self.model
+                .diarize_session()
+                .map_err(native_error)?
+                .run(pcm, &transcribe_cpp::DiarizeOptions::default())
+                .map_err(native_error)?
+        } else {
+            self.model
+                .session()
+                .map_err(native_error)?
+                .run(
+                    pcm,
+                    &RunOptions {
+                        diarize: transcribe_cpp::Diarize::On,
+                        ..Default::default()
+                    },
+                )
+                .map_err(native_error)?
+                .speaker_segments
+        };
+        if rows.len() > 10000 {
+            return Err(BridgeError::OutputLimit);
+        }
+        let duration = (pcm.len() as u64) * 1000 / 16000;
+        let mut turns = Vec::new();
+        for row in rows {
+            // Untimed text attribution cannot become invented word or turn times.
+            if row.t0_ms == 0 && row.t1_ms == 0 {
+                continue;
+            }
+            if row.t0_ms < 0
+                || row.t1_ms <= row.t0_ms
+                || row.t1_ms as u64 > duration
+                || !(1..=1000).contains(&row.speaker_id)
+            {
+                return Err(BridgeError::Native(
+                    "Speaker model returned invalid section bounds".into(),
+                ));
+            }
+            turns.push(SpeakerTurn {
+                start_ms: row.t0_ms as u64,
+                end_ms: row.t1_ms as u64,
+                speaker_id: row.speaker_id as u32,
+                confidence: (row.p.is_finite() && (0.0..=1.0).contains(&row.p)).then_some(row.p),
+            });
+        }
+        Ok(turns)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

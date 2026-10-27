@@ -51,7 +51,15 @@ fn parse_devices(
     for sink in sinks {
         let name = identifier(sink, "name")?;
         // The server supplies the actual monitor name. Do not guess a suffix.
-        let monitor = identifier(sink, "monitor_source_name")?;
+        // `pactl --format=json` (PulseAudio 16, pipewire-pulse) names the key `monitor_source`.
+        let monitor = match ["monitor_source", "monitor_source_name"]
+            .into_iter()
+            .find(|key| sink.get(*key).and_then(Value::as_str).is_some())
+        {
+            Some(key) => identifier(sink, key)?,
+            // A sink without a reported monitor cannot be recorded; keep the other devices.
+            None => continue,
+        };
         monitors.insert(monitor.clone());
         result.push(AudioDevice {
             id: monitor,
@@ -129,19 +137,28 @@ mod tests {
     use super::*;
     #[test]
     fn actual_monitor_names_and_defaults_are_retained_without_reclassifying_loopback_as_mic() {
-        let sinks = serde_json::json!([{"name":"headphones","description":"Headphones","monitor_source_name":"custom.remote.capture"}]);
+        // Shape of `pactl --format=json list sinks` from PulseAudio 16.1.
+        let sinks = serde_json::json!([{"index":0,"state":"RUNNING","name":"headphones","description":"Headphones","driver":"module-null-sink.c","monitor_source":"custom.remote.capture"}]);
         let sources = serde_json::json!([{"name":"custom.remote.capture"},{"name":"desk-microphone","description":"Desk microphone"}]);
         let devices = parse_devices(&sinks, &sources, "headphones", "desk-microphone").unwrap();
         assert_eq!(devices.len(), 2);
         assert_eq!(devices[0].id, "custom.remote.capture");
         assert!(devices.iter().all(|d| d.is_default));
         assert_eq!(devices[1].source, "microphone");
-        assert!(parse_devices(
+        let legacy = serde_json::json!([{"name":"older","monitor_source_name":"older.capture"}]);
+        assert_eq!(
+            parse_devices(&legacy, &serde_json::json!([]), "", "").unwrap()[0].id,
+            "older.capture"
+        );
+        // No guessed monitor name: the sink is left out, the microphones remain.
+        let devices = parse_devices(
             &serde_json::json!([{"name":"missing-monitor"}]),
             &sources,
             "",
-            ""
+            "",
         )
-        .is_err());
+        .unwrap();
+        assert!(devices.iter().all(|d| d.source == "microphone"));
+        assert_eq!(devices.len(), 2);
     }
 }

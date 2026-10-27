@@ -19,20 +19,22 @@ An independent **Rust + Tauri companion for [Handy](https://github.com/cjpais/Ha
 
 ## Download
 
-**[Open releases and download the matching package](https://github.com/Puma7/handy-meeting/releases)**. Open a complete release and expand Assets. The versioned package files are listed there together with their checksums.
+**[Download the latest complete release](https://github.com/Puma7/handy-meeting/releases/latest)**. Open Assets and choose the package for your computer. The versioned downloads are listed together with their checksums. [Older releases](https://github.com/Puma7/handy-meeting/releases) remain available.
 
 | Your computer | Package type | Requirements |
 | --- | --- | --- |
 | Windows 10/11 · x64 | Setup EXE · portable ZIP | WebView2 and Microsoft Visual C++ x64 runtime; no .NET needed |
 | Ubuntu 22.04+ / Debian 12–13 · x64 | DEB | PulseAudio or PipeWire-Pulse; package manager resolves declared libraries |
-| Mac · Apple Silicon / M-series | Apple Silicon DMG | macOS 13+; recording permissions |
-| Mac · Intel | Intel DMG | macOS 13+; recording permissions |
+| Mac · Apple Silicon / M-series | Apple Silicon DMG | macOS 15+; recording permissions |
+| Mac · Intel | Intel DMG | macOS 15+; recording permissions |
 
-**Patch status:** 1.0.1 corrects the first-install Windows folder failure found in 1.0.0. An empty release page or a tag alone does not establish a successful build: all five packages and `RELEASE_MANIFEST.json` must be present. Until a complete corrected release is available, 1.0.0 has this known installer limitation; the portable ZIP is separate.
+**Installer status:** the complete 1.0.1 release corrects the first-install Windows folder failure found in 1.0.0. Every complete release includes five packages and `RELEASE_MANIFEST.json`. Keep the versioned program folders separate; recordings and older installations are preserved.
 
 **Future releases:** a matching version tag automatically starts the full Windows/Linux/Mac build matrix. Successful checks produce all five packages and their proofs in a release draft. Publish the populated draft to make the downloads public; publishing a release directly also starts this workflow. [Release procedure](docs/RELEASING.md).
 
 **Validation limits:** Mac/Linux device capture and a new full-app Rust two-hour run still require hardware validation. Mac builds are ad-hoc signed and not Apple-notarized; Windows setup is unsigned. Operating-system trust checks may block them. Do not disable system protection to install a build. Use independently backed-up test meetings first. [Measured evidence and open gates](TEST_REPORT.md).
+
+Version 1.0.2 is in development and not yet released; the download above is 1.0.1. It adds visible analysis progress, names and VIP flags, local history search, separately confirmed archives and audio copies, optional speaker experiments, and explicit update checks. See the [full 1.0.2 user guide](docs/1.0.2-USER-GUIDE.md) for the separate controls and their limits.
 
 ## A meeting workflow, kept together
 
@@ -72,7 +74,7 @@ For a local summary, run a local text-model service such as LM Studio, load an a
 - **Local notes are the default.** Cloud text processing is optional and requires explicit approval for every run. It receives text, source IDs and instructions, without audio or local file paths. There is no automatic cloud fallback. A separately configured local server must itself execute models locally.
 - **Keys are session-only by default.** Optional storage uses Windows Credential Manager, macOS Keychain or Linux Secret Service. Unreadable entries are preserved; there is no plaintext fallback.
 - **Saved checkpoints are recoverable after tested process crashes.** Unconfirmed audio at the end can still be missing. This is not a power-loss or hardware-failure guarantee. Existing recordings, transcript journals and analysis versions are not automatically deleted.
-- **Two tracks are not speaker identification.** Diarization, exact word timestamps and reliable words-per-person statistics are not implemented. Times identify recording sections. Notes remain reviewable AI drafts.
+- **Two tracks are not speaker identification.** Speaker names are only assigned when you confirm them. The optional post-meeting separation (beta) and live voice sections (experimental) in 1.0.2 give neutral per-section voice IDs, depend on a compatible model and do not identify people. Exact word timestamps and reliable words-per-person statistics are not implemented. Times identify recording sections. Notes remain reviewable AI drafts.
 - **No hidden recording authority.** Local agents use private stdio with visible approval for each owned recording and separate microphone consent. Disconnect, revocation and limits stop only that agent's recording. This is not an MCP server.
 
 Files live in the existing local `HandyMeeting/RustBeta` application-data folder for compatibility with earlier Rust builds. The name is retained to avoid moving or losing user data. The Windows uninstaller removes its listed program files; it does not recursively delete session storage. Files themselves are not encrypted; a folder-sync service can independently upload them.

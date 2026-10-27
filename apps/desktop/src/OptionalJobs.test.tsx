@@ -1,0 +1,299 @@
+import { expect, it, vi } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import UpdatePanel from "./views/UpdatePanel";
+import SpeakerExperiments from "./views/SpeakerExperiments";
+import { nameCandidates, SPEAKER_NAME_TEMPLATE } from "./speaker-proposals";
+import type { DesktopApi, Meeting, AnalysisResult } from "./types";
+const meeting: Meeting = {
+  id: "0123456789abcdef0123456789abcdef",
+  title: "Synthetic fixture",
+  startedAt: "2026-10-27T00:00:00Z",
+  durationMs: 30000,
+  status: "complete",
+  modelId: "asr",
+  warnings: [],
+  parts: [
+    {
+      file: "system-000000000000.wav",
+      source: "system",
+      startSample: 0,
+      sampleCount: 480000,
+      status: "complete",
+      text: "Anna, please read the report.",
+    },
+  ],
+};
+it("never checks or installs updates merely by opening settings and blocks installation during active work", async () => {
+  const check = vi.fn(),
+    download = vi.fn(),
+    install = vi.fn();
+  const api = {
+    checkForUpdate: check,
+    downloadUpdate: download,
+    installUpdate: install,
+    getUpdateProgress: vi.fn().mockResolvedValue({
+      status: "ready",
+      version: "1.0.3",
+      releaseUrl: "https://github.com/Puma7/handy-meeting/releases/tag/v1.0.3",
+      receivedBytes: 10,
+      totalBytes: 10,
+      elapsedMs: 20,
+      error: null,
+    }),
+  } as unknown as DesktopApi;
+  render(<UpdatePanel api={api} locale="en" blocked />);
+  const button = await screen.findByRole("button", {
+    name: "Start installer and close app",
+  });
+  expect((button as HTMLButtonElement).disabled).toBe(true);
+  expect(check).not.toHaveBeenCalled();
+  expect(download).not.toHaveBeenCalled();
+  expect(install).not.toHaveBeenCalled();
+});
+it("shows download progress only from confirmed bytes", async () => {
+  const api = {
+    checkForUpdate: vi.fn(),
+    getUpdateProgress: vi.fn().mockResolvedValue({
+      status: "downloading",
+      version: "1.0.3",
+      releaseUrl: null,
+      receivedBytes: 25,
+      totalBytes: 100,
+      elapsedMs: 7000,
+      error: null,
+    }),
+    cancelUpdate: vi.fn().mockResolvedValue(undefined),
+  } as unknown as DesktopApi;
+  render(<UpdatePanel api={api} locale="en" footer />);
+  const bar = await screen.findByRole("progressbar");
+  expect(bar.getAttribute("value")).toBe("25");
+  expect(bar.getAttribute("max")).toBe("100");
+  expect(screen.getByText(/25%/)).toBeTruthy();
+  await userEvent.click(
+    screen.getByRole("button", { name: "Cancel download" }),
+  );
+  expect(api.cancelUpdate).toHaveBeenCalledOnce();
+});
+it("keeps live and post-meeting speaker actions separate and never starts them automatically", async () => {
+  const start = vi.fn().mockResolvedValue("speaker-job");
+  const api = {
+    startSpeakerExperiment: start,
+    getSpeakerProgress: vi.fn().mockResolvedValue(null),
+    getSpeakerSections: vi.fn().mockResolvedValue(null),
+  } as unknown as DesktopApi;
+  render(
+    <SpeakerExperiments
+      api={api}
+      locale="en"
+      meeting={meeting}
+      models={[
+        {
+          id: "optional-model",
+          name: "Installed optional model",
+          isDownloaded: true,
+          supportsStreaming: false,
+        },
+      ]}
+      recording
+    />,
+  );
+  await userEvent.selectOptions(
+    screen.getByLabelText("Additional local speaker model"),
+    "optional-model",
+  );
+  expect(start).not.toHaveBeenCalled();
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "Run local speaker separation",
+      }) as HTMLButtonElement
+    ).disabled,
+  ).toBe(true);
+  await userEvent.click(
+    screen.getByRole("button", { name: "Check live voice sections" }),
+  );
+  await waitFor(() =>
+    expect(start).toHaveBeenCalledWith(meeting.id, "optional-model", "live"),
+  );
+});
+it("targets cancellation only at the owned speaker job and displays unsupported-model failure", async () => {
+  const cancel = vi.fn().mockResolvedValue(true);
+  const get = vi.fn().mockResolvedValue({
+    jobId: "owned-speaker-job",
+    meetingId: meeting.id,
+    mode: "live",
+    status: "running",
+    stage: "waiting",
+    modelId: "optional",
+    confirmedTasks: 2,
+    totalTasks: 0,
+    elapsedMs: 4000,
+    error: null,
+    cancelRequested: false,
+    lastSection: null,
+  });
+  const api = {
+    startSpeakerExperiment: vi.fn(),
+    getSpeakerProgress: get,
+    cancelSpeakerExperiment: cancel,
+    stopMeeting: vi.fn(),
+  } as unknown as DesktopApi;
+  render(<SpeakerExperiments api={api} locale="en" footer />);
+  const button = await screen.findByRole("button", {
+    name: "Cancel only the speaker experiment",
+  });
+  expect(
+    (screen.getByRole("progressbar") as HTMLProgressElement).hasAttribute(
+      "value",
+    ),
+  ).toBe(false);
+  await userEvent.click(button);
+  expect(cancel).toHaveBeenCalledWith("owned-speaker-job");
+  expect(api.stopMeeting).not.toHaveBeenCalled();
+});
+it("filters forged, stale and wrong-meeting name candidates before they can prefill a manual label", () => {
+  const analysis = {
+    id: "result",
+    meetingId: meeting.id,
+    sourceHash: "synthetic",
+    template: SPEAKER_NAME_TEMPLATE,
+    createdAt: "synthetic",
+    sources: [
+      {
+        id: "original",
+        source: "system",
+        startMs: 0,
+        endMs: 30000,
+        text: meeting.parts[0].text!,
+      },
+    ],
+    sections: [
+      {
+        id: "names",
+        name: "Names",
+        kind: "summary",
+        items: [
+          {
+            text: "Anna",
+            owner: null,
+            due: null,
+            evidence: [{ sourceId: "original", quote: "Anna, please read" }],
+          },
+        ],
+      },
+    ],
+  } as AnalysisResult;
+  expect(nameCandidates([analysis], meeting).map((c) => c.name)).toEqual([
+    "Anna",
+  ]);
+  expect(
+    nameCandidates([{ ...analysis, meetingId: "other" }], meeting),
+  ).toEqual([]);
+  const forged = structuredClone(analysis);
+  forged.sections[0].items[0].text = "Peter";
+  expect(nameCandidates([forged], meeting)).toEqual([]);
+  const stale = {
+    ...meeting,
+    parts: [{ ...meeting.parts[0], text: "Changed original text" }],
+  };
+  expect(nameCandidates([analysis], stale)).toEqual([]);
+  const owner = structuredClone(analysis);
+  owner.sections[0].items[0].owner = "Anna";
+  expect(nameCandidates([owner], meeting)).toEqual([]);
+});
+it("keeps cancel available while the download request is still running", async () => {
+  let status = "available";
+  const api = {
+    checkForUpdate: vi.fn(),
+    downloadUpdate: vi.fn(() => {
+      status = "downloading";
+      return new Promise(() => {});
+    }),
+    cancelUpdate: vi.fn().mockResolvedValue(undefined),
+    getUpdateProgress: vi.fn(async () => ({
+      status,
+      version: "1.0.3",
+      releaseUrl: null,
+      receivedBytes: 1,
+      totalBytes: 10,
+      elapsedMs: 5,
+      error: null,
+    })),
+  } as unknown as DesktopApi;
+  render(<UpdatePanel api={api} locale="en" />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Download Windows installer" }),
+  );
+  const cancel = await screen.findByRole("button", { name: "Cancel download" });
+  expect((cancel as HTMLButtonElement).disabled).toBe(false);
+  await userEvent.click(cancel);
+  expect(api.cancelUpdate).toHaveBeenCalledOnce();
+});
+it("blocks installation while archive maintenance is running", async () => {
+  const api = {
+    checkForUpdate: vi.fn(),
+    installUpdate: vi.fn(),
+    getMaintenanceProgress: vi.fn().mockResolvedValue({ status: "running" }),
+    getLibraryProgress: vi.fn().mockResolvedValue(null),
+    getUpdateProgress: vi.fn().mockResolvedValue({
+      status: "ready",
+      version: "1.0.3",
+      releaseUrl: null,
+      receivedBytes: 10,
+      totalBytes: 10,
+      elapsedMs: 20,
+      error: null,
+    }),
+  } as unknown as DesktopApi;
+  render(<UpdatePanel api={api} locale="en" />);
+  await screen.findByText(/archive maintenance and indexing first/);
+  const button = screen.getByRole("button", {
+    name: "Start installer and close app",
+  });
+  expect((button as HTMLButtonElement).disabled).toBe(true);
+});
+it("does not keep a cancelled download in the footer and lets a failure be dismissed", async () => {
+  let status = "cancelled";
+  const api = {
+    checkForUpdate: vi.fn(),
+    getUpdateProgress: vi.fn(async () => ({
+      status,
+      version: "1.0.3",
+      releaseUrl: null,
+      receivedBytes: 0,
+      totalBytes: 0,
+      elapsedMs: 0,
+      error: status === "failed" ? "offline" : null,
+    })),
+  } as unknown as DesktopApi;
+  const { container } = render(<UpdatePanel api={api} locale="en" footer />);
+  await new Promise((r) => setTimeout(r, 30));
+  expect(container.textContent).toBe("");
+  status = "failed";
+  await userEvent.click(await screen.findByRole("button", { name: "Dismiss" }));
+  expect(container.textContent).toBe("");
+});
+it("shows a repeated failure again after a new attempt", async () => {
+  let attempt = 1;
+  const api = {
+    checkForUpdate: vi.fn(),
+    getUpdateProgress: vi.fn(async () => ({
+      status: "failed",
+      version: "1.0.3",
+      releaseUrl: null,
+      receivedBytes: 0,
+      totalBytes: 0,
+      elapsedMs: 0,
+      error: "offline",
+      attempt,
+    })),
+  } as unknown as DesktopApi;
+  const { container } = render(<UpdatePanel api={api} locale="en" footer />);
+  await userEvent.click(await screen.findByRole("button", { name: "Dismiss" }));
+  expect(container.textContent).toBe("");
+  attempt = 2;
+  expect(
+    await screen.findByRole("button", { name: "Dismiss" }, { timeout: 2000 }),
+  ).toBeTruthy();
+});

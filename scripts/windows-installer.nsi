@@ -4,7 +4,7 @@ Unicode true
 !include WinVer.nsh
 !include LogicLib.nsh
 !include FileFunc.nsh
-Name "HandyMeeting ${APP_VERSION}"
+Name "HandyMeeting"
 OutFile "${OUTPUT_FILE}"
 InstallDir "$LOCALAPPDATA\Programs\HandyMeeting\${APP_VERSION}"
 RequestExecutionLevel user
@@ -20,7 +20,7 @@ VIAddVersionKey /LANG=1033 "LegalCopyright" "HandyMeeting contributors"
 !define MUI_ABORTWARNING
 !define MUI_WELCOMEPAGE_TEXT "Install HandyMeeting for this Windows user. Handy, a compatible streaming model, Microsoft WebView2 and the Microsoft Visual C++ x64 runtime are required. Existing recordings and older program versions are preserved."
 !define MUI_FINISHPAGE_LINK "Installation help / Installationshilfe"
-!define MUI_FINISHPAGE_LINK_LOCATION "https://github.com/Puma7/handy-meeting/blob/main/README.de.md"
+!define MUI_FINISHPAGE_LINK_LOCATION "https://github.com/Puma7/handy-meeting/blob/main/README.md"
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "${APP_LICENSE}"
 !define MUI_PAGE_CUSTOMFUNCTION_LEAVE CheckNewDirectory
@@ -97,8 +97,12 @@ Section "HandyMeeting" Main
   SetOverwrite off
   !include "${INSTALL_FILES}"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
-  CreateDirectory "$SMPROGRAMS\HandyMeeting"
-  CreateShortcut "$SMPROGRAMS\HandyMeeting\HandyMeeting ${APP_VERSION}.lnk" "$INSTDIR\HandyMeeting.exe"
+  nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -File "$INSTDIR\ManageStartMenu.ps1" -Mode install -InstallDirectory "$INSTDIR"'
+  Pop $0
+  Pop $1
+  StrCmp $0 "0" shortcut_ready
+  DetailPrint "Existing/custom Start menu links were preserved, or shortcut creation was blocked. HandyMeeting.exe remains available in the new program folder."
+  shortcut_ready:
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-${APP_VERSION}" "DisplayName" "HandyMeeting ${APP_VERSION}"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-${APP_VERSION}" "DisplayVersion" "${APP_VERSION}"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-${APP_VERSION}" "Publisher" "HandyMeeting contributors"
@@ -111,12 +115,14 @@ SectionEnd
 Section "Uninstall"
   SetShellVarContext current
   SetRegView 64
+  nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -File "$INSTDIR\ManageStartMenu.ps1" -Mode uninstall -InstallDirectory "$INSTDIR"'
+  Pop $0
+  Pop $1
   !include "${UNINSTALL_FILES}"
   Delete "$INSTDIR\Uninstall.exe"
   ; A different installation must retain its shared registration and shortcut.
   ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-${APP_VERSION}" "InstallLocation"
   StrCmp $0 "$INSTDIR" 0 keep_registration
-  Delete "$SMPROGRAMS\HandyMeeting\HandyMeeting ${APP_VERSION}.lnk"
   RMDir "$SMPROGRAMS\HandyMeeting"
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-${APP_VERSION}"
   keep_registration:

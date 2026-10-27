@@ -1,0 +1,15 @@
+{
+  "audioFiles": 0,
+  "broadSearchMs": 218.625,
+  "buildMs": 95695,
+  "lastHistoryPageMs": 13.736,
+  "limits": "Synthetic single-section meetings, no audio/model/UI; reopened DB is not an OS cold-cache measurement; timings are observations, not retrospectively chosen acceptance thresholds.",
+  "manifests": 100000,
+  "meetings": 100000,
+  "queryCount": 100,
+  "reopenedQueryMs": 1.982,
+  "synthetic": true,
+  "version": "1.0.2",
+  "warmQueryMedianMs": 0.244,
+  "warmQueryP95Ms": 0.424
+}
