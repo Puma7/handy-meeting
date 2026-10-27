@@ -83,9 +83,8 @@ test "$panicked" = false || { echo 'The desktop process panicked.' >&2; exit 1; 
 [[ "$status" = 0 || "$status" = 143 ]] || { echo "The desktop process did not stop cleanly (status ${status:-none})." >&2; exit 1; }
 if [[ "${window_count:-}" =~ ^[0-9]+$ ]]; then
   (( window_count > 0 )) || { echo 'No HandyMeeting window appeared.' >&2; exit 1; }
-elif [[ "$(uname -s)" = Linux ]]; then
-  echo 'Window detection failed.' >&2; exit 1
 else
-  echo 'Warning: macOS window listing was unavailable; only liveness and clean exit were checked.' >&2
+  # Without a window count the check proves nothing about the window; never pass it.
+  echo 'Window detection failed.' >&2; exit 1
 fi
 echo 'GUI smoke check passed: window shown, process alive, stopped cleanly.'
