@@ -532,6 +532,18 @@ impl Service {
         }
         result
     }
+    /// Polling cleanup. It runs only while no start, stop or resume holds the transition
+    /// gate, so a session set aside for settling cannot race a new recording into the
+    /// active slot; those transitions collect finished work themselves.
+    fn reap_when_idle(&self) -> AppResult<()> {
+        match self.transition.try_lock() {
+            Ok(_gate) => self.reap_finished(),
+            Err(std::sync::TryLockError::WouldBlock) => Ok(()),
+            Err(std::sync::TryLockError::Poisoned(_)) => {
+                Err("Aufnahmesteuerung ist gesperrt.".into())
+            }
+        }
+    }
     fn reap_finished(&self) -> AppResult<()> {
         let finished = {
             let mut inner = self.lock()?;
@@ -554,8 +566,13 @@ impl Service {
             }
             if let Err(error) = Self::settle_catch_up(&active.store) {
                 // The workers are joined; keep the session so the next poll retries the
-                // status write instead of leaving it "catching-up".
-                self.lock()?.active = Some(active);
+                // status write instead of leaving it "catching-up". Callers hold the
+                // transition gate, so no new session can have taken the slot meanwhile;
+                // a session that did is never replaced.
+                let mut inner = self.lock()?;
+                if inner.active.is_none() {
+                    inner.active = Some(active);
+                }
                 return Err(error);
             }
             if let Ok(data) = active.store.snapshot() {
@@ -942,7 +959,7 @@ async fn get_app_state(service: State<'_, Arc<Service>>) -> AppResult<AppView> {
     blocking(move || {
         // A finished catch-up after stop or resume is collected here, so it never keeps
         // reporting active work. A failed collection is retried on the next poll.
-        let _ = service.reap_finished();
+        let _ = service.reap_when_idle();
         service.state()
     })
     .await
@@ -1510,12 +1527,18 @@ mod service_tests {
             stop: Arc::new(AtomicBool::new(true)),
             workers: vec![worker],
         });
+        // Polling leaves the session alone while a transition holds the gate.
+        {
+            let _gate = service.transition.lock().unwrap();
+            service.reap_when_idle().unwrap();
+            assert!(service.lock().unwrap().active.is_some());
+        }
         // Synthetic: a directory in place of session.json makes the status write fail.
         let manifest = store.folder().join("session.json");
         let saved = std::fs::read(&manifest).unwrap();
         std::fs::remove_file(&manifest).unwrap();
         std::fs::create_dir(&manifest).unwrap();
-        assert!(service.reap_finished().is_err());
+        assert!(service.reap_when_idle().is_err());
         assert!(service.lock().unwrap().active.is_some());
         assert_eq!(store.snapshot().unwrap().status, "catching-up");
         std::fs::remove_dir(&manifest).unwrap();
@@ -1524,7 +1547,7 @@ mod service_tests {
         let index = root.join("library-index");
         assert!(!index.exists());
         std::fs::write(&index, b"synthetic, blocks the search index").unwrap();
-        service.reap_finished().unwrap();
+        service.reap_when_idle().unwrap();
         assert!(service.lock().unwrap().active.is_none());
         let data = store.snapshot().unwrap();
         assert_eq!(data.status, "recorded");
