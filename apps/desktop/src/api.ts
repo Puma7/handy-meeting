@@ -1,5 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import type { DesktopApi } from "./types";
+import { requestJobStatusRefresh } from "./jobPolling";
 function desktopInvoke<T>(
   command: string,
   args?: Record<string, unknown>,
@@ -10,40 +11,51 @@ function desktopInvoke<T>(
     );
   return invoke<T>(command, args);
 }
+// Background jobs: status bars check right away instead of waiting for their idle interval.
+function jobInvoke<T>(
+  command: string,
+  args?: Record<string, unknown>,
+): Promise<T> {
+  const pending = desktopInvoke<T>(command, args);
+  requestJobStatusRefresh();
+  void pending.then(requestJobStatusRefresh, requestJobStatusRefresh);
+  return pending;
+}
 export const desktopApi: DesktopApi = {
   listAudioCopies: (offset) => desktopInvoke("list_audio_copies", { offset }),
   transcribeAudioCopy: (runId, modelId, confirmed) =>
-    desktopInvoke("transcribe_audio_copy", { runId, modelId, confirmed }),
+    jobInvoke("transcribe_audio_copy", { runId, modelId, confirmed }),
   compactArchive: (archiveId, confirmed) =>
-    desktopInvoke("compact_archive", { archiveId, confirmed }),
+    jobInvoke("compact_archive", { archiveId, confirmed }),
   listArchives: (offset, limit) =>
     desktopInvoke("list_archives", { offset, limit }),
   restoreArchive: (archiveId, confirmed) =>
-    desktopInvoke("restore_archive", { archiveId, confirmed }),
+    jobInvoke("restore_archive", { archiveId, confirmed }),
   listUnfinishedDeletions: () => desktopInvoke("list_unfinished_deletions"),
   resumePermanentDeletion: (logId, confirmation) =>
-    desktopInvoke("resume_permanent_deletion", { logId, confirmation }),
+    jobInvoke("resume_permanent_deletion", { logId, confirmation }),
   applyRetention: (planId, candidateIndex, confirmation) =>
-    desktopInvoke("apply_retention", { planId, candidateIndex, confirmation }),
+    jobInvoke("apply_retention", { planId, candidateIndex, confirmation }),
   getRetentionPolicy: () => desktopInvoke("get_retention_policy"),
   saveRetentionPolicy: (expectedRevision, policy) =>
     desktopInvoke("save_retention_policy", { expectedRevision, policy }),
-  previewRetention: () => desktopInvoke("preview_retention"),
+  previewRetention: () => jobInvoke("preview_retention"),
   getRetentionPlan: (jobId) => desktopInvoke("get_retention_plan", { jobId }),
   getMaintenanceProgress: () => desktopInvoke("get_maintenance_progress"),
   cancelMaintenance: (jobId) => desktopInvoke("cancel_maintenance", { jobId }),
   startSpeakerExperiment: (meetingId, modelId, mode) =>
-    desktopInvoke("start_speaker_experiment", { meetingId, modelId, mode }),
+    jobInvoke("start_speaker_experiment", { meetingId, modelId, mode }),
   getSpeakerProgress: () => desktopInvoke("get_speaker_progress"),
   cancelSpeakerExperiment: (jobId) =>
     desktopInvoke("cancel_speaker_experiment", { jobId }),
   getSpeakerSections: (meetingId) =>
     desktopInvoke("get_speaker_sections", { meetingId }),
-  checkForUpdate: () => desktopInvoke("check_for_update"),
-  downloadUpdate: () => desktopInvoke("download_update"),
+  checkForUpdate: () => jobInvoke("check_for_update"),
+  downloadUpdate: () => jobInvoke("download_update"),
   getUpdateProgress: () => desktopInvoke("get_update_progress"),
   cancelUpdate: () => desktopInvoke("cancel_update"),
   installUpdate: () => desktopInvoke("install_update"),
+  openReleasePage: () => desktopInvoke("open_release_page"),
   getSpeakerLabels: (meetingId) =>
     desktopInvoke("get_speaker_labels", { meetingId }),
   saveSpeakerLabels: (meetingId, expectedRevision, enabled, assignments) =>
@@ -62,7 +74,7 @@ export const desktopApi: DesktopApi = {
     }),
   searchMeetings: (query, offset, limit) =>
     desktopInvoke("search_meetings", { query, offset, limit }),
-  rebuildSearchIndex: () => desktopInvoke("rebuild_search_index"),
+  rebuildSearchIndex: () => jobInvoke("rebuild_search_index"),
   getLibraryProgress: () => desktopInvoke("get_library_progress"),
   cancelLibraryJob: (jobId) => desktopInvoke("cancel_library_job", { jobId }),
   getAppState: () => desktopInvoke("get_app_state"),

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { RefreshCw, Square } from "lucide-react";
 import { errorMessage } from "../api";
 import { clock } from "../domain";
+import { startAdaptivePoll } from "../jobPolling";
 import type {
   DesktopApi,
   Locale,
@@ -38,27 +39,23 @@ export default function SpeakerExperiments({
   useEffect(() => {
     if (!api.getSpeakerProgress) return;
     let active = true,
-      polling = false;
-    async function poll() {
-      if (polling) return;
-      polling = true;
+      running = false;
+    const stop = startAdaptivePoll(async () => {
       try {
         const next = await api.getSpeakerProgress!();
+        running = next?.status === "running";
         if (active) {
           setJob(next);
           setPollError(null);
         }
       } catch (e) {
         if (active) setPollError(errorMessage(e));
-      } finally {
-        polling = false;
       }
-    }
-    void poll();
-    const timer = setInterval(() => void poll(), 500);
+      return running;
+    });
     return () => {
       active = false;
-      clearInterval(timer);
+      stop();
     };
   }, [api]);
   useEffect(() => {

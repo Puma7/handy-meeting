@@ -1585,9 +1585,19 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         )}
       </main>
       <div className="job-status-stack">
-        <MaintenanceStatus api={api} locale={locale} />
+        {/* Settings already shows retention progress and the full update panel. */}
+        <MaintenanceStatus
+          api={api}
+          locale={locale}
+          hidden={page === "settings" && Boolean(api.getRetentionPolicy)}
+        />
         <SpeakerExperiments api={api} locale={locale} footer />
-        <UpdatePanel api={api} locale={locale} footer />
+        <UpdatePanel
+          api={api}
+          locale={locale}
+          footer
+          hidden={page === "settings"}
+        />
         <LibraryStatus api={api} connected={connected} locale={locale} />
         <NotesProgressPanel
           progress={notesJob.progress}
