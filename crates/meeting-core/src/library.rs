@@ -4,6 +4,21 @@ use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path, time::Duration};
 
+/// Version 3 adds the meeting title as `context` to every section row (issue #22).
+const SCHEMA_VERSION: i64 = 3;
+/// Row layout: one meeting row (`source_id` empty, `title` set, `body` and `context` empty) and
+/// one row per transcript section (`title` empty, `body` = section text, `context` = title).
+const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS meetings (
+    id TEXT PRIMARY KEY, title TEXT NOT NULL, started TEXT NOT NULL, duration INTEGER NOT NULL,
+    status TEXT NOT NULL, model TEXT NOT NULL, pinned INTEGER NOT NULL, audio_removed INTEGER NOT NULL,
+    revision INTEGER NOT NULL, fingerprint TEXT NOT NULL);
+  CREATE INDEX IF NOT EXISTS meetings_time ON meetings(pinned DESC,started DESC,id);
+  CREATE VIRTUAL TABLE IF NOT EXISTS transcript_search USING fts5(
+    meeting_id UNINDEXED, source_id UNINDEXED, start_ms UNINDEXED, end_ms UNINDEXED,
+    title, body, context, tokenize='unicode61 remove_diacritics 2');
+  CREATE TABLE IF NOT EXISTS search_rows(row_id INTEGER PRIMARY KEY, meeting_id TEXT NOT NULL);
+  CREATE INDEX IF NOT EXISTS search_rows_meeting ON search_rows(meeting_id);";
+
 pub struct LibraryIndex {
     db: Connection,
 }
@@ -65,26 +80,56 @@ impl LibraryIndex {
         }
         let db = Connection::open(path)?;
         db.busy_timeout(Duration::from_secs(3))?;
-        db.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
-          CREATE TABLE IF NOT EXISTS meetings (
-            id TEXT PRIMARY KEY, title TEXT NOT NULL, started TEXT NOT NULL, duration INTEGER NOT NULL,
-            status TEXT NOT NULL, model TEXT NOT NULL, pinned INTEGER NOT NULL, audio_removed INTEGER NOT NULL,
-            revision INTEGER NOT NULL, fingerprint TEXT NOT NULL);
-          CREATE INDEX IF NOT EXISTS meetings_time ON meetings(pinned DESC,started DESC,id);
-          CREATE VIRTUAL TABLE IF NOT EXISTS transcript_search USING fts5(
-            meeting_id UNINDEXED, source_id UNINDEXED, start_ms UNINDEXED, end_ms UNINDEXED,
-            title, body, tokenize='unicode61 remove_diacritics 2');")?;
-        db.execute_batch("CREATE TABLE IF NOT EXISTS search_rows(row_id INTEGER PRIMARY KEY, meeting_id TEXT NOT NULL);
-          CREATE INDEX IF NOT EXISTS search_rows_meeting ON search_rows(meeting_id);")?;
+        db.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
         let version: i64 = db.query_row("PRAGMA user_version", [], |r| r.get(0))?;
-        if version < 2 {
-            db.execute_batch(
-                "BEGIN IMMEDIATE;
-              INSERT OR IGNORE INTO search_rows SELECT rowid,meeting_id FROM transcript_search;
-              PRAGMA user_version=2; COMMIT;",
-            )?;
+        if version != SCHEMA_VERSION {
+            Self::upgrade(&db)?;
         }
         Ok(Self { db })
+    }
+    /// The index is derived from the session folders. A version-2 index is converted row by
+    /// row (title context added to section rows); any other version is rebuilt empty and
+    /// refilled by the next scan, so an older or newer layout is never misread.
+    fn upgrade(db: &Connection) -> Result<()> {
+        db.execute_batch("BEGIN IMMEDIATE")?;
+        let result = (|| -> Result<()> {
+            let version: i64 = db.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+            if version == SCHEMA_VERSION {
+                return Ok(()); // Another process finished the upgrade first.
+            }
+            let fts_exists: bool = db.query_row(
+                "SELECT count(*)>0 FROM sqlite_master WHERE name='transcript_search'",
+                [],
+                |r| r.get(0),
+            )?;
+            if version == 2 && fts_exists {
+                db.execute_batch("ALTER TABLE transcript_search RENAME TO transcript_search_v2;")?;
+                db.execute_batch(SCHEMA)?;
+                db.execute_batch(
+                    "INSERT INTO transcript_search(rowid,meeting_id,source_id,start_ms,end_ms,title,body,context)
+                       SELECT s.rowid,s.meeting_id,s.source_id,s.start_ms,s.end_ms,s.title,s.body,
+                         CASE WHEN s.source_id='' THEN '' ELSE coalesce((SELECT m.title FROM meetings m WHERE m.id=s.meeting_id),'') END
+                       FROM transcript_search_v2 s;
+                     DROP TABLE transcript_search_v2;",
+                )?;
+            } else {
+                db.execute_batch(
+                    "DROP TABLE IF EXISTS transcript_search; DROP TABLE IF EXISTS search_rows;
+                     DROP TABLE IF EXISTS meetings;",
+                )?;
+                db.execute_batch(SCHEMA)?;
+            }
+            db.execute_batch(&format!("PRAGMA user_version={SCHEMA_VERSION};"))?;
+            Ok(())
+        })();
+        match result {
+            Ok(()) => db.execute_batch("COMMIT")?,
+            Err(e) => {
+                db.execute_batch("ROLLBACK")?;
+                return Err(e);
+            }
+        }
+        Ok(())
     }
     pub fn current_fingerprint(&self, id: &str) -> Result<Option<String>> {
         use rusqlite::OptionalExtension;
@@ -146,8 +191,8 @@ impl LibraryIndex {
           revision=excluded.revision,fingerprint=excluded.fingerprint",
           params![data.id,title,data.started_at,data.duration_ms as i64,data.status,data.model_id,meta.pinned,meta.audio_removed||(data.read_only&&!data.id.starts_with("legacy-")),meta.revision as i64,fingerprint])?;
         {
-            let mut insert=tx.prepare_cached("INSERT INTO transcript_search(meeting_id,source_id,start_ms,end_ms,title,body) VALUES(?1,?2,?3,?4,?5,?6)")?;
-            insert.execute(params![data.id, "", 0, 0, title, ""])?;
+            let mut insert=tx.prepare_cached("INSERT INTO transcript_search(meeting_id,source_id,start_ms,end_ms,title,body,context) VALUES(?1,?2,?3,?4,?5,?6,?7)")?;
+            insert.execute(params![data.id, "", 0, 0, title, "", ""])?;
             tx.execute(
                 "INSERT INTO search_rows VALUES(?1,?2)",
                 params![tx.last_insert_rowid(), data.id],
@@ -171,7 +216,8 @@ impl LibraryIndex {
                     start as i64,
                     end as i64,
                     "",
-                    text
+                    text,
+                    title
                 ])?;
                 tx.execute(
                     "INSERT INTO search_rows VALUES(?1,?2)",
@@ -194,14 +240,14 @@ impl LibraryIndex {
         if query.chars().count() > 200 || !(1..=100).contains(&limit) || offset > i64::MAX as u64 {
             return Err("Invalid search range".into());
         }
-        let expression = query
+        let terms = query
             .split_whitespace()
             // A token without letters or digits becomes an empty FTS phrase that matches nothing.
             .filter(|word| word.chars().any(char::is_alphanumeric))
             .take(20)
             .map(|word| format!("\"{}\"*", word.replace('"', "\"\"")))
-            .collect::<Vec<_>>()
-            .join(" AND ");
+            .collect::<Vec<_>>();
+        let expression = match_expression(&terms);
         let (total, items) = if expression.is_empty() {
             let total = self
                 .db
@@ -247,6 +293,28 @@ impl LibraryIndex {
         }
         result
     }
+}
+/// Every term must occur in the row. A meeting row matches when all terms are in its title.
+/// A section row matches when all terms are in its text or meeting title and at least one is
+/// in its text, so a title word plus a transcript word finds that section, while a title-only
+/// query still yields the single meeting-level hit instead of one hit per section.
+fn match_expression(terms: &[String]) -> String {
+    if terms.is_empty() {
+        return String::new();
+    }
+    let join = |column: &str, operator: &str| {
+        terms
+            .iter()
+            .map(|term| format!("{column} : {term}"))
+            .collect::<Vec<_>>()
+            .join(operator)
+    };
+    format!(
+        "({}) OR (({}) AND ({}))",
+        join("title", " AND "),
+        join("{body context}", " AND "),
+        join("body", " OR ")
+    )
 }
 fn hit(row: &rusqlite::Row<'_>) -> rusqlite::Result<SearchHit> {
     Ok(SearchHit {
@@ -351,6 +419,147 @@ mod tests {
         assert_eq!(serde_json::to_vec(&d).unwrap(), original);
         index.remove(&d.id).unwrap();
         assert_eq!(index.search("", 0, 20).unwrap().total, 0);
+    }
+    fn two_sections(id: &str) -> SessionData {
+        serde_json::from_value(serde_json::json!({"schemaVersion":2,"id":id,"title":"Quartalsplanung Vertrieb","startedAt":"2026-10-27T06:00:00Z","status":"complete","modelId":"synthetic","parts":[
+            {"file":"system-0.wav","source":"system","startSample":16000,"sampleCount":32000,"confirmedSampleCount":32000,"text":"Anna bestätigt den Prüfbericht am Freitag.","status":"complete"},
+            {"file":"system-1.wav","source":"system","startSample":64000,"sampleCount":32000,"confirmedSampleCount":16000,"text":"Ben fragt nach dem Budget.","status":"complete"}]})).unwrap()
+    }
+    #[test]
+    fn query_mixing_title_and_transcript_words_finds_the_matching_section_only() {
+        let root = tempfile::tempdir().unwrap();
+        let mut index = LibraryIndex::open(root.path()).unwrap();
+        let d = two_sections("0123456789abcdef0123456789abcdef");
+        index
+            .upsert(&d, &metadata::Metadata::default(), "fixture")
+            .unwrap();
+        // Regression for #22: title and section text used to sit in different rows.
+        let mixed = index.search("Quartalsplanung Prüfbericht", 0, 20).unwrap();
+        assert_eq!(mixed.total, 1);
+        assert_eq!(mixed.items[0].source_id.as_deref(), Some("system-0.wav"));
+        assert_eq!(mixed.items[0].start_ms, Some(1000));
+        assert_eq!(mixed.items[0].end_ms, Some(3000));
+        assert!(mixed.items[0].excerpt.contains("Prüfbericht"));
+        let second = index.search("vertrieb budget", 0, 20).unwrap();
+        assert_eq!(second.total, 1);
+        assert_eq!(second.items[0].source_id.as_deref(), Some("system-1.wav"));
+        assert_eq!(second.items[0].start_ms, Some(4000));
+        assert_eq!(second.items[0].end_ms, Some(5000));
+        // A title-only query stays one meeting-level hit, not one hit per section.
+        let title = index.search("Quartalsplanung", 0, 20).unwrap();
+        assert_eq!(title.total, 1);
+        assert_eq!(title.items[0].source_id, None);
+        // Words from two different sections are not combined into one hit.
+        assert_eq!(index.search("Prüfbericht Budget", 0, 20).unwrap().total, 0);
+        assert_eq!(
+            index
+                .search("Quartalsplanung Unbekannt", 0, 20)
+                .unwrap()
+                .total,
+            0
+        );
+        // A renamed title replaces the original one in every section row.
+        let meta = metadata::Metadata {
+            revision: 1,
+            title: Some("Umbenannt".into()),
+            pinned: false,
+            audio_removed: false,
+        };
+        index.upsert(&d, &meta, "renamed").unwrap();
+        assert_eq!(index.search("Umbenannt Budget", 0, 20).unwrap().total, 1);
+        assert_eq!(
+            index.search("Quartalsplanung Budget", 0, 20).unwrap().total,
+            0
+        );
+        assert_eq!(index.search("", 0, 20).unwrap().total, 1);
+        let rows: i64 = index
+            .db
+            .query_row("SELECT count(*) FROM search_rows", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(rows, 3, "one meeting row and one row per section");
+    }
+    #[test]
+    fn version_two_index_is_converted_and_unknown_versions_are_rebuilt() {
+        let root = tempfile::tempdir().unwrap();
+        let folder = root.path().join("library-index");
+        fs::create_dir(&folder).unwrap();
+        let id = "0123456789abcdef0123456789abcdef";
+        {
+            // Layout written by HandyMeeting up to 1.0.2 (schema version 2).
+            let db = Connection::open(folder.join("library.sqlite3")).unwrap();
+            db.execute_batch("CREATE TABLE meetings (
+                id TEXT PRIMARY KEY, title TEXT NOT NULL, started TEXT NOT NULL, duration INTEGER NOT NULL,
+                status TEXT NOT NULL, model TEXT NOT NULL, pinned INTEGER NOT NULL, audio_removed INTEGER NOT NULL,
+                revision INTEGER NOT NULL, fingerprint TEXT NOT NULL);
+              CREATE VIRTUAL TABLE transcript_search USING fts5(
+                meeting_id UNINDEXED, source_id UNINDEXED, start_ms UNINDEXED, end_ms UNINDEXED,
+                title, body, tokenize='unicode61 remove_diacritics 2');
+              CREATE TABLE search_rows(row_id INTEGER PRIMARY KEY, meeting_id TEXT NOT NULL);
+              PRAGMA user_version=2;").unwrap();
+            db.execute(
+                "INSERT INTO meetings VALUES(?1,'Quartalsplanung','2026-10-27T06:00:00Z',3000,'complete','synthetic',0,0,0,'v2')",
+                [id],
+            )
+            .unwrap();
+            for (source, start, end, title, body) in [
+                ("", 0, 0, "Quartalsplanung", ""),
+                (
+                    "system-0.wav",
+                    1000,
+                    3000,
+                    "",
+                    "Anna bestätigt den Prüfbericht.",
+                ),
+            ] {
+                db.execute(
+                    "INSERT INTO transcript_search(meeting_id,source_id,start_ms,end_ms,title,body) VALUES(?1,?2,?3,?4,?5,?6)",
+                    params![id, source, start, end, title, body],
+                )
+                .unwrap();
+                db.execute(
+                    "INSERT INTO search_rows VALUES(?1,?2)",
+                    params![db.last_insert_rowid(), id],
+                )
+                .unwrap();
+            }
+        }
+        let mut index = LibraryIndex::open(root.path()).unwrap();
+        let version: i64 = index
+            .db
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(version, SCHEMA_VERSION);
+        assert_eq!(
+            index.current_fingerprint(id).unwrap().as_deref(),
+            Some("v2")
+        );
+        let found = index.search("Quartalsplanung Prüfbericht", 0, 20).unwrap();
+        assert_eq!(found.total, 1);
+        assert_eq!(found.items[0].source_id.as_deref(), Some("system-0.wav"));
+        assert_eq!(found.items[0].start_ms, Some(1000));
+        assert_eq!(index.search("Quartalsplanung", 0, 20).unwrap().total, 1);
+        // Converted rows stay attributable, so a later update replaces them instead of duplicating.
+        index
+            .upsert(&data(id), &metadata::Metadata::default(), "fresh")
+            .unwrap();
+        assert_eq!(index.search("Prüfbericht", 0, 20).unwrap().total, 1);
+        assert_eq!(index.search("Quartalsplanung", 0, 20).unwrap().total, 0);
+        drop(index);
+        // A layout this version does not know is rebuilt, never misread.
+        Connection::open(folder.join("library.sqlite3"))
+            .unwrap()
+            .execute_batch("PRAGMA user_version=99;")
+            .unwrap();
+        let mut index = LibraryIndex::open(root.path()).unwrap();
+        assert_eq!(index.search("", 0, 20).unwrap().total, 0);
+        assert_eq!(index.current_fingerprint(id).unwrap(), None);
+        index
+            .upsert(&data(id), &metadata::Metadata::default(), "rebuilt")
+            .unwrap();
+        assert_eq!(
+            index.search("Original Prüfbericht", 0, 20).unwrap().total,
+            1
+        );
     }
     #[test]
     fn failed_batch_rolls_back_search_and_labels_without_harming_prior_documents() {
