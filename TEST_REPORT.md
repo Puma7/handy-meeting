@@ -408,3 +408,17 @@ Locked dependency audit: docs/rust-1.0.2-dependency-audit.json,566packages, Rust
 
 
 Final local UI follow-up before review export: all78 tests in11files passed together; TypeScript passed. The rendered Edge check was repeated successfully with the raw-copy compaction confirmation included, still with synthetic IPC only. The earlier failed new-test selectors/type declarations were corrected in the test fixture; their logs remain retained. No additional hardware or speaker-quality claim.
+
+## 1.0.3 development verification (27 October 2026, unreleased)
+
+The coordinated Cargo/frontend/Tauri version is 1.0.3. This source state works through issues #15-#25 from the 1.0.2 repository review; it contains PR #14 (1.0.2). No 1.0.3 package, release or CI run is claimed by this entry.
+
+Executed local checks on Linux x86_64 (container, Rust 1.91.1, Node 22): npm ci, build, TypeScript, Prettier and Vitest (93 tests in 11 files); cargo fmt; clippy with -D warnings for the workspace and for handy-bridge/meeting-core/meeting-notes without default features; the full locked Rust workspace suite (198 passed, 0 failed; standalone child-process and native credential fixtures ignored as before); test_rust_portable.py, test_release*.py and rust-artifacts.mjs self-test. All passed. Vitest also passed 91/91 twice with four busy-loop processes saturating all four cores (synthetic load), after full-App tests had timed out on a slow macOS Intel runner.
+
+Locked dependency audit with cargo-audit 0.22.2 (0.21.2 cannot parse CVSS 4.0 advisories): docs/rust-1.0.3-dependency-audit.json, 566 packages, 1380 advisories, zero vulnerabilities, nine unmaintained warnings and the existing GLib unsoundness warning, as in 1.0.2. The yanked-crate lookup was unavailable behind this environment's proxy. CI now runs the same audit as a gate.
+
+Synthetic only (labelled in the tests): crash, replay and reopen journals; never-closed parts; derived TXT receipts; dangling links for session, archive, label, speaker and retention files; interrupted archive moves; damaged archive receipts and labels; the search index v2 to v3 conversion; per-item analysis rejection, older prompt versions and damaged saved runs; partial, truncated, oversized and cancelled update downloads; a diverging CPU replay after a GPU failure; stop while recognition catches up.
+
+Virtual but real devices and tools: a private PulseAudio 16.1 server with a null sink and a virtual microphone (device listing and two-track capture, three runs); an Xvfb GUI launch of the debug desktop build (window shown, clean stop); a dpkg-deb build of a synthetic package with /usr/bin/handymeeting and the new Recommends. These are not hardware validation.
+
+Not run here: PowerShell/NSIS (the Windows CI job runs the installer lifecycle under the Restricted user policy), the Swift helper and macOS microphone selection, IPv6 loopback, real GPU/CPU recognition backends, a real local text-model reference run for the per-item statement checks, and the hardware, abort and long-session tests that AGENTS.md requires for capture and recognition changes before a release.
