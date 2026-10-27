@@ -54,12 +54,23 @@ export default function SpeakerLabels({
     };
   }, [api, meeting.id]);
   useEffect(() => {
-    let active = true;
     setDoc(null);
     setError(null);
     setSource("");
     setName("");
     setQuote("");
+  }, [meeting.id]);
+  // Source hashes come from the backend; reload them whenever recognition revises a section,
+  // so a label confirmed for earlier text is shown as stale instead of confirmed.
+  const textSignature = meeting.parts
+    // Length, status and tail keep this cheap for long meetings while catching revisions.
+    .map(
+      (p) =>
+        `${p.file ?? ""}:${p.status}:${p.text?.length ?? 0}:${p.text?.slice(-64) ?? ""}`,
+    )
+    .join("\u0000");
+  useEffect(() => {
+    let active = true;
     api
       .getSpeakerLabels?.(meeting.id)
       .then((v) => {
@@ -71,7 +82,7 @@ export default function SpeakerLabels({
     return () => {
       active = false;
     };
-  }, [api, meeting.id]);
+  }, [api, meeting.id, textSignature]);
   useEffect(() => {
     if (!onLabels) return;
     const labels: Record<string, string> = {};

@@ -224,3 +224,25 @@ it("shows enabled confirmed labels beside unchanged sections only", async () => 
   );
   await waitFor(() => expect(labels).toHaveBeenLastCalledWith(meeting.id, {}));
 });
+it("reloads label hashes when recognition revises a section", async () => {
+  const get = vi.fn().mockResolvedValue({
+    revision: 1,
+    enabled: true,
+    assignments: [],
+    sources: {},
+  });
+  const api = {
+    getSpeakerLabels: get,
+    saveSpeakerLabels: vi.fn(),
+  } as unknown as DesktopApi;
+  const { rerender } = render(
+    <SpeakerLabels api={api} meeting={meeting} locale="en" />,
+  );
+  await waitFor(() => expect(get).toHaveBeenCalledTimes(1));
+  const revised = {
+    ...meeting,
+    parts: meeting.parts.map((p) => ({ ...p, text: `${p.text} More words.` })),
+  };
+  rerender(<SpeakerLabels api={api} meeting={revised} locale="en" />);
+  await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+});

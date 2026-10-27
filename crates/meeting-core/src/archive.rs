@@ -1539,6 +1539,15 @@ fn deletion_inventory(root: &Path, id: &str, cancel: &AtomicBool) -> Result<Dele
     for sidecar in sidecars(root, id)? {
         push_delete_file(root, &root.join(sidecar.name), cancel, &mut files)?;
     }
+    // atomic_json keeps the previous label/speaker revision as .json.bak; it can hold the
+    // title, speaker names and quotes, so it belongs to the confirmed deletion too.
+    for parent in ["user-metadata", "speaker-labels"] {
+        let backup = root.join(parent).join(format!("{id}.json.bak"));
+        if fs::symlink_metadata(&backup).is_ok() {
+            regular(&backup)?;
+            push_delete_file(root, &backup, cancel, &mut files)?;
+        }
+    }
     let copies = root.join("audio-copies");
     if copies.exists() {
         metadata::checked_directory(&copies)?;
@@ -2250,16 +2259,22 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let id = fixture(root.path());
         let cancel = AtomicBool::new(false);
-        metadata::edit(root.path(), &id, 0, Some("Archived fixture".into()), false).unwrap();
-        let first = create(root.path(), &id, 1, "whole-meeting", &cancel, |_, _| {}).unwrap();
-        let second = create(root.path(), &id, 1, "whole-meeting", &cancel, |_, _| {}).unwrap();
-        move_source_into_archive(root.path(), &second, 1, &cancel).unwrap();
+        metadata::edit(root.path(), &id, 0, Some("Earlier title".into()), false).unwrap();
+        metadata::edit(root.path(), &id, 1, Some("Archived fixture".into()), false).unwrap();
+        let backup = root
+            .path()
+            .join("user-metadata")
+            .join(format!("{id}.json.bak"));
+        assert!(backup.is_file(), "a second label save leaves a backup");
+        let first = create(root.path(), &id, 2, "whole-meeting", &cancel, |_, _| {}).unwrap();
+        let second = create(root.path(), &id, 2, "whole-meeting", &cancel, |_, _| {}).unwrap();
+        move_source_into_archive(root.path(), &second, 2, &cancel).unwrap();
         let other = fixture(root.path());
         let (hash, _) = deletion_fingerprint(root.path(), &id, &cancel).unwrap();
         assert!(delete_archived_meeting(
             root.path(),
             &id,
-            1,
+            2,
             &hash,
             &format!("DELETE {id}"),
             &AtomicBool::new(true),
@@ -2269,7 +2284,7 @@ mod tests {
         delete_archived_meeting(
             root.path(),
             &id,
-            1,
+            2,
             &hash,
             &format!("DELETE {id}"),
             &cancel,
@@ -2293,6 +2308,10 @@ mod tests {
             .join("user-metadata")
             .join(format!("{id}.json"))
             .exists());
+        assert!(
+            !backup.exists(),
+            "label backups are deleted with the meeting"
+        );
         assert!(root
             .path()
             .join("sessions")
