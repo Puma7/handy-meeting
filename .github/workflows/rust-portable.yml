@@ -45,7 +45,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libvulkan1 pulseaudio-utils dbus gnome-keyring
+          sudo apt-get install -y build-essential pkg-config libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libvulkan1 pulseaudio-utils dbus gnome-keyring pulseaudio xvfb x11-utils
       - name: Install pinned Rust tooling
         run: |
           set -euo pipefail
@@ -84,6 +84,8 @@ jobs:
           python3 -m unittest discover -s scripts -p test_worker_memory.py
           bash -n scripts/package-rust-portable.sh
           bash -n scripts/check-native-credentials.sh
+          bash -n scripts/check-linux-virtual-audio.sh
+          bash -n scripts/check-gui-smoke.sh
       - name: Verify frontend and bounded portable audio transport
         run: |
           set -euo pipefail
@@ -104,6 +106,21 @@ jobs:
           .build/rust-target/${{ matrix.target }}/release/HandyMeeting --release-checks .build/portable-release-checks
           node scripts/rust-artifacts.mjs source-fingerprint > .build/portable-source-after.json
           python3 -c 'import json; assert json.load(open(".build/portable-source-before.json"))==json.load(open(".build/portable-source-after.json")), "Source changed during portable checks"'
+      - name: Check real pactl listing and parec two-track capture with private virtual PulseAudio devices
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          cargo +1.91.1 build --locked --target '${{ matrix.target }}' -p meeting-core --example device_capture
+          bash scripts/check-linux-virtual-audio.sh '.build/rust-target/${{ matrix.target }}/debug/examples/device_capture' .build/linux-virtual-audio
+      - name: Launch the exact release GUI briefly and require a window and clean stop
+        run: |
+          set -euo pipefail
+          app='.build/rust-target/${{ matrix.target }}/release/HandyMeeting'
+          if [[ "$RUNNER_OS" = Linux ]]; then
+            xvfb-run -a -s '-screen 0 1280x900x24' dbus-run-session -- bash scripts/check-gui-smoke.sh "$app" .build/gui-smoke 15
+          else
+            bash scripts/check-gui-smoke.sh "$app" .build/gui-smoke 15
+          fi
       - name: Package the checked desktop, prove relocation and verify isolated native credentials
         run: |
           set -euo pipefail
@@ -119,7 +136,10 @@ jobs:
               version=$(dpkg-query -W handymeeting)
               test -n "$version"
               executable=$(dpkg-query -L handymeeting | sed -n "/\/HandyMeeting$/p")
-              "$executable" --release-checks /tmp/handymeeting-release-checks
+              test "$(readlink /usr/bin/handymeeting)" = "$executable"
+              dpkg-query -W -f="\${Recommends}\n" handymeeting | grep -q "xdg-utils, gnome-keyring"
+              # The command link must resolve the bundled native libraries via $ORIGIN.
+              handymeeting --release-checks /tmp/handymeeting-release-checks
               cat /tmp/handymeeting-release-checks/release-checks.json
             '
           done
@@ -145,5 +165,7 @@ jobs:
           include-hidden-files: true
           retention-days: 14
           path: .build/rust-portable-proofs/${{ matrix.rid }}/*.json
-# No real microphone/system capture, model download, cloud call, two-hour test,
-# Developer ID, notarization, or public release is claimed by this workflow.
+# No physical microphone/system capture, model download, cloud call, two-hour test,
+# Developer ID, notarization, or public release is claimed by this workflow. The
+# Linux PulseAudio check uses a private server with virtual null-sink devices only;
+# the GUI smoke check proves launch and a window, not rendering or usability.

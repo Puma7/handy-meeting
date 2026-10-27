@@ -24,6 +24,12 @@ mod platform;
 #[cfg(any(target_os = "linux", target_os = "macos", test))]
 #[path = "portable_capture.rs"]
 mod portable;
+// Type-checks and unit-tests the macOS adapter's pure parsing/argument code on
+// other build hosts; it never starts the Swift helper there.
+#[cfg(all(test, not(target_os = "macos")))]
+#[path = "macos_capture.rs"]
+#[allow(dead_code)]
+mod macos_adapter_checks;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

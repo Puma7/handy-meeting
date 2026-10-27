@@ -35,7 +35,20 @@ enum Packet {
 /// Small read-only device queries: bounded output and an owned ten-second deadline.
 #[cfg(any(target_os = "linux", test))]
 pub(super) fn text_command(command: &mut Command) -> Result<String> {
-    let mut child=OwnedChild(command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().map_err(|_|"PulseAudio tools are missing. Install pulseaudio-utils and use a running PulseAudio or PipeWire-Pulse service.")?);
+    query_command(command, "PulseAudio tools are missing. Install pulseaudio-utils and use a running PulseAudio or PipeWire-Pulse service.")
+}
+
+/// Same bounded query with the platform's own message for a missing tool.
+#[cfg(any(target_os = "linux", target_os = "macos", test))]
+pub(super) fn query_command(command: &mut Command, missing: &'static str) -> Result<String> {
+    let mut child = OwnedChild(
+        command
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .map_err(|_| missing)?,
+    );
     let stdout = child
         .0
         .stdout
@@ -52,14 +65,14 @@ pub(super) fn text_command(command: &mut Command) -> Result<String> {
             break status;
         }
         if Instant::now() >= deadline {
-            return Err("PulseAudio device query timed out; check the local audio service".into());
+            return Err("Audio device query timed out; check the local audio service".into());
         }
         thread::sleep(Duration::from_millis(25));
     };
     let (read, data) = reading.join().map_err(|_| "Device query reader failed")?;
     read?;
     if !status.success() {
-        return Err("PulseAudio device query failed; check the local audio service".into());
+        return Err("Audio device query failed; check the local audio service".into());
     }
     if data.len() > 1024 * 1024 {
         return Err("Device query exceeded its output limit".into());
