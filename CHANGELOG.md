@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.3 — recording reliability, recovery and platform follow-ups (in development)
+
+- Stop a meeting without waiting for the recognition backlog; the session shows "catching up" and completes in the background. A track that stops while the other continues is reported on its own (#17, #20).
+- Close every audio part at its confirmed prefix when a session is opened, record the end of capture for every post-recording status, and write journals and the manifest outside the shared session lock so a slow disk cannot delay audio capture (#15, #16, #18).
+- Reject dangling links before opening or creating session, archive, label, speaker and retention files; keep a readable TXT owned across a crash during its refresh; retry briefly when a session lease is still held by a closing process (#21).
+- Show an unreadable archive entry as preserved instead of hiding the whole archive list; let an interrupted archive move be repeated while keeping its earlier placement record (#21).
+- Find a section when the search combines a meeting-title word with a transcript word; the search index converts in place (#22).
+- Drop and count individual analysis statements that fail the source checks instead of failing the whole run; keep analyses from earlier prompt versions readable and mark them; skip damaged saved runs instead of hiding the list (#19).
+- Download updates to a `.partial` file that becomes the installer only after its size and SHA-256 match; Linux and macOS show their own package and open the official release page. Status bars poll quickly only while a job runs (#23).
+- Keep the Start menu link on the newest side-by-side installation; uninstalling the linked version moves the link to the newest remaining one (#23).
+- `localhost` reaches a local text-model server on IPv4 or IPv6 loopback without system DNS or proxies. Linux: versioned Handy AppImages in `~/Applications` are found, and the DEB adds `/usr/bin/handymeeting`. macOS: choose a real microphone. CI gains a virtual PulseAudio capture check and a GUI launch smoke check (#24).
+- Start only Handy- and FFmpeg-named programs chosen through the app, and add a locked `cargo audit` CI gate (#25).
+
 ## 1.0.1 — installer and recovery fixes
 
 - Fix first-time Windows setup when the default parent folders do not exist; retain exclusive destination reservation and existing user files. Native regression checks cover missing nested parents, occupied directories and parent paths blocked by files. Full CI installation now starts with a fresh nested path.
