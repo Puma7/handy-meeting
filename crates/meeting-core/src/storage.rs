@@ -117,14 +117,31 @@ impl SessionStore {
             .name("meeting-readable-text".into())
             .spawn(move || {
                 while receiver.recv().is_ok() {
-                    // Hold a strong reference only while copying, so owner checks stay exact.
-                    let data = {
-                        let Some(inner) = weak.upgrade() else { break };
-                        let Ok(guard) = inner.lock() else { break };
-                        guard.data.clone()
-                    };
-                    // All filesystem work is outside the audio checkpoint lock.
-                    if crate::live_text::refresh(&path, &data).is_err() {
+                    let mut released = false;
+                    let outcome = crate::live_text::retry_io(
+                        || {
+                            // Hold a strong reference only while copying, so owner checks
+                            // stay exact. Each attempt writes the latest confirmed state.
+                            let data = {
+                                let Some(inner) = weak.upgrade() else {
+                                    released = true;
+                                    return Ok(());
+                                };
+                                let Ok(guard) = inner.lock() else {
+                                    released = true;
+                                    return Ok(());
+                                };
+                                guard.data.clone()
+                            };
+                            // All filesystem work is outside the audio checkpoint lock.
+                            crate::live_text::refresh(&path, &data)
+                        },
+                        std::thread::sleep,
+                    );
+                    if released {
+                        break;
+                    }
+                    if outcome.is_err() {
                         if let Some(inner) = weak.upgrade() {
                             if let Ok(mut guard) = inner.lock() {
                                 note_data(&mut guard.data, TXT_WARNING);
