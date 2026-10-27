@@ -125,9 +125,10 @@ impl LibraryIndex {
         }
         Ok(Self { db })
     }
-    /// The index is derived from the session folders. A version-2 index is converted row by
-    /// row (title context added to section rows); any other version is rebuilt empty and
-    /// refilled by the next scan, so an older or newer layout is never misread.
+    /// The index is derived from the session folders. An index of version 2 or older is
+    /// converted row by row (title context added to section rows; older layouts also get
+    /// their row ownership table filled), so search keeps working before the next scan.
+    /// Any newer version is rebuilt empty and refilled by that scan, so it is never misread.
     fn upgrade(db: &Connection) -> Result<()> {
         db.execute_batch("BEGIN IMMEDIATE")?;
         let result = (|| -> Result<()> {
@@ -140,7 +141,7 @@ impl LibraryIndex {
                 [],
                 |r| r.get(0),
             )?;
-            if version == 2 && fts_exists {
+            if (0..=2).contains(&version) && fts_exists {
                 db.execute_batch("ALTER TABLE transcript_search RENAME TO transcript_search_v2;")?;
                 db.execute_batch(SCHEMA)?;
                 db.execute_batch(
@@ -148,7 +149,8 @@ impl LibraryIndex {
                        SELECT s.rowid,s.meeting_id,s.source_id,s.start_ms,s.end_ms,s.title,s.body,
                          CASE WHEN s.source_id='' THEN '' ELSE coalesce((SELECT m.title FROM meetings m WHERE m.id=s.meeting_id),'') END
                        FROM transcript_search_v2 s;
-                     DROP TABLE transcript_search_v2;",
+                     DROP TABLE transcript_search_v2;
+                     INSERT OR IGNORE INTO search_rows SELECT rowid,meeting_id FROM transcript_search;",
                 )?;
             } else {
                 db.execute_batch(
@@ -658,6 +660,61 @@ mod tests {
             .unwrap();
         assert_eq!(rows, 3, "one meeting row and one row per section");
     }
+    #[test]
+    fn version_one_index_keeps_its_rows_while_converting() {
+        // Synthetic layout of early 1.0.2 development builds: no row ownership table yet.
+        let root = tempfile::tempdir().unwrap();
+        let folder = root.path().join("library-index");
+        fs::create_dir(&folder).unwrap();
+        let id = "0123456789abcdef0123456789abcdef";
+        {
+            let db = Connection::open(folder.join("library.sqlite3")).unwrap();
+            db.execute_batch("CREATE TABLE meetings (
+                id TEXT PRIMARY KEY, title TEXT NOT NULL, started TEXT NOT NULL, duration INTEGER NOT NULL,
+                status TEXT NOT NULL, model TEXT NOT NULL, pinned INTEGER NOT NULL, audio_removed INTEGER NOT NULL,
+                revision INTEGER NOT NULL, fingerprint TEXT NOT NULL);
+              CREATE VIRTUAL TABLE transcript_search USING fts5(
+                meeting_id UNINDEXED, source_id UNINDEXED, start_ms UNINDEXED, end_ms UNINDEXED,
+                title, body, tokenize='unicode61 remove_diacritics 2');
+              PRAGMA user_version=1;").unwrap();
+            db.execute(
+                "INSERT INTO meetings VALUES(?1,'Quartalsplanung','2026-10-27T06:00:00Z',3000,'complete','synthetic',0,0,0,'v1')",
+                [id],
+            )
+            .unwrap();
+            for (source, start, end, title, body) in [
+                ("", 0, 0, "Quartalsplanung", ""),
+                (
+                    "system-0.wav",
+                    1000,
+                    3000,
+                    "",
+                    "Anna bestätigt den Prüfbericht.",
+                ),
+            ] {
+                db.execute(
+                    "INSERT INTO transcript_search(meeting_id,source_id,start_ms,end_ms,title,body) VALUES(?1,?2,?3,?4,?5,?6)",
+                    params![id, source, start, end, title, body],
+                )
+                .unwrap();
+            }
+        }
+        let mut index = LibraryIndex::open(root.path()).unwrap();
+        assert_eq!(
+            index.current_fingerprint(id).unwrap().as_deref(),
+            Some("v1")
+        );
+        let found = index.search("Quartalsplanung Prüfbericht", 0, 20).unwrap();
+        assert_eq!(found.total, 1);
+        assert_eq!(found.items[0].source_id.as_deref(), Some("system-0.wav"));
+        // The filled ownership table lets a later update replace the rows, not duplicate them.
+        index
+            .upsert(&data(id), &metadata::Metadata::default(), "fresh")
+            .unwrap();
+        assert_eq!(index.search("Prüfbericht", 0, 20).unwrap().total, 1);
+        assert_eq!(index.search("Quartalsplanung", 0, 20).unwrap().total, 0);
+    }
+
     #[test]
     fn version_two_index_is_converted_and_unknown_versions_are_rebuilt() {
         let root = tempfile::tempdir().unwrap();
