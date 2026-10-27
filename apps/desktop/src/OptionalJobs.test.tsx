@@ -42,7 +42,8 @@ it("never checks or installs updates merely by opening settings and blocks insta
     getUpdateProgress: vi.fn().mockResolvedValue({
       status: "ready",
       version: "1.0.3",
-      releaseUrl: "https://github.com/Puma7/handy-meeting/releases/tag/v1.0.3",
+      releaseUrl:
+        "https://github.com/Puma7/meeting-for-handy/releases/tag/v1.0.3",
       receivedBytes: 10,
       totalBytes: 10,
       elapsedMs: 20,
@@ -448,7 +449,8 @@ it("sends Linux and macOS users to the official release page instead of a Window
     getUpdateProgress: vi.fn().mockResolvedValue({
       status: "available",
       version: "1.0.3",
-      releaseUrl: "https://github.com/Puma7/handy-meeting/releases/tag/v1.0.3",
+      releaseUrl:
+        "https://github.com/Puma7/meeting-for-handy/releases/tag/v1.0.3",
       receivedBytes: 0,
       totalBytes: 0,
       elapsedMs: 5,
