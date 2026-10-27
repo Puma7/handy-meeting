@@ -44,6 +44,7 @@ import type {
   MeetingSummary,
   NotesRequest,
   PendingAnalysis,
+  SkippedAnalysis,
   Theme,
 } from "./types";
 
@@ -147,6 +148,12 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     [cloudRequest, setCloudRequest] = useState<NotesRequest | null>(null),
     [source, setSource] = useState<SourceSelection | null>(null);
   const [pendingAnalyses, setPendingAnalyses] = useState<PendingAnalysis[]>([]);
+  // Stored work states the backend could not verify; they stay untouched and are only reported.
+  const [skippedResults, setSkippedResults] = useState<SkippedAnalysis[]>([]),
+    [skippedPending, setSkippedPending] = useState<SkippedAnalysis[]>([]);
+  const skippedRuns = [
+    ...new Set([...skippedResults, ...skippedPending].map((item) => item.id)),
+  ];
   const [resumeAnalysis, setResumeAnalysis] = useState<PendingAnalysis | null>(
     null,
   );
@@ -561,6 +568,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     setAnalyses([]);
     setResultId("");
     setPendingAnalyses([]);
+    setSkippedResults([]);
+    setSkippedPending([]);
     setResumeAnalysis(null);
     if (!id) {
       setNotesMeetingLoading(false);
@@ -589,21 +598,23 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       await Promise.all([
         api
           .listAnalyses(id)
-          .then((items) => {
+          .then(({ analyses: items, skipped }) => {
             if (!isCurrentSelection()) return;
             if (items.some((item) => item.meetingId !== id))
               throw new Error(t.wrongMeeting);
             setAnalyses(items);
+            setSkippedResults(skipped);
             setResultId(items[0]?.id ?? "");
           })
           .catch(reportDiscoveryFailure),
         api
           .listUnfinishedAnalyses(id)
-          .then((pending) => {
+          .then(({ items: pending, skipped }) => {
             if (!isCurrentSelection()) return;
             if (pending.some((item) => item.meetingId !== id))
               throw new Error(t.wrongMeeting);
             setPendingAnalyses(pending);
+            setSkippedPending(skipped);
           })
           .catch(reportDiscoveryFailure),
       ]);
@@ -828,7 +839,9 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     await notesJob.run(request);
     const sequence = notesLoadSequence.current;
     try {
-      const pending = await api.listUnfinishedAnalyses(request.meetingId);
+      const { items: pending, skipped } = await api.listUnfinishedAnalyses(
+        request.meetingId,
+      );
       if (
         mounted.current &&
         sequence === notesLoadSequence.current &&
@@ -837,6 +850,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         if (pending.some((item) => item.meetingId !== request.meetingId))
           throw new Error(t.wrongMeeting);
         setPendingAnalyses(pending);
+        setSkippedPending(skipped);
       }
     } catch (failure) {
       if (mounted.current && notesSelectionRef.current === request.meetingId)
@@ -1475,6 +1489,12 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             </button>
           </section>
         )}
+        {page === "notes" && skippedRuns.length > 0 && (
+          <div className="notice warning" role="status">
+            <p>{t.skippedAnalyses}</p>
+            <p className="muted">{skippedRuns.join(", ")}</p>
+          </div>
+        )}
         {page === "notes" && pendingAnalyses.length > 0 && (
           <section
             className="pending-analyses"
@@ -1494,20 +1514,28 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
                       {run.model} · {run.confirmedTasks}/{run.totalTasks}{" "}
                       {t.confirmedTasks}
                     </p>
+                    {!run.resumable && (
+                      <p className="muted">
+                        {t.earlierPrompt}: {run.promptVersion} ·{" "}
+                        {t.earlierPromptPending}
+                      </p>
+                    )}
                   </div>
-                  <button
-                    className="secondary"
-                    disabled={
-                      !connected ||
-                      notesBusy ||
-                      recording ||
-                      busy ||
-                      notesMeetingLoading
-                    }
-                    onClick={() => setResumeAnalysis(run)}
-                  >
-                    {t.resumeAnalysis}
-                  </button>
+                  {run.resumable && (
+                    <button
+                      className="secondary"
+                      disabled={
+                        !connected ||
+                        notesBusy ||
+                        recording ||
+                        busy ||
+                        notesMeetingLoading
+                      }
+                      onClick={() => setResumeAnalysis(run)}
+                    >
+                      {t.resumeAnalysis}
+                    </button>
+                  )}
                 </div>
               ))}
             </div>

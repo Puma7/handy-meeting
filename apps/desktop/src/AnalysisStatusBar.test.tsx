@@ -39,7 +39,7 @@ function fixture() {
     listDevices: vi.fn().mockResolvedValue([]),
     listMeetings: vi.fn().mockResolvedValue([meeting]),
     getMeeting: vi.fn().mockResolvedValue(meeting),
-    listAnalyses: vi.fn().mockResolvedValue([]),
+    listAnalyses: vi.fn().mockResolvedValue({ analyses: [], skipped: [] }),
     listTextModels: vi.fn().mockResolvedValue(["synthetic-text"]),
     getNotesProgress: vi.fn().mockResolvedValue(null),
     generateNotes: vi.fn(),

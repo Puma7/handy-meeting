@@ -148,6 +148,15 @@ export interface TranscriptSource {
   endMs: number;
   text: string;
 }
+/** Why the backend discarded a model statement; discarded text is never stored. */
+export type RejectionReason =
+  | "invalidText"
+  | "evidenceCount"
+  | "quoteNotLiteral"
+  | "ownerOrDueOutsideTasks"
+  | "unverifiedOwnerOrDue"
+  | "invalidNameCandidate"
+  | "itemLimit";
 export interface AnalysisResult {
   id: string;
   meetingId: string;
@@ -158,9 +167,27 @@ export interface AnalysisResult {
     name: string;
     kind: AnalysisKind;
     items: NoteFact[];
+    rejected?: Partial<Record<RejectionReason, number>>;
   }[];
   sources: TranscriptSource[];
   createdAt: string;
+  promptVersion?: string;
+  resultSchema?: number;
+  /** False for a result of an earlier prompt version: shown read-only, never continued. */
+  currentPrompt?: boolean;
+}
+/** A stored work state the backend left untouched and did not show. */
+export interface SkippedAnalysis {
+  id: string;
+  reason: "damaged" | "newerFormat" | "otherMeeting";
+}
+export interface AnalysisListing {
+  analyses: AnalysisResult[];
+  skipped: SkippedAnalysis[];
+}
+export interface PendingListing {
+  items: PendingAnalysis[];
+  skipped: SkippedAnalysis[];
 }
 export interface StartRequest {
   title: string;
@@ -179,6 +206,9 @@ export interface PendingAnalysis {
   endpoint: string;
   confirmedTasks: number;
   totalTasks: number;
+  promptVersion: string;
+  /** Only runs of the current prompt version may be continued. */
+  resumable: boolean;
 }
 export interface NotesRequest {
   jobId?: string;
@@ -289,8 +319,8 @@ export interface DesktopApi {
   resumeMeeting(id: string): Promise<Meeting>;
   importLegacy(manifest: string): Promise<Meeting>;
   generateNotes(request: NotesRequest): Promise<AnalysisResult>;
-  listAnalyses(meetingId: string): Promise<AnalysisResult[]>;
-  listUnfinishedAnalyses(meetingId: string): Promise<PendingAnalysis[]>;
+  listAnalyses(meetingId: string): Promise<AnalysisListing>;
+  listUnfinishedAnalyses(meetingId: string): Promise<PendingListing>;
   listTextModels(endpoint: string): Promise<string[]>;
   getNotesProgress(): Promise<NotesProgress | null>;
   cancelNotes(jobId: string): Promise<boolean>;

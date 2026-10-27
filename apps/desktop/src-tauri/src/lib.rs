@@ -1063,9 +1063,10 @@ async fn generate_notes(
 async fn list_analyses(
     service: State<'_, Arc<Service>>,
     meeting_id: String,
-) -> AppResult<Vec<meeting_notes::Analysis>> {
+) -> AppResult<meeting_notes::AnalysisListing> {
     let service = Arc::clone(&service);
-    blocking(move||{if valid_legacy_id(&meeting_id){return Ok(vec![]);}validate_id(&meeting_id)?;let root=service.root.join("sessions").join(meeting_id).join("analyses");if !root.exists(){return Ok(vec![]);}let mut results=vec![];for entry in fs::read_dir(root).map_err(|_|"Gespeicherte Auswertungen konnten nicht gelesen werden.")?.flatten(){let path=entry.path().join("result.json");if path.exists(){let result=meeting_notes::read_analysis(&path).map_err(|_|"Eine gespeicherte Auswertung besteht die Quellenprüfung nicht. Originaldateien bleiben erhalten.")?;results.push(result);}}results.sort_by(|a,b|b.created_at.cmp(&a.created_at));Ok(results)}).await
+    // Each result is checked on its own: damaged files are reported as skipped, earlier prompt versions stay listed read-only.
+    blocking(move||{if valid_legacy_id(&meeting_id){return Ok(Default::default());}validate_id(&meeting_id)?;let root=service.root.join("sessions").join(&meeting_id).join("analyses");if !root.exists(){return Ok(Default::default());}meeting_notes::list_analyses(&root,&meeting_id).map_err(|_|"Gespeicherte Auswertungen konnten nicht gelesen werden. Originaldateien bleiben erhalten.".into())}).await
 }
 
 pub fn run() {

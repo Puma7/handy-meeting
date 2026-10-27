@@ -296,20 +296,23 @@ fn analysis_folder(
     crate::meeting_files::directory(&analyses.join(run_id))
 }
 
+/// Each unfinished run is checked on its own: a damaged or foreign run is reported as skipped
+/// (and left untouched) instead of hiding every other run. Runs of an earlier prompt version
+/// are listed with `resumable: false`.
 pub(crate) fn pending_analyses(
     service: &Service,
     meeting_id: &str,
-) -> AppResult<Vec<meeting_notes::PendingAnalysis>> {
+) -> AppResult<meeting_notes::PendingListing> {
+    let mut listing = meeting_notes::PendingListing::default();
     if valid_legacy_id(meeting_id) {
-        return Ok(vec![]);
+        return Ok(listing);
     }
     let session = crate::meeting_files::session_folder(&service.root, meeting_id)?;
     let root = session.join("analyses");
     if !root.exists() {
-        return Ok(vec![]);
+        return Ok(listing);
     }
     let root = crate::meeting_files::directory(&root)?;
-    let mut pending = vec![];
     for entry in std::fs::read_dir(root)
         .map_err(|_| "Gespeicherte Arbeitsstände konnten nicht gelesen werden.")?
     {
@@ -321,14 +324,27 @@ pub(crate) fn pending_analyses(
         if crate::validate_id(&id).is_err() {
             continue;
         }
-        let folder = analysis_folder(service, meeting_id, &id)?;
-        if let Some(item) = meeting_notes::read_pending_analysis(&folder).map_err(|_| "Ein gespeicherter Arbeitsstand besteht die Quellenprüfung nicht. Originaldateien bleiben erhalten.")? {
-            if item.meeting_id != meeting_id { return Err("Der Arbeitsstand gehört zu einer anderen Sitzung.".into()); }
-            pending.push(item);
-        }
+        let reason = match analysis_folder(service, meeting_id, &id)
+            .map_err(anyhow::Error::msg)
+            .and_then(|folder| meeting_notes::read_pending_analysis(&folder))
+        {
+            Ok(None) => continue,
+            Ok(Some(item)) if item.meeting_id == meeting_id => {
+                listing.items.push(item);
+                continue;
+            }
+            Ok(Some(_)) => meeting_notes::SkipReason::OtherMeeting,
+            Err(error) => meeting_notes::skip_reason(&error),
+        };
+        listing
+            .skipped
+            .push(meeting_notes::SkippedAnalysis { id, reason });
     }
-    pending.sort_by(|a, b| b.created_at.cmp(&a.created_at));
-    Ok(pending)
+    listing
+        .items
+        .sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    listing.skipped.sort_by(|a, b| a.id.cmp(&b.id));
+    Ok(listing)
 }
 
 #[cfg(test)]
@@ -393,18 +409,23 @@ mod tests {
             mode: "cloud".into(),
             endpoint: "https://example.test/v1/".into(),
             prompt_version: meeting_notes::PROMPT_VERSION.into(),
+            result_schema: meeting_notes::RESULT_SCHEMA,
         };
         let original = serde_json::to_vec(&snapshot).unwrap();
         std::fs::write(folder.join("snapshot.json"), &original).unwrap();
         let checkpoint = br#"{"items":[]}"#;
         std::fs::write(folder.join("step-0000-000000.json"), checkpoint).unwrap();
         let first = Service::new(root.clone()).unwrap();
-        assert_eq!(pending_analyses(&first, &meeting_id).unwrap().len(), 1);
+        assert_eq!(
+            pending_analyses(&first, &meeting_id).unwrap().items.len(),
+            1
+        );
         drop(first);
         let restarted = Service::new(root).unwrap();
         assert!(restarted.notes_jobs.snapshot().unwrap().is_none());
         let pending = pending_analyses(&restarted, &meeting_id)
             .unwrap()
+            .items
             .pop()
             .unwrap();
         assert_eq!(pending.confirmed_tasks, 1);
@@ -433,7 +454,68 @@ mod tests {
             std::fs::read(folder.join("step-0000-000000.json")).unwrap(),
             checkpoint
         );
-        assert_eq!(pending_analyses(&restarted, &meeting_id).unwrap().len(), 1);
+        assert_eq!(
+            pending_analyses(&restarted, &meeting_id)
+                .unwrap()
+                .items
+                .len(),
+            1
+        );
+
+        // A damaged run and a run of an earlier prompt version must not hide the others.
+        let damaged =
+            session_analyses(&restarted, &meeting_id).join("1123456789abcdef0123456789abcdef");
+        std::fs::create_dir(&damaged).unwrap();
+        std::fs::write(damaged.join("snapshot.json"), b"{\"id\":").unwrap();
+        let earlier =
+            session_analyses(&restarted, &meeting_id).join("2123456789abcdef0123456789abcdef");
+        std::fs::create_dir(&earlier).unwrap();
+        let mut old: serde_json::Value = serde_json::from_slice(&original).unwrap();
+        old["id"] = "2123456789abcdef0123456789abcdef".into();
+        old["promptVersion"] = "handymeeting-rust-notes-1".into();
+        old.as_object_mut().unwrap().remove("resultSchema");
+        let old = serde_json::to_vec(&old).unwrap();
+        std::fs::write(earlier.join("snapshot.json"), &old).unwrap();
+        let listing = pending_analyses(&restarted, &meeting_id).unwrap();
+        assert_eq!(listing.items.len(), 2);
+        let readonly = listing
+            .items
+            .iter()
+            .find(|item| item.id == "2123456789abcdef0123456789abcdef")
+            .unwrap();
+        assert!(!readonly.resumable);
+        assert_eq!(readonly.prompt_version, "handymeeting-rust-notes-1");
+        assert!(listing
+            .items
+            .iter()
+            .any(|item| item.id == "0123456789abcdef0123456789abcdef" && item.resumable));
+        assert_eq!(
+            listing.skipped,
+            [meeting_notes::SkippedAnalysis {
+                id: "1123456789abcdef0123456789abcdef".into(),
+                reason: meeting_notes::SkipReason::Damaged,
+            }]
+        );
+        assert_eq!(
+            std::fs::read(damaged.join("snapshot.json")).unwrap(),
+            b"{\"id\":"
+        );
+        assert_eq!(std::fs::read(earlier.join("snapshot.json")).unwrap(), old);
+        let mut resume = request(&meeting_notes::new_job_id());
+        resume.meeting_id = meeting_id.clone();
+        resume.resume_run_id = Some(readonly.id.clone());
+        resume.template = readonly.template.clone();
+        resume.model = readonly.model.clone();
+        assert!(analyze(&restarted, resume)
+            .unwrap_err()
+            .contains("anderen Promptfassung"));
+        assert_eq!(std::fs::read(earlier.join("snapshot.json")).unwrap(), old);
+    }
+
+    fn session_analyses(service: &Service, meeting_id: &str) -> std::path::PathBuf {
+        crate::meeting_files::session_folder(&service.root, meeting_id)
+            .unwrap()
+            .join("analyses")
     }
 
     fn request(id: &str) -> NotesRequest {

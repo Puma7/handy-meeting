@@ -468,6 +468,8 @@ export default function NotesView({
                       {new Date(item.createdAt).toLocaleString(
                         locale === "de" ? "de-DE" : "en-GB",
                       )}
+                      {item.currentPrompt === false &&
+                        ` · ${t.earlierPrompt} (${t.readOnly})`}
                     </option>
                   ))}
                 </select>
@@ -505,6 +507,11 @@ export default function NotesView({
         </div>
       </section>
       <section className="analysis-panel">
+        {result?.currentPrompt === false && (
+          <p className="notice warning" role="note">
+            {t.earlierPrompt}: {result.promptVersion} · {t.earlierPromptResult}
+          </p>
+        )}
         {result && (
           <div className="saved-template-notice">
             <details>
@@ -683,6 +690,11 @@ export default function NotesView({
           aria-labelledby={tabId(activeId)}
           tabIndex={0}
         >
+          {resultSection && rejectedCount(resultSection) > 0 && (
+            <p className="muted rejected-note">
+              {rejectedCount(resultSection)} {t.rejectedItems}
+            </p>
+          )}
           {resultSection ? (
             resultSection.items.length ? (
               <ul className="fact-list">
@@ -734,5 +746,11 @@ export default function NotesView({
         </div>
       </section>
     </>
+  );
+}
+function rejectedCount(section: AnalysisResult["sections"][number]): number {
+  return Object.values(section.rejected ?? {}).reduce(
+    (sum, count) => sum + (count ?? 0),
+    0,
   );
 }

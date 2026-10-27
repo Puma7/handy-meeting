@@ -201,6 +201,19 @@ it("filters forged, stale and wrong-meeting name candidates before they can pref
   const owner = structuredClone(analysis);
   owner.sections[0].items[0].owner = "Anna";
   expect(nameCandidates([owner], meeting)).toEqual([]);
+  // An earlier prompt version stays readable but never feeds new speaker labels.
+  expect(
+    nameCandidates(
+      [
+        {
+          ...analysis,
+          promptVersion: "handymeeting-rust-notes-1",
+          currentPrompt: false,
+        },
+      ],
+      meeting,
+    ),
+  ).toEqual([]);
 });
 it("keeps cancel available while the download request is still running", async () => {
   let status = "available";
