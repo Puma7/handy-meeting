@@ -1,5 +1,4 @@
 use crate::{AudioPart, Result, SessionData, SessionProgress, TranscriptCheckpoint, SAMPLE_RATE};
-use fs2::FileExt;
 use serde::{de::DeserializeOwned, Serialize};
 use sha2::Digest;
 use std::{
@@ -55,7 +54,39 @@ pub struct SessionStore {
     folder: PathBuf,
     // Join the derived writer before releasing the last session lease.
     mirror: Arc<TextMirror>,
+    writers: Arc<Writers>,
     inner: Arc<Mutex<Inner>>,
+}
+
+/// One writer lock per durable file (#18). File writes and fsync run under these and
+/// never under the shared data lock, so a slow transcript or manifest write cannot
+/// delay an audio checkpoint. Lock order: writer lock, then the data lock briefly.
+/// A record becomes visible in memory only after it is durable.
+#[derive(Default)]
+struct Writers {
+    audio: Mutex<()>,
+    transcript: Mutex<()>,
+    manifest: Mutex<()>,
+    #[cfg(test)]
+    test: TestGate,
+}
+
+/// Test hook only: parks a transcript append between validation and its file write,
+/// standing in for a slow fsync on HDD, network or scanned storage.
+#[cfg(test)]
+#[derive(Default)]
+struct TestGate {
+    transcript_io: Mutex<()>,
+    transcript_waiting: std::sync::atomic::AtomicBool,
+}
+#[cfg(test)]
+impl TestGate {
+    fn pause_transcript_io(&self) {
+        use std::sync::atomic::Ordering;
+        self.transcript_waiting.store(true, Ordering::Release);
+        drop(self.transcript_io.lock());
+        self.transcript_waiting.store(false, Ordering::Release);
+    }
 }
 
 struct TextMirror {
@@ -109,6 +140,7 @@ impl SessionStore {
                 sender: Some(sender),
                 worker,
             }),
+            writers: Arc::default(),
             inner,
         }
     }
@@ -403,13 +435,24 @@ impl SessionStore {
         // that point are preserved on disk but never silently advertised as confirmed.
         let mut malformed = 0;
         replay_audio_journal(folder, &mut data, &mut malformed)?;
+        let mut unclosed = 0;
         for part in &mut data.parts {
             validate_part(part)?;
             let audio = safe_audio_path(folder, &part.file)?;
             crate::pcm::verify_confirmed(&audio, part)?;
             part.sample_count = part.confirmed_sample_count;
-            if interrupted {
+            // The exclusive lease is held, so no writer in any process can still append
+            // to this part, and a writer never reattaches to a track that has audio.
+            // Close every part at its confirmed prefix, also after a stopped recording
+            // whose chunk finalization failed (#15). Unconfirmed bytes stay on disk.
+            if !part.audio_closed {
                 part.audio_closed = true;
+                // "complete" is only derived for closed audio; the transcript replay
+                // below re-derives it from the journal for the closed prefix.
+                if part.status == "complete" {
+                    part.status = "pending".into();
+                }
+                unclosed += 1;
             }
         }
         replay_transcript_journal(folder, &mut data, &mut malformed)?;
@@ -425,6 +468,8 @@ impl SessionStore {
         if interrupted {
             warn_data(&mut data, "Recording process was interrupted. Confirmed audio and text recovered; an unconfirmed tail may be missing.");
             data.status = "recorded".into();
+        } else if unclosed > 0 {
+            warn_data(&mut data, "An audio section was not closed when the recording stopped, for example because the disk was full. It was closed at its last confirmed point; an unconfirmed tail may be missing.");
         }
         data.duration_ms = duration(&data.parts);
         let store = Self::from_parts(folder.to_owned(), data, lease);
@@ -439,20 +484,25 @@ impl SessionStore {
 
     pub fn audio_checkpoint(&self, mut part: AudioPart) -> Result<()> {
         validate_part(&part)?;
-        let mut guard = self.inner.lock().map_err(|_| "Session lock was poisoned")?;
-        if let Some(existing) = guard.data.parts.iter().find(|old| old.file == part.file) {
-            if part.confirmed_sample_count < existing.confirmed_sample_count {
-                return Err("Confirmed audio cannot move backward".into());
+        // Serializes audio records, so journal order equals publish order and the
+        // monotonic check below stays valid until this record is published.
+        let _journal = self
+            .writers
+            .audio
+            .lock()
+            .map_err(|_| "Audio journal lock was poisoned")?;
+        {
+            let guard = self.inner.lock().map_err(|_| "Session lock was poisoned")?;
+            if let Some(existing) = guard.data.parts.iter().find(|old| old.file == part.file) {
+                if part.confirmed_sample_count < existing.confirmed_sample_count {
+                    return Err("Confirmed audio cannot move backward".into());
+                }
+                keep_text(&mut part, existing);
             }
-            part.text = existing.text.clone();
-            part.committed_text = existing.committed_text.clone();
-            part.tentative_text = existing.tentative_text.clone();
-            part.processed_samples = existing.processed_samples;
-            part.model_id = existing.model_id.clone();
-            part.status = existing.status.clone();
-            part.transcript_sequence = existing.transcript_sequence;
         }
         append_json(&self.folder.join("audio-journal.jsonl"), &part)?;
+        // Publish only after the record is durable.
+        let mut guard = self.inner.lock().map_err(|_| "Session lock was poisoned")?;
         guard.data.duration_ms = guard
             .data
             .duration_ms
@@ -463,35 +513,51 @@ impl SessionStore {
             .iter_mut()
             .find(|old| old.file == part.file)
         {
+            // Recognition may have advanced while the audio record was synced.
+            keep_text(&mut part, existing);
             *existing = part;
         } else {
             guard.data.parts.push(part);
         }
-        // Journal is committed before UI snapshots can acquire the mutex.
         Ok(())
     }
 
     pub fn append_transcript(&self, mut checkpoint: TranscriptCheckpoint) -> Result<()> {
-        let mut guard = self.inner.lock().map_err(|_| "Session lock was poisoned")?;
-        let part = guard
-            .data
-            .parts
-            .iter()
-            .find(|part| part.file == checkpoint.file)
-            .ok_or("Unknown audio part")?;
-        validate_checkpoint(part, &checkpoint)?;
-        validate_continuity(part, &checkpoint)?;
-        let next = guard
-            .data
-            .snapshot_sequence
-            .checked_add(1)
-            .ok_or("Sequence overflow")?;
-        if checkpoint.sequence != 0 && checkpoint.sequence != next {
-            return Err("Unexpected transcript sequence".into());
-        }
+        // Serializes transcript records: sequence assignment, journal order and publish
+        // order stay identical. Only this path changes text fields and the sequence.
+        let _journal = self
+            .writers
+            .transcript
+            .lock()
+            .map_err(|_| "Transcript journal lock was poisoned")?;
+        let next = {
+            let guard = self.inner.lock().map_err(|_| "Session lock was poisoned")?;
+            let part = guard
+                .data
+                .parts
+                .iter()
+                .find(|part| part.file == checkpoint.file)
+                .ok_or("Unknown audio part")?;
+            // Confirmed audio only grows, so this validation still holds at publish time.
+            validate_checkpoint(part, &checkpoint)?;
+            validate_continuity(part, &checkpoint)?;
+            let next = guard
+                .data
+                .snapshot_sequence
+                .checked_add(1)
+                .ok_or("Sequence overflow")?;
+            if checkpoint.sequence != 0 && checkpoint.sequence != next {
+                return Err("Unexpected transcript sequence".into());
+            }
+            next
+        };
         checkpoint.sequence = next;
         checkpoint.at = now();
+        #[cfg(test)]
+        self.writers.test.pause_transcript_io();
         append_json(&self.folder.join("transcript-journal.jsonl"), &checkpoint)?;
+        // Publish only after the record is durable.
+        let mut guard = self.inner.lock().map_err(|_| "Session lock was poisoned")?;
         let part = guard
             .data
             .parts
@@ -502,6 +568,28 @@ impl SessionStore {
         guard.data.snapshot_sequence = next;
         drop(guard);
         self.queue_text_mirror();
+        Ok(())
+    }
+
+    /// Persist a manifest change without holding the data lock during the write, then
+    /// apply the same idempotent change to the current state. Audio and text recorded
+    /// meanwhile stay in memory; their journals remain authoritative.
+    fn update_manifest(&self, change: impl Fn(&mut SessionData)) -> Result<()> {
+        let _manifest = self
+            .writers
+            .manifest
+            .lock()
+            .map_err(|_| "Session manifest lock was poisoned")?;
+        let mut updated = self
+            .inner
+            .lock()
+            .map_err(|_| "Session lock was poisoned")?
+            .data
+            .clone();
+        change(&mut updated);
+        atomic_json(&self.folder.join("session.json"), &updated)?;
+        let mut guard = self.inner.lock().map_err(|_| "Session lock was poisoned")?;
+        change(&mut guard.data);
         Ok(())
     }
 
@@ -518,39 +606,28 @@ impl SessionStore {
         {
             return Err("Unknown session status".into());
         }
-        let mut guard = self.inner.lock().map_err(|_| "Session lock was poisoned")?;
-        let mut updated = guard.data.clone();
-        updated.status = status.into();
-        if status == "recorded" {
-            updated.ended_at = Some(now());
-        }
-        atomic_json(&self.folder.join("session.json"), &updated)?;
-        guard.data = updated;
-        drop(guard);
+        // Every status after capture records the end once. Without it, a session that
+        // was recovered after a crash and then finished would read as interrupted and
+        // fall back to "recorded" on every later open (#16).
+        let ended_at = (!["recording", "streaming"].contains(&status)).then(now);
+        self.update_manifest(|data| {
+            data.status = status.into();
+            if data.ended_at.is_none() {
+                data.ended_at.clone_from(&ended_at);
+            }
+        })?;
         // An explicit update reconciles text recovered from the journals after a crash.
         self.queue_text_mirror();
         Ok(())
     }
 
     pub fn warn(&self, warning: &str) -> Result<()> {
-        let mut guard = self.inner.lock().map_err(|_| "Session lock was poisoned")?;
-        let mut updated = guard.data.clone();
-        warn_data(&mut updated, warning);
-        atomic_json(&self.folder.join("session.json"), &updated)?;
-        guard.data = updated;
-        Ok(())
+        self.update_manifest(|data| warn_data(data, warning))
     }
 
     /// An inference/UI warning does not imply that the audio capture was incomplete.
     pub fn notice(&self, warning: &str) -> Result<()> {
-        let mut guard = self.inner.lock().map_err(|_| "Session lock was poisoned")?;
-        let mut updated = guard.data.clone();
-        if !updated.warnings.iter().any(|old| old == warning) {
-            updated.warnings.push(warning.into());
-        }
-        atomic_json(&self.folder.join("session.json"), &updated)?;
-        guard.data = updated;
-        Ok(())
+        self.update_manifest(|data| note_data(data, warning))
     }
 
     pub fn transcript_text(&self) -> Result<String> {
@@ -631,21 +708,33 @@ fn replay_audio_journal(
             if part.confirmed_sample_count < existing.confirmed_sample_count {
                 return Ok(());
             }
-            let text = existing.clone();
+            // A manifest saved after recovery closed exactly this confirmed prefix keeps
+            // it closed; the journal itself is never rewritten by recovery.
+            let closed = part.audio_closed
+                || (existing.audio_closed
+                    && existing.confirmed_sample_count == part.confirmed_sample_count
+                    && existing.confirmed_sha256 == part.confirmed_sha256);
+            let mut part = part;
+            keep_text(&mut part, existing);
+            part.audio_closed = closed;
             *existing = part;
-            existing.text = text.text;
-            existing.committed_text = text.committed_text;
-            existing.tentative_text = text.tentative_text;
-            existing.processed_samples = text.processed_samples;
-            existing.model_id = text.model_id;
-            existing.status = text.status;
-            existing.transcript_sequence = text.transcript_sequence;
         } else {
             data.parts.push(part);
         }
         Ok(())
     })?;
     Ok(())
+}
+/// Audio records carry the recognition fields of the part only as a copy; the
+/// transcript journal owns them.
+fn keep_text(part: &mut AudioPart, from: &AudioPart) {
+    part.text = from.text.clone();
+    part.committed_text = from.committed_text.clone();
+    part.tentative_text = from.tentative_text.clone();
+    part.processed_samples = from.processed_samples;
+    part.model_id = from.model_id.clone();
+    part.status = from.status.clone();
+    part.transcript_sequence = from.transcript_sequence;
 }
 fn replay_transcript_journal(
     folder: &Path,
@@ -815,29 +904,27 @@ pub(crate) fn lease(folder: &Path) -> Result<SessionLease> {
         sha2::Sha256::digest(folder.canonicalize()?.to_string_lossy().as_bytes())
     );
     let relocation_path = locks.join(format!("{key}.lock"));
-    if relocation_path.exists() {
-        reject_link(&relocation_path)?;
-    }
+    // A dangling link reads as missing to exists(), and create(true) would follow it.
+    exists_no_link(&relocation_path)?;
     let relocation = OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .truncate(false)
         .open(relocation_path)?;
-    relocation
-        .try_lock_exclusive()
+    // A child process started elsewhere can briefly inherit an open lease handle
+    // between fork and exec; a lease that stays held is still a hard error.
+    crate::metadata::lock_soon(&relocation)
         .map_err(|_| "This session is already active in another process")?;
     let path = folder.join("session.lock");
-    if path.exists() {
-        reject_link(&path)?;
-    }
+    exists_no_link(&path)?;
     let file = OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .truncate(false)
         .open(path)?;
-    file.try_lock_exclusive()
+    crate::metadata::lock_soon(&file)
         .map_err(|_| "This session is already active in another process")?;
     Ok(SessionLease {
         internal: Some(file),
@@ -939,13 +1026,25 @@ pub(crate) fn safe_audio_path(folder: &Path, name: &str) -> Result<PathBuf> {
     let audio = folder.join("audio");
     reject_link(&audio)?;
     let path = audio.join(name);
-    if path.exists() {
-        reject_link(&path)?;
-    }
+    exists_no_link(&path)?;
     Ok(path)
 }
+/// Like `Path::exists`, but any link, including a dangling one that `exists()` reports
+/// as missing, is an error. Use before opening or creating a file in session storage.
+pub(crate) fn exists_no_link(path: &Path) -> Result<bool> {
+    match fs::symlink_metadata(path) {
+        Ok(meta) => {
+            check_not_link(&meta)?;
+            Ok(true)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.into()),
+    }
+}
 pub(crate) fn reject_link(path: &Path) -> Result<()> {
-    let meta = fs::symlink_metadata(path)?;
+    check_not_link(&fs::symlink_metadata(path)?)
+}
+fn check_not_link(meta: &fs::Metadata) -> Result<()> {
     if meta.file_type().is_symlink() {
         return Err("Links are not allowed in session storage".into());
     }
@@ -960,9 +1059,7 @@ pub(crate) fn reject_link(path: &Path) -> Result<()> {
 }
 
 fn append_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
-    if path.exists() {
-        reject_link(path)?;
-    }
+    exists_no_link(path)?;
     let bytes = serde_json::to_vec(value)?;
     if bytes.len() > MAX_JOURNAL_LINE {
         return Err("Journal entry exceeds safety limit".into());
@@ -993,10 +1090,10 @@ fn read_lines<T: DeserializeOwned, F: FnMut(T) -> Result<()>>(
     malformed: &mut usize,
     mut consume: F,
 ) -> Result<()> {
-    if !path.exists() {
+    // A dangling link is rejected, not silently replayed as an empty journal.
+    if !exists_no_link(path)? {
         return Ok(());
     }
-    reject_link(path)?;
     let mut reader = BufReader::new(File::open(path)?);
     let mut line = vec![];
     // Replay one bounded line at a time, regardless of meeting duration.
@@ -1036,12 +1133,10 @@ pub(crate) fn atomic_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
     let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
     temporary.write_all(&bytes)?;
     temporary.as_file().sync_all()?;
-    if path.exists() {
-        reject_link(path)?;
+    if exists_no_link(path)? {
         let backup = path.with_extension("json.bak");
-        if backup.exists() {
-            reject_link(&backup)?;
-        }
+        // fs::copy would write through a dangling backup link.
+        exists_no_link(&backup)?;
         fs::copy(path, &backup)?;
         OpenOptions::new().write(true).open(backup)?.sync_all()?;
     }
@@ -1119,5 +1214,98 @@ mod tests {
         assert_eq!(store.progress().unwrap().total_parts, 480);
         assert_eq!(store.progress().unwrap().complete_parts, 479);
         assert!(!store.recognition_complete().unwrap());
+    }
+
+    #[test]
+    fn briefly_inherited_lease_handle_does_not_fail_open_but_a_held_one_does() {
+        // Synthetic: a second handle stands in for a lease inherited by a child process
+        // between fork and exec.
+        use fs2::FileExt;
+        let root = tempfile::tempdir().unwrap();
+        let store = SessionStore::create(root.path(), "Lease", "m", "s", None).unwrap();
+        let folder = store.folder().to_owned();
+        drop(store);
+        let inherited = File::open(folder.join("session.lock")).unwrap();
+        inherited.try_lock_exclusive().unwrap();
+        let release = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            drop(inherited);
+        });
+        let reopened = SessionStore::open(&folder).unwrap();
+        release.join().unwrap();
+        // An owner that keeps the lease still blocks a second writer.
+        assert!(SessionStore::open(&folder).is_err());
+        drop(reopened);
+        assert!(SessionStore::open(&folder).is_ok());
+    }
+
+    #[test]
+    fn slow_transcript_write_does_not_delay_audio_checkpoints() {
+        // Synthetic (#18): a test gate parks the transcript append exactly where its
+        // journal write and fsync run, standing in for slow storage. No real disk delay.
+        use std::{sync::atomic::Ordering, thread, time::Duration};
+        let root = tempfile::tempdir().unwrap();
+        let store = SessionStore::create(root.path(), "Slow text", "m", "s", None).unwrap();
+        let folder = store.folder().to_owned();
+        let mut writer = crate::PcmWriter::new(store.clone(), "system").unwrap();
+        writer.append(&[1; 1600]).unwrap();
+        writer.checkpoint().unwrap();
+        let part = store.snapshot().unwrap().parts[0].clone();
+        let gate = store.writers.test.transcript_io.lock().unwrap();
+        let recognizer = {
+            let store = store.clone();
+            thread::spawn(move || {
+                store.append_transcript(TranscriptCheckpoint {
+                    sequence: 0,
+                    at: String::new(),
+                    file: part.file.clone(),
+                    model_id: "m".into(),
+                    full: "Parked words".into(),
+                    committed: "Parked words".into(),
+                    tentative: String::new(),
+                    processed_samples: part.confirmed_sample_count,
+                    final_text: false,
+                })
+            })
+        };
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !store
+            .writers
+            .test
+            .transcript_waiting
+            .load(Ordering::Acquire)
+        {
+            assert!(std::time::Instant::now() < deadline, "append never started");
+            thread::sleep(Duration::from_millis(1));
+        }
+        let (done, finished) = mpsc::channel();
+        let capture = thread::spawn(move || {
+            writer.append(&[2; 1600]).unwrap();
+            writer.checkpoint().unwrap();
+            done.send(()).unwrap();
+            writer
+        });
+        finished
+            .recv_timeout(Duration::from_secs(5))
+            .expect("audio checkpoint waited for the parked transcript write");
+        let data = store.snapshot().unwrap();
+        assert_eq!(data.parts[0].confirmed_sample_count, 3200);
+        // A checkpoint becomes visible only after it is durable.
+        assert_eq!(data.snapshot_sequence, 0);
+        assert!(data.parts[0].text.is_none());
+        assert!(!folder.join("transcript-journal.jsonl").exists());
+        drop(gate);
+        recognizer.join().unwrap().unwrap();
+        let data = store.snapshot().unwrap();
+        assert_eq!(data.snapshot_sequence, 1);
+        assert_eq!(data.parts[0].text.as_deref(), Some("Parked words"));
+        assert_eq!(data.parts[0].confirmed_sample_count, 3200);
+        let mut writer = capture.join().unwrap();
+        writer.finish().unwrap();
+        drop(writer);
+        drop(store);
+        let reopened = SessionStore::open(&folder).unwrap().snapshot().unwrap();
+        assert_eq!(reopened.parts[0].confirmed_sample_count, 3200);
+        assert_eq!(reopened.parts[0].text.as_deref(), Some("Parked words"));
     }
 }

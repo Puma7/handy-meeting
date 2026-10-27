@@ -584,3 +584,200 @@ fn legacy_final_batch_manifest_beats_older_stream_and_other_model_journal() {
     assert_eq!([hash(&manifest), hash(&audio), hash(&journal)], before);
     assert!(!root.path().join("session.lock").exists());
 }
+
+#[cfg(unix)]
+#[test]
+fn dangling_links_in_session_storage_are_never_followed_or_created() {
+    // Synthetic links (#21): exists() reports a dangling link as missing, and
+    // create(true) or fs::copy would create its target outside the session.
+    use std::os::unix::fs::symlink;
+    let root = tempfile::tempdir().unwrap();
+    let outside = root.path().join("outside");
+    fs::create_dir(&outside).unwrap();
+    let store = SessionStore::create(root.path(), "Links", "m", "s", None).unwrap();
+    let folder = store.folder().to_owned();
+    let mut writer = PcmWriter::new(store.clone(), "system").unwrap();
+    writer.append(&vec![5; 1600]).unwrap();
+    writer.finish().unwrap();
+    drop(writer);
+    let part = store.snapshot().unwrap().parts[0].clone();
+
+    // Manifest backup: the copy must not write through the link.
+    symlink(outside.join("backup"), folder.join("session.json.bak")).unwrap();
+    let manifest = fs::read(folder.join("session.json")).unwrap();
+    assert!(store.set_status("recorded").is_err());
+    assert!(!outside.join("backup").exists());
+    assert_eq!(fs::read(folder.join("session.json")).unwrap(), manifest);
+    fs::remove_file(folder.join("session.json.bak")).unwrap();
+    store.set_status("recorded").unwrap();
+
+    // Journal append and replay.
+    let journal = folder.join("transcript-journal.jsonl");
+    symlink(outside.join("journal"), &journal).unwrap();
+    let mut text = checkpoint(&part, "Linked text.");
+    text.model_id = "m".into();
+    assert!(store.append_transcript(text).is_err());
+    assert!(!outside.join("journal").exists());
+    assert_eq!(store.snapshot().unwrap().snapshot_sequence, 0);
+    drop(store);
+    assert!(
+        SessionStore::open(&folder).is_err(),
+        "a linked journal is not replayed as an empty one"
+    );
+    assert!(!outside.join("journal").exists());
+    fs::remove_file(&journal).unwrap();
+
+    // Both lease files.
+    let key = format!(
+        "{:x}",
+        Sha256::digest(folder.canonicalize().unwrap().to_string_lossy().as_bytes())
+    );
+    for (lock, target) in [
+        (folder.join("session.lock"), outside.join("session-lock")),
+        (
+            root.path().join(".leases").join(format!("{key}.lock")),
+            outside.join("relocation-lock"),
+        ),
+    ] {
+        let retained = lock.with_extension("retained-by-test");
+        fs::rename(&lock, &retained).unwrap();
+        symlink(&target, &lock).unwrap();
+        assert!(SessionStore::open(&folder).is_err());
+        assert!(!target.exists(), "lease must not create a link target");
+        fs::remove_file(&lock).unwrap();
+        fs::rename(&retained, &lock).unwrap();
+    }
+    let reopened = SessionStore::open(&folder).unwrap();
+    assert_eq!(
+        reopened.snapshot().unwrap().parts[0].confirmed_sample_count,
+        1600
+    );
+}
+
+#[test]
+fn recovered_session_completed_after_resume_stays_complete_on_every_reopen() {
+    // Synthetic crash (#16): the process ends without a stop, so no end time is saved.
+    let root = tempfile::tempdir().unwrap();
+    let store = fixture(root.path());
+    let folder = store.folder().to_owned();
+    drop(store);
+
+    let recovered = SessionStore::open(&folder).unwrap();
+    let data = recovered.snapshot().unwrap();
+    assert_eq!(data.status, "recorded");
+    assert!(data.ended_at.is_none());
+    // Resume as the app does, finish the remaining recognition and mark it complete.
+    recovered.set_status("catching-up").unwrap();
+    let system = data.parts.iter().find(|p| p.source == "system").unwrap();
+    recovered
+        .append_transcript(checkpoint(system, "Confirmed system. Caught up."))
+        .unwrap();
+    assert!(recovered.recognition_complete().unwrap());
+    recovered.set_status("complete").unwrap();
+    let ended_at = recovered.snapshot().unwrap().ended_at;
+    assert!(ended_at.is_some());
+    drop(recovered);
+
+    for _ in 0..2 {
+        let reopened = SessionStore::open(&folder).unwrap();
+        let data = reopened.snapshot().unwrap();
+        assert_eq!(data.status, "complete");
+        assert_eq!(data.ended_at, ended_at);
+        assert!(reopened.recognition_complete().unwrap());
+        assert!(data
+            .parts
+            .iter()
+            .all(|p| p.audio_closed && p.status == "complete"));
+        assert_eq!(
+            data.parts
+                .iter()
+                .find(|p| p.source == "system")
+                .unwrap()
+                .text
+                .as_deref(),
+            Some("Confirmed system. Caught up.")
+        );
+        // The crash remains documented once; no new interruption is reported.
+        assert_eq!(
+            data.warnings
+                .iter()
+                .filter(|w| w.contains("interrupted"))
+                .count(),
+            1
+        );
+        assert!(!data.warnings.iter().any(|w| w.contains("not closed")));
+        drop(reopened);
+        // The search index reads the manifest and must agree with the opened session.
+        assert_eq!(
+            meeting_core::inspect_manifest(&folder).unwrap().status,
+            "complete"
+        );
+    }
+}
+
+#[test]
+fn stopped_session_with_failed_chunk_close_reopens_closed_at_confirmed_prefix() {
+    // Synthetic fault injection (#15): the audio journal cannot be written at the chunk
+    // boundary, as on a full disk, and the recording is then stopped normally.
+    let root = tempfile::tempdir().unwrap();
+    let store =
+        SessionStore::create(root.path(), "Failed close", "synthetic-model", "s", None).unwrap();
+    let folder = store.folder().to_owned();
+    let mut writer = PcmWriter::new(store.clone(), "system").unwrap();
+    for _ in 0..5 {
+        writer.append(&vec![3; 80_000]).unwrap();
+    }
+    writer.checkpoint().unwrap();
+    let journal = folder.join("audio-journal.jsonl");
+    let retained = folder.join("audio-journal.retained-by-test");
+    fs::rename(&journal, &retained).unwrap();
+    fs::create_dir(&journal).unwrap();
+    // The last packet reaches the 30-second boundary; its close cannot be journaled.
+    assert!(writer.append(&vec![4; 80_000]).is_err());
+    fs::remove_dir(&journal).unwrap();
+    fs::rename(&retained, &journal).unwrap();
+    store.set_status("recorded").unwrap();
+    let part = store.snapshot().unwrap().parts[0].clone();
+    assert!(!part.audio_closed);
+    assert_eq!(part.confirmed_sample_count, 400_000);
+    let audio = store.audio_path(&part).unwrap();
+    drop(writer);
+    drop(store);
+    let audio_before = hash(&audio);
+    let journal_before = fs::read(&journal).unwrap();
+
+    let reopened = SessionStore::open(&folder).unwrap();
+    let data = reopened.snapshot().unwrap();
+    assert_eq!(data.status, "recorded");
+    assert!(
+        data.parts[0].audio_closed,
+        "a stopped session must not keep an open part"
+    );
+    assert_eq!(data.parts[0].confirmed_sample_count, 400_000);
+    assert_eq!(data.parts[0].sample_count, 400_000);
+    assert!(data.capture_incomplete);
+    assert!(data.warnings.iter().any(|w| w.contains("not closed")));
+    assert_eq!(
+        hash(&audio),
+        audio_before,
+        "unconfirmed tail bytes stay on disk"
+    );
+    assert_eq!(fs::read(&journal).unwrap(), journal_before);
+    // Recognition of the closed prefix can now finish instead of waiting forever.
+    assert!(!reopened.recognition_complete().unwrap());
+    reopened
+        .append_transcript(checkpoint(&data.parts[0], "Confirmed prefix."))
+        .unwrap();
+    assert!(reopened.recognition_complete().unwrap());
+    reopened.set_status("complete").unwrap();
+    drop(reopened);
+
+    for _ in 0..2 {
+        let again = SessionStore::open(&folder).unwrap();
+        let data = again.snapshot().unwrap();
+        assert!(again.recognition_complete().unwrap());
+        assert_eq!(data.status, "complete");
+        assert_eq!(data.parts[0].text.as_deref(), Some("Confirmed prefix."));
+        assert_eq!(hash(&audio), audio_before);
+    }
+}
