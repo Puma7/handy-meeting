@@ -26,7 +26,10 @@ pub fn discover_handy(explicit: Option<&Path>) -> Result<PathBuf> {
             let applications = home.join("Applications");
             // The unversioned name keeps its earlier priority; downloaded
             // release names such as `Handy_0.9.8_amd64.AppImage` follow.
-            candidates.push(applications.join("Handy.AppImage"));
+            let unversioned = applications.join("Handy.AppImage");
+            if is_executable(&unversioned) {
+                candidates.push(unversioned);
+            }
             candidates.extend(launchable_appimages(&applications, std::env::consts::ARCH));
         }
     }
@@ -181,7 +184,8 @@ fn versioned_appimages(directory: &Path, machine_arch: &str) -> Vec<PathBuf> {
 }
 
 /// Versioned AppImages that can be started. A browser download is often saved without
-/// the execute bit; such a file must not hide an older installation that can run.
+/// the execute bit; such a file must not hide an older installation that can run. The
+/// unversioned `Handy.AppImage` gets the same check.
 fn launchable_appimages(directory: &Path, machine_arch: &str) -> Vec<PathBuf> {
     versioned_appimages(directory, machine_arch)
         .into_iter()
@@ -297,6 +301,11 @@ mod tests {
             mode(&installed, 0o755);
         }
         assert_eq!(launchable_appimages(dir.path(), "x86_64"), [installed]);
+        // The unversioned name is checked the same way before it is offered.
+        let unversioned = dir.path().join("Handy.AppImage");
+        std::fs::write(&unversioned, b"synthetic, never executed").unwrap();
+        assert!(!is_executable(&unversioned));
+        assert!(!is_executable(&dir.path().join("missing.AppImage")));
     }
 
     #[test]
