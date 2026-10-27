@@ -284,6 +284,10 @@ impl Service {
             .map(PathBuf::from)
             .or(self.lock()?.executable.clone());
         let attempt = (|| {
+            // A chosen path is recorded below either way, but only a Handy program is started.
+            if path.as_deref().is_some_and(|p| !plausible_handy_path(p)) {
+                return Err("Bitte die Handy-Programmdatei auswählen (handy, Handy.exe, Handy.app oder eine Handy-AppImage). / Choose the Handy program itself.".to_string());
+            }
             let bridge = HandyBridge::discover(path.as_deref()).map_err(|e| e.to_string())?;
             let catalog = bridge.refresh().map_err(|e| e.to_string())?;
             let models = catalog
@@ -823,6 +827,21 @@ fn validate_id(id: &str) -> AppResult<()> {
     }
     Ok(())
 }
+/// Defence in depth for an executable path that arrives through IPC: only something named like
+/// the Handy program (or its macOS bundle) is ever started for model discovery.
+fn plausible_handy_path(path: &Path) -> bool {
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    name.starts_with("handy")
+        && (name == "handy"
+            || name.ends_with(".exe")
+            || name.ends_with(".app")
+            || name.ends_with(".appimage")
+            || !name.contains('.'))
+}
 fn valid_legacy_id(id: &str) -> bool {
     id.strip_prefix("legacy-")
         .is_some_and(|s| s.len() == 16 && s.bytes().all(|c| c.is_ascii_hexdigit()))
@@ -1270,6 +1289,25 @@ mod service_tests {
         ))
     }
 
+    #[test]
+    fn only_handy_named_programs_are_accepted_as_explicit_executables() {
+        for ok in [
+            "/usr/bin/handy",
+            "C:/Program Files/Handy/Handy.exe",
+            "/Applications/Handy.app",
+            "/home/u/Applications/Handy_0.9.8_amd64.AppImage",
+        ] {
+            assert!(plausible_handy_path(Path::new(ok)), "{ok}");
+        }
+        for bad in [
+            "/bin/sh",
+            "C:/Windows/System32/cmd.exe",
+            "/tmp/handy.sh",
+            "/tmp/payload",
+        ] {
+            assert!(!plausible_handy_path(Path::new(bad)), "{bad}");
+        }
+    }
     #[test]
     fn invalid_explicit_installation_never_reverts_to_an_earlier_executable() {
         let root = fixture_root("installation-choice");

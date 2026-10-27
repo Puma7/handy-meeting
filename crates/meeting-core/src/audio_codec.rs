@@ -265,6 +265,14 @@ impl AudioTool {
     }
     pub fn inspect(path: &Path, cancel: &AtomicBool) -> Result<Self> {
         let path = path.canonicalize()?;
+        // Defence in depth: a path coming through IPC is only ever run if it names FFmpeg.
+        if !path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .is_some_and(|s| s.eq_ignore_ascii_case("ffmpeg"))
+        {
+            return Err("Choose the FFmpeg program itself (ffmpeg or ffmpeg.exe)".into());
+        }
         let (_, sha256) = file_digest(&path)?;
         let bytes = run(&path, &["-version".into()], cancel)?;
         let text = String::from_utf8(bytes)?;
