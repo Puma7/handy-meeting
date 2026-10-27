@@ -225,7 +225,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
+      # cargo install runs third-party build code; it must not find a stored token.
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
       - name: Install pinned Rust tooling and audit tool
         run: |
           set -euo pipefail

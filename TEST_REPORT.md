@@ -411,7 +411,7 @@ Final local UI follow-up before review export: all78 tests in11files passed toge
 
 ## 1.0.3 development verification (27 October 2026, unreleased)
 
-The coordinated Cargo/frontend/Tauri version is 1.0.3. This source state works through issues #15-#25 from the 1.0.2 repository review; it contains PR #14 (1.0.2). No 1.0.3 package, release or CI run is claimed by this entry.
+The coordinated Cargo/frontend/Tauri version is 1.0.3. This source state implements the fixes for issues #15-#19 and #21-#23 from the 1.0.2 repository review and parts of #20, #24 and #25, which stay open for their remaining items; it contains PR #14 (1.0.2). No 1.0.3 package, release or CI run is claimed by this entry.
 
 Executed local checks on Linux x86_64 (container, Rust 1.91.1, Node 22): npm ci, build, TypeScript, Prettier and Vitest (93 tests in 11 files); cargo fmt; clippy with -D warnings for the workspace and for handy-bridge/meeting-core/meeting-notes without default features; the full locked Rust workspace suite (198 passed, 0 failed; standalone child-process and native credential fixtures ignored as before); test_rust_portable.py, test_release*.py and rust-artifacts.mjs self-test. All passed. Vitest also passed 91/91 twice with four busy-loop processes saturating all four cores (synthetic load), after full-App tests had timed out on a slow macOS Intel runner.
 
