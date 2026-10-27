@@ -55,7 +55,39 @@ pub struct SessionStore {
     folder: PathBuf,
     // Join the derived writer before releasing the last session lease.
     mirror: Arc<TextMirror>,
+    writers: Arc<Writers>,
     inner: Arc<Mutex<Inner>>,
+}
+
+/// One writer lock per durable file (#18). File writes and fsync run under these and
+/// never under the shared data lock, so a slow transcript or manifest write cannot
+/// delay an audio checkpoint. Lock order: writer lock, then the data lock briefly.
+/// A record becomes visible in memory only after it is durable.
+#[derive(Default)]
+struct Writers {
+    audio: Mutex<()>,
+    transcript: Mutex<()>,
+    manifest: Mutex<()>,
+    #[cfg(test)]
+    test: TestGate,
+}
+
+/// Test hook only: parks a transcript append between validation and its file write,
+/// standing in for a slow fsync on HDD, network or scanned storage.
+#[cfg(test)]
+#[derive(Default)]
+struct TestGate {
+    transcript_io: Mutex<()>,
+    transcript_waiting: std::sync::atomic::AtomicBool,
+}
+#[cfg(test)]
+impl TestGate {
+    fn pause_transcript_io(&self) {
+        use std::sync::atomic::Ordering;
+        self.transcript_waiting.store(true, Ordering::Release);
+        drop(self.transcript_io.lock());
+        self.transcript_waiting.store(false, Ordering::Release);
+    }
 }
 
 struct TextMirror {
@@ -109,6 +141,7 @@ impl SessionStore {
                 sender: Some(sender),
                 worker,
             }),
+            writers: Arc::default(),
             inner,
         }
     }
@@ -452,14 +485,25 @@ impl SessionStore {
 
     pub fn audio_checkpoint(&self, mut part: AudioPart) -> Result<()> {
         validate_part(&part)?;
-        let mut guard = self.inner.lock().map_err(|_| "Session lock was poisoned")?;
-        if let Some(existing) = guard.data.parts.iter().find(|old| old.file == part.file) {
-            if part.confirmed_sample_count < existing.confirmed_sample_count {
-                return Err("Confirmed audio cannot move backward".into());
+        // Serializes audio records, so journal order equals publish order and the
+        // monotonic check below stays valid until this record is published.
+        let _journal = self
+            .writers
+            .audio
+            .lock()
+            .map_err(|_| "Audio journal lock was poisoned")?;
+        {
+            let guard = self.inner.lock().map_err(|_| "Session lock was poisoned")?;
+            if let Some(existing) = guard.data.parts.iter().find(|old| old.file == part.file) {
+                if part.confirmed_sample_count < existing.confirmed_sample_count {
+                    return Err("Confirmed audio cannot move backward".into());
+                }
+                keep_text(&mut part, existing);
             }
-            keep_text(&mut part, existing);
         }
         append_json(&self.folder.join("audio-journal.jsonl"), &part)?;
+        // Publish only after the record is durable.
+        let mut guard = self.inner.lock().map_err(|_| "Session lock was poisoned")?;
         guard.data.duration_ms = guard
             .data
             .duration_ms
@@ -470,35 +514,51 @@ impl SessionStore {
             .iter_mut()
             .find(|old| old.file == part.file)
         {
+            // Recognition may have advanced while the audio record was synced.
+            keep_text(&mut part, existing);
             *existing = part;
         } else {
             guard.data.parts.push(part);
         }
-        // Journal is committed before UI snapshots can acquire the mutex.
         Ok(())
     }
 
     pub fn append_transcript(&self, mut checkpoint: TranscriptCheckpoint) -> Result<()> {
-        let mut guard = self.inner.lock().map_err(|_| "Session lock was poisoned")?;
-        let part = guard
-            .data
-            .parts
-            .iter()
-            .find(|part| part.file == checkpoint.file)
-            .ok_or("Unknown audio part")?;
-        validate_checkpoint(part, &checkpoint)?;
-        validate_continuity(part, &checkpoint)?;
-        let next = guard
-            .data
-            .snapshot_sequence
-            .checked_add(1)
-            .ok_or("Sequence overflow")?;
-        if checkpoint.sequence != 0 && checkpoint.sequence != next {
-            return Err("Unexpected transcript sequence".into());
-        }
+        // Serializes transcript records: sequence assignment, journal order and publish
+        // order stay identical. Only this path changes text fields and the sequence.
+        let _journal = self
+            .writers
+            .transcript
+            .lock()
+            .map_err(|_| "Transcript journal lock was poisoned")?;
+        let next = {
+            let guard = self.inner.lock().map_err(|_| "Session lock was poisoned")?;
+            let part = guard
+                .data
+                .parts
+                .iter()
+                .find(|part| part.file == checkpoint.file)
+                .ok_or("Unknown audio part")?;
+            // Confirmed audio only grows, so this validation still holds at publish time.
+            validate_checkpoint(part, &checkpoint)?;
+            validate_continuity(part, &checkpoint)?;
+            let next = guard
+                .data
+                .snapshot_sequence
+                .checked_add(1)
+                .ok_or("Sequence overflow")?;
+            if checkpoint.sequence != 0 && checkpoint.sequence != next {
+                return Err("Unexpected transcript sequence".into());
+            }
+            next
+        };
         checkpoint.sequence = next;
         checkpoint.at = now();
+        #[cfg(test)]
+        self.writers.test.pause_transcript_io();
         append_json(&self.folder.join("transcript-journal.jsonl"), &checkpoint)?;
+        // Publish only after the record is durable.
+        let mut guard = self.inner.lock().map_err(|_| "Session lock was poisoned")?;
         let part = guard
             .data
             .parts
@@ -509,6 +569,28 @@ impl SessionStore {
         guard.data.snapshot_sequence = next;
         drop(guard);
         self.queue_text_mirror();
+        Ok(())
+    }
+
+    /// Persist a manifest change without holding the data lock during the write, then
+    /// apply the same idempotent change to the current state. Audio and text recorded
+    /// meanwhile stay in memory; their journals remain authoritative.
+    fn update_manifest(&self, change: impl Fn(&mut SessionData)) -> Result<()> {
+        let _manifest = self
+            .writers
+            .manifest
+            .lock()
+            .map_err(|_| "Session manifest lock was poisoned")?;
+        let mut updated = self
+            .inner
+            .lock()
+            .map_err(|_| "Session lock was poisoned")?
+            .data
+            .clone();
+        change(&mut updated);
+        atomic_json(&self.folder.join("session.json"), &updated)?;
+        let mut guard = self.inner.lock().map_err(|_| "Session lock was poisoned")?;
+        change(&mut guard.data);
         Ok(())
     }
 
@@ -525,42 +607,28 @@ impl SessionStore {
         {
             return Err("Unknown session status".into());
         }
-        let mut guard = self.inner.lock().map_err(|_| "Session lock was poisoned")?;
-        let mut updated = guard.data.clone();
-        updated.status = status.into();
         // Every status after capture records the end once. Without it, a session that
         // was recovered after a crash and then finished would read as interrupted and
         // fall back to "recorded" on every later open (#16).
-        if !["recording", "streaming"].contains(&status) && updated.ended_at.is_none() {
-            updated.ended_at = Some(now());
-        }
-        atomic_json(&self.folder.join("session.json"), &updated)?;
-        guard.data = updated;
-        drop(guard);
+        let ended_at = (!["recording", "streaming"].contains(&status)).then(now);
+        self.update_manifest(|data| {
+            data.status = status.into();
+            if data.ended_at.is_none() {
+                data.ended_at.clone_from(&ended_at);
+            }
+        })?;
         // An explicit update reconciles text recovered from the journals after a crash.
         self.queue_text_mirror();
         Ok(())
     }
 
     pub fn warn(&self, warning: &str) -> Result<()> {
-        let mut guard = self.inner.lock().map_err(|_| "Session lock was poisoned")?;
-        let mut updated = guard.data.clone();
-        warn_data(&mut updated, warning);
-        atomic_json(&self.folder.join("session.json"), &updated)?;
-        guard.data = updated;
-        Ok(())
+        self.update_manifest(|data| warn_data(data, warning))
     }
 
     /// An inference/UI warning does not imply that the audio capture was incomplete.
     pub fn notice(&self, warning: &str) -> Result<()> {
-        let mut guard = self.inner.lock().map_err(|_| "Session lock was poisoned")?;
-        let mut updated = guard.data.clone();
-        if !updated.warnings.iter().any(|old| old == warning) {
-            updated.warnings.push(warning.into());
-        }
-        atomic_json(&self.folder.join("session.json"), &updated)?;
-        guard.data = updated;
-        Ok(())
+        self.update_manifest(|data| note_data(data, warning))
     }
 
     pub fn transcript_text(&self) -> Result<String> {
@@ -1141,5 +1209,75 @@ mod tests {
         assert_eq!(store.progress().unwrap().total_parts, 480);
         assert_eq!(store.progress().unwrap().complete_parts, 479);
         assert!(!store.recognition_complete().unwrap());
+    }
+
+    #[test]
+    fn slow_transcript_write_does_not_delay_audio_checkpoints() {
+        // Synthetic (#18): a test gate parks the transcript append exactly where its
+        // journal write and fsync run, standing in for slow storage. No real disk delay.
+        use std::{sync::atomic::Ordering, thread, time::Duration};
+        let root = tempfile::tempdir().unwrap();
+        let store = SessionStore::create(root.path(), "Slow text", "m", "s", None).unwrap();
+        let folder = store.folder().to_owned();
+        let mut writer = crate::PcmWriter::new(store.clone(), "system").unwrap();
+        writer.append(&[1; 1600]).unwrap();
+        writer.checkpoint().unwrap();
+        let part = store.snapshot().unwrap().parts[0].clone();
+        let gate = store.writers.test.transcript_io.lock().unwrap();
+        let recognizer = {
+            let store = store.clone();
+            thread::spawn(move || {
+                store.append_transcript(TranscriptCheckpoint {
+                    sequence: 0,
+                    at: String::new(),
+                    file: part.file.clone(),
+                    model_id: "m".into(),
+                    full: "Parked words".into(),
+                    committed: "Parked words".into(),
+                    tentative: String::new(),
+                    processed_samples: part.confirmed_sample_count,
+                    final_text: false,
+                })
+            })
+        };
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !store
+            .writers
+            .test
+            .transcript_waiting
+            .load(Ordering::Acquire)
+        {
+            assert!(std::time::Instant::now() < deadline, "append never started");
+            thread::sleep(Duration::from_millis(1));
+        }
+        let (done, finished) = mpsc::channel();
+        let capture = thread::spawn(move || {
+            writer.append(&[2; 1600]).unwrap();
+            writer.checkpoint().unwrap();
+            done.send(()).unwrap();
+            writer
+        });
+        finished
+            .recv_timeout(Duration::from_secs(5))
+            .expect("audio checkpoint waited for the parked transcript write");
+        let data = store.snapshot().unwrap();
+        assert_eq!(data.parts[0].confirmed_sample_count, 3200);
+        // A checkpoint becomes visible only after it is durable.
+        assert_eq!(data.snapshot_sequence, 0);
+        assert!(data.parts[0].text.is_none());
+        assert!(!folder.join("transcript-journal.jsonl").exists());
+        drop(gate);
+        recognizer.join().unwrap().unwrap();
+        let data = store.snapshot().unwrap();
+        assert_eq!(data.snapshot_sequence, 1);
+        assert_eq!(data.parts[0].text.as_deref(), Some("Parked words"));
+        assert_eq!(data.parts[0].confirmed_sample_count, 3200);
+        let mut writer = capture.join().unwrap();
+        writer.finish().unwrap();
+        drop(writer);
+        drop(store);
+        let reopened = SessionStore::open(&folder).unwrap().snapshot().unwrap();
+        assert_eq!(reopened.parts[0].confirmed_sample_count, 3200);
+        assert_eq!(reopened.parts[0].text.as_deref(), Some("Parked words"));
     }
 }
