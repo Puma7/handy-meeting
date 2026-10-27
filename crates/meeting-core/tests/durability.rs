@@ -586,6 +586,67 @@ fn legacy_final_batch_manifest_beats_older_stream_and_other_model_journal() {
 }
 
 #[test]
+fn recovered_session_completed_after_resume_stays_complete_on_every_reopen() {
+    // Synthetic crash (#16): the process ends without a stop, so no end time is saved.
+    let root = tempfile::tempdir().unwrap();
+    let store = fixture(root.path());
+    let folder = store.folder().to_owned();
+    drop(store);
+
+    let recovered = SessionStore::open(&folder).unwrap();
+    let data = recovered.snapshot().unwrap();
+    assert_eq!(data.status, "recorded");
+    assert!(data.ended_at.is_none());
+    // Resume as the app does, finish the remaining recognition and mark it complete.
+    recovered.set_status("catching-up").unwrap();
+    let system = data.parts.iter().find(|p| p.source == "system").unwrap();
+    recovered
+        .append_transcript(checkpoint(system, "Confirmed system. Caught up."))
+        .unwrap();
+    assert!(recovered.recognition_complete().unwrap());
+    recovered.set_status("complete").unwrap();
+    let ended_at = recovered.snapshot().unwrap().ended_at;
+    assert!(ended_at.is_some());
+    drop(recovered);
+
+    for _ in 0..2 {
+        let reopened = SessionStore::open(&folder).unwrap();
+        let data = reopened.snapshot().unwrap();
+        assert_eq!(data.status, "complete");
+        assert_eq!(data.ended_at, ended_at);
+        assert!(reopened.recognition_complete().unwrap());
+        assert!(data
+            .parts
+            .iter()
+            .all(|p| p.audio_closed && p.status == "complete"));
+        assert_eq!(
+            data.parts
+                .iter()
+                .find(|p| p.source == "system")
+                .unwrap()
+                .text
+                .as_deref(),
+            Some("Confirmed system. Caught up.")
+        );
+        // The crash remains documented once; no new interruption is reported.
+        assert_eq!(
+            data.warnings
+                .iter()
+                .filter(|w| w.contains("interrupted"))
+                .count(),
+            1
+        );
+        assert!(!data.warnings.iter().any(|w| w.contains("not closed")));
+        drop(reopened);
+        // The search index reads the manifest and must agree with the opened session.
+        assert_eq!(
+            meeting_core::inspect_manifest(&folder).unwrap().status,
+            "complete"
+        );
+    }
+}
+
+#[test]
 fn stopped_session_with_failed_chunk_close_reopens_closed_at_confirmed_prefix() {
     // Synthetic fault injection (#15): the audio journal cannot be written at the chunk
     // boundary, as on a full disk, and the recording is then stopped normally.

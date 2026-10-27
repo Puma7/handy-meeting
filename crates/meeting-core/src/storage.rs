@@ -457,13 +457,7 @@ impl SessionStore {
             if part.confirmed_sample_count < existing.confirmed_sample_count {
                 return Err("Confirmed audio cannot move backward".into());
             }
-            part.text = existing.text.clone();
-            part.committed_text = existing.committed_text.clone();
-            part.tentative_text = existing.tentative_text.clone();
-            part.processed_samples = existing.processed_samples;
-            part.model_id = existing.model_id.clone();
-            part.status = existing.status.clone();
-            part.transcript_sequence = existing.transcript_sequence;
+            keep_text(&mut part, existing);
         }
         append_json(&self.folder.join("audio-journal.jsonl"), &part)?;
         guard.data.duration_ms = guard
@@ -534,7 +528,10 @@ impl SessionStore {
         let mut guard = self.inner.lock().map_err(|_| "Session lock was poisoned")?;
         let mut updated = guard.data.clone();
         updated.status = status.into();
-        if status == "recorded" {
+        // Every status after capture records the end once. Without it, a session that
+        // was recovered after a crash and then finished would read as interrupted and
+        // fall back to "recorded" on every later open (#16).
+        if !["recording", "streaming"].contains(&status) && updated.ended_at.is_none() {
             updated.ended_at = Some(now());
         }
         atomic_json(&self.folder.join("session.json"), &updated)?;
@@ -644,21 +641,33 @@ fn replay_audio_journal(
             if part.confirmed_sample_count < existing.confirmed_sample_count {
                 return Ok(());
             }
-            let text = existing.clone();
+            // A manifest saved after recovery closed exactly this confirmed prefix keeps
+            // it closed; the journal itself is never rewritten by recovery.
+            let closed = part.audio_closed
+                || (existing.audio_closed
+                    && existing.confirmed_sample_count == part.confirmed_sample_count
+                    && existing.confirmed_sha256 == part.confirmed_sha256);
+            let mut part = part;
+            keep_text(&mut part, existing);
+            part.audio_closed = closed;
             *existing = part;
-            existing.text = text.text;
-            existing.committed_text = text.committed_text;
-            existing.tentative_text = text.tentative_text;
-            existing.processed_samples = text.processed_samples;
-            existing.model_id = text.model_id;
-            existing.status = text.status;
-            existing.transcript_sequence = text.transcript_sequence;
         } else {
             data.parts.push(part);
         }
         Ok(())
     })?;
     Ok(())
+}
+/// Audio records carry the recognition fields of the part only as a copy; the
+/// transcript journal owns them.
+fn keep_text(part: &mut AudioPart, from: &AudioPart) {
+    part.text = from.text.clone();
+    part.committed_text = from.committed_text.clone();
+    part.tentative_text = from.tentative_text.clone();
+    part.processed_samples = from.processed_samples;
+    part.model_id = from.model_id.clone();
+    part.status = from.status.clone();
+    part.transcript_sequence = from.transcript_sequence;
 }
 fn replay_transcript_journal(
     folder: &Path,
