@@ -78,9 +78,19 @@ struct Writers {
 struct TestGate {
     transcript_io: Mutex<()>,
     transcript_waiting: std::sync::atomic::AtomicBool,
+    /// Readable-TXT refresh attempts that fail with an I/O error before touching files.
+    refresh_failures: std::sync::atomic::AtomicUsize,
 }
 #[cfg(test)]
 impl TestGate {
+    fn refresh_fails(&self) -> bool {
+        use std::sync::atomic::Ordering;
+        self.refresh_failures
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |left| {
+                left.checked_sub(1)
+            })
+            .is_ok()
+    }
     fn pause_transcript_io(&self) {
         use std::sync::atomic::Ordering;
         self.transcript_waiting.store(true, Ordering::Release);
@@ -111,6 +121,9 @@ impl SessionStore {
         }));
         let weak = Arc::downgrade(&inner);
         let path = folder.clone();
+        let writers: Arc<Writers> = Arc::default();
+        #[cfg(test)]
+        let gate = Arc::clone(&writers);
         // At most one pending notification. Each write uses the latest confirmed state.
         let (sender, receiver) = mpsc::sync_channel(1);
         let worker = std::thread::Builder::new()
@@ -133,6 +146,10 @@ impl SessionStore {
                                 };
                                 guard.data.clone()
                             };
+                            #[cfg(test)]
+                            if gate.test.refresh_fails() {
+                                return Err(std::io::Error::other("synthetic busy file").into());
+                            }
                             // All filesystem work is outside the audio checkpoint lock.
                             crate::live_text::refresh(&path, &data)
                         },
@@ -157,7 +174,7 @@ impl SessionStore {
                 sender: Some(sender),
                 worker,
             }),
-            writers: Arc::default(),
+            writers,
             inner,
         }
     }
@@ -1299,6 +1316,83 @@ mod tests {
         assert!(SessionStore::open(&folder).is_err());
         drop(reopened);
         assert!(SessionStore::open(&folder).is_ok());
+    }
+
+    #[test]
+    fn readable_text_worker_repeats_a_refresh_after_brief_io_failures() {
+        // Synthetic: a test gate fails refresh attempts with an I/O error, standing in
+        // for a scanner or reader briefly holding the TXT open on Windows.
+        use std::{sync::atomic::Ordering, thread, time::Duration};
+        let root = tempfile::tempdir().unwrap();
+        let store = SessionStore::create(root.path(), "Busy text", "m", "s", None).unwrap();
+        let folder = store.folder().to_owned();
+        let mut writer = crate::PcmWriter::new(store.clone(), "system").unwrap();
+        writer.append(&[1; 1600]).unwrap();
+        writer.finish().unwrap();
+        drop(writer);
+        let failures = &store.writers.test.refresh_failures;
+        let confirm = |text: &str| {
+            let part = store.snapshot().unwrap().parts[0].clone();
+            store
+                .append_transcript(TranscriptCheckpoint {
+                    sequence: 0,
+                    at: String::new(),
+                    file: part.file,
+                    model_id: "m".into(),
+                    full: text.into(),
+                    committed: text.into(),
+                    tentative: String::new(),
+                    processed_samples: part.confirmed_sample_count,
+                    final_text: true,
+                    revision_after_restart: false,
+                })
+                .unwrap();
+        };
+        let has_warning = || {
+            store
+                .snapshot()
+                .unwrap()
+                .warnings
+                .iter()
+                .any(|warning| warning == TXT_WARNING)
+        };
+        let file = folder.join("transcript.txt");
+        let wait = |done: &dyn Fn() -> bool| {
+            let deadline = std::time::Instant::now() + Duration::from_secs(10);
+            while !done() {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "text writer did not finish"
+                );
+                thread::sleep(Duration::from_millis(5));
+            }
+        };
+
+        // Three failed attempts, then the last confirmed text is written without a warning.
+        failures.store(3, Ordering::Release);
+        confirm("Written after three busy attempts.");
+        wait(&|| {
+            fs::read_to_string(&file)
+                .is_ok_and(|text| text.contains("Written after three busy attempts."))
+        });
+        assert_eq!(failures.load(Ordering::Acquire), 0);
+        assert!(!has_warning());
+
+        // A file that stays busy is reported after a bounded number of attempts.
+        failures.store(1000, Ordering::Release);
+        confirm("Written after three busy attempts. Still busy.");
+        wait(&has_warning);
+        let attempts = 1000 - failures.load(Ordering::Acquire);
+        assert!((8..=16).contains(&attempts), "{attempts} attempts");
+        // The earlier readable text and the confirmed journal are untouched.
+        let text = fs::read_to_string(&file).unwrap();
+        assert!(
+            text.contains("Written after three busy attempts.") && !text.contains("Still busy.")
+        );
+        assert!(fs::read_to_string(folder.join("transcript-journal.jsonl"))
+            .unwrap()
+            .contains("Still busy."));
+        failures.store(0, Ordering::Release);
     }
 
     #[test]

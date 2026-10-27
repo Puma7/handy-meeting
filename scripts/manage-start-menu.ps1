@@ -18,11 +18,46 @@ function Get-LinkHash([string]$Path) {
     $stream=[IO.File]::OpenRead($Path)
     try {return [BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-','')} finally {$stream.Dispose();$sha.Dispose()}
 }
-# Release versions sort numerically; a prerelease sorts below its release. Unknown text is $null.
+# A parsed version: numeric release fields and the prerelease identifiers. Unknown text is $null.
 function ConvertTo-HandyVersion([string]$Value) {
-    if (-not ($Value -match '^([0-9]{1,9})\.([0-9]{1,9})\.([0-9]{1,9})(-[A-Za-z0-9.-]+)?$')) {return $null}
-    $release=if ($Matches[4]) {0} else {1}
-    return [version]::new([int]$Matches[1],[int]$Matches[2],[int]$Matches[3],$release)
+    if (-not ($Value -match '^([0-9]{1,9})\.([0-9]{1,9})\.([0-9]{1,9})(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$')) {return $null}
+    $prerelease=[string[]]@()
+    if ($Matches[4]) {$prerelease=[string[]]$Matches[4].Split('.')}
+    return [pscustomobject]@{Release=[version]::new([int]$Matches[1],[int]$Matches[2],[int]$Matches[3]);Prerelease=$prerelease}
+}
+# SemVer precedence, -1, 0 or 1: release fields numerically, then a prerelease below its
+# release, then identifiers left to right (numbers numerically and below text, text
+# ordinally, a shorter list first), so beta.2 follows beta.1 and beta.10 follows beta.9.
+function Compare-HandyVersion($Left,$Right) {
+    $order=$Left.Release.CompareTo($Right.Release)
+    if ($order -ne 0) {return [Math]::Sign($order)}
+    $a=$Left.Prerelease
+    $b=$Right.Prerelease
+    if ($a.Count -eq 0 -or $b.Count -eq 0) {return [Math]::Sign($b.Count-$a.Count)}
+    for ($i=0; $i -lt [Math]::Min($a.Count,$b.Count); $i++) {
+        $x=$a[$i]
+        $y=$b[$i]
+        $xNumber=$x -match '^[0-9]+$'
+        $yNumber=$y -match '^[0-9]+$'
+        if ($xNumber -and $yNumber) {
+            $x=$x.TrimStart('0')
+            $y=$y.TrimStart('0')
+            $order=if ($x.Length -ne $y.Length) {$x.Length-$y.Length} else {[string]::CompareOrdinal($x,$y)}
+        } elseif ($xNumber -or $yNumber) {
+            $order=if ($xNumber) {-1} else {1}
+        } else {
+            $order=[string]::CompareOrdinal($x,$y)
+        }
+        if ($order -ne 0) {return [Math]::Sign($order)}
+    }
+    return [Math]::Sign($a.Count-$b.Count)
+}
+function Select-NewestInstallation($Installations) {
+    $newest=$null
+    foreach ($item in $Installations) {
+        if (-not $newest -or (Compare-HandyVersion $item.Version $newest.Version) -gt 0) {$newest=$item}
+    }
+    return $newest
 }
 # Side-by-side installations registered by this installer for the current user.
 function Get-HandyInstallations {
@@ -80,8 +115,8 @@ try {
     if ($Mode -eq 'uninstall') {
         if ($owned -and $record.Target -eq $program) {
             # Keep a Start menu entry for the newest remaining installation.
-            $remaining=@(Get-HandyInstallations | Where-Object {$_.Program -ne $program} | Sort-Object -Property Version -Descending)
-            if ($remaining.Count -gt 0) {Publish-HandyLink $remaining[0].Program} else {
+            $newest=Select-NewestInstallation @(Get-HandyInstallations | Where-Object {$_.Program -ne $program})
+            if ($newest) {Publish-HandyLink $newest.Program} else {
                 Remove-Item -LiteralPath $shortcut
                 Remove-Item -LiteralPath $owner
             }
@@ -93,7 +128,7 @@ try {
         # Installing an older version beside a newer one keeps the link on the newer version.
         $newVersion=ConvertTo-HandyVersion $Version
         $current=@(Get-HandyInstallations | Where-Object {$_.Program -eq $record.Target})
-        if ($newVersion -and $current.Count -gt 0 -and $newVersion -le $current[0].Version) {exit 4}
+        if ($newVersion -and $current.Count -gt 0 -and (Compare-HandyVersion $newVersion $current[0].Version) -le 0) {exit 4}
     }
     Publish-HandyLink $program
     exit 0
