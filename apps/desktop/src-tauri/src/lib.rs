@@ -238,13 +238,24 @@ impl Service {
             None
         };
         let recording = inner.active.as_ref().is_some_and(|a| a.capture.is_some());
-        let capture_failed = inner
-            .active
-            .as_ref()
-            .and_then(|a| a.capture.as_ref())
-            .is_some_and(|c| !c.is_running());
+        let capture = inner.active.as_ref().and_then(|a| a.capture.as_ref());
+        let capture_failed = capture.is_some_and(|c| !c.is_running());
+        let stopped_tracks = capture.map(|c| c.stopped_tracks()).unwrap_or_default();
         let error = if capture_failed {
             Some("Die Audioaufnahme wurde unterbrochen. Bereits gesicherte Daten bleiben erhalten; bitte das Meeting beenden und das Audiogerät prüfen.".into())
+        } else if !stopped_tracks.is_empty() {
+            let names = stopped_tracks
+                .iter()
+                .map(|s| {
+                    if *s == "microphone" {
+                        "Mikrofon / microphone"
+                    } else {
+                        "Systemaudio / system audio"
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            Some(format!("Eine Audiospur nimmt nicht mehr auf: {names}. Die übrige Spur läuft weiter, gesicherte Daten bleiben erhalten; bitte das Gerät prüfen. / One audio track stopped recording; the other track continues and saved audio is retained."))
         } else {
             inner.error.clone()
         };
@@ -478,14 +489,24 @@ impl Service {
             self.agent.capture_ended();
         }
         active.stop.store(true, Ordering::Release);
-        for worker in active.workers.drain(..) {
-            if worker.join().is_err() {
-                let _=active.store.notice("Ein Erkennungsprozess wurde unterbrochen. Offene Abschnitte können später nachgeholt werden.");
+        // Audio is final once capture has stopped. Recognition of the remaining sections can take
+        // minutes on slow hardware, so it continues as a capture-less catch-up (like `resume`)
+        // instead of holding the transition; `reap_finished` collects it later.
+        let catching_up = active.workers.iter().any(|worker| !worker.is_finished());
+        if catching_up {
+            if capture_result.is_ok() {
+                let _ = active.store.set_status("catching-up");
             }
-        }
-        if let Ok(data) = active.store.snapshot() {
-            if library_service::update(&self.root, &data).is_err() {
-                let _ = active.store.notice("Die Aufnahme ist gespeichert; bitte den lokalen Suchindex unter Einstellungen aktualisieren. / Recording saved; refresh the local search index in Settings.");
+        } else {
+            for worker in active.workers.drain(..) {
+                if worker.join().is_err() {
+                    let _=active.store.notice("Ein Erkennungsprozess wurde unterbrochen. Offene Abschnitte können später nachgeholt werden.");
+                }
+            }
+            if let Ok(data) = active.store.snapshot() {
+                if library_service::update(&self.root, &data).is_err() {
+                    let _ = active.store.notice("Die Aufnahme ist gespeichert; bitte den lokalen Suchindex unter Einstellungen aktualisieren. / Recording saved; refresh the local search index in Settings.");
+                }
             }
         }
         let result: AppResult<MeetingView> = if capture_result.is_err() {
@@ -498,6 +519,9 @@ impl Service {
                 .map_err(|_| "Der gespeicherte Sitzungsstand konnte nicht gelesen werden.".into())
         };
         let mut inner = self.lock()?;
+        if catching_up {
+            inner.active = Some(active);
+        }
         inner.transitioning = false;
         if let Err(error) = &result {
             inner.error = Some(error.clone());
@@ -868,7 +892,13 @@ async fn blocking<T: Send + 'static>(
 #[tauri::command]
 async fn get_app_state(service: State<'_, Arc<Service>>) -> AppResult<AppView> {
     let service = Arc::clone(&service);
-    blocking(move || service.state()).await
+    blocking(move || {
+        // A finished catch-up after stop or resume is collected here, so it never keeps
+        // reporting active work. A failed collection is retried on the next poll.
+        let _ = service.reap_finished();
+        service.state()
+    })
+    .await
 }
 #[tauri::command]
 async fn refresh_handy(
@@ -1290,6 +1320,53 @@ mod service_tests {
         fs::write(&manifest, &bytes).unwrap();
         assert!(service.data(&id).is_err());
         assert_eq!(fs::read(&manifest).unwrap(), bytes);
+    }
+
+    #[test]
+    fn stop_returns_while_recognition_catches_up_and_a_poll_collects_it_later() {
+        let root = fixture_root("stop-catch-up");
+        let store = SessionStore::create(
+            &root.join("sessions"),
+            "Synthetic slow backlog",
+            "fixture-model",
+            "fixture-output",
+            None,
+        )
+        .unwrap();
+        let mut writer = meeting_core::PcmWriter::new(store.clone(), "system").unwrap();
+        writer.append(&[1_i16, 2, 3, 4]).unwrap();
+        writer.finish().unwrap();
+        drop(writer);
+        store.set_status("recorded").unwrap();
+        let service = Service::new(root.clone()).unwrap();
+        // A recognition worker that is still busy with the backlog when the user stops.
+        let (release, wait) = std::sync::mpsc::channel::<()>();
+        let worker = std::thread::spawn(move || {
+            let _ = wait.recv();
+        });
+        service.lock().unwrap().active = Some(Active {
+            owner: None,
+            store: store.clone(),
+            capture: None,
+            stop: Arc::new(AtomicBool::new(false)),
+            workers: vec![worker],
+        });
+        let started = std::time::Instant::now();
+        let view = service.stop().unwrap();
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+        assert_eq!(view.data.status, "catching-up");
+        {
+            let inner = service.lock().unwrap();
+            assert!(!inner.transitioning, "stop must not hold the transition");
+            assert!(inner.active.as_ref().is_some_and(|a| a.capture.is_none()));
+        }
+        release.send(()).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while service.lock().unwrap().active.is_some() {
+            assert!(std::time::Instant::now() < deadline);
+            service.reap_finished().unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
     }
 
     #[test]

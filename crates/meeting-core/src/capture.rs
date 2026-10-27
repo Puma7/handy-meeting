@@ -37,7 +37,7 @@ pub struct CaptureOptions {
 /// There is no unbounded queue between the device and durable storage.
 pub struct CaptureController {
     stop: Arc<AtomicBool>,
-    tracks: Vec<JoinHandle<()>>,
+    tracks: Vec<(&'static str, JoinHandle<()>)>,
     store: SessionStore,
 }
 
@@ -82,7 +82,7 @@ impl CaptureController {
                 let _ = store.warn(&format!("{source}: capture stopped: {error}. Saved audio is retained; check the device before recording again."));
             }
         })?;
-        self.tracks.push(track);
+        self.tracks.push((source, track));
         let timeout = if cfg!(target_os = "macos") { 60 } else { 10 };
         match result.recv_timeout(Duration::from_secs(timeout)) {
             Ok(Ok(())) => Ok(()),
@@ -99,12 +99,26 @@ impl CaptureController {
     }
 
     pub fn is_running(&self) -> bool {
-        !self.stop.load(Ordering::Acquire) && self.tracks.iter().any(|track| !track.is_finished())
+        !self.stop.load(Ordering::Acquire)
+            && self.tracks.iter().any(|(_, track)| !track.is_finished())
+    }
+
+    /// Tracks ("system", "microphone") whose capture ended before an explicit stop, while
+    /// another track may still record. A partly failed capture must stay visible.
+    pub fn stopped_tracks(&self) -> Vec<&'static str> {
+        if self.stop.load(Ordering::Acquire) {
+            return Vec::new();
+        }
+        self.tracks
+            .iter()
+            .filter(|(_, track)| track.is_finished())
+            .map(|(source, _)| *source)
+            .collect()
     }
 
     pub fn stop(&mut self) -> Result<()> {
         self.stop.store(true, Ordering::Release);
-        for track in self.tracks.drain(..) {
+        for (_, track) in self.tracks.drain(..) {
             if track.join().is_err() {
                 self.store.warn(
                     "A recording thread stopped unexpectedly. Confirmed audio is retained.",
@@ -131,5 +145,37 @@ pub fn list_devices() -> Result<Vec<AudioDevice>> {
     #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
     {
         Err("This operating system has no supported audio device adapter.".into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn a_track_that_ends_early_is_reported_while_the_other_keeps_recording() {
+        let root = tempfile::tempdir().unwrap();
+        let store = SessionStore::create(root.path(), "Synthetic", "m", "s", None).unwrap();
+        let stop = Arc::new(AtomicBool::new(false));
+        let keep = Arc::clone(&stop);
+        let system = std::thread::spawn(move || {
+            while !keep.load(Ordering::Acquire) {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+        });
+        let microphone = std::thread::spawn(|| {});
+        let mut controller = CaptureController {
+            stop,
+            tracks: vec![("system", system), ("microphone", microphone)],
+            store,
+        };
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while controller.stopped_tracks().is_empty() {
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(controller.is_running(), "system audio still records");
+        assert_eq!(controller.stopped_tracks(), vec!["microphone"]);
+        controller.stop().unwrap();
+        assert!(controller.stopped_tracks().is_empty());
     }
 }

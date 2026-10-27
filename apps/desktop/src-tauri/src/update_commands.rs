@@ -35,6 +35,7 @@ pub(crate) async fn install_update(
     blocking(move||{
   if !cfg!(target_os="windows"){return Err("Use the official release page for this platform".into());}
   let _gate=service.transition.lock().map_err(|_|"Application state unavailable")?;
+  service.reap_finished()?;
   {let inner=service.lock()?;if inner.active.is_some()||inner.transitioning||service.notes_jobs.running()||service.speaker_jobs.snapshot().is_some_and(|p|p.status=="running")||service.maintenance_jobs.snapshot().is_some_and(|p|p.status=="running")||service.library_jobs.snapshot().is_some_and(|p|p.status=="running"){return Err("Finish recording, recognition, analysis, speaker experiments, archive maintenance and search indexing before installing. / Bitte Aufnahme, Erkennung, Auswertung, Sprecherexperimente, Archivpflege und Indexierung vor der Installation abschließen.".into());}}
   let installer=service.updater.installer()?;
   service.lock()?.transitioning=true;
