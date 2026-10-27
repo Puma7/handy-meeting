@@ -361,7 +361,8 @@ mod tests {
         assert!(LibraryIndex::open(root.path()).is_err());
         let (mut index, aside) = LibraryIndex::open_for_rebuild(root.path()).unwrap();
         let aside = aside.expect("the unreadable index is set aside");
-        assert!(aside.starts_with(&folder));
+        // The root is canonical internally (/private/var on macOS, \\?\ on Windows).
+        assert!(aside.starts_with(folder.canonicalize().unwrap()));
         assert_eq!(fs::read(aside.join("library.sqlite3")).unwrap(), damaged);
         let d = data("0123456789abcdef0123456789abcdef");
         index
