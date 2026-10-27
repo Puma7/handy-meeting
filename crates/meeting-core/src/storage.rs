@@ -1,5 +1,4 @@
 use crate::{AudioPart, Result, SessionData, SessionProgress, TranscriptCheckpoint, SAMPLE_RATE};
-use fs2::FileExt;
 use serde::{de::DeserializeOwned, Serialize};
 use sha2::Digest;
 use std::{
@@ -913,8 +912,9 @@ pub(crate) fn lease(folder: &Path) -> Result<SessionLease> {
         .create(true)
         .truncate(false)
         .open(relocation_path)?;
-    relocation
-        .try_lock_exclusive()
+    // A child process started elsewhere can briefly inherit an open lease handle
+    // between fork and exec; a lease that stays held is still a hard error.
+    crate::metadata::lock_soon(&relocation)
         .map_err(|_| "This session is already active in another process")?;
     let path = folder.join("session.lock");
     exists_no_link(&path)?;
@@ -924,7 +924,7 @@ pub(crate) fn lease(folder: &Path) -> Result<SessionLease> {
         .create(true)
         .truncate(false)
         .open(path)?;
-    file.try_lock_exclusive()
+    crate::metadata::lock_soon(&file)
         .map_err(|_| "This session is already active in another process")?;
     Ok(SessionLease {
         internal: Some(file),
@@ -1214,6 +1214,29 @@ mod tests {
         assert_eq!(store.progress().unwrap().total_parts, 480);
         assert_eq!(store.progress().unwrap().complete_parts, 479);
         assert!(!store.recognition_complete().unwrap());
+    }
+
+    #[test]
+    fn briefly_inherited_lease_handle_does_not_fail_open_but_a_held_one_does() {
+        // Synthetic: a second handle stands in for a lease inherited by a child process
+        // between fork and exec.
+        use fs2::FileExt;
+        let root = tempfile::tempdir().unwrap();
+        let store = SessionStore::create(root.path(), "Lease", "m", "s", None).unwrap();
+        let folder = store.folder().to_owned();
+        drop(store);
+        let inherited = File::open(folder.join("session.lock")).unwrap();
+        inherited.try_lock_exclusive().unwrap();
+        let release = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            drop(inherited);
+        });
+        let reopened = SessionStore::open(&folder).unwrap();
+        release.join().unwrap();
+        // An owner that keeps the lease still blocks a second writer.
+        assert!(SessionStore::open(&folder).is_err());
+        drop(reopened);
+        assert!(SessionStore::open(&folder).is_ok());
     }
 
     #[test]
