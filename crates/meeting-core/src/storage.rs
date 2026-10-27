@@ -905,9 +905,8 @@ pub(crate) fn lease(folder: &Path) -> Result<SessionLease> {
         sha2::Sha256::digest(folder.canonicalize()?.to_string_lossy().as_bytes())
     );
     let relocation_path = locks.join(format!("{key}.lock"));
-    if relocation_path.exists() {
-        reject_link(&relocation_path)?;
-    }
+    // A dangling link reads as missing to exists(), and create(true) would follow it.
+    exists_no_link(&relocation_path)?;
     let relocation = OpenOptions::new()
         .read(true)
         .write(true)
@@ -918,9 +917,7 @@ pub(crate) fn lease(folder: &Path) -> Result<SessionLease> {
         .try_lock_exclusive()
         .map_err(|_| "This session is already active in another process")?;
     let path = folder.join("session.lock");
-    if path.exists() {
-        reject_link(&path)?;
-    }
+    exists_no_link(&path)?;
     let file = OpenOptions::new()
         .read(true)
         .write(true)
@@ -1029,13 +1026,25 @@ pub(crate) fn safe_audio_path(folder: &Path, name: &str) -> Result<PathBuf> {
     let audio = folder.join("audio");
     reject_link(&audio)?;
     let path = audio.join(name);
-    if path.exists() {
-        reject_link(&path)?;
-    }
+    exists_no_link(&path)?;
     Ok(path)
 }
+/// Like `Path::exists`, but any link, including a dangling one that `exists()` reports
+/// as missing, is an error. Use before opening or creating a file in session storage.
+pub(crate) fn exists_no_link(path: &Path) -> Result<bool> {
+    match fs::symlink_metadata(path) {
+        Ok(meta) => {
+            check_not_link(&meta)?;
+            Ok(true)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.into()),
+    }
+}
 pub(crate) fn reject_link(path: &Path) -> Result<()> {
-    let meta = fs::symlink_metadata(path)?;
+    check_not_link(&fs::symlink_metadata(path)?)
+}
+fn check_not_link(meta: &fs::Metadata) -> Result<()> {
     if meta.file_type().is_symlink() {
         return Err("Links are not allowed in session storage".into());
     }
@@ -1050,9 +1059,7 @@ pub(crate) fn reject_link(path: &Path) -> Result<()> {
 }
 
 fn append_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
-    if path.exists() {
-        reject_link(path)?;
-    }
+    exists_no_link(path)?;
     let bytes = serde_json::to_vec(value)?;
     if bytes.len() > MAX_JOURNAL_LINE {
         return Err("Journal entry exceeds safety limit".into());
@@ -1083,10 +1090,10 @@ fn read_lines<T: DeserializeOwned, F: FnMut(T) -> Result<()>>(
     malformed: &mut usize,
     mut consume: F,
 ) -> Result<()> {
-    if !path.exists() {
+    // A dangling link is rejected, not silently replayed as an empty journal.
+    if !exists_no_link(path)? {
         return Ok(());
     }
-    reject_link(path)?;
     let mut reader = BufReader::new(File::open(path)?);
     let mut line = vec![];
     // Replay one bounded line at a time, regardless of meeting duration.
@@ -1126,12 +1133,10 @@ pub(crate) fn atomic_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
     let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
     temporary.write_all(&bytes)?;
     temporary.as_file().sync_all()?;
-    if path.exists() {
-        reject_link(path)?;
+    if exists_no_link(path)? {
         let backup = path.with_extension("json.bak");
-        if backup.exists() {
-            reject_link(&backup)?;
-        }
+        // fs::copy would write through a dangling backup link.
+        exists_no_link(&backup)?;
         fs::copy(path, &backup)?;
         OpenOptions::new().write(true).open(backup)?.sync_all()?;
     }

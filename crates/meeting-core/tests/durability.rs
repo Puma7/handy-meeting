@@ -585,6 +585,75 @@ fn legacy_final_batch_manifest_beats_older_stream_and_other_model_journal() {
     assert!(!root.path().join("session.lock").exists());
 }
 
+#[cfg(unix)]
+#[test]
+fn dangling_links_in_session_storage_are_never_followed_or_created() {
+    // Synthetic links (#21): exists() reports a dangling link as missing, and
+    // create(true) or fs::copy would create its target outside the session.
+    use std::os::unix::fs::symlink;
+    let root = tempfile::tempdir().unwrap();
+    let outside = root.path().join("outside");
+    fs::create_dir(&outside).unwrap();
+    let store = SessionStore::create(root.path(), "Links", "m", "s", None).unwrap();
+    let folder = store.folder().to_owned();
+    let mut writer = PcmWriter::new(store.clone(), "system").unwrap();
+    writer.append(&vec![5; 1600]).unwrap();
+    writer.finish().unwrap();
+    drop(writer);
+    let part = store.snapshot().unwrap().parts[0].clone();
+
+    // Manifest backup: the copy must not write through the link.
+    symlink(outside.join("backup"), folder.join("session.json.bak")).unwrap();
+    let manifest = fs::read(folder.join("session.json")).unwrap();
+    assert!(store.set_status("recorded").is_err());
+    assert!(!outside.join("backup").exists());
+    assert_eq!(fs::read(folder.join("session.json")).unwrap(), manifest);
+    fs::remove_file(folder.join("session.json.bak")).unwrap();
+    store.set_status("recorded").unwrap();
+
+    // Journal append and replay.
+    let journal = folder.join("transcript-journal.jsonl");
+    symlink(outside.join("journal"), &journal).unwrap();
+    let mut text = checkpoint(&part, "Linked text.");
+    text.model_id = "m".into();
+    assert!(store.append_transcript(text).is_err());
+    assert!(!outside.join("journal").exists());
+    assert_eq!(store.snapshot().unwrap().snapshot_sequence, 0);
+    drop(store);
+    assert!(
+        SessionStore::open(&folder).is_err(),
+        "a linked journal is not replayed as an empty one"
+    );
+    assert!(!outside.join("journal").exists());
+    fs::remove_file(&journal).unwrap();
+
+    // Both lease files.
+    let key = format!(
+        "{:x}",
+        Sha256::digest(folder.canonicalize().unwrap().to_string_lossy().as_bytes())
+    );
+    for (lock, target) in [
+        (folder.join("session.lock"), outside.join("session-lock")),
+        (
+            root.path().join(".leases").join(format!("{key}.lock")),
+            outside.join("relocation-lock"),
+        ),
+    ] {
+        let retained = lock.with_extension("retained-by-test");
+        fs::rename(&lock, &retained).unwrap();
+        symlink(&target, &lock).unwrap();
+        assert!(SessionStore::open(&folder).is_err());
+        assert!(!target.exists(), "lease must not create a link target");
+        fs::remove_file(&lock).unwrap();
+        fs::rename(&retained, &lock).unwrap();
+    }
+    let reopened = SessionStore::open(&folder).unwrap();
+    assert_eq!(
+        reopened.snapshot().unwrap().parts[0].confirmed_sample_count,
+        1600
+    );
+}
+
 #[test]
 fn recovered_session_completed_after_resume_stays_complete_on_every_reopen() {
     // Synthetic crash (#16): the process ends without a stop, so no end time is saved.

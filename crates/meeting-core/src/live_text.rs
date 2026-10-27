@@ -1,6 +1,6 @@
 //! Readable derived TXT follows confirmed journals; failures never control capture.
 use crate::{
-    storage::{atomic_json, reject_link, render_transcript},
+    storage::{atomic_json, exists_no_link, reject_link, render_transcript},
     Result, SessionData,
 };
 use serde::{Deserialize, Serialize};
@@ -72,8 +72,7 @@ fn write(
     let bytes = text.as_bytes();
     let next = digest(bytes);
     let mut current = next.clone();
-    if file.exists() {
-        reject_link(&file)?;
+    if exists_no_link(&file)? {
         let mut previous = Vec::new();
         fs::File::open(&file)?
             .take(32 * 1024 * 1024 + 1)
