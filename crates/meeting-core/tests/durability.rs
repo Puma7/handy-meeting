@@ -584,3 +584,70 @@ fn legacy_final_batch_manifest_beats_older_stream_and_other_model_journal() {
     assert_eq!([hash(&manifest), hash(&audio), hash(&journal)], before);
     assert!(!root.path().join("session.lock").exists());
 }
+
+#[test]
+fn stopped_session_with_failed_chunk_close_reopens_closed_at_confirmed_prefix() {
+    // Synthetic fault injection (#15): the audio journal cannot be written at the chunk
+    // boundary, as on a full disk, and the recording is then stopped normally.
+    let root = tempfile::tempdir().unwrap();
+    let store =
+        SessionStore::create(root.path(), "Failed close", "synthetic-model", "s", None).unwrap();
+    let folder = store.folder().to_owned();
+    let mut writer = PcmWriter::new(store.clone(), "system").unwrap();
+    for _ in 0..5 {
+        writer.append(&vec![3; 80_000]).unwrap();
+    }
+    writer.checkpoint().unwrap();
+    let journal = folder.join("audio-journal.jsonl");
+    let retained = folder.join("audio-journal.retained-by-test");
+    fs::rename(&journal, &retained).unwrap();
+    fs::create_dir(&journal).unwrap();
+    // The last packet reaches the 30-second boundary; its close cannot be journaled.
+    assert!(writer.append(&vec![4; 80_000]).is_err());
+    fs::remove_dir(&journal).unwrap();
+    fs::rename(&retained, &journal).unwrap();
+    store.set_status("recorded").unwrap();
+    let part = store.snapshot().unwrap().parts[0].clone();
+    assert!(!part.audio_closed);
+    assert_eq!(part.confirmed_sample_count, 400_000);
+    let audio = store.audio_path(&part).unwrap();
+    drop(writer);
+    drop(store);
+    let audio_before = hash(&audio);
+    let journal_before = fs::read(&journal).unwrap();
+
+    let reopened = SessionStore::open(&folder).unwrap();
+    let data = reopened.snapshot().unwrap();
+    assert_eq!(data.status, "recorded");
+    assert!(
+        data.parts[0].audio_closed,
+        "a stopped session must not keep an open part"
+    );
+    assert_eq!(data.parts[0].confirmed_sample_count, 400_000);
+    assert_eq!(data.parts[0].sample_count, 400_000);
+    assert!(data.capture_incomplete);
+    assert!(data.warnings.iter().any(|w| w.contains("not closed")));
+    assert_eq!(
+        hash(&audio),
+        audio_before,
+        "unconfirmed tail bytes stay on disk"
+    );
+    assert_eq!(fs::read(&journal).unwrap(), journal_before);
+    // Recognition of the closed prefix can now finish instead of waiting forever.
+    assert!(!reopened.recognition_complete().unwrap());
+    reopened
+        .append_transcript(checkpoint(&data.parts[0], "Confirmed prefix."))
+        .unwrap();
+    assert!(reopened.recognition_complete().unwrap());
+    reopened.set_status("complete").unwrap();
+    drop(reopened);
+
+    for _ in 0..2 {
+        let again = SessionStore::open(&folder).unwrap();
+        let data = again.snapshot().unwrap();
+        assert!(again.recognition_complete().unwrap());
+        assert_eq!(data.status, "complete");
+        assert_eq!(data.parts[0].text.as_deref(), Some("Confirmed prefix."));
+        assert_eq!(hash(&audio), audio_before);
+    }
+}

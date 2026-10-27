@@ -403,13 +403,24 @@ impl SessionStore {
         // that point are preserved on disk but never silently advertised as confirmed.
         let mut malformed = 0;
         replay_audio_journal(folder, &mut data, &mut malformed)?;
+        let mut unclosed = 0;
         for part in &mut data.parts {
             validate_part(part)?;
             let audio = safe_audio_path(folder, &part.file)?;
             crate::pcm::verify_confirmed(&audio, part)?;
             part.sample_count = part.confirmed_sample_count;
-            if interrupted {
+            // The exclusive lease is held, so no writer in any process can still append
+            // to this part, and a writer never reattaches to a track that has audio.
+            // Close every part at its confirmed prefix, also after a stopped recording
+            // whose chunk finalization failed (#15). Unconfirmed bytes stay on disk.
+            if !part.audio_closed {
                 part.audio_closed = true;
+                // "complete" is only derived for closed audio; the transcript replay
+                // below re-derives it from the journal for the closed prefix.
+                if part.status == "complete" {
+                    part.status = "pending".into();
+                }
+                unclosed += 1;
             }
         }
         replay_transcript_journal(folder, &mut data, &mut malformed)?;
@@ -425,6 +436,8 @@ impl SessionStore {
         if interrupted {
             warn_data(&mut data, "Recording process was interrupted. Confirmed audio and text recovered; an unconfirmed tail may be missing.");
             data.status = "recorded".into();
+        } else if unclosed > 0 {
+            warn_data(&mut data, "An audio section was not closed when the recording stopped, for example because the disk was full. It was closed at its last confirmed point; an unconfirmed tail may be missing.");
         }
         data.duration_ms = duration(&data.parts);
         let store = Self::from_parts(folder.to_owned(), data, lease);
