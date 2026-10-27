@@ -243,6 +243,19 @@ pub(crate) async fn choose_legacy_manifest(
 mod tests {
     use super::*;
     #[test]
+    fn relative_paths_never_become_native_file_grants() {
+        for (purpose, path) in [
+            (Purpose::Handy, "Handy.exe"),
+            (Purpose::Ffmpeg, "ffmpeg"),
+            (Purpose::Legacy, "legacy-fixture/session.json"),
+        ] {
+            assert!(inspect(purpose, Path::new(path)).is_err());
+            assert!(Selections::default()
+                .verify(purpose, Path::new(path))
+                .is_err());
+        }
+    }
+    #[test]
     fn discovered_handy_updates_rediscover_without_becoming_native_path_grants() {
         let root = std::env::temp_dir().join(format!(
             "meeting-discovered-update-{}",

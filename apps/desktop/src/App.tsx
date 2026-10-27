@@ -83,6 +83,9 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     [busy, setBusy] = useState(false),
     [isStopping, setIsStopping] = useState(false),
     [refreshingHandy, setRefreshingHandy] = useState(false),
+    [handyRefreshFailure, setHandyRefreshFailure] = useState<string | null>(
+      null,
+    ),
     [copied, setCopied] = useState<"transcript" | "notes" | null>(null);
   const [fileExport, setFileExport] = useState<{
     id: string;
@@ -166,6 +169,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     initialCatalogSeen = useRef(false),
     lastModelRefresh = useRef(Date.now()),
     modelRefreshInFlight = useRef<Promise<void> | null>(null),
+    catalogueFailure = useRef<string | null>(null),
     mounted = useRef(true),
     copyTimer = useRef<ReturnType<typeof setTimeout>>();
   const template =
@@ -173,7 +177,9 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
   const templatePending = useRef(templateStore.pending);
   templatePending.current = templateStore.pending;
   const result = analyses.find((item) => item.id === resultId);
-  const models = (app?.handy?.models ?? []).filter(
+  const models = (
+    handyRefreshFailure !== null ? [] : (app?.handy?.models ?? [])
+  ).filter(
     (item) =>
       item.isDownloaded && item.supportsStreaming && !item.compatibilityError,
   );
@@ -355,13 +361,13 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       initialModelSelected.current = true;
       if (!models.some((item) => item.id === modelId)) {
         setModelId("");
-        setError(t.modelUnavailable);
+        setError(handyRefreshFailure || app.handy.error || t.modelUnavailable);
       }
     } else if (!initialModelSelected.current && models.length) {
       initialModelSelected.current = true;
       setModelId(models[0].id);
     }
-  }, [app?.handy, modelId, t.modelUnavailable]);
+  }, [app?.handy, modelId, handyRefreshFailure, t.modelUnavailable]);
   const applyDevices = useCallback((items: AudioDevice[]) => {
     setDevices(items);
     setSystemId((old) =>
@@ -476,10 +482,31 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         setRefreshingHandy(true);
         // The backend retains discovery/native origin. A displayed cached path
         // must not turn an automatic refresh into an explicit file selection.
-        const handy = await api.refreshHandy(
-          automatic ? null : (selectedPath ?? (handyPath.trim() || null)),
-        );
+        const handy = await api
+          .refreshHandy(
+            automatic ? null : (selectedPath ?? (handyPath.trim() || null)),
+          )
+          .catch(async (failure) => {
+            const reason = errorMessage(failure) || t.modelUnavailable;
+            // This gate is independent of status-poll ordering. A newer poll can
+            // supersede the reread below, but cannot restore an invalid model.
+            catalogueFailure.current = reason;
+            if (mounted.current) {
+              setHandyRefreshFailure(reason);
+              setModelId("");
+            }
+            // A rejected refresh can invalidate the backend catalogue. Re-read
+            // it before releasing the busy state so stale models cannot start.
+            if (mounted.current) await poll();
+            throw failure;
+          });
         if (!mounted.current) return;
+        // Only a successful program/model query may clear a prior failure gate;
+        // an older getAppState response has no authority to clear it.
+        catalogueFailure.current =
+          handy.error == null ? null : handy.error || t.modelUnavailable;
+        setHandyRefreshFailure(catalogueFailure.current);
+        if (catalogueFailure.current !== null) setModelId("");
         requestSequence.current++;
         setApp((previous) =>
           previous ? { ...previous, handy } : { ...fresh, handy },
@@ -495,7 +522,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         if (mounted.current) setRefreshingHandy(false);
       }
     },
-    [api, handyPath],
+    [api, handyPath, poll, t.modelUnavailable],
   );
   useEffect(() => {
     const onFocus = () => {
@@ -648,6 +675,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
   }
   async function start() {
     await action(async () => {
+      if (catalogueFailure.current !== null)
+        throw new Error(catalogueFailure.current);
       const item = await api.startMeeting({
         title: title.trim() || defaultMeetingTitle(locale),
         modelId,

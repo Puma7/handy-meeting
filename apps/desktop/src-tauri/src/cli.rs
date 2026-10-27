@@ -94,6 +94,11 @@ fn application_checks(output: Option<&str>, include_installed: bool) -> AppResul
         return Err("Integration check output already exists; preserve previous evidence.".into());
     }
     fs::create_dir_all(&output).map_err(|_| "Cannot create integration check directory")?;
+    // Only our newly created diagnostic fixture gains an absolute path. Native/IPC
+    // selections still require their own absolute, purpose-bound human approval.
+    let output = output
+        .canonicalize()
+        .map_err(|_| "Cannot resolve the newly created integration check directory")?;
     let service = Service::new(output.join("application-data"))?;
     let installed = if include_installed {
         let (_, catalog, _) = service.refresh(None)?;
