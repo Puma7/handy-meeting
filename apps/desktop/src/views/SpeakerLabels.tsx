@@ -62,12 +62,9 @@ export default function SpeakerLabels({
   }, [meeting.id]);
   // Source hashes come from the backend; reload them whenever recognition revises a section,
   // so a label confirmed for earlier text is shown as stale instead of confirmed.
+  // A full-text digest catches every revision, including same-length corrections.
   const textSignature = meeting.parts
-    // Length, status and tail keep this cheap for long meetings while catching revisions.
-    .map(
-      (p) =>
-        `${p.file ?? ""}:${p.status}:${p.text?.length ?? 0}:${p.text?.slice(-64) ?? ""}`,
-    )
+    .map((p) => `${p.file ?? ""}:${p.status}:${textDigest(p.text ?? "")}`)
     .join("\u0000");
   useEffect(() => {
     let active = true;
@@ -318,4 +315,13 @@ export default function SpeakerLabels({
       )}
     </details>
   );
+}
+/** FNV-1a over the whole text: cheap enough per render, sensitive to any change. */
+function textDigest(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return `${text.length}.${hash.toString(16)}`;
 }

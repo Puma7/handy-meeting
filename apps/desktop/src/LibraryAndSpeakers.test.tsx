@@ -246,3 +246,30 @@ it("reloads label hashes when recognition revises a section", async () => {
   rerender(<SpeakerLabels api={api} meeting={revised} locale="en" />);
   await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
 });
+it("reloads label hashes after a same-length correction early in a long section", async () => {
+  const get = vi.fn().mockResolvedValue({
+    revision: 1,
+    enabled: true,
+    assignments: [],
+    sources: {},
+  });
+  const api = {
+    getSpeakerLabels: get,
+    saveSpeakerLabels: vi.fn(),
+  } as unknown as DesktopApi;
+  const long = "A".repeat(200) + " confirmed ending of the section";
+  const original = {
+    ...meeting,
+    parts: meeting.parts.map((p) => ({ ...p, text: long })),
+  };
+  const { rerender } = render(
+    <SpeakerLabels api={api} meeting={original} locale="en" />,
+  );
+  await waitFor(() => expect(get).toHaveBeenCalledTimes(1));
+  const corrected = {
+    ...meeting,
+    parts: meeting.parts.map((p) => ({ ...p, text: "B" + long.slice(1) })),
+  };
+  rerender(<SpeakerLabels api={api} meeting={corrected} locale="en" />);
+  await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+});
