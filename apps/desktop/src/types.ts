@@ -413,18 +413,23 @@ export interface SpeakerDocument {
   assignments: SpeakerAssignment[];
 }
 
+export interface ArchiveReceipt {
+  archiveId: string;
+  meetingId: string;
+  kind: string;
+  archiveBytes: number;
+  originalBytes: number;
+  createdAt: string;
+}
 export interface ArchiveEntry {
-  receipt: {
-    archiveId: string;
-    meetingId: string;
-    kind: string;
-    archiveBytes: number;
-    originalBytes: number;
-    createdAt: string;
-  };
+  archiveId: string;
+  /** Null when the receipt could not be read; its files are still preserved. */
+  receipt: ArchiveReceipt | null;
   title: string;
   sessionPresent: boolean;
   sourceCopyRetained: boolean;
+  /** Which record could not be read. Such entries offer no restore or compaction. */
+  unreadable: "receipt" | "labels" | null;
 }
 export interface UnfinishedDeletion {
   logId: string;

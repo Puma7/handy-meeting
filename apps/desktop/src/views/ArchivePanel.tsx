@@ -59,7 +59,7 @@ export default function ArchivePanel({
     setBusy(true);
     setError(null);
     try {
-      await api.restoreArchive(selected.receipt.archiveId, true);
+      await api.restoreArchive(selected.archiveId, true);
       setSelected(null);
     } catch (e) {
       setError(errorMessage(e));
@@ -72,7 +72,7 @@ export default function ArchivePanel({
     setBusy(true);
     setError(null);
     try {
-      await api.compactArchive(compact.receipt.archiveId, true);
+      await api.compactArchive(compact.archiveId, true);
       setCompact(null);
     } catch (e) {
       setError(errorMessage(e));
@@ -161,66 +161,94 @@ export default function ArchivePanel({
       {page && (
         <>
           <ul>
-            {page.items.map((item) => (
-              <li key={item.receipt.archiveId}>
-                <strong>{item.title}</strong>
-                <p>
-                  {item.receipt.kind === "audio-only"
-                    ? de
-                      ? "Nur Audio"
-                      : "Audio only"
-                    : de
-                      ? "Ganzes Meeting"
-                      : "Whole meeting"}{" "}
-                  · {Math.ceil(item.receipt.archiveBytes / 1024)} KiB ·{" "}
-                  {item.receipt.createdAt}
-                </p>
-                {item.sourceCopyRetained && (
-                  <p className="muted">
-                    {de
-                      ? "Geprüftes ZIP und zusätzliche Originalkopie vorhanden"
-                      : "Verified ZIP and additional original copy retained"}
+            {page.items.map((item) => {
+              const receipt = item.receipt;
+              if (!receipt || item.unreadable === "receipt") {
+                return (
+                  <li key={item.archiveId}>
+                    <strong>
+                      {de ? "Nicht lesbares Archiv" : "Unreadable archive"}
+                    </strong>{" "}
+                    <code>{item.archiveId}</code>
+                    <p role="status">
+                      {de
+                        ? "Der Archivbeleg ist nicht lesbar, möglicherweise stammt er aus einer neueren Version. Alle Dateien bleiben unverändert erhalten. Wiederherstellen ist hier nicht möglich; bitte mit der passenden Version öffnen oder den lokalen Archivordner prüfen."
+                        : "The archive receipt cannot be read; it may come from a newer version. All files are kept unchanged. Restoring is not available here; open it with a matching version or inspect the local archive folder."}
+                    </p>
+                  </li>
+                );
+              }
+              if (item.unreadable === "labels") {
+                return (
+                  <li key={item.archiveId}>
+                    <strong>{item.title}</strong>
+                    <p role="status">
+                      {de
+                        ? "Die gespeicherten Meetingbezeichnungen sind nicht lesbar. Archiv und Bezeichnungen bleiben unverändert erhalten. Wiederherstellen ist erst nach Prüfung der Bezeichnungen möglich."
+                        : "The saved meeting labels cannot be read. The archive and the labels are kept unchanged. Restoring is available only after the labels have been checked."}
+                    </p>
+                  </li>
+                );
+              }
+              return (
+                <li key={item.archiveId}>
+                  <strong>{item.title}</strong>
+                  <p>
+                    {receipt.kind === "audio-only"
+                      ? de
+                        ? "Nur Audio"
+                        : "Audio only"
+                      : de
+                        ? "Ganzes Meeting"
+                        : "Whole meeting"}{" "}
+                    · {Math.ceil(receipt.archiveBytes / 1024)} KiB ·{" "}
+                    {receipt.createdAt}
                   </p>
-                )}
-                {item.sourceCopyRetained && api.compactArchive && (
+                  {item.sourceCopyRetained && (
+                    <p className="muted">
+                      {de
+                        ? "Geprüftes ZIP und zusätzliche Originalkopie vorhanden"
+                        : "Verified ZIP and additional original copy retained"}
+                    </p>
+                  )}
+                  {item.sourceCopyRetained && api.compactArchive && (
+                    <button
+                      className="secondary"
+                      disabled={busy || running}
+                      onClick={() => {
+                        setCompact(item);
+                        setSelected(null);
+                      }}
+                    >
+                      {de
+                        ? "Archiv platzsparend aufbewahren"
+                        : "Keep archive compactly"}
+                    </button>
+                  )}
                   <button
                     className="secondary"
-                    disabled={busy || running}
+                    disabled={
+                      busy ||
+                      running ||
+                      (receipt.kind === "whole-meeting" && item.sessionPresent)
+                    }
                     onClick={() => {
-                      setCompact(item);
-                      setSelected(null);
+                      setSelected(item);
+                      setCompact(null);
                     }}
                   >
-                    {de
-                      ? "Archiv platzsparend aufbewahren"
-                      : "Keep archive compactly"}
+                    {de ? "Wiederherstellung prüfen" : "Review restoration"}
                   </button>
-                )}
-                <button
-                  className="secondary"
-                  disabled={
-                    busy ||
-                    running ||
-                    (item.receipt.kind === "whole-meeting" &&
-                      item.sessionPresent)
-                  }
-                  onClick={() => {
-                    setSelected(item);
-                    setCompact(null);
-                  }}
-                >
-                  {de ? "Wiederherstellung prüfen" : "Review restoration"}
-                </button>
-                {item.sessionPresent &&
-                  item.receipt.kind === "whole-meeting" && (
+                  {item.sessionPresent && receipt.kind === "whole-meeting" && (
                     <p>
                       {de
                         ? "Meeting ist bereits in der normalen Historie vorhanden."
                         : "Meeting already exists in normal history."}
                     </p>
                   )}
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
           {!page.items.length && (
             <p>

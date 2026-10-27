@@ -28,6 +28,40 @@ pub(crate) fn lock_soon(file: &fs::File) -> std::io::Result<()> {
     }
 }
 
+/// Rejects any link at `path`, including a dangling one that `Path::exists` reports as absent.
+/// A missing path is accepted so the caller may create it.
+pub(crate) fn reject_link_if_present(path: &Path) -> Result<()> {
+    match fs::symlink_metadata(path) {
+        Ok(_) => reject_link(path),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Opens or creates a lock file without following a link, not even a dangling one, so no
+/// file is ever created or locked outside the storage folder.
+pub(crate) fn open_lock_file(path: &Path) -> Result<fs::File> {
+    reject_link_if_present(path)?;
+    let file = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(path)?;
+    // A link swapped in between the check and the open must not be used as a lock.
+    reject_link(path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let opened = file.metadata()?;
+        let current = fs::symlink_metadata(path)?;
+        if opened.dev() != current.dev() || opened.ino() != current.ino() {
+            return Err("Lock file changed while opening; existing files retained".into());
+        }
+    }
+    Ok(file)
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Metadata {
@@ -74,6 +108,8 @@ pub fn read(root: &Path, id: &str) -> Result<Metadata> {
     }
     let folder = checked_directory(&folder)?;
     let path = folder.join(format!("{id}.json"));
+    // A dangling link is not an absent file: it must never read as unpinned defaults.
+    reject_link_if_present(&path)?;
     if !path.exists() {
         let history = folder.join(format!("{id}-history"));
         if history.exists() {
@@ -117,16 +153,7 @@ pub fn edit(
     }
     validate_title(title.as_deref())?;
     let folder = directory(root)?;
-    let lock_path = folder.join(format!("{id}.lock"));
-    if lock_path.exists() {
-        reject_link(&lock_path)?;
-    }
-    let lock = OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(lock_path)?;
+    let lock = open_lock_file(&folder.join(format!("{id}.lock")))?;
     lock_soon(&lock).map_err(|_| "Meeting metadata is being edited in another window")?;
     let old = read(root, id)?;
     if old.revision != expected {
@@ -209,5 +236,28 @@ mod tests {
         assert!(read(root.path(), ID).is_err());
         assert!(edit(root.path(), ID, 0, None, false).is_err());
         assert!(!path.exists());
+    }
+    #[cfg(unix)]
+    #[test]
+    fn dangling_lock_or_label_links_are_rejected_without_creating_their_target() {
+        let root = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let dir = directory(root.path()).unwrap();
+        let target = outside.path().join("created-through-link");
+        std::os::unix::fs::symlink(&target, dir.join(format!("{ID}.lock"))).unwrap();
+        assert!(!dir.join(format!("{ID}.lock")).exists(), "the link dangles");
+        assert!(edit(root.path(), ID, 0, Some("Title".into()), true).is_err());
+        assert!(!target.exists(), "no file is created through the link");
+        assert!(!dir.join(format!("{ID}.json")).exists());
+        fs::remove_file(dir.join(format!("{ID}.lock"))).unwrap();
+        // A dangling current label link is not an absent, unpinned label file.
+        std::os::unix::fs::symlink(&target, dir.join(format!("{ID}.json"))).unwrap();
+        assert!(read(root.path(), ID).is_err());
+        assert!(edit(root.path(), ID, 0, None, false).is_err());
+        assert!(!target.exists());
+        assert!(fs::symlink_metadata(dir.join(format!("{ID}.json")))
+            .unwrap()
+            .file_type()
+            .is_symlink());
     }
 }

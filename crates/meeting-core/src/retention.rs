@@ -84,6 +84,8 @@ fn json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T> {
 pub fn read_policy(root: &Path) -> Result<Policy> {
     metadata::checked_directory(root)?;
     let path = root.join("retention-settings.json");
+    // A dangling link is not an absent settings file; never fall back to defaults through it.
+    metadata::reject_link_if_present(&path)?;
     if !path.exists() {
         let history = root.join("retention-settings-history");
         if history.exists() {
@@ -101,16 +103,7 @@ pub fn read_policy(root: &Path) -> Result<Policy> {
 pub fn save_policy(root: &Path, expected: u64, mut next: Policy) -> Result<Policy> {
     next.validate()?;
     metadata::checked_directory(root)?;
-    let lock_path = root.join("retention-settings.lock");
-    if lock_path.exists() {
-        reject_link(&lock_path)?;
-    }
-    let lock = OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(lock_path)?;
+    let lock = metadata::open_lock_file(&root.join("retention-settings.lock"))?;
     metadata::lock_soon(&lock)?;
     let old = read_policy(root)?;
     if old.revision != expected || next.revision != expected {
@@ -482,6 +475,29 @@ mod tests {
             fs::read(root.path().join("retention-settings.json")).unwrap(),
             b"broken retained policy"
         );
+    }
+    #[cfg(unix)]
+    #[test]
+    fn dangling_retention_lock_or_settings_link_is_rejected_without_creating_its_target() {
+        let root = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let target = outside.path().join("created-through-link");
+        let lock = root.path().join("retention-settings.lock");
+        std::os::unix::fs::symlink(&target, &lock).unwrap();
+        assert!(!lock.exists(), "the link dangles");
+        assert!(save_policy(root.path(), 0, Policy::default()).is_err());
+        assert!(!target.exists(), "no file is created through the link");
+        assert!(!root.path().join("retention-settings.json").exists());
+        fs::remove_file(&lock).unwrap();
+        let settings = root.path().join("retention-settings.json");
+        std::os::unix::fs::symlink(&target, &settings).unwrap();
+        assert!(read_policy(root.path()).is_err());
+        assert!(save_policy(root.path(), 0, Policy::default()).is_err());
+        assert!(!target.exists());
+        assert!(fs::symlink_metadata(&settings)
+            .unwrap()
+            .file_type()
+            .is_symlink());
     }
     #[test]
     fn preview_fingerprint_detects_a_late_unknown_file_and_missing_policy_cannot_reset_history() {
