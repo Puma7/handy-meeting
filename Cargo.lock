@@ -1655,7 +1655,7 @@ dependencies = [
 
 [[package]]
 name = "handy-bridge"
-version = "1.0.2"
+version = "1.0.3"
 dependencies = [
  "plist",
  "serde",
@@ -1669,7 +1669,7 @@ dependencies = [
 
 [[package]]
 name = "handy-meeting-desktop"
-version = "1.0.2"
+version = "1.0.3"
 dependencies = [
  "anyhow",
  "arboard",
@@ -2397,7 +2397,7 @@ dependencies = [
 
 [[package]]
 name = "meeting-core"
-version = "1.0.2"
+version = "1.0.3"
 dependencies = [
  "chrono",
  "fs2",
@@ -2414,7 +2414,7 @@ dependencies = [
 
 [[package]]
 name = "meeting-notes"
-version = "1.0.2"
+version = "1.0.3"
 dependencies = [
  "anyhow",
  "chrono",
