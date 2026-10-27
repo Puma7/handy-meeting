@@ -72,9 +72,18 @@ struct AppImageRank {
     numbers: [u64; 4],
     /// A final release sorts above its pre-releases.
     release: bool,
-    pre_release: String,
+    pre_release: Vec<PreReleaseId>,
     /// A name stating this machine's architecture is more specific.
     arch_specific: bool,
+}
+
+/// One dot-separated pre-release identifier. The derived order is SemVer precedence:
+/// numbers compare numerically and below text, text compares by ASCII, and a list
+/// that is a prefix of another sorts first, so `beta.10` follows `beta.9`.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum PreReleaseId {
+    Number(u64),
+    Text(String),
 }
 
 /// Parses `Handy_<version>[_<arch>].AppImage` (also `-` separators).
@@ -112,17 +121,30 @@ fn appimage_rank(name: &str, machine_arch: &str) -> Option<AppImageRank> {
         }
     }
     let (core, pre_release) = match version.split_once('-') {
+        Some((_, "")) => return None,
         Some((core, pre)) => (core, pre),
         None => (version, ""),
     };
     let parts: Vec<&str> = core.split('.').collect();
     let mut numbers = [0_u64; 4];
-    if parts.len() > numbers.len()
-        || !pre_release
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '.')
-    {
+    if parts.len() > numbers.len() {
         return None;
+    }
+    let mut identifiers = Vec::new();
+    if !pre_release.is_empty() {
+        for id in pre_release.split('.') {
+            if id.is_empty() || !id.bytes().all(|b| b.is_ascii_alphanumeric()) {
+                return None;
+            }
+            identifiers.push(if id.bytes().all(|b| b.is_ascii_digit()) {
+                if id.len() > 18 {
+                    return None;
+                }
+                PreReleaseId::Number(id.parse().ok()?)
+            } else {
+                PreReleaseId::Text(id.into())
+            });
+        }
     }
     for (slot, part) in numbers.iter_mut().zip(&parts) {
         if part.is_empty() || part.len() > 9 || !part.bytes().all(|b| b.is_ascii_digit()) {
@@ -133,7 +155,7 @@ fn appimage_rank(name: &str, machine_arch: &str) -> Option<AppImageRank> {
     Some(AppImageRank {
         numbers,
         release: pre_release.is_empty(),
-        pre_release: pre_release.into(),
+        pre_release: identifiers,
         arch_specific,
     })
 }
@@ -185,6 +207,10 @@ mod tests {
             "Handy_1.2.3.4.5.AppImage",
             "Handy_0.9.8_amd64 (1).AppImage",
             "Handy_0.9.8-beta/1.AppImage",
+            "Handy_0.9.8-beta..1.AppImage",
+            "Handy_0.9.8-beta._amd64.AppImage",
+            "Handy_0.9.8-.AppImage",
+            "Handy_0.9.8-beta.1234567890123456789.AppImage",
             "Handy_99999999999.AppImage",
             // Unrelated non-ASCII names must be skipped, never split mid-character.
             "中文.AppImage",
@@ -194,6 +220,38 @@ mod tests {
         ] {
             assert!(appimage_rank(name, "x86_64").is_none(), "{name}");
         }
+    }
+
+    #[test]
+    fn pre_releases_follow_semver_precedence() {
+        let ordered = [
+            "Handy_0.10.0-alpha.AppImage",
+            "Handy_0.10.0-alpha.1.AppImage",
+            "Handy_0.10.0-alpha.beta.AppImage",
+            "Handy_0.10.0-beta.AppImage",
+            "Handy_0.10.0-beta.2.AppImage",
+            "Handy_0.10.0-beta.9.AppImage",
+            "Handy_0.10.0-beta.10.AppImage",
+            "Handy_0.10.0-beta.11.AppImage",
+            "Handy_0.10.0-rc.1.AppImage",
+            "Handy_0.10.0.AppImage",
+        ];
+        for pair in ordered.windows(2) {
+            let lower = appimage_rank(pair[0], "x86_64").unwrap();
+            let higher = appimage_rank(pair[1], "x86_64").unwrap();
+            assert!(lower < higher, "{} must sort below {}", pair[0], pair[1]);
+        }
+        let dir = tempfile::tempdir().unwrap();
+        for name in [
+            "Handy_0.10.0-beta.9_amd64.AppImage",
+            "Handy_0.10.0-beta.10_amd64.AppImage",
+        ] {
+            std::fs::write(dir.path().join(name), b"synthetic, never executed").unwrap();
+        }
+        assert_eq!(
+            versioned_appimages(dir.path(), "x86_64")[0],
+            dir.path().join("Handy_0.10.0-beta.10_amd64.AppImage")
+        );
     }
 
     #[test]
