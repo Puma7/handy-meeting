@@ -50,6 +50,26 @@ try {
         # An older uninstaller may not remove the newer installation's shortcut.
         & (Join-Path $install 'ManageStartMenu.ps1') -Mode uninstall -InstallDirectory (Join-Path $work 'other-older-installation')
         if (-not (Test-Path -LiteralPath $stableShortcut)) { throw 'A foreign-version uninstall removed the current shortcut.' }
+        # Side by side: a synthetic older registration must not take the link, and removing the
+        # linked version moves the owned link to the newest remaining registered installation.
+        $installedProgram = [IO.Path]::GetFullPath((Join-Path $install 'HandyMeeting.exe'))
+        $olderInstall = Join-Path $work 'older-side-by-side'
+        $olderProgram = [IO.Path]::GetFullPath((Join-Path $olderInstall 'HandyMeeting.exe'))
+        $olderRegistration = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-0.0.1'
+        New-Item -ItemType Directory -Path $olderInstall | Out-Null
+        [IO.File]::WriteAllText($olderProgram,'Synthetic older installation, not an executable.')
+        try {
+            New-Item -Path $olderRegistration -Force | Out-Null
+            New-ItemProperty -LiteralPath $olderRegistration -Name InstallLocation -Value $olderInstall -PropertyType String -Force | Out-Null
+            & (Join-Path $install 'ManageStartMenu.ps1') -Mode install -InstallDirectory $olderInstall -Version '0.0.1'
+            if ($LASTEXITCODE -ne 4 -or [IO.Path]::GetFullPath($shortcutShell.CreateShortcut($stableShortcut).TargetPath) -ne $installedProgram) { throw 'Installing an older version moved the Start menu link away from the newer version.' }
+            & (Join-Path $install 'ManageStartMenu.ps1') -Mode uninstall -InstallDirectory $install
+            if ($LASTEXITCODE -ne 0 -or [IO.Path]::GetFullPath($shortcutShell.CreateShortcut($stableShortcut).TargetPath) -ne $olderProgram -or (Get-ItemProperty -LiteralPath 'HKCU:\Software\HandyMeeting\StartMenuLink').Target -ne $olderProgram) { throw 'Removing the linked version left the remaining installation without its Start menu link.' }
+            & (Join-Path $install 'ManageStartMenu.ps1') -Mode install -InstallDirectory $install -Version $version
+            if ($LASTEXITCODE -ne 0 -or [IO.Path]::GetFullPath($shortcutShell.CreateShortcut($stableShortcut).TargetPath) -ne $installedProgram) { throw 'Installing a newer version did not take over the owned Start menu link.' }
+        } finally {
+            Remove-Item -LiteralPath $olderRegistration -ErrorAction SilentlyContinue
+        }
         $secondInstall = Join-Path $work 'second-install'
         $duplicate = Start-Process -FilePath $package -ArgumentList @('/S',('/D=' + $secondInstall)) -WindowStyle Hidden -Wait -PassThru
         if ($duplicate.ExitCode -eq 0 -or (Test-Path -LiteralPath (Join-Path $secondInstall 'HandyMeeting.exe')) -or (Get-ItemProperty -LiteralPath $registration).InstallLocation -ne $install) { throw 'Duplicate version replaced an existing installation registration.' }
@@ -112,7 +132,7 @@ try {
         $tested = $true
     }
     $hash = (Get-FileHash -LiteralPath $package -Algorithm SHA256).Hash.ToLowerInvariant()
-    $proof = [ordered]@{success=$true;version=$version;rid='windows-x64';package=[IO.Path]::GetFileName($package);sha256=$hash;bytes=(Get-Item -LiteralPath $package).Length;sourceFingerprintSHA256=$receipt.sourceFingerprintSHA256;executableSHA256=$receipt.executableSHA256;compilerVersion=$compiler.version;compilerArchiveSHA256=$compiler.archiveSHA256;actualInstallUninstallChecked=$tested;existingDestinationRejected=$tested;freshMissingParentsChecked=$tested;duplicateVersionRejected=$tested;unknownUserFilePreserved=$tested;stableStartMenuNameChecked=$tested;foreignVersionShortcutPreserved=$tested;userEditedShortcutPreserved=$tested;ownedShortcutRemovedByUninstall=$tested;restrictedPolicyShortcutChecked=$restrictedPolicyChecked;recursiveDeletion=$false;userRecordingsIncluded=$false;signing='unsigned'}
+    $proof = [ordered]@{success=$true;version=$version;rid='windows-x64';package=[IO.Path]::GetFileName($package);sha256=$hash;bytes=(Get-Item -LiteralPath $package).Length;sourceFingerprintSHA256=$receipt.sourceFingerprintSHA256;executableSHA256=$receipt.executableSHA256;compilerVersion=$compiler.version;compilerArchiveSHA256=$compiler.archiveSHA256;actualInstallUninstallChecked=$tested;existingDestinationRejected=$tested;freshMissingParentsChecked=$tested;duplicateVersionRejected=$tested;unknownUserFilePreserved=$tested;stableStartMenuNameChecked=$tested;foreignVersionShortcutPreserved=$tested;sideBySideShortcutChecked=$tested;userEditedShortcutPreserved=$tested;ownedShortcutRemovedByUninstall=$tested;restrictedPolicyShortcutChecked=$restrictedPolicyChecked;recursiveDeletion=$false;userRecordingsIncluded=$false;signing='unsigned'}
     [IO.File]::WriteAllText(($package+'.sha256'),($hash+'  '+[IO.Path]::GetFileName($package)+"`n"),[Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText(($package+'.verification.json'),(($proof|ConvertTo-Json)+"`n"),[Text.UTF8Encoding]::new($false))
     $proof | ConvertTo-Json

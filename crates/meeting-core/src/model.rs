@@ -136,6 +136,14 @@ pub struct TranscriptCheckpoint {
     pub processed_samples: u64,
     #[serde(rename = "final", alias = "Final")]
     pub final_text: bool,
+    /// Explicit new text version (#20): a native stream reconstructed after a
+    /// recognition restart caught up with the durable progress of its part, but its
+    /// confirmed text does not continue the stored confirmed prefix (e.g. GPU to CPU
+    /// replacement). Only such a marked checkpoint may replace a confirmed prefix; the
+    /// earlier checkpoints stay unchanged in the append-only journal as the previous
+    /// version. Omitted when false, so older records keep their exact bytes.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub revision_after_restart: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -74,7 +74,7 @@ function fixture() {
     resumeMeeting: vi.fn(),
     importLegacy: vi.fn(),
     generateNotes: vi.fn(),
-    listAnalyses: vi.fn().mockResolvedValue([]),
+    listAnalyses: vi.fn().mockResolvedValue({ analyses: [], skipped: [] }),
     listTextModels: vi.fn().mockResolvedValue(["fixture-text"]),
     getNotesProgress: vi.fn().mockResolvedValue(null),
     cancelNotes: vi.fn(),
@@ -364,7 +364,10 @@ it("keeps saved instructions read only, duplicates their snapshot and navigates 
   saved.template.steps[0].prompt = "Historical immutable prompt";
   const before = JSON.stringify(saved);
   const { api } = fixture();
-  vi.mocked(api.listAnalyses).mockResolvedValue([saved]);
+  vi.mocked(api.listAnalyses).mockResolvedValue({
+    analyses: [saved],
+    skipped: [],
+  });
   render(<App api={api} />);
   await notes();
   await screen.findByText("Original claim");

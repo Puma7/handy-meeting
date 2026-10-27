@@ -1,7 +1,9 @@
 //! One owned native worker per track. Capture never waits on this module.
 use handy_bridge::native::{default_run_options, native_error, NativeEngine};
 use handy_bridge::BridgeError;
-use meeting_core::{read_pcm_samples, AudioPart, SessionStore, TranscriptCheckpoint};
+use meeting_core::{
+    continues_confirmed_text, read_pcm_samples, AudioPart, SessionStore, TranscriptCheckpoint,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     io::{BufRead, BufReader, BufWriter, Read, Write},
@@ -502,6 +504,25 @@ impl Worker {
     }
 }
 
+/// One recognition stream as the track controller sees it. Production uses the owned
+/// child process; unit tests substitute a synthetic in-process recognizer.
+trait Recognizer {
+    fn request(&mut self, request: Request) -> Result<Reply, String>;
+    /// Ends the owned recognizer; used only by the synthetic interruption hook.
+    fn terminate(&mut self) -> Result<(), String>;
+}
+
+impl Recognizer for Worker {
+    fn request(&mut self, request: Request) -> Result<Reply, String> {
+        self.call(request)
+    }
+    fn terminate(&mut self) -> Result<(), String> {
+        self.child
+            .kill()
+            .map_err(|_| "Owned synthetic recognition child could not be terminated".into())
+    }
+}
+
 impl Drop for Worker {
     fn drop(&mut self) {
         // This handle was created above, so no foreign Handy or user process can be killed.
@@ -551,6 +572,31 @@ fn spawn_track_options(
     stop: Arc<AtomicBool>,
     options: TrackRunOptions,
 ) -> JoinHandle<()> {
+    let worker_source = source.clone();
+    let deadline = options.deadline;
+    spawn_track_with(store, source, stop, options, move |folder, cpu_only| {
+        Worker::start(
+            &model_path,
+            &backend_dir,
+            folder,
+            &worker_source,
+            cpu_only,
+            deadline,
+        )
+    })
+}
+
+fn spawn_track_with<R, S>(
+    store: SessionStore,
+    source: String,
+    stop: Arc<AtomicBool>,
+    options: TrackRunOptions,
+    start: S,
+) -> JoinHandle<()>
+where
+    R: Recognizer,
+    S: Fn(&Path, bool) -> Result<R, String> + Send + 'static,
+{
     thread::spawn(move || {
         if !["system", "microphone"].contains(&source.as_str()) {
             let _ = store.notice("Recognition track was invalid; audio remains available.");
@@ -558,15 +604,7 @@ fn spawn_track_options(
         }
         for attempt in 0..3 {
             let cpu_only = options.force_cpu || attempt >= 2;
-            match run_track(
-                &store,
-                &model_path,
-                &backend_dir,
-                &source,
-                &stop,
-                cpu_only,
-                &options,
-            ) {
+            match run_track(&store, &source, &stop, cpu_only, &options, &start) {
                 Ok(()) => {
                     if let Ok(snapshot) = store.snapshot() {
                         if ["recorded", "catching-up", "complete"]
@@ -602,25 +640,19 @@ fn spawn_track_options(
     })
 }
 
-fn run_track(
+fn run_track<R: Recognizer>(
     store: &SessionStore,
-    model_path: &Path,
-    backend_dir: &Path,
     source: &str,
     stop: &AtomicBool,
     cpu_only: bool,
     options: &TrackRunOptions,
+    start: &impl Fn(&Path, bool) -> Result<R, String>,
 ) -> Result<(), String> {
     let model_id = store.model_id().map_err(|_| "Session unavailable")?;
-    let mut worker = Worker::start(
-        model_path,
-        backend_dir,
-        store.folder(),
-        source,
-        cpu_only,
-        options.deadline,
-    )?;
-    let mut current: Option<(String, u64)> = None;
+    let mut worker = start(store.folder(), cpu_only)?;
+    // Open stream: file, fed cursor, and whether this fresh stream still replays a part
+    // that already had durable progress of this model (a recognition restart, #20).
+    let mut current: Option<(String, u64, bool)> = None;
     loop {
         if store.model_id().map_err(|_| "Session unavailable")? != model_id {
             return Err(
@@ -648,6 +680,7 @@ fn run_track(
                 },
                 part.confirmed_sample_count,
                 true,
+                false,
             )?;
             current = None;
             continue;
@@ -659,20 +692,26 @@ fn run_track(
             thread::sleep(Duration::from_millis(100));
             continue;
         }
-        if current.as_ref().is_none_or(|(file, _)| file != &part.file) {
-            worker.call(Request::Begin {
+        if current
+            .as_ref()
+            .is_none_or(|(file, _, _)| file != &part.file)
+        {
+            worker.request(Request::Begin {
                 file: part.file.clone(),
             })?;
-            current = Some((part.file.clone(), 0));
+            let restart_replay =
+                part.model_id.as_deref() == Some(model_id.as_str()) && part.processed_samples > 0;
+            current = Some((part.file.clone(), 0, restart_replay));
         }
-        let (_, cursor) = current.as_mut().ok_or("Recognition cursor unavailable")?;
+        let (_, cursor, restart_replay) =
+            current.as_mut().ok_or("Recognition cursor unavailable")?;
         let available = part
             .confirmed_sample_count
             .checked_sub(*cursor)
             .ok_or("Confirmed audio moved backward")?;
         if available >= FEED_SAMPLES as u64 || (part.audio_closed && available > 0) {
             let count = available.min(FEED_SAMPLES as u64) as usize;
-            let reply = worker.call(Request::Feed {
+            let reply = worker.request(Request::Feed {
                 offset_samples: *cursor,
                 sample_count: count,
                 confirmed_samples: part.confirmed_sample_count,
@@ -691,7 +730,19 @@ fn run_track(
                 })
             });
             *cursor += count as u64;
-            persist(store, &part, &model_id, reply, *cursor, false)?;
+            if persist(
+                store,
+                &part,
+                &model_id,
+                reply,
+                *cursor,
+                false,
+                *restart_replay,
+            )? {
+                // The replay caught up with the durable progress; later checkpoints of
+                // this stream are ordinary continuations again.
+                *restart_replay = false;
+            }
             if has_hypothesis
                 && options
                     .inject_kill
@@ -710,10 +761,7 @@ fn run_track(
                         std::fs::read(store.folder().join("transcript-journal.jsonl"))
                             .map_err(|_| "Synthetic checkpoint could not be read")?;
                 }
-                worker
-                    .child
-                    .kill()
-                    .map_err(|_| "Owned synthetic recognition child could not be terminated")?;
+                worker.terminate()?;
                 if let Some(injected) = &options.inject_kill {
                     injected.store(true, Ordering::Release);
                 }
@@ -722,8 +770,16 @@ fn run_track(
             continue;
         }
         if part.audio_closed && *cursor == part.confirmed_sample_count {
-            let reply = worker.call(Request::Finalize)?;
-            persist(store, &part, &model_id, reply, *cursor, true)?;
+            let reply = worker.request(Request::Finalize)?;
+            persist(
+                store,
+                &part,
+                &model_id,
+                reply,
+                *cursor,
+                true,
+                *restart_replay,
+            )?;
             current = None;
             continue;
         }
@@ -734,6 +790,9 @@ fn run_track(
     }
 }
 
+/// Returns whether a checkpoint was written. `restart_replay` is true only while a
+/// stream reconstructed after a recognition restart has not yet written a checkpoint
+/// for its part.
 fn persist(
     store: &SessionStore,
     part: &AudioPart,
@@ -741,12 +800,19 @@ fn persist(
     reply: Reply,
     samples: u64,
     final_text: bool,
-) -> Result<(), String> {
+    restart_replay: bool,
+) -> Result<bool, String> {
     // Reconstruct a fresh native stream without replacing a later durable text
     // checkpoint with its earlier, usually empty replay hypothesis.
     if part.model_id.as_deref() == Some(model_id) && samples < part.processed_samples {
-        return Ok(());
+        return Ok(false);
     }
+    // A caught-up replay can decode differently, e.g. on the CPU replacement after a
+    // GPU fault (#20). It becomes an explicitly marked new text version; the earlier
+    // checkpoints remain in the journal. Outside this case a changed prefix is still
+    // rejected by the store.
+    let revision_after_restart =
+        restart_replay && !continues_confirmed_text(part, model_id, &reply.committed, &reply.full);
     store
         .append_transcript(TranscriptCheckpoint {
             sequence: 0,
@@ -758,7 +824,9 @@ fn persist(
             tentative: reply.tentative,
             processed_samples: samples,
             final_text,
+            revision_after_restart,
         })
+        .map(|()| true)
         .map_err(|error| {
             format!(
                 "Recognition checkpoint rejected: {error}. Previous confirmed text is retained."
@@ -1030,7 +1098,7 @@ mod tests {
         }
         writer.finish().unwrap();
         let part = store.snapshot().unwrap().parts[0].clone();
-        persist(
+        assert!(persist(
             &store,
             &part,
             "m",
@@ -1042,12 +1110,14 @@ mod tests {
             },
             320000,
             false,
+            false,
         )
-        .unwrap();
+        .unwrap());
         let saved = store.snapshot().unwrap().parts[0].clone();
         let journal = std::fs::read(store.folder().join("transcript-journal.jsonl")).unwrap();
         // Actual replay persistence path receives an earlier half-second hypothesis.
-        persist(
+        // It is skipped, also as a restart replay, and nothing is written.
+        assert!(!persist(
             &store,
             &saved,
             "m",
@@ -1058,8 +1128,9 @@ mod tests {
             },
             8000,
             false,
+            true,
         )
-        .unwrap();
+        .unwrap());
         assert_eq!(
             store.snapshot().unwrap().parts[0].text.as_deref(),
             Some("Confirmed twenty seconds.")
@@ -1081,23 +1152,174 @@ mod tests {
             Some("Confirmed twenty seconds.")
         );
         let saved = reopened.snapshot().unwrap().parts[0].clone();
-        assert!(persist(
-            &reopened,
-            &saved,
-            "m",
-            Reply {
-                ok: true,
-                full: "Diverged text.".into(),
-                committed: "Diverged text.".into(),
-                ..Reply::default()
-            },
-            320000,
-            false
-        )
-        .is_err());
+        // This fixture was never stopped, so reopen already reports an interruption.
+        let incomplete = reopened.snapshot().unwrap().capture_incomplete;
+        let diverged = || Reply {
+            ok: true,
+            full: "Diverged text.".into(),
+            committed: "Diverged text.".into(),
+            ..Reply::default()
+        };
+        // Outside a restart replay a changed confirmed prefix is still rejected.
+        assert!(persist(&reopened, &saved, "m", diverged(), 320000, false, false).is_err());
         assert_eq!(
             reopened.snapshot().unwrap().parts[0].text.as_deref(),
             Some("Confirmed twenty seconds.")
         );
+        assert_eq!(
+            std::fs::read(folder.join("transcript-journal.jsonl")).unwrap(),
+            journal
+        );
+        // A caught-up restart replay with diverging text is kept as a marked new version.
+        assert!(persist(&reopened, &saved, "m", diverged(), 320000, false, true).unwrap());
+        let revised = reopened.snapshot().unwrap();
+        assert_eq!(revised.parts[0].text.as_deref(), Some("Diverged text."));
+        assert_eq!(revised.parts[0].processed_samples, 320000);
+        // The revision notice is informational and never marks the capture incomplete.
+        assert_eq!(revised.capture_incomplete, incomplete);
+        assert!(revised
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("earlier text is kept")));
+        let after = std::fs::read(folder.join("transcript-journal.jsonl")).unwrap();
+        assert!(after.starts_with(&journal));
+        let tail = String::from_utf8(after[journal.len()..].to_vec()).unwrap();
+        assert!(tail.contains("\"revisionAfterRestart\":true"));
+        assert!(tail.contains("Diverged text."));
+    }
+
+    /// Synthetic in-process recognizer standing in for the native worker (#20). It
+    /// decodes nothing: each half-second packet adds one word naming its backend, so a
+    /// CPU replay of a GPU-recognized prefix diverges deterministically.
+    struct SyntheticRecognizer {
+        word: &'static str,
+        fed: u64,
+        fail_at: Option<u64>,
+    }
+    impl SyntheticRecognizer {
+        fn text(&self) -> Reply {
+            let words = vec![self.word; (self.fed / FEED_SAMPLES as u64) as usize].join(" ");
+            Reply {
+                ok: true,
+                full: words.clone(),
+                committed: words,
+                ..Reply::default()
+            }
+        }
+    }
+    impl Recognizer for SyntheticRecognizer {
+        fn request(&mut self, request: Request) -> Result<Reply, String> {
+            match request {
+                Request::Begin { .. } => {
+                    self.fed = 0;
+                    Ok(Reply {
+                        ok: true,
+                        ..Reply::default()
+                    })
+                }
+                Request::Feed { sample_count, .. } => {
+                    if self.fail_at.is_some_and(|limit| self.fed >= limit) {
+                        return Err("Synthetic GPU device was lost".into());
+                    }
+                    self.fed += sample_count as u64;
+                    Ok(self.text())
+                }
+                Request::Finalize => Ok(self.text()),
+                _ => Err("Synthetic recognizer received an unexpected request".into()),
+            }
+        }
+        fn terminate(&mut self) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    /// Synthetic, accelerated regression for #20: no native model, no device, no GPU.
+    /// The first GPU stream confirms text for one second and fails, the fresh GPU
+    /// process cannot start, and the CPU replacement replays the part with different
+    /// confirmed text. Before the fix the CPU checkpoint was rejected and the part
+    /// stayed pending forever.
+    #[test]
+    fn synthetic_cpu_replay_with_diverging_text_completes_as_new_version() {
+        let root =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../.build/asr-replay-regressions");
+        let store = SessionStore::create(
+            &root,
+            "Synthetic GPU to CPU replay regression",
+            "m",
+            "synthetic",
+            None,
+        )
+        .unwrap();
+        let mut writer = meeting_core::PcmWriter::new(store.clone(), "system").unwrap();
+        writer.append(&vec![42_i16; 32000]).unwrap();
+        writer.finish().unwrap();
+        drop(writer);
+        store.set_status("recorded").unwrap();
+        let folder = store.folder().to_owned();
+        let starts = Arc::new(AtomicUsize::new(0));
+        let journal_before_cpu = Arc::new(Mutex::new(Vec::new()));
+        let (count, before_cpu) = (Arc::clone(&starts), Arc::clone(&journal_before_cpu));
+        let handle = spawn_track_with(
+            store.clone(),
+            "system".into(),
+            Arc::new(AtomicBool::new(true)),
+            TrackRunOptions::default(),
+            move |folder: &Path, cpu_only| match (count.fetch_add(1, Ordering::AcqRel), cpu_only) {
+                (_, true) => {
+                    *before_cpu.lock().unwrap() =
+                        std::fs::read(folder.join("transcript-journal.jsonl")).unwrap();
+                    Ok(SyntheticRecognizer {
+                        word: "cpu",
+                        fed: 0,
+                        fail_at: None,
+                    })
+                }
+                (0, false) => Ok(SyntheticRecognizer {
+                    word: "gpu",
+                    fed: 0,
+                    fail_at: Some(16000),
+                }),
+                _ => Err("Synthetic GPU recognition process could not start".into()),
+            },
+        );
+        handle.join().unwrap();
+        assert_eq!(starts.load(Ordering::Acquire), 3);
+        let done = store.snapshot().unwrap();
+        let part = &done.parts[0];
+        assert_eq!(part.status, "complete");
+        assert_eq!(done.status, "complete");
+        assert_eq!(part.text.as_deref(), Some("cpu cpu cpu cpu"));
+        assert_eq!(part.processed_samples, 32000);
+        assert!(!done.capture_incomplete);
+        let notices: Vec<_> = done
+            .warnings
+            .iter()
+            .filter(|warning| warning.contains("earlier text is kept"))
+            .collect();
+        assert_eq!(notices.len(), 1);
+        assert!(notices[0].starts_with("system 00:00:00:"));
+        // The GPU version stays byte-identical in the append-only journal.
+        let prefix = journal_before_cpu.lock().unwrap().clone();
+        assert!(String::from_utf8_lossy(&prefix).contains("\"committed\":\"gpu gpu\""));
+        let journal = std::fs::read(folder.join("transcript-journal.jsonl")).unwrap();
+        assert!(journal.starts_with(&prefix));
+        let added: Vec<serde_json::Value> = String::from_utf8(journal[prefix.len()..].to_vec())
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        // Only the first caught-up CPU checkpoint carries the marker.
+        let marked: Vec<_> = added
+            .iter()
+            .map(|line| line.get("revisionAfterRestart").is_some())
+            .collect();
+        assert_eq!(marked, [true, false, false, false]);
+        assert_eq!(added[0]["committed"], "cpu cpu");
+        assert_eq!(added[0]["processedSamples"], 16000);
+        drop(store);
+        let reopened = SessionStore::open(&folder).unwrap().snapshot().unwrap();
+        assert_eq!(reopened.parts[0].text.as_deref(), Some("cpu cpu cpu cpu"));
+        assert_eq!(reopened.parts[0].status, "complete");
+        assert!(!reopened.capture_incomplete);
     }
 }

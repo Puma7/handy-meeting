@@ -7,7 +7,7 @@ HandyMeeting ist eine eigenständige Companion App im Handy-Ökosystem. Zuverlä
 - Bestehende Nutzeraufnahmen, Transkripte, Journale und Auswertungsfassungen erhalten. Automatische Löschung ist keine zulässige Fehlerbehebung.
 - Audioaufnahme und KI-Erkennung bleiben getrennt. Erkennungsfehler dürfen keine bereits laufende Audiosicherung beenden.
 - Nachbearbeitung startet lokal. Cloud nur nach ausdrücklicher Textfreigabe je Auswertung, ohne Audiodateien, lokale Dateipfade oder automatischen Anbieterwechsel.
-- Textmodell-Transport darf weder Sitzungsobjekte noch Audio-Dateizugriff erhalten. Weiterleitungen und System-Proxys bleiben im lokalen Transport gesperrt.
+- Textmodell-Transport darf weder Sitzungsobjekte noch Audio-Dateizugriff erhalten. Weiterleitungen und System-Proxys bleiben im lokalen Transport gesperrt. Auch Cloud-Transport und Update-Prüfung verwenden derzeit keinen System-Proxy; hinter einem verpflichtenden Firmen-Proxy funktionieren sie deshalb nicht.
 - API-Schlüssel nicht protokollieren oder als Klartext speichern. Nicht lesbare verschlüsselte Schlüssel nicht stillschweigend überschreiben.
 - Originaltranskriptstände und bestätigte Arbeitsschritte versioniert erhalten. Modell-, Anbieter- oder Promptänderungen dürfen nicht unbemerkt in einen älteren Arbeitsstand gemischt werden.
 

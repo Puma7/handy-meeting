@@ -12,8 +12,11 @@ use std::{
     time::{Duration, Instant},
 };
 type Result<T> = std::result::Result<T, String>;
-const LATEST: &str = "https://api.github.com/repos/Puma7/handy-meeting/releases/latest";
+const LATEST: &str = "https://api.github.com/repos/Puma7/meeting-for-handy/releases/latest";
 const MAX_INSTALLER: u64 = 1024 * 1024 * 1024;
+const RELEASES: &str = "https://github.com/Puma7/meeting-for-handy/releases";
+/// Unfinished downloads never carry an executable extension.
+const PARTIAL_SUFFIX: &str = "-setup.partial";
 #[derive(Clone, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct View {
@@ -26,13 +29,45 @@ pub(super) struct View {
     pub error: Option<String>,
     /// Increases with every check or download, so the UI can scope a dismissal to one attempt.
     pub attempt: u64,
+    /// Operating system of this build ("windows", "linux", "macos", ...).
+    pub platform: String,
+    /// Official release asset for this platform, shown when no in-app download exists.
+    pub asset_name: Option<String>,
+    /// Only a verified Windows setup can be downloaded inside the app.
+    pub can_download: bool,
+}
+#[derive(Clone, Copy)]
+struct Platform {
+    os: &'static str,
+    suffix: Option<&'static str>,
+    downloads: bool,
+}
+fn platform() -> Platform {
+    let os = std::env::consts::OS;
+    let suffix = match (os, std::env::consts::ARCH) {
+        ("windows", _) => Some("windows-x64-setup.exe"),
+        ("linux", "x86_64") => Some("linux-amd64.deb"),
+        ("macos", "aarch64") => Some("osx-arm64.dmg"),
+        ("macos", "x86_64") => Some("osx-x64.dmg"),
+        _ => None,
+    };
+    Platform {
+        os,
+        suffix,
+        downloads: os == "windows",
+    }
+}
+#[derive(Clone)]
+struct Installer {
+    url: String,
+    sha256: String,
+    bytes: u64,
 }
 #[derive(Clone)]
 struct Candidate {
     version: String,
-    url: String,
-    sha256: String,
-    bytes: u64,
+    asset_name: Option<String>,
+    installer: Option<Installer>,
 }
 #[derive(Default)]
 struct Inner {
@@ -76,7 +111,7 @@ fn version(value: &str) -> Result<(u32, u32, u32)> {
     }
     Ok((parts[0], parts[1], parts[2]))
 }
-fn candidate(release: Release, current: &str) -> Result<Option<Candidate>> {
+fn candidate(release: Release, current: &str, platform: Platform) -> Result<Option<Candidate>> {
     let tag = release
         .tag_name
         .strip_prefix('v')
@@ -84,29 +119,40 @@ fn candidate(release: Release, current: &str) -> Result<Option<Candidate>> {
     let newer = version(tag)? > version(current)?;
     if release.draft
         || release.prerelease
-        || release.html_url
-            != format!(
-                "https://github.com/Puma7/handy-meeting/releases/tag/{}",
-                release.tag_name
-            )
+        || release.html_url != format!("{RELEASES}/tag/{}", release.tag_name)
     {
         return Err("Unexpected official release metadata".into());
     }
     if !newer {
         return Ok(None);
     }
-    let name = format!("HandyMeeting-{tag}-windows-x64-setup.exe");
+    let Some(suffix) = platform.suffix else {
+        return Ok(Some(Candidate {
+            version: tag.into(),
+            asset_name: None,
+            installer: None,
+        }));
+    };
+    let name = format!("HandyMeeting-{tag}-{suffix}");
+    let expected_url = format!("{RELEASES}/download/{}/{}", release.tag_name, name);
     let mut matches = release.assets.into_iter().filter(|a| a.name == name);
-    let asset = matches.next().ok_or(
+    let first = matches.next();
+    let unique = matches.next().is_none();
+    if !platform.downloads {
+        // Display only: the release page stays the download source on this platform.
+        let listed = first.is_some_and(|a| unique && a.browser_download_url == expected_url);
+        return Ok(Some(Candidate {
+            version: tag.into(),
+            asset_name: listed.then_some(name),
+            installer: None,
+        }));
+    }
+    let asset = first.ok_or(
         "The latest release has no Windows setup yet. Try again after its package checks finish.",
     )?;
-    if matches.next().is_some() || asset.size == 0 || asset.size > MAX_INSTALLER {
+    if !unique || asset.size == 0 || asset.size > MAX_INSTALLER {
         return Err("Conflicting or oversized release installer".into());
     }
-    let expected_url = format!(
-        "https://github.com/Puma7/handy-meeting/releases/download/{}/{}",
-        release.tag_name, name
-    );
     if asset.browser_download_url != expected_url {
         return Err("Unexpected installer origin".into());
     }
@@ -119,10 +165,119 @@ fn candidate(release: Release, current: &str) -> Result<Option<Candidate>> {
     }
     Ok(Some(Candidate {
         version: tag.into(),
-        url: expected_url,
-        sha256: digest.to_ascii_lowercase(),
-        bytes: asset.size,
+        asset_name: Some(name),
+        installer: Some(Installer {
+            url: expected_url,
+            sha256: digest.to_ascii_lowercase(),
+            bytes: asset.size,
+        }),
     }))
+}
+/// Removes only the updater's own unfinished downloads. On Windows a download that
+/// another app instance still writes is open without delete sharing and is skipped.
+fn remove_stale_partials(folder: &Path) {
+    let Ok(entries) = fs::read_dir(folder) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let own = entry.file_name().to_str().is_some_and(own_partial);
+        if own && entry.file_type().is_ok_and(|t| t.is_file()) {
+            let _ = fs::remove_file(entry.path());
+        }
+    }
+}
+fn own_partial(name: &str) -> bool {
+    name.strip_prefix("HandyMeeting-")
+        .and_then(|rest| rest.strip_suffix(PARTIAL_SUFFIX))
+        .and_then(|rest| rest.rsplit_once('-'))
+        .is_some_and(|(release, id)| {
+            version(release).is_ok() && id.len() == 32 && id.bytes().all(|b| b.is_ascii_hexdigit())
+        })
+}
+/// Deletes its unfinished download unless the verified file was published.
+struct PartialFile {
+    path: PathBuf,
+    file: Option<fs::File>,
+    keep: bool,
+}
+impl Drop for PartialFile {
+    fn drop(&mut self) {
+        // Close first: Windows cannot delete a file that is still open here.
+        self.file.take();
+        if !self.keep {
+            let _ = fs::remove_file(&self.path);
+        }
+    }
+}
+/// Streams into a `.partial` file and publishes `-setup.exe` only after size and SHA256 match.
+fn receive(
+    folder: &Path,
+    version: &str,
+    installer: &Installer,
+    input: &mut impl Read,
+    cancel: &AtomicBool,
+    mut progress: impl FnMut(u64),
+) -> Result<PathBuf> {
+    let stem = format!("HandyMeeting-{version}-{}", meeting_notes::new_job_id());
+    let target = folder.join(format!("{stem}-setup.exe"));
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options.share_mode(1);
+    }
+    let path = folder.join(format!("{stem}{PARTIAL_SUFFIX}"));
+    let file = options
+        .open(&path)
+        .map_err(|_| "Could not reserve a new installer file")?;
+    let mut partial = PartialFile {
+        path,
+        file: Some(file),
+        keep: false,
+    };
+    let mut received = 0u64;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0u8; 65536];
+    loop {
+        if cancel.load(Ordering::Acquire) {
+            return Err("Installer download cancelled and the incomplete file was removed. Recordings and installed versions are unchanged. / Download abgebrochen und unvollständige Datei entfernt; Aufnahmen und installierte Versionen bleiben erhalten.".into());
+        }
+        let count = input.read(&mut buffer).map_err(|_| {
+            "The installer connection was interrupted and the incomplete file was removed. Check for updates again to retry."
+        })?;
+        if count == 0 {
+            break;
+        }
+        received = received
+            .checked_add(count as u64)
+            .ok_or("Download size overflow")?;
+        if received > installer.bytes {
+            return Err("The installer was larger than the verified release size and was removed. Check for updates again to retry.".into());
+        }
+        let output = partial.file.as_mut().ok_or("Installer download closed")?;
+        output.write_all(&buffer[..count]).map_err(|_| {
+            "Could not save the installer download; the incomplete file was removed"
+        })?;
+        hasher.update(&buffer[..count]);
+        progress(received);
+    }
+    partial
+        .file
+        .take()
+        .ok_or("Installer download closed")?
+        .sync_all()
+        .map_err(|_| "Could not confirm saved installer")?;
+    if received != installer.bytes || format!("{:x}", hasher.finalize()) != installer.sha256 {
+        return Err("Installer size or SHA256 did not match GitHub. The file was removed and installation is blocked; check for updates again to retry. / Installerprüfung fehlgeschlagen; Datei entfernt und Installation gesperrt.".into());
+    }
+    if fs::symlink_metadata(&target).is_ok() {
+        return Err("Could not reserve a new installer file".into());
+    }
+    fs::rename(&partial.path, &target)
+        .map_err(|_| "Could not finish the verified installer file")?;
+    partial.keep = true;
+    Ok(target)
 }
 fn allowed(url: &url::Url) -> bool {
     url.scheme() == "https"
@@ -150,10 +305,15 @@ fn client() -> Result<reqwest::blocking::Client> {
         .build()
         .map_err(|_| "Could not initialize the update connection".into())
 }
+fn present(state: &Inner) -> View {
+    let mut view = state.view.clone();
+    view.platform = platform().os.into();
+    view
+}
 impl Updater {
     pub fn snapshot(&self) -> Result<View> {
         let state = self.inner.lock().map_err(|_| "Update state unavailable")?;
-        let mut view = state.view.clone();
+        let mut view = present(&state);
         if matches!(view.status.as_str(), "checking" | "downloading") {
             view.elapsed_ms = state.started.map_or(0, |s| s.elapsed().as_millis() as u64);
         }
@@ -204,18 +364,18 @@ impl Updater {
             }
             let release: Release =
                 serde_json::from_slice(&bytes).map_err(|_| "Invalid release metadata")?;
-            let found = candidate(release, current)?;
+            let found = candidate(release, current, platform())?;
             let mut state = self.inner.lock().map_err(|_| "Update state unavailable")?;
             state.ready = None;
             state.view.received_bytes = 0;
-            state.view.total_bytes = found.as_ref().map_or(0, |c| c.bytes);
+            let installer = found.as_ref().and_then(|c| c.installer.as_ref());
+            state.view.total_bytes = installer.map_or(0, |i| i.bytes);
+            state.view.can_download = installer.is_some();
+            state.view.asset_name = found.as_ref().and_then(|c| c.asset_name.clone());
             state.view.version = found.as_ref().map(|c| c.version.clone());
-            state.view.release_url = found.as_ref().map(|c| {
-                format!(
-                    "https://github.com/Puma7/handy-meeting/releases/tag/v{}",
-                    c.version
-                )
-            });
+            state.view.release_url = found
+                .as_ref()
+                .map(|c| format!("{RELEASES}/tag/v{}", c.version));
             state.view.status = if found.is_some() {
                 "available"
             } else {
@@ -224,12 +384,21 @@ impl Updater {
             .into();
             state.candidate = found;
             state.view.elapsed_ms = state.started.map_or(0, |v| v.elapsed().as_millis() as u64);
-            Ok(state.view.clone())
+            Ok(present(&state))
         })();
         self.finish(result)
     }
     pub fn cancel(&self) {
         self.cancel.store(true, Ordering::Release);
+    }
+    /// The official page for the checked release, or the release list before any check.
+    pub fn release_page(&self) -> Result<String> {
+        let state = self.inner.lock().map_err(|_| "Update state unavailable")?;
+        let page = state.candidate.as_ref().map_or_else(
+            || RELEASES.to_owned(),
+            |c| format!("{RELEASES}/tag/v{}", c.version),
+        );
+        Ok(page)
     }
     pub fn download(&self, root: &Path) -> Result<View> {
         if !cfg!(target_os = "windows") {
@@ -244,6 +413,10 @@ impl Updater {
                 .candidate
                 .clone()
                 .ok_or("Check for an official update first")?;
+            let installer = candidate
+                .installer
+                .as_ref()
+                .ok_or("Use the official release page for this platform")?;
             meeting_core::metadata::checked_directory(root)
                 .map_err(|_| "Update storage is unavailable")?;
             let folder = root.join("updates");
@@ -254,61 +427,29 @@ impl Updater {
             }
             meeting_core::metadata::checked_directory(&folder)
                 .map_err(|_| "Linked update folders are rejected")?;
-            let file = folder.join(format!(
-                "HandyMeeting-{}-{}-setup.exe",
-                candidate.version,
-                meeting_notes::new_job_id()
-            ));
-            let mut output = OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&file)
-                .map_err(|_| "Could not reserve a new installer file")?;
-            // Partial downloads use unique files and are never executed or overwritten.
+            remove_stale_partials(&folder);
             let mut response = client()?
-                .get(&candidate.url)
+                .get(&installer.url)
                 .send()
                 .and_then(reqwest::blocking::Response::error_for_status)
                 .map_err(|_| "Installer download failed; retry from the update check")?;
-            let mut received = 0u64;
-            let mut hasher = Sha256::new();
-            let mut buffer = [0u8; 65536];
-            loop {
-                if self.cancel.load(Ordering::Acquire) {
-                    return Err("Installer download cancelled. Recordings and installed versions are unchanged. / Download abgebrochen; Aufnahmen und installierte Versionen bleiben erhalten.".into());
-                }
-                let count = response.read(&mut buffer).map_err(|_| {
-                    "Installer connection was interrupted; the partial file will not be installed"
-                })?;
-                if count == 0 {
-                    break;
-                }
-                received = received
-                    .checked_add(count as u64)
-                    .ok_or("Download size overflow")?;
-                if received > candidate.bytes {
-                    return Err("Installer size exceeds the verified release size".into());
-                }
-                output
-                    .write_all(&buffer[..count])
-                    .map_err(|_| "Could not save installer download")?;
-                hasher.update(&buffer[..count]);
-                if let Ok(mut state) = self.inner.lock() {
-                    state.view.received_bytes = received;
-                }
-            }
-            output
-                .sync_all()
-                .map_err(|_| "Could not confirm saved installer")?;
-            if received != candidate.bytes || format!("{:x}", hasher.finalize()) != candidate.sha256
-            {
-                return Err("Installer size or SHA256 did not match GitHub. Installation is blocked. / Installerprüfung fehlgeschlagen; Installation gesperrt.".into());
-            }
+            let file = receive(
+                &folder,
+                &candidate.version,
+                installer,
+                &mut response,
+                &self.cancel,
+                |received| {
+                    if let Ok(mut state) = self.inner.lock() {
+                        state.view.received_bytes = received;
+                    }
+                },
+            )?;
             let mut state = self.inner.lock().map_err(|_| "Update state unavailable")?;
             state.ready = Some(file);
             state.view.status = "ready".into();
             state.view.elapsed_ms = state.started.map_or(0, |v| v.elapsed().as_millis() as u64);
-            Ok(state.view.clone())
+            Ok(present(&state))
         })();
         self.finish(result)
     }
@@ -317,7 +458,11 @@ impl Updater {
         if state.view.status != "ready" {
             return Err("No verified installer is ready".into());
         }
-        let candidate = state.candidate.as_ref().ok_or("Missing verified release")?;
+        let candidate = state
+            .candidate
+            .as_ref()
+            .and_then(|c| c.installer.as_ref())
+            .ok_or("Missing verified release")?;
         let path = state.ready.as_ref().ok_or("Missing verified installer")?;
         let meta = fs::symlink_metadata(path).map_err(|_| "Verified installer is missing")?;
         #[cfg(windows)]
@@ -366,21 +511,209 @@ impl Updater {
 mod tests {
     use super::*;
     fn release() -> Release {
-        Release{tag_name:"v1.0.2".into(),draft:false,prerelease:false,html_url:"https://github.com/Puma7/handy-meeting/releases/tag/v1.0.2".into(),assets:vec![Asset{name:"HandyMeeting-1.0.2-windows-x64-setup.exe".into(),size:123,digest:Some(format!("sha256:{}","a".repeat(64))),browser_download_url:"https://github.com/Puma7/handy-meeting/releases/download/v1.0.2/HandyMeeting-1.0.2-windows-x64-setup.exe".into()}]}
+        Release{tag_name:"v1.0.2".into(),draft:false,prerelease:false,html_url:"https://github.com/Puma7/meeting-for-handy/releases/tag/v1.0.2".into(),assets:vec![Asset{name:"HandyMeeting-1.0.2-windows-x64-setup.exe".into(),size:123,digest:Some(format!("sha256:{}","a".repeat(64))),browser_download_url:"https://github.com/Puma7/meeting-for-handy/releases/download/v1.0.2/HandyMeeting-1.0.2-windows-x64-setup.exe".into()}]}
     }
+    const WINDOWS: Platform = Platform {
+        os: "windows",
+        suffix: Some("windows-x64-setup.exe"),
+        downloads: true,
+    };
+    const LINUX: Platform = Platform {
+        os: "linux",
+        suffix: Some("linux-amd64.deb"),
+        downloads: false,
+    };
     #[test]
     fn release_selection_rejects_drafts_bad_digests_and_foreign_origins() {
-        assert!(candidate(release(), "1.0.1").unwrap().is_some());
-        assert!(candidate(release(), "1.0.2").unwrap().is_none());
+        assert!(candidate(release(), "1.0.1", WINDOWS).unwrap().is_some());
+        assert!(candidate(release(), "1.0.2", WINDOWS).unwrap().is_none());
         let mut r = release();
         r.draft = true;
-        assert!(candidate(r, "1.0.1").is_err());
+        assert!(candidate(r, "1.0.1", WINDOWS).is_err());
         let mut r = release();
         r.assets[0].digest = None;
-        assert!(candidate(r, "1.0.1").is_err());
+        assert!(candidate(r, "1.0.1", WINDOWS).is_err());
         let mut r = release();
         r.assets[0].browser_download_url = "https://example.com/program.exe".into();
-        assert!(candidate(r, "1.0.1").is_err());
+        assert!(candidate(r, "1.0.1", WINDOWS).is_err());
+    }
+    #[test]
+    fn other_platforms_see_new_releases_without_the_windows_setup() {
+        // The Windows setup alone must not fail a Linux check or become downloadable there.
+        let found = candidate(release(), "1.0.1", LINUX).unwrap().unwrap();
+        assert_eq!(found.version, "1.0.2");
+        assert!(found.installer.is_none());
+        assert!(found.asset_name.is_none());
+        let mut r = release();
+        r.assets.push(Asset {
+            name: "HandyMeeting-1.0.2-linux-amd64.deb".into(),
+            size: 5,
+            digest: None,
+            browser_download_url: format!(
+                "{RELEASES}/download/v1.0.2/HandyMeeting-1.0.2-linux-amd64.deb"
+            ),
+        });
+        let found = candidate(r, "1.0.1", LINUX).unwrap().unwrap();
+        assert_eq!(
+            found.asset_name.as_deref(),
+            Some("HandyMeeting-1.0.2-linux-amd64.deb")
+        );
+        assert!(found.installer.is_none());
+        let mut r = release();
+        r.assets[0].name = "HandyMeeting-1.0.2-linux-amd64.deb".into();
+        assert!(candidate(r, "1.0.1", LINUX)
+            .unwrap()
+            .unwrap()
+            .asset_name
+            .is_none());
+        let mut r = release();
+        r.assets.clear();
+        assert!(candidate(r, "1.0.1", WINDOWS).is_err());
+        let unknown = Platform {
+            os: "freebsd",
+            suffix: None,
+            downloads: false,
+        };
+        assert!(candidate(release(), "1.0.1", unknown).unwrap().is_some());
+    }
+    fn folder() -> PathBuf {
+        let root = std::env::temp_dir().join(meeting_notes::new_job_id());
+        fs::create_dir(&root).unwrap();
+        root
+    }
+    fn names(folder: &Path) -> Vec<String> {
+        let mut names: Vec<String> = fs::read_dir(folder)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        names.sort();
+        names
+    }
+    fn synthetic(bytes: &[u8]) -> Installer {
+        Installer {
+            url: String::new(),
+            sha256: format!("{:x}", Sha256::digest(bytes)),
+            bytes: bytes.len() as u64,
+        }
+    }
+    struct Broken;
+    impl Read for Broken {
+        fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+            Err(std::io::ErrorKind::ConnectionReset.into())
+        }
+    }
+    #[test]
+    fn only_verified_downloads_become_setup_files() {
+        let root = folder();
+        let payload = b"synthetic installer bytes, not an executable";
+        let cancel = AtomicBool::new(false);
+        let mut seen = 0;
+        let file = receive(
+            &root,
+            "1.0.3",
+            &synthetic(payload),
+            &mut &payload[..],
+            &cancel,
+            |n| seen = n,
+        )
+        .unwrap();
+        assert_eq!(seen, payload.len() as u64);
+        assert_eq!(fs::read(&file).unwrap(), payload);
+        let name = file.file_name().unwrap().to_str().unwrap().to_owned();
+        assert!(name.starts_with("HandyMeeting-1.0.3-") && name.ends_with("-setup.exe"));
+        assert_eq!(names(&root), vec![name]);
+        fs::remove_file(file).unwrap();
+        // Mismatched digest, oversize, truncation, interruption and cancellation leave nothing.
+        let mut wrong = synthetic(payload);
+        wrong.sha256 = "0".repeat(64);
+        assert!(receive(&root, "1.0.3", &wrong, &mut &payload[..], &cancel, |_| ()).is_err());
+        let mut short = synthetic(payload);
+        short.bytes -= 1;
+        assert!(receive(&root, "1.0.3", &short, &mut &payload[..], &cancel, |_| ()).is_err());
+        let truncated = &payload[..10];
+        assert!(receive(
+            &root,
+            "1.0.3",
+            &synthetic(payload),
+            &mut &truncated[..],
+            &cancel,
+            |_| ()
+        )
+        .is_err());
+        assert!(receive(
+            &root,
+            "1.0.3",
+            &synthetic(payload),
+            &mut Broken,
+            &cancel,
+            |_| ()
+        )
+        .is_err());
+        cancel.store(true, Ordering::Release);
+        assert!(receive(
+            &root,
+            "1.0.3",
+            &synthetic(payload),
+            &mut &payload[..],
+            &cancel,
+            |_| ()
+        )
+        .is_err());
+        assert!(names(&root).is_empty());
+        fs::remove_dir(root).unwrap();
+    }
+    #[test]
+    fn stale_cleanup_touches_only_own_partial_downloads() {
+        let root = folder();
+        let id = meeting_notes::new_job_id();
+        let own = format!("HandyMeeting-1.0.3-{id}{PARTIAL_SUFFIX}");
+        let kept = [
+            format!("HandyMeeting-1.0.3-{id}-setup.exe"),
+            "notes.partial".to_owned(),
+            format!("HandyMeeting-1.0.3-short{PARTIAL_SUFFIX}"),
+            format!("Other-1.0.3-{id}{PARTIAL_SUFFIX}"),
+        ];
+        fs::write(root.join(&own), b"stale").unwrap();
+        for name in &kept {
+            fs::write(root.join(name), b"keep").unwrap();
+        }
+        fs::create_dir(root.join(format!("HandyMeeting-1.0.4-{id}{PARTIAL_SUFFIX}"))).unwrap();
+        remove_stale_partials(&root);
+        let mut expected: Vec<String> = kept.to_vec();
+        expected.push(format!("HandyMeeting-1.0.4-{id}{PARTIAL_SUFFIX}"));
+        expected.sort();
+        assert_eq!(names(&root), expected);
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn a_release_listed_by_github_for_this_repository_is_accepted() {
+        // Shape and addresses as the GitHub API lists the published v1.0.1 release of
+        // Puma7/meeting-for-handy. The earlier repository name redirects, and the
+        // updater refuses both the redirect and a release page under another name.
+        let listed: Release = serde_json::from_str(
+            r#"{"tag_name":"v1.0.4","draft":false,"prerelease":false,
+                "html_url":"https://github.com/Puma7/meeting-for-handy/releases/tag/v1.0.4",
+                "assets":[{"name":"HandyMeeting-1.0.4-windows-x64-setup.exe","size":123,
+                  "digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "browser_download_url":"https://github.com/Puma7/meeting-for-handy/releases/download/v1.0.4/HandyMeeting-1.0.4-windows-x64-setup.exe"}]}"#,
+        )
+        .unwrap();
+        let found = candidate(listed, "1.0.3", WINDOWS).unwrap().unwrap();
+        assert_eq!(found.version, "1.0.4");
+        assert_eq!(
+            LATEST,
+            "https://api.github.com/repos/Puma7/meeting-for-handy/releases/latest"
+        );
+    }
+    #[test]
+    fn release_page_stays_on_the_official_repository() {
+        let updater = Updater::default();
+        assert_eq!(updater.release_page().unwrap(), RELEASES);
+        updater.inner.lock().unwrap().candidate = candidate(release(), "1.0.1", LINUX).unwrap();
+        assert_eq!(
+            updater.release_page().unwrap(),
+            "https://github.com/Puma7/meeting-for-handy/releases/tag/v1.0.2"
+        );
     }
     #[test]
     fn redirects_cannot_escape_https_official_asset_hosts() {
@@ -409,9 +742,8 @@ mod tests {
             s.view.status = "ready".into();
             s.candidate = Some(Candidate {
                 version: "1.0.2".into(),
-                url: String::new(),
-                sha256: format!("{:x}", Sha256::digest(b"old")),
-                bytes: 3,
+                asset_name: None,
+                installer: Some(synthetic(b"old")),
             });
             s.ready = Some(file.clone());
         }

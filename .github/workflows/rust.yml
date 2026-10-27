@@ -89,6 +89,13 @@ jobs:
       - name: Verify native reservation of missing destination parents and preservation failures
         shell: pwsh
         run: ./scripts/check-installer-reservation.ps1
+      - name: Verify Start menu version ordering in both PowerShell editions
+        shell: pwsh
+        run: |
+          ./scripts/check-start-menu-versions.ps1
+          # The installer runs the Start menu script with Windows PowerShell 5.1.
+          powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ./scripts/check-start-menu-versions.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Start menu version ordering failed in Windows PowerShell.' }
       - name: Bind separate checks to this source tree
         shell: pwsh
         run: node scripts/rust-artifacts.mjs begin-check
@@ -220,5 +227,26 @@ jobs:
           cargo fmt --all -- --check
           cargo test -p handy-bridge -p meeting-core -p meeting-notes --all-targets --no-default-features --locked
           cargo clippy -p handy-bridge -p meeting-core -p meeting-notes --all-targets --no-default-features --locked -- -D warnings
+  dependency-audit:
+    name: Locked dependency audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      # cargo install runs third-party build code; it must not find a stored token.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust tooling and audit tool
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.91.1 --profile minimal
+          rustup default 1.91.1
+          cargo install cargo-audit --version 0.22.2 --locked
+      - name: Fail on known vulnerabilities in the locked dependency set
+        # Reads the current RustSec database. Maintenance warnings are reported but do not fail;
+        # a published vulnerability for any locked package does.
+        run: |
+          set -euo pipefail
+          cargo audit
 # No model weights, Handy installation, real-device recording, cloud credentials,
 # native ASR inference, portable GUI build or public release is used by these jobs.

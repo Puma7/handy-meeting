@@ -157,7 +157,14 @@ fn drain_track(
             writer.written_samples(),
         );
         if info.discontinuity && diagnostics.discontinuities == 1 {
-            store.warn(&format!("{}: audio driver reported a discontinuity; affected recording ranges can be incomplete.", diagnostics.source))?;
+            // Only the system track is padded to wall time; a microphone gap is not filled,
+            // so its later section times can move earlier relative to the meeting.
+            let shifted = if diagnostics.source == "system" {
+                ""
+            } else {
+                " Later section times of this track can be shifted earlier."
+            };
+            store.warn(&format!("{}: audio driver reported a discontinuity; affected recording ranges can be incomplete.{shifted}", diagnostics.source))?;
         }
         if info.timestamp_error && diagnostics.timestamp_errors == 1 {
             store.warn(&format!(

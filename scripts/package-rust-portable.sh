@@ -16,7 +16,7 @@ if [[ "$rid" = linux-x64 ]]; then
   work="$(python3 scripts/rust-portable-artifacts.py stage "$rid" "$source_receipt" "$release_checks")"
 else
   tools="$(mktemp -d "$root/.build/rust-mac-tools.XXXXXX")"
-  xcrun swiftc -parse-as-library -swift-version 5 -warnings-as-errors -O -target "$swift_target" platform/macos/HandyMeetingCapture.swift -o "$tools/HandyMeetingCapture" -framework AVFoundation -framework ScreenCaptureKit -framework CoreMedia
+  xcrun swiftc -parse-as-library -swift-version 5 -warnings-as-errors -O -target "$swift_target" platform/macos/HandyMeetingCapture.swift -o "$tools/HandyMeetingCapture" -framework AVFoundation -framework ScreenCaptureKit -framework CoreMedia -framework CoreAudio -framework AudioToolbox
   iconset="$tools/HandyMeeting.iconset"
   mkdir "$iconset"
   for size in 16 32 128 256 512; do
@@ -52,33 +52,10 @@ mkdir -p packages
 if [[ "$rid" = linux-x64 ]]; then
   stage="$work/deb"
   install_root="/opt/handymeeting/$version"
-  mkdir -p "$stage/DEBIAN" "$stage$install_root" "$stage/usr/share/applications" "$stage/usr/share/icons/hicolor/scalable/apps"
+  mkdir -p "$stage$install_root" "$stage/usr/share/icons/hicolor/scalable/apps"
   cp -a "$app/." "$stage$install_root/"
-  # Debian orders pre-releases before the final version.
-  deb_version="${version/-beta./~beta}"
-  cat > "$stage/DEBIAN/control" <<EOF
-Package: handymeeting
-Version: $deb_version
-Section: sound
-Priority: optional
-Architecture: amd64
-Maintainer: HandyMeeting contributors
-Depends: libc6 (>= 2.35), libgcc-s1, libstdc++6, libgomp1, libgtk-3-0, libwebkit2gtk-4.1-0, libayatana-appindicator3-1, librsvg2-2, libxdo3, libvulkan1, pulseaudio-utils
-Suggests: pipewire-pulse | pulseaudio
-Description: HandyMeeting local meeting companion
- Separate local system and microphone audio; reuses compatible Handy models.
- Target-device capture and long-session tests remain required.
-EOF
-  cat > "$stage/usr/share/applications/handymeeting.desktop" <<EOF
-[Desktop Entry]
-Type=Application
-Name=HandyMeeting
-Comment=Local meeting audio and transcript
-Exec=$install_root/HandyMeeting
-Icon=handymeeting
-Terminal=false
-Categories=Audio;AudioVideo;Utility;
-EOF
+  # Control file, desktop entry and the /usr/bin/handymeeting link come from one tested definition.
+  python3 scripts/rust-portable-artifacts.py deb-metadata "$work"
   cp assets/handymeeting.svg "$stage/usr/share/icons/hicolor/scalable/apps/handymeeting.svg"
   find "$stage" -type d -exec chmod 755 {} +
   find "$stage" -type f -exec chmod 644 {} +

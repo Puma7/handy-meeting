@@ -1,8 +1,9 @@
 //! Independent integration regressions with a synthetic loopback HTTP service.
 //! No real model, cloud credentials, TLS provider or recording is used here.
 use meeting_notes::{
-    analyze, analyze_controlled, is_cancelled, read_analysis, read_pending_analysis, read_snapshot,
-    AnalysisControl, Connection, Kind, Source, Step, Template, TextClient,
+    analyze, analyze_controlled, is_cancelled, list_analyses, read_analysis, read_pending_analysis,
+    read_snapshot, AnalysisControl, Connection, Kind, RejectionReason, Rejections, SkipReason,
+    Source, Step, Template, TextClient,
 };
 use serde_json::{json, Value};
 use std::{
@@ -793,11 +794,37 @@ fn name_reply(text: &str, owner: Option<&str>) -> Reply {
 }
 
 #[test]
-fn invalid_name_candidate_batches_are_never_saved_and_never_block_resume() {
+fn invalid_name_candidates_are_discarded_per_item_and_legacy_batches_never_block_resume() {
     let root = tempfile::tempdir().unwrap();
     let template = meeting_notes::name_candidates::template().unwrap();
     // The literal name is missing from its quote: valid JSON evidence, invalid candidate.
     let server = SyntheticHttp::new(vec![name_reply("Bernd", None)]);
+    let result = analyze(
+        root.path(),
+        "synthetic-meeting",
+        sources(),
+        template.clone(),
+        connection(&server.endpoint),
+        None,
+    )
+    .unwrap();
+    assert!(result.sections[0].items.is_empty());
+    assert_eq!(
+        result.sections[0].rejected,
+        Rejections::from([(RejectionReason::InvalidNameCandidate, 1)])
+    );
+    let folder = run_folder(root.path());
+    for entry in fs::read_dir(&folder).unwrap() {
+        let data = fs::read_to_string(entry.unwrap().path()).unwrap();
+        assert!(
+            !data.contains("Bernd"),
+            "A discarded candidate must never be stored as a result"
+        );
+    }
+
+    // A batch saved by an earlier build before per-batch checks existed.
+    let root = tempfile::tempdir().unwrap();
+    let server = SyntheticHttp::new(vec![Reply::failed()]);
     assert!(analyze(
         root.path(),
         "synthetic-meeting",
@@ -811,9 +838,8 @@ fn invalid_name_candidate_batches_are_never_saved_and_never_block_resume() {
     let step = folder.join("step-0000-000000.json");
     assert!(
         !step.exists(),
-        "A rejected answer must fail at its own step"
+        "A failed request must not leave a checkpoint"
     );
-    // A batch saved by an earlier build before per-batch checks existed.
     fs::write(
         &step,
         json!({"items":[{"text":"Bernd","owner":null,"due":null,"evidence":[{"sourceId":"S00001","quote":ORIGINAL}]}]}).to_string(),
@@ -835,4 +861,401 @@ fn invalid_name_candidate_batches_are_never_saved_and_never_block_resume() {
         folder.join("step-0000-000000.rejected-0.json").is_file(),
         "The rejected answer is kept as evidence"
     );
+}
+
+fn reply_items(items: Value) -> Reply {
+    let answer = json!({ "items": items });
+    Reply {
+        status: 200,
+        body:
+            json!({"choices":[{"finish_reason":"stop","message":{"content":answer.to_string()}}]})
+                .to_string(),
+        location: None,
+        pause: false,
+    }
+}
+const INVENTED: &str = "Ben verfasst die Abrechnung bis Dienstag.";
+
+#[test]
+fn invalid_statements_are_discarded_counted_and_only_verified_ones_are_stored() {
+    let root = tempfile::tempdir().unwrap();
+    let valid = json!({"text":"Bericht wird geschrieben","owner":null,"due":null,"evidence":[{"sourceId":"S00001","quote":ORIGINAL}]});
+    let invented = json!({"text":"Erfundene Abrechnung","owner":null,"due":null,"evidence":[{"sourceId":"S00001","quote":INVENTED}]});
+    let unknown_source = json!({"text":"Unbekannte Quelle","owner":null,"due":null,"evidence":[{"sourceId":"S99999","quote":ORIGINAL}]});
+    let invented_owner = json!({"text":"Bericht","owner":"Ben","due":null,"evidence":[{"sourceId":"S00001","quote":ORIGINAL}]});
+    let task = json!({"text":"Bericht schreiben","owner":"Anna","due":"Freitag","evidence":[{"sourceId":"S00001","quote":ORIGINAL}]});
+    let summary_reply = reply_items(json!([invented, valid, unknown_source]));
+    let task_reply = reply_items(json!([invented_owner, task]));
+    let server = SyntheticHttp::new(vec![summary_reply, task_reply]);
+    let result = analyze(
+        root.path(),
+        "synthetic-meeting",
+        sources(),
+        template(),
+        connection(&server.endpoint),
+        None,
+    )
+    .unwrap();
+    assert_eq!(server.requests(), 2, "Partial answers must not be retried");
+    assert_eq!(result.result_schema, meeting_notes::RESULT_SCHEMA);
+    let summary = &result.sections[0];
+    assert_eq!(summary.items.len(), 1);
+    assert_eq!(summary.items[0].text, "Bericht wird geschrieben");
+    assert_eq!(
+        summary.rejected,
+        Rejections::from([(RejectionReason::QuoteNotLiteral, 2)])
+    );
+    let tasks = &result.sections[1];
+    assert_eq!(tasks.items.len(), 1);
+    assert_eq!(tasks.items[0].owner.as_deref(), Some("Anna"));
+    assert_eq!(
+        tasks.rejected,
+        Rejections::from([(RejectionReason::UnverifiedOwnerOrDue, 1)])
+    );
+    let folder = root.path().join(&result.id);
+    let stored = read_analysis(&folder.join("result.json")).unwrap();
+    assert_eq!(stored.sections[0].rejected, summary.rejected);
+    for section in &stored.sections {
+        for fact in &section.items {
+            for evidence in &fact.evidence {
+                let source = stored
+                    .sources
+                    .iter()
+                    .find(|s| s.id == evidence.source_id)
+                    .expect("kept evidence must cite an existing source");
+                assert!(source.text.contains(&evidence.quote));
+            }
+        }
+    }
+    let checkpoint: Value =
+        serde_json::from_slice(&fs::read(folder.join("step-0000-000000.json")).unwrap()).unwrap();
+    assert_eq!(checkpoint["rejected"], json!({"quoteNotLiteral": 2}));
+    assert_eq!(checkpoint["items"].as_array().unwrap().len(), 1);
+    for entry in fs::read_dir(&folder).unwrap() {
+        let data = fs::read_to_string(entry.unwrap().path()).unwrap();
+        for discarded in [
+            INVENTED,
+            "Erfundene Abrechnung",
+            "Unbekannte Quelle",
+            "\"Ben\"",
+        ] {
+            assert!(
+                !data.contains(discarded),
+                "Discarded model text must not be stored: {discarded}"
+            );
+        }
+    }
+    let markdown = fs::read_to_string(folder.join("result.md")).unwrap();
+    assert!(markdown.contains("Hinweis: 2 KI-Aussage(n) wurden verworfen"));
+    let text = fs::read_to_string(folder.join("result.txt")).unwrap();
+    assert!(text.contains("Hinweis: 1 KI-Aussage(n) wurden verworfen"));
+
+    // Reopening the finished run neither re-requests nor changes the stored counts.
+    let finished = fs::read(folder.join("result.json")).unwrap();
+    let again = analyze(
+        root.path(),
+        "synthetic-meeting",
+        sources(),
+        template(),
+        connection(&server.endpoint),
+        Some(&result.id),
+    )
+    .unwrap();
+    assert_eq!(again.sections[0].rejected, summary.rejected);
+    assert_eq!(server.requests(), 2);
+    assert_eq!(fs::read(folder.join("result.json")).unwrap(), finished);
+}
+
+#[test]
+fn structurally_invalid_answers_still_fail_the_step_without_a_checkpoint() {
+    for content in [
+        "not json".to_string(),
+        json!({"items":[{"text":"Bericht","evidence":[{"sourceId":"S00001","quote":ORIGINAL}]}]})
+            .to_string(),
+        json!({"items":[], "notes":"extra field"}).to_string(),
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        let server = SyntheticHttp::new(vec![Reply {
+            status: 200,
+            body: json!({"choices":[{"finish_reason":"stop","message":{"content":content}}]})
+                .to_string(),
+            location: None,
+            pause: false,
+        }]);
+        assert!(analyze(
+            root.path(),
+            "synthetic-meeting",
+            sources(),
+            template(),
+            connection(&server.endpoint),
+            None
+        )
+        .is_err());
+        let folder = run_folder(root.path());
+        assert!(!folder.join("step-0000-000000.json").exists());
+        assert!(!folder.join("result.json").exists());
+    }
+}
+
+#[test]
+fn resumed_partial_checkpoint_keeps_counts_and_tampered_checkpoint_items_block() {
+    let root = tempfile::tempdir().unwrap();
+    let valid = json!({"text":"Bericht wird geschrieben","owner":null,"due":null,"evidence":[{"sourceId":"S00001","quote":ORIGINAL}]});
+    let invented = json!({"text":"Erfunden","owner":null,"due":null,"evidence":[{"sourceId":"S00001","quote":INVENTED}]});
+    let server = SyntheticHttp::new(vec![reply_items(json!([valid, invented])), Reply::failed()]);
+    assert!(analyze(
+        root.path(),
+        "synthetic-meeting",
+        sources(),
+        template(),
+        connection(&server.endpoint),
+        None
+    )
+    .is_err());
+    let folder = run_folder(root.path());
+    let step = folder.join("step-0000-000000.json");
+    let checkpoint = fs::read(&step).unwrap();
+    assert_eq!(
+        read_pending_analysis(&folder)
+            .unwrap()
+            .unwrap()
+            .confirmed_tasks,
+        1
+    );
+    // A saved checkpoint is read strictly: an item edited to an invented quote blocks resume.
+    let mut tampered: Value = serde_json::from_slice(&checkpoint).unwrap();
+    tampered["items"][0]["evidence"][0]["quote"] = INVENTED.into();
+    fs::write(&step, serde_json::to_vec(&tampered).unwrap()).unwrap();
+    assert!(read_pending_analysis(&folder).is_err());
+    assert!(analyze(
+        root.path(),
+        "synthetic-meeting",
+        sources(),
+        template(),
+        connection(&server.endpoint),
+        Some(only_run_id(&folder))
+    )
+    .is_err());
+    assert_eq!(
+        server.requests(),
+        2,
+        "A damaged checkpoint is never repaired by a new request"
+    );
+    fs::write(&step, &checkpoint).unwrap();
+    server.queue(Reply::successful(true));
+    let result = analyze(
+        root.path(),
+        "synthetic-meeting",
+        sources(),
+        template(),
+        connection(&server.endpoint),
+        Some(only_run_id(&folder)),
+    )
+    .unwrap();
+    assert_eq!(server.requests(), 3);
+    assert_eq!(
+        result.sections[0].rejected,
+        Rejections::from([(RejectionReason::QuoteNotLiteral, 1)])
+    );
+    assert!(result.sections[1].rejected.is_empty());
+    assert_eq!(fs::read(&step).unwrap(), checkpoint);
+}
+
+fn finished_run(root: &Path, server: &SyntheticHttp) -> PathBuf {
+    server.queue(Reply::successful(false));
+    server.queue(Reply::successful(true));
+    let result = analyze(
+        root,
+        "synthetic-meeting",
+        sources(),
+        template(),
+        connection(&server.endpoint),
+        None,
+    )
+    .unwrap();
+    root.join(result.id)
+}
+fn rewrite(path: &Path, change: impl FnOnce(&mut Value)) -> Vec<u8> {
+    let mut value: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+    change(&mut value);
+    let bytes = serde_json::to_vec_pretty(&value).unwrap();
+    fs::write(path, &bytes).unwrap();
+    bytes
+}
+/// Shape of a result written by 1.0.2: no result schema and no rejection counts.
+fn as_legacy_result(value: &mut Value) {
+    value.as_object_mut().unwrap().remove("resultSchema");
+    for section in value["sections"].as_array_mut().unwrap() {
+        section.as_object_mut().unwrap().remove("rejected");
+    }
+}
+
+#[test]
+fn earlier_prompt_results_stay_listed_read_only_and_damaged_files_are_skipped_untouched() {
+    let root = tempfile::tempdir().unwrap();
+    let server = SyntheticHttp::new(Vec::new());
+    let current = finished_run(root.path(), &server);
+    let earlier = finished_run(root.path(), &server);
+    let legacy = finished_run(root.path(), &server);
+    let damaged = finished_run(root.path(), &server);
+    let newer = finished_run(root.path(), &server);
+    let forged = finished_run(root.path(), &server);
+    let foreign = finished_run(root.path(), &server);
+    let earlier_bytes = rewrite(&earlier.join("result.json"), |v| {
+        v["promptVersion"] = "handymeeting-rust-notes-1".into();
+        as_legacy_result(v);
+    });
+    // A 1.0.2 result of the current prompt version stays readable as schema 1.
+    rewrite(&legacy.join("result.json"), as_legacy_result);
+    fs::write(damaged.join("result.json"), b"{\"id\":").unwrap();
+    rewrite(&newer.join("result.json"), |v| {
+        v["resultSchema"] = 99.into()
+    });
+    // Schema 1 never discarded statements, so a recorded count there is forged.
+    rewrite(&forged.join("result.json"), |v| {
+        as_legacy_result(v);
+        v["sections"][0]["rejected"] = json!({"quoteNotLiteral": 1});
+    });
+    rewrite(&foreign.join("result.json"), |v| {
+        v["meetingId"] = "other-meeting".into()
+    });
+    fs::create_dir(root.path().join("not-a-run")).unwrap();
+    let before: Vec<_> = [
+        &current, &earlier, &legacy, &damaged, &newer, &forged, &foreign,
+    ]
+    .iter()
+    .map(|folder| fs::read(folder.join("result.json")).unwrap())
+    .collect();
+
+    let listing = list_analyses(root.path(), "synthetic-meeting").unwrap();
+    let id = |folder: &PathBuf| only_run_id(folder).to_string();
+    let mut listed: Vec<_> = listing
+        .analyses
+        .iter()
+        .map(|item| (item.analysis.id.clone(), item.current_prompt))
+        .collect();
+    listed.sort();
+    let mut expected = vec![
+        (id(&current), true),
+        (id(&earlier), false),
+        (id(&legacy), true),
+    ];
+    expected.sort();
+    assert_eq!(listed, expected);
+    let old = listing
+        .analyses
+        .iter()
+        .find(|item| item.analysis.id == id(&earlier))
+        .unwrap();
+    assert_eq!(old.analysis.prompt_version, "handymeeting-rust-notes-1");
+    assert_eq!(old.analysis.result_schema, 1);
+    let public = serde_json::to_value(old).unwrap();
+    assert_eq!(public["currentPrompt"], json!(false));
+    assert_eq!(public["promptVersion"], json!("handymeeting-rust-notes-1"));
+    let mut skipped: Vec<_> = listing
+        .skipped
+        .iter()
+        .map(|item| (item.id.clone(), item.reason))
+        .collect();
+    skipped.sort_by(|a, b| a.0.cmp(&b.0));
+    let mut expected = vec![
+        (id(&damaged), SkipReason::Damaged),
+        (id(&newer), SkipReason::NewerFormat),
+        (id(&forged), SkipReason::Damaged),
+        (id(&foreign), SkipReason::OtherMeeting),
+    ];
+    expected.sort_by(|a, b| a.0.cmp(&b.0));
+    assert_eq!(skipped, expected);
+    let after: Vec<_> = [
+        &current, &earlier, &legacy, &damaged, &newer, &forged, &foreign,
+    ]
+    .iter()
+    .map(|folder| fs::read(folder.join("result.json")).unwrap())
+    .collect();
+    assert_eq!(
+        before, after,
+        "Listing must never modify stored work states"
+    );
+
+    // The earlier version renders read-only, but is never reopened as current work.
+    assert!(
+        meeting_notes::render_markdown(&read_analysis(&earlier.join("result.json")).unwrap())
+            .is_ok()
+    );
+    rewrite(&earlier.join("snapshot.json"), |v| {
+        v["promptVersion"] = "handymeeting-rust-notes-1".into()
+    });
+    let requests = server.requests();
+    assert!(analyze(
+        root.path(),
+        "synthetic-meeting",
+        sources(),
+        template(),
+        connection(&server.endpoint),
+        Some(only_run_id(&earlier))
+    )
+    .is_err());
+    assert_eq!(server.requests(), requests);
+    assert_eq!(
+        fs::read(earlier.join("result.json")).unwrap(),
+        earlier_bytes
+    );
+}
+
+#[test]
+fn unfinished_run_of_an_earlier_prompt_is_listed_read_only_and_never_resumed() {
+    let root = tempfile::tempdir().unwrap();
+    let server = SyntheticHttp::new(vec![Reply::successful(false), Reply::failed()]);
+    assert!(analyze(
+        root.path(),
+        "synthetic-meeting",
+        sources(),
+        template(),
+        connection(&server.endpoint),
+        None
+    )
+    .is_err());
+    let folder = run_folder(root.path());
+    let current = read_pending_analysis(&folder).unwrap().unwrap();
+    assert!(current.resumable);
+    assert_eq!(current.prompt_version, meeting_notes::PROMPT_VERSION);
+    let snapshot = rewrite(&folder.join("snapshot.json"), |v| {
+        v["promptVersion"] = "handymeeting-rust-notes-1".into();
+        v.as_object_mut().unwrap().remove("resultSchema");
+    });
+    let checkpoint = fs::read(folder.join("step-0000-000000.json")).unwrap();
+    let pending = read_pending_analysis(&folder).unwrap().unwrap();
+    assert!(!pending.resumable);
+    assert_eq!(pending.prompt_version, "handymeeting-rust-notes-1");
+    assert_eq!(pending.confirmed_tasks, 1);
+    let error = read_snapshot(&folder.join("snapshot.json")).unwrap_err();
+    assert!(error.to_string().contains("anderen Promptfassung"));
+    server.queue(Reply::successful(true));
+    assert!(analyze(
+        root.path(),
+        "synthetic-meeting",
+        sources(),
+        template(),
+        connection(&server.endpoint),
+        Some(only_run_id(&folder))
+    )
+    .is_err());
+    assert_eq!(
+        server.requests(),
+        2,
+        "An earlier prompt version must not be continued"
+    );
+    assert!(!folder.join("step-0001-000000.json").exists());
+    assert!(!folder.join("result.json").exists());
+    assert_eq!(fs::read(folder.join("snapshot.json")).unwrap(), snapshot);
+    assert_eq!(
+        fs::read(folder.join("step-0000-000000.json")).unwrap(),
+        checkpoint
+    );
+    // A snapshot from an unknown newer storage format is reported as such, not guessed at.
+    rewrite(&folder.join("snapshot.json"), |v| {
+        v["resultSchema"] = 99.into()
+    });
+    let error = read_pending_analysis(&folder).unwrap_err();
+    assert_eq!(meeting_notes::skip_reason(&error), SkipReason::NewerFormat);
 }

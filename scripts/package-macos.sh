@@ -10,7 +10,7 @@ mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$root/packages"
 dotnet restore "$root/src/HandyMeeting.Portable/HandyMeeting.Portable.csproj" --locked-mode
 dotnet publish "$root/src/HandyMeeting.Portable/HandyMeeting.Portable.csproj" -c Release -r "$rid" --self-contained true --no-restore -o "$app/Contents/MacOS"
 python3 "$root/scripts/native-runtime.py" "$rid" "$app/Contents/MacOS/native"
-xcrun swiftc -parse-as-library -swift-version 5 -warnings-as-errors -O -target "$target" "$root/platform/macos/HandyMeetingCapture.swift" -o "$app/Contents/MacOS/HandyMeetingCapture" -framework AVFoundation -framework ScreenCaptureKit -framework CoreMedia
+xcrun swiftc -parse-as-library -swift-version 5 -warnings-as-errors -O -target "$target" "$root/platform/macos/HandyMeetingCapture.swift" -o "$app/Contents/MacOS/HandyMeetingCapture" -framework AVFoundation -framework ScreenCaptureKit -framework CoreMedia -framework CoreAudio -framework AudioToolbox
 cp "$root/THIRD_PARTY_NOTICES.txt" "$app/Contents/Resources/"
 cp "$root/LICENSE" "$app/Contents/Resources/HandyMeeting-LICENSE.txt"
 cp -R "$root/licenses" "$app/Contents/Resources/third-party-licenses"

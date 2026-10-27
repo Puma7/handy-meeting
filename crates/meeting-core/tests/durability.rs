@@ -49,6 +49,7 @@ fn checkpoint(part: &AudioPart, text: &str) -> TranscriptCheckpoint {
         tentative: String::new(),
         processed_samples: part.confirmed_sample_count,
         final_text: true,
+        revision_after_restart: false,
     }
 }
 
@@ -583,4 +584,372 @@ fn legacy_final_batch_manifest_beats_older_stream_and_other_model_journal() {
     assert_eq!(data.parts[0].model_id.as_deref(), Some("new"));
     assert_eq!([hash(&manifest), hash(&audio), hash(&journal)], before);
     assert!(!root.path().join("session.lock").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn dangling_links_in_session_storage_are_never_followed_or_created() {
+    // Synthetic links (#21): exists() reports a dangling link as missing, and
+    // create(true) or fs::copy would create its target outside the session.
+    use std::os::unix::fs::symlink;
+    let root = tempfile::tempdir().unwrap();
+    let outside = root.path().join("outside");
+    fs::create_dir(&outside).unwrap();
+    let store = SessionStore::create(root.path(), "Links", "m", "s", None).unwrap();
+    let folder = store.folder().to_owned();
+    let mut writer = PcmWriter::new(store.clone(), "system").unwrap();
+    writer.append(&vec![5; 1600]).unwrap();
+    writer.finish().unwrap();
+    drop(writer);
+    let part = store.snapshot().unwrap().parts[0].clone();
+
+    // Manifest backup: the copy must not write through the link.
+    symlink(outside.join("backup"), folder.join("session.json.bak")).unwrap();
+    let manifest = fs::read(folder.join("session.json")).unwrap();
+    assert!(store.set_status("recorded").is_err());
+    assert!(!outside.join("backup").exists());
+    assert_eq!(fs::read(folder.join("session.json")).unwrap(), manifest);
+    fs::remove_file(folder.join("session.json.bak")).unwrap();
+    store.set_status("recorded").unwrap();
+
+    // Journal append and replay.
+    let journal = folder.join("transcript-journal.jsonl");
+    symlink(outside.join("journal"), &journal).unwrap();
+    let mut text = checkpoint(&part, "Linked text.");
+    text.model_id = "m".into();
+    assert!(store.append_transcript(text).is_err());
+    assert!(!outside.join("journal").exists());
+    assert_eq!(store.snapshot().unwrap().snapshot_sequence, 0);
+    drop(store);
+    assert!(
+        SessionStore::open(&folder).is_err(),
+        "a linked journal is not replayed as an empty one"
+    );
+    assert!(!outside.join("journal").exists());
+    fs::remove_file(&journal).unwrap();
+
+    // Both lease files.
+    let key = format!(
+        "{:x}",
+        Sha256::digest(folder.canonicalize().unwrap().to_string_lossy().as_bytes())
+    );
+    for (lock, target) in [
+        (folder.join("session.lock"), outside.join("session-lock")),
+        (
+            root.path().join(".leases").join(format!("{key}.lock")),
+            outside.join("relocation-lock"),
+        ),
+    ] {
+        let retained = lock.with_extension("retained-by-test");
+        fs::rename(&lock, &retained).unwrap();
+        symlink(&target, &lock).unwrap();
+        assert!(SessionStore::open(&folder).is_err());
+        assert!(!target.exists(), "lease must not create a link target");
+        fs::remove_file(&lock).unwrap();
+        fs::rename(&retained, &lock).unwrap();
+    }
+    let reopened = SessionStore::open(&folder).unwrap();
+    assert_eq!(
+        reopened.snapshot().unwrap().parts[0].confirmed_sample_count,
+        1600
+    );
+}
+
+#[test]
+fn recovered_session_completed_after_resume_stays_complete_on_every_reopen() {
+    // Synthetic crash (#16): the process ends without a stop, so no end time is saved.
+    let root = tempfile::tempdir().unwrap();
+    let store = fixture(root.path());
+    let folder = store.folder().to_owned();
+    drop(store);
+
+    let recovered = SessionStore::open(&folder).unwrap();
+    let data = recovered.snapshot().unwrap();
+    assert_eq!(data.status, "recorded");
+    assert!(data.ended_at.is_none());
+    // Resume as the app does, finish the remaining recognition and mark it complete.
+    recovered.set_status("catching-up").unwrap();
+    let system = data.parts.iter().find(|p| p.source == "system").unwrap();
+    recovered
+        .append_transcript(checkpoint(system, "Confirmed system. Caught up."))
+        .unwrap();
+    assert!(recovered.recognition_complete().unwrap());
+    recovered.set_status("complete").unwrap();
+    let ended_at = recovered.snapshot().unwrap().ended_at;
+    assert!(ended_at.is_some());
+    drop(recovered);
+
+    for _ in 0..2 {
+        let reopened = SessionStore::open(&folder).unwrap();
+        let data = reopened.snapshot().unwrap();
+        assert_eq!(data.status, "complete");
+        assert_eq!(data.ended_at, ended_at);
+        assert!(reopened.recognition_complete().unwrap());
+        assert!(data
+            .parts
+            .iter()
+            .all(|p| p.audio_closed && p.status == "complete"));
+        assert_eq!(
+            data.parts
+                .iter()
+                .find(|p| p.source == "system")
+                .unwrap()
+                .text
+                .as_deref(),
+            Some("Confirmed system. Caught up.")
+        );
+        // The crash remains documented once; no new interruption is reported.
+        assert_eq!(
+            data.warnings
+                .iter()
+                .filter(|w| w.contains("interrupted"))
+                .count(),
+            1
+        );
+        assert!(!data.warnings.iter().any(|w| w.contains("not closed")));
+        drop(reopened);
+        // The search index reads the manifest and must agree with the opened session.
+        assert_eq!(
+            meeting_core::inspect_manifest(&folder).unwrap().status,
+            "complete"
+        );
+    }
+}
+
+#[test]
+fn stopped_session_with_failed_chunk_close_reopens_closed_at_confirmed_prefix() {
+    // Synthetic fault injection (#15): the audio journal cannot be written at the chunk
+    // boundary, as on a full disk, and the recording is then stopped normally.
+    let root = tempfile::tempdir().unwrap();
+    let store =
+        SessionStore::create(root.path(), "Failed close", "synthetic-model", "s", None).unwrap();
+    let folder = store.folder().to_owned();
+    let mut writer = PcmWriter::new(store.clone(), "system").unwrap();
+    for _ in 0..5 {
+        writer.append(&vec![3; 80_000]).unwrap();
+    }
+    writer.checkpoint().unwrap();
+    let journal = folder.join("audio-journal.jsonl");
+    let retained = folder.join("audio-journal.retained-by-test");
+    fs::rename(&journal, &retained).unwrap();
+    fs::create_dir(&journal).unwrap();
+    // The last packet reaches the 30-second boundary; its close cannot be journaled.
+    assert!(writer.append(&vec![4; 80_000]).is_err());
+    fs::remove_dir(&journal).unwrap();
+    fs::rename(&retained, &journal).unwrap();
+    store.set_status("recorded").unwrap();
+    let part = store.snapshot().unwrap().parts[0].clone();
+    assert!(!part.audio_closed);
+    assert_eq!(part.confirmed_sample_count, 400_000);
+    let audio = store.audio_path(&part).unwrap();
+    drop(writer);
+    drop(store);
+    let audio_before = hash(&audio);
+    let journal_before = fs::read(&journal).unwrap();
+
+    let reopened = SessionStore::open(&folder).unwrap();
+    let data = reopened.snapshot().unwrap();
+    assert_eq!(data.status, "recorded");
+    assert!(
+        data.parts[0].audio_closed,
+        "a stopped session must not keep an open part"
+    );
+    assert_eq!(data.parts[0].confirmed_sample_count, 400_000);
+    assert_eq!(data.parts[0].sample_count, 400_000);
+    assert!(data.capture_incomplete);
+    assert!(data.warnings.iter().any(|w| w.contains("not closed")));
+    assert_eq!(
+        hash(&audio),
+        audio_before,
+        "unconfirmed tail bytes stay on disk"
+    );
+    assert_eq!(fs::read(&journal).unwrap(), journal_before);
+    // Recognition of the closed prefix can now finish instead of waiting forever.
+    assert!(!reopened.recognition_complete().unwrap());
+    reopened
+        .append_transcript(checkpoint(&data.parts[0], "Confirmed prefix."))
+        .unwrap();
+    assert!(reopened.recognition_complete().unwrap());
+    reopened.set_status("complete").unwrap();
+    drop(reopened);
+
+    for _ in 0..2 {
+        let again = SessionStore::open(&folder).unwrap();
+        let data = again.snapshot().unwrap();
+        assert!(again.recognition_complete().unwrap());
+        assert_eq!(data.status, "complete");
+        assert_eq!(data.parts[0].text.as_deref(), Some("Confirmed prefix."));
+        assert_eq!(hash(&audio), audio_before);
+    }
+}
+
+/// Synthetic closed one-part session whose confirmed text is "Confirmed system.".
+fn closed_fixture(root: &Path) -> SessionStore {
+    let store = SessionStore::create(
+        root,
+        "Synthetic restart revision fixture",
+        "synthetic-model",
+        "generated system",
+        None,
+    )
+    .unwrap();
+    let mut writer = PcmWriter::new(store.clone(), "system").unwrap();
+    writer.append(&vec![128_i16; 16_000]).unwrap();
+    writer.finish().unwrap();
+    drop(writer);
+    store.set_status("recorded").unwrap();
+    let part = store.snapshot().unwrap().parts[0].clone();
+    store
+        .append_transcript(checkpoint(&part, "Confirmed system."))
+        .unwrap();
+    store
+}
+
+fn revision(part: &AudioPart, text: &str) -> TranscriptCheckpoint {
+    TranscriptCheckpoint {
+        revision_after_restart: true,
+        ..checkpoint(part, text)
+    }
+}
+
+fn revision_notices(warnings: &[String]) -> usize {
+    warnings
+        .iter()
+        .filter(|warning| warning.contains("the earlier text is kept in the transcript journal"))
+        .count()
+}
+
+/// Synthetic regression for #20: a recognition restart (e.g. GPU to CPU) decodes the
+/// same audio differently. Only the explicitly marked checkpoint becomes a new text
+/// version; every earlier journal line stays byte-identical and the audio is intact.
+#[test]
+fn marked_restart_revision_is_a_new_version_that_keeps_earlier_lines_and_survives_reopen() {
+    let root = tempfile::tempdir().unwrap();
+    let store = closed_fixture(root.path());
+    let folder = store.folder().to_owned();
+    let part = store.snapshot().unwrap().parts[0].clone();
+    let audio = store.audio_path(&part).unwrap();
+    let audio_before = hash(&audio);
+    let journal = folder.join("transcript-journal.jsonl");
+    let original = fs::read(&journal).unwrap();
+    // Unmarked divergence is still rejected and writes nothing.
+    assert!(store
+        .append_transcript(checkpoint(&part, "Revised system."))
+        .is_err());
+    // The marker never allows progress to move backward.
+    let mut backward = revision(&part, "Revised system.");
+    backward.processed_samples = 8_000;
+    assert!(store.append_transcript(backward).is_err());
+    assert_eq!(fs::read(&journal).unwrap(), original);
+
+    store
+        .append_transcript(revision(&part, "Revised system."))
+        .unwrap();
+    let data = store.snapshot().unwrap();
+    assert_eq!(data.parts[0].text.as_deref(), Some("Revised system."));
+    assert_eq!(data.parts[0].committed_text, "Revised system.");
+    assert_eq!(data.parts[0].processed_samples, 16_000);
+    assert_eq!(data.parts[0].status, "complete");
+    assert!(!data.capture_incomplete);
+    assert_eq!(revision_notices(&data.warnings), 1);
+    // A second restart revision of the same part keeps a single notice.
+    let revised = data.parts[0].clone();
+    store
+        .append_transcript(revision(&revised, "Revised again."))
+        .unwrap();
+    assert_eq!(revision_notices(&store.snapshot().unwrap().warnings), 1);
+
+    let versions = fs::read(&journal).unwrap();
+    assert!(versions.starts_with(&original));
+    let added: Vec<_> = String::from_utf8(versions[original.len()..].to_vec())
+        .unwrap()
+        .lines()
+        .map(str::to_owned)
+        .collect();
+    assert_eq!(added.len(), 2);
+    assert!(added
+        .iter()
+        .all(|line| line.contains("\"revisionAfterRestart\":true")));
+    assert!(String::from_utf8_lossy(&versions).contains("\"committed\":\"Confirmed system.\""));
+
+    drop(store);
+    let reopened = SessionStore::open(&folder).unwrap();
+    let data = reopened.snapshot().unwrap();
+    assert_eq!(data.parts[0].text.as_deref(), Some("Revised again."));
+    assert_eq!(data.parts[0].status, "complete");
+    assert!(!data.capture_incomplete);
+    assert_eq!(revision_notices(&data.warnings), 1);
+    assert_eq!(fs::read(&journal).unwrap(), versions);
+    assert_eq!(hash(&audio), audio_before);
+}
+
+/// Synthetic crash window: the marked checkpoint is durable, but the manifest still
+/// predates it. Journal replay accepts the marked line, re-derives the notice and
+/// yields the new text as current.
+#[test]
+fn journal_replay_accepts_marked_revision_and_rederives_its_notice() {
+    let root = tempfile::tempdir().unwrap();
+    let store = closed_fixture(root.path());
+    let folder = store.folder().to_owned();
+    let manifest = fs::read(folder.join("session.json")).unwrap();
+    let part = store.snapshot().unwrap().parts[0].clone();
+    store
+        .append_transcript(revision(&part, "Revised system."))
+        .unwrap();
+    drop(store);
+    let journal = fs::read(folder.join("transcript-journal.jsonl")).unwrap();
+    // Simulate a crash before the manifest update of the marked checkpoint.
+    fs::write(folder.join("session.json"), &manifest).unwrap();
+    let data = SessionStore::open(&folder).unwrap().snapshot().unwrap();
+    assert_eq!(data.parts[0].text.as_deref(), Some("Revised system."));
+    assert_eq!(data.parts[0].status, "complete");
+    assert!(!data.capture_incomplete);
+    assert_eq!(revision_notices(&data.warnings), 1);
+    assert_eq!(
+        fs::read(folder.join("transcript-journal.jsonl")).unwrap(),
+        journal
+    );
+}
+
+/// Synthetic: an unmarked journal line that changes the confirmed prefix is still
+/// refused on reopen, and no original file is rewritten.
+#[test]
+fn journal_replay_still_rejects_unmarked_prefix_change() {
+    let root = tempfile::tempdir().unwrap();
+    let store = closed_fixture(root.path());
+    let folder = store.folder().to_owned();
+    let data = store.snapshot().unwrap();
+    let mut line = checkpoint(&data.parts[0], "Silently replaced.");
+    line.sequence = data.snapshot_sequence + 1;
+    drop(store);
+    let journal = folder.join("transcript-journal.jsonl");
+    let mut bytes = serde_json::to_vec(&line).unwrap();
+    bytes.push(b'\n');
+    OpenOptions::new()
+        .append(true)
+        .open(&journal)
+        .unwrap()
+        .write_all(&bytes)
+        .unwrap();
+    let before = fs::read(&journal).unwrap();
+    let manifest = fs::read(folder.join("session.json")).unwrap();
+    assert!(SessionStore::open(&folder).is_err());
+    assert_eq!(fs::read(&journal).unwrap(), before);
+    assert_eq!(fs::read(folder.join("session.json")).unwrap(), manifest);
+}
+
+#[test]
+fn journal_line_without_revision_field_parses_and_keeps_its_bytes() {
+    let old = r#"{"sequence":7,"at":"2026-01-02T03:04:05+00:00","file":"system-000000000000.wav","modelId":"synthetic-model","full":"Old text.","committed":"Old text.","tentative":"","processedSamples":16000,"final":true}"#;
+    let parsed: TranscriptCheckpoint = serde_json::from_str(old).unwrap();
+    assert!(!parsed.revision_after_restart);
+    assert_eq!(serde_json::to_string(&parsed).unwrap(), old);
+    let marked = TranscriptCheckpoint {
+        revision_after_restart: true,
+        ..parsed
+    };
+    let encoded = serde_json::to_string(&marked).unwrap();
+    assert!(encoded.ends_with(r#""final":true,"revisionAfterRestart":true}"#));
+    let decoded: TranscriptCheckpoint = serde_json::from_str(&encoded).unwrap();
+    assert!(decoded.revision_after_restart);
 }

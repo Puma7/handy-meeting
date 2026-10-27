@@ -44,7 +44,7 @@ export default function SpeakerLabels({
     api
       .listAnalyses?.(meeting.id)
       .then((value) => {
-        if (active) setCandidates(nameCandidates(value, meeting));
+        if (active) setCandidates(nameCandidates(value.analyses, meeting));
       })
       .catch((e) => {
         if (active) setError(errorMessage(e));

@@ -47,6 +47,9 @@ pub fn render_markdown(analysis: &Analysis) -> Result<String> {
                 ));
             }
         }
+        if let Some(note) = crate::service::rejected_note(section) {
+            output.push_str(&format!("\n{note}\n"));
+        }
     }
     output.push_str("\n## Originaltranskript\n\nDieser unveränderte Quellenstand gehört zu dieser Auswertungsfassung.\n");
     for (index, source) in analysis.sources.iter().enumerate() {
@@ -124,6 +127,7 @@ mod tests {
                         quote: sources[0].text.clone(),
                     }],
                 }],
+                rejected: Default::default(),
             }],
             sources,
             created_at: "fixture".into(),
@@ -131,6 +135,7 @@ mod tests {
             mode: "local".into(),
             endpoint: "http://127.0.0.1/v1/".into(),
             prompt_version: crate::PROMPT_VERSION.into(),
+            result_schema: crate::RESULT_SCHEMA,
         }
     }
     #[test]

@@ -50,7 +50,7 @@ function fixture() {
     listDevices: vi.fn().mockResolvedValue([]),
     listMeetings: vi.fn().mockResolvedValue([meeting, other]),
     getMeeting: vi.fn(async (id) => (id === other.id ? other : meeting)),
-    listAnalyses: vi.fn().mockResolvedValue([]),
+    listAnalyses: vi.fn().mockResolvedValue({ analyses: [], skipped: [] }),
     getNotesProgress: vi.fn().mockResolvedValue(null),
     listTextModels: vi.fn().mockResolvedValue([]),
     copyText: vi.fn().mockResolvedValue(undefined),

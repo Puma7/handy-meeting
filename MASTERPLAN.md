@@ -98,7 +98,7 @@ Die erste Version soll eine Frage zuverlässig beantworten: Kann ich ein langes 
 | --- | --- | --- |
 | P0 | Systemaudio aufnehmen | Ausgabe des ausgewählten Audiogeräts erfassen, auch bei Kopfhörern |
 | P0 | Eigene Stimme ergänzen | Mikrofon als eigene, ausdrücklich aktivierte Spur hinzufügen |
-| P0 | Sitzung steuern | Start, Pause, Fortsetzen und Ende mit sichtbarem Aufnahmestatus |
+| P0 | Sitzung steuern | Start, Pause, Fortsetzen und Ende mit sichtbarem Aufnahmestatus (Stand 1.0.3: Start, Ende und Wiederaufnahme der Erkennung umgesetzt; Pause/Fortsetzen der Aufnahme noch offen) |
 | P0 | Lokal transkribieren | Ausgewähltes lokales Modell; bei Fehlern Aufnahme erhalten und Verarbeitung nachholen |
 | P0 | Vollständigkeit anzeigen | Verarbeitete Abschnitte, Rückstand und Unterbrechungen sichtbar machen |
 | P0 | Sitzungen speichern | Titel, Datum, Dauer, Audioquellen, Transkript und Bearbeitungsstatus |
@@ -127,7 +127,7 @@ Vor dem Start zeigen zwei Pegelanzeigen, ob beide Quellen ankommen. Die Auswahl 
 
 Die Spuren bleiben getrennt. So ist zunächst eine ehrliche Zuordnung „Lokales Mikrofon“ und „Meeting-Audio“ möglich. Das sind Quellenbezeichnungen, keine automatische Personenidentifikation. Ein Mikrofon kann mehrere Menschen im Raum aufnehmen.
 
-**Stummschaltung:** Ein in Teams oder Zoom stummgeschaltetes Mikrofon kann von der Companion App weiterhin aufgenommen werden. Die App braucht deshalb eine eigene gut sichtbare Mikrofon-Stummschaltung und Pause. Sie darf den Meeting-Mute-Status nicht ohne verlässliche Integration voraussetzen.
+**Stummschaltung:** Ein in Teams oder Zoom stummgeschaltetes Mikrofon kann von der Companion App weiterhin aufgenommen werden. Die App braucht deshalb eine eigene gut sichtbare Mikrofon-Stummschaltung und Pause. Sie darf den Meeting-Mute-Status nicht ohne verlässliche Integration voraussetzen. Stand 1.0.3: noch nicht umgesetzt; bis dahin lässt sich das Mikrofon nur beim Start abwählen.
 
 **Echo:** Bei Lautsprecherbetrieb landet der Ton der anderen Teilnehmer oft zusätzlich im Mikrofon. Zwei unabhängige Transkriptionen können dann doppelte Beiträge liefern. Kopfhörer sind der erste verlässlich unterstützte Betriebsfall. Lautsprecherbetrieb wird erst nach geprüfter Echounterdrückung als gleichwertig unterstützt. Unklare Dopplungen dürfen nicht pauschal aus dem Original gelöscht werden.
 
@@ -153,7 +153,9 @@ Unter Linux ist pipewire-pulse ein pragmatischer erster Kompatibilitätsweg. Fü
 
 # Architektur und Verantwortung der Module
 
-Der aktuelle Windows-Prototyp verwendet .NET 10 und WPF; transcribe.cpp läuft über seine C-Schnittstelle im eigenen Erkennungsprozess. Für eine spätere plattformübergreifende Oberfläche bleibt Tauri 2 mit Rust eine mögliche Zielarchitektur. Ein Umbau erfolgt nur mit erhaltenen Dateiformaten, überprüfbarer Wiederherstellung und geprüften Audioadaptern. Eine zusätzliche Python-, PyTorch- oder Electron-Laufzeit wird für die Kernfunktion nicht benötigt.
+Die Anwendung ist in Rust/Tauri 2 umgesetzt (Crates `meeting-core`, `meeting-notes`, `handy-bridge` und die Desktop-App). transcribe.cpp läuft über die offiziellen Rust-Bindings in eigenen Erkennungsprozessen. Der frühere .NET-10/WPF-Prototyp bleibt nur zum Lesen alter Sitzungen erhalten. Eine zusätzliche Python-, PyTorch- oder Electron-Laufzeit wird für die Kernfunktion nicht benötigt.
+
+**Tatsächliche Datenhaltung:** Maßgeblich sind je Sitzung `session.json` und die angehängten Journale `audio-journal.jsonl` und `transcript-journal.jsonl` neben den WAV-Abschnitten; daraus entsteht die lesbare `transcript.txt`. Die SQLite-Datenbank unter `library-index/` ist nur ein abgeleiteter, jederzeit neu aufbaubarer Suchindex und nie die Quelle der Wahrheit. Die folgende Modultabelle und das Diagramm beschreiben die fachlichen Aufgaben; „SQLite“ steht dort für diesen abgeleiteten Index.
 
 Die laufende App besteht aus der Oberfläche mit Sitzungsverwaltung und einem von ihr gestarteten lokalen ASR-Unterprozess. Es gibt zunächst keinen dauerhaft installierten Systemdienst. Ein Absturz des nativen KI-Codes soll die Aufnahme nicht beenden.
 
@@ -166,7 +168,7 @@ Die laufende App besteht aus der Oberfläche mit Sitzungsverwaltung und einem vo
 | asr_worker | Gepinnte transcribe.cpp-Version laden und mit vorhandenen Modellen ausführen |
 | model_adapter | Kompatible Modelldateien finden, auswählen und deren Fähigkeiten prüfen |
 | transcript_store | Segmente, Quellen, Revisionen und Korrekturen in SQLite speichern |
-| export | Markdown, Text und JSON erzeugen |
+| export | Markdown, Text und JSON erzeugen (Stand 1.0.3: Transkript als TXT, Auswertungen als TXT und Markdown; strukturiertes JSON noch offen) |
 | postprocess | Optional einen lokalen Textmodell-Anbieter verwenden |
 
 Handys aktueller Code isoliert transcribe.cpp ebenfalls in einem Unterprozess. Das ist ein gutes Vorbild für Abbruch, Neustart und CPU-Fallback; sein internes Protokoll bleibt jedoch eine interne Implementierung. Die Companion App bindet nicht an versteckte Startparameter oder private Protokoll-Details einer installierten Handy-Version. [Handys Engine-Supervisor](https://github.com/cjpais/Handy/blob/0e5e9ca9363bcd41c0bd6244b2798f3022f5317d/src-tauri/src/engine_supervisor/mod.rs).

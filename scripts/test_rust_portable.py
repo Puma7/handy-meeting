@@ -192,6 +192,55 @@ class PortableArtifactGuards(unittest.TestCase):
                 self.skipTest("This test account cannot create directory symlinks: " + str(error))
             self.assert_flat_proof_scope(work)
 
+    def test_debian_control_recommends_desktop_helpers_and_keeps_dependencies(self):
+        files, links = artifacts.debian_files("1.0.3-beta.1")
+        control = files["DEBIAN/control"]
+        fields = dict(line.split(": ", 1) for line in control.splitlines() if line and not line.startswith(" "))
+        self.assertEqual(fields["Package"], "handymeeting")
+        self.assertEqual(fields["Version"], "1.0.3~beta1")
+        self.assertIn("pulseaudio-utils", fields["Depends"])
+        recommends = [item.strip() for item in fields["Recommends"].split(",")]
+        self.assertIn("xdg-utils", recommends)
+        self.assertIn("gnome-keyring", recommends)
+        self.assertNotIn("gnome-keyring", fields["Depends"])  # Never a hard requirement.
+        self.assertTrue(control.endswith("\n"))
+        self.assertEqual(links, {"usr/bin/handymeeting": "/opt/handymeeting/1.0.3-beta.1/HandyMeeting"})
+        self.assertIn("Exec=/opt/handymeeting/1.0.3-beta.1/HandyMeeting\n", files["usr/share/applications/handymeeting.desktop"])
+        self.assertEqual(artifacts.debian_files("1.0.3")[0]["DEBIAN/control"].splitlines()[1], "Version: 1.0.3")
+
+    def deb_fixture(self, rid="linux-x64"):
+        work = self.root / f".build/rust-portable-package/{rid}-synthetic"
+        self.put(str(work.relative_to(self.root) / "stage-receipt.json"), {"rid": rid, "applicationVersion": "1.0.3"})
+        return work
+
+    def test_deb_metadata_links_the_command_to_the_staged_executable(self):
+        work = self.deb_fixture()
+        executable = self.put(str(work.relative_to(self.root) / "deb/opt/handymeeting/1.0.3/HandyMeeting"), b"synthetic, never executed")
+        with contextlib.redirect_stdout(io.StringIO()):
+            artifacts.deb_metadata(work)
+        link = work / "deb/usr/bin/handymeeting"
+        self.assertTrue(link.is_symlink())
+        self.assertEqual(str(link.readlink()), "/opt/handymeeting/1.0.3/HandyMeeting")
+        self.assertEqual((work / "deb" / str(link.readlink()).lstrip("/")).resolve(), executable.resolve())
+        control = (work / "deb/DEBIAN/control").read_text(encoding="utf-8")
+        self.assertIn("Recommends: xdg-utils, gnome-keyring\n", control)
+        self.assertTrue((work / "deb/usr/share/applications/handymeeting.desktop").is_file())
+        # Never overwrites an existing staged package file.
+        with self.assertRaises(FileExistsError):
+            artifacts.deb_metadata(work)
+
+    def test_deb_metadata_requires_the_staged_linux_executable_and_work_directory(self):
+        work = self.deb_fixture()
+        with self.assertRaisesRegex(RuntimeError, "not part of the staged package"), contextlib.redirect_stdout(io.StringIO()):
+            artifacts.deb_metadata(work)
+        self.assertFalse((work / "deb/usr/bin/handymeeting").exists())
+        with self.assertRaisesRegex(RuntimeError, "Unexpected Debian staging directory"):
+            artifacts.deb_metadata(self.deb_fixture("osx-arm64"))
+        outside = self.root / "elsewhere/linux-x64-synthetic"
+        self.put(str(outside.relative_to(self.root) / "stage-receipt.json"), {"rid": "linux-x64", "applicationVersion": "1.0.3"})
+        with self.assertRaisesRegex(RuntimeError, "Unexpected Debian staging directory"):
+            artifacts.deb_metadata(outside)
+
     def test_proof_output_rejects_unexpected_directories(self):
         work = self.proof_fixture()
         output = self.root / ".build/rust-portable-proofs/osx-arm64"

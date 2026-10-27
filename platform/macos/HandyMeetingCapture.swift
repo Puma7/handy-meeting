@@ -2,9 +2,14 @@ import Foundation
 import AVFoundation
 import ScreenCaptureKit
 import CoreMedia
+import CoreAudio
+import AudioToolbox
 
 // Native audio-only helper: stdout is signed 16-bit LE mono PCM at 16 kHz; diagnostics use stderr.
 // No screen frames are registered or persisted. This source must be built and tested on macOS.
+// Modes: --track system|microphone [--device CORE_AUDIO_UID] (microphone only) and
+// --list-microphones (one JSON array of {id,name,isDefault} on stdout, no permission prompt).
+// Microphone selection was added without access to Mac hardware and still needs a device test.
 final class Sink: @unchecked Sendable {
     private var converter: AVAudioConverter?
     private var format: AVAudioFormat?
@@ -37,6 +42,58 @@ func fail(_ message: String) -> Never {
 func announceReady() {
     // Startup acknowledgement is separate from PCM: silence is valid after permissions succeed.
     FileHandle.standardError.write(Data("HANDYMEETING_AUDIO_READY\n".utf8))
+}
+func address(_ selector: AudioObjectPropertySelector, _ scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal) -> AudioObjectPropertyAddress {
+    AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: kAudioObjectPropertyElementMain)
+}
+func audioDevices() -> [AudioDeviceID] {
+    let system = AudioObjectID(kAudioObjectSystemObject)
+    var request = address(kAudioHardwarePropertyDevices)
+    var size: UInt32 = 0
+    guard AudioObjectGetPropertyDataSize(system, &request, 0, nil, &size) == noErr, size > 0 else { return [] }
+    var devices = [AudioDeviceID](repeating: 0, count: Int(size) / MemoryLayout<AudioDeviceID>.size)
+    guard AudioObjectGetPropertyData(system, &request, 0, nil, &size, &devices) == noErr else { return [] }
+    return Array(devices.prefix(Int(size) / MemoryLayout<AudioDeviceID>.size))
+}
+func hasInput(_ device: AudioDeviceID) -> Bool {
+    var request = address(kAudioDevicePropertyStreams, kAudioObjectPropertyScopeInput)
+    var size: UInt32 = 0
+    return AudioObjectGetPropertyDataSize(device, &request, 0, nil, &size) == noErr && size > 0
+}
+func text(_ device: AudioDeviceID, _ selector: AudioObjectPropertySelector) -> String? {
+    var request = address(selector)
+    var value: Unmanaged<CFString>?
+    var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+    let status = withUnsafeMutablePointer(to: &value) { AudioObjectGetPropertyData(device, &request, 0, nil, &size, $0) }
+    guard status == noErr, let result = value else { return nil }
+    return result.takeRetainedValue() as String // Core Audio returns a +1 CFString.
+}
+func defaultInput() -> AudioDeviceID? {
+    var request = address(kAudioHardwarePropertyDefaultInputDevice)
+    var device = AudioDeviceID(0)
+    var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+    guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &request, 0, nil, &size, &device) == noErr, device != 0 else { return nil }
+    return device
+}
+func listMicrophones() -> Never {
+    let current = defaultInput()
+    var rows: [[String: Any]] = []
+    for device in audioDevices() where hasInput(device) {
+        guard let uid = text(device, kAudioDevicePropertyDeviceUID), !uid.isEmpty else { continue }
+        rows.append(["id": uid, "name": text(device, kAudioObjectPropertyName) ?? uid, "isDefault": device == current])
+    }
+    guard let data = try? JSONSerialization.data(withJSONObject: rows, options: [.sortedKeys]) else { fail("Cannot list microphones") }
+    FileHandle.standardOutput.write(data + Data("\n".utf8)); exit(0)
+}
+// AVAudioEngine records the system default input unless its input unit is pointed at a device.
+func select(microphone uid: String, for engine: AVAudioEngine) {
+    guard var device = audioDevices().first(where: { hasInput($0) && text($0, kAudioDevicePropertyDeviceUID) == uid }) else {
+        fail("The selected microphone is not available. Choose another microphone or the default.")
+    }
+    guard let unit = engine.inputNode.audioUnit,
+          AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0, &device, UInt32(MemoryLayout<AudioDeviceID>.size)) == noErr else {
+        fail("Cannot select the requested microphone")
+    }
 }
 @available(macOS 13.0, *)
 final class SystemCapture: NSObject, SCStreamOutput, SCStreamDelegate {
@@ -84,17 +141,26 @@ final class SystemCapture: NSObject, SCStreamOutput, SCStreamDelegate {
 }
 @main struct AudioMain {
     static func main() async {
-        guard CommandLine.arguments.count == 3, CommandLine.arguments[1] == "--track" else { fail("Use --track system|microphone") }
+        let arguments = CommandLine.arguments
+        // Listing reads device names only; it opens no stream and needs no stdin.
+        if arguments.count == 2, arguments[1] == "--list-microphones" { listMicrophones() }
+        guard arguments.count == 3 || arguments.count == 5, arguments[1] == "--track" else { fail("Use --track system|microphone [--device UID] or --list-microphones") }
+        var selected: String? = nil
+        if arguments.count == 5 {
+            guard arguments[2] == "microphone", arguments[3] == "--device", !arguments[4].isEmpty else { fail("Only --track microphone accepts --device UID") }
+            selected = arguments[4]
+        }
         // Parent EOF ends either track, including a parent process crash.
         DispatchQueue.global().async { _ = FileHandle.standardInput.readDataToEndOfFile(); exit(0) }
-        if CommandLine.arguments[2] == "microphone" {
+        if arguments[2] == "microphone" {
             guard await AVCaptureDevice.requestAccess(for: .audio) else { fail("Microphone access denied") }
             let engine = AVAudioEngine(); let sink = Sink()
+            if let uid = selected { select(microphone: uid, for: engine) } // Before reading the input format.
             let input = engine.inputNode; let format = input.outputFormat(forBus: 0)
             input.installTap(onBus: 0, bufferSize: 1600, format: format) { buffer, _ in sink.write(buffer) }
             do { try engine.start(); announceReady(); while true { try await Task.sleep(nanoseconds: 1_000_000_000) } }
             catch { fail("Microphone capture failed: " + error.localizedDescription) }
-        } else if CommandLine.arguments[2] == "system" {
+        } else if arguments[2] == "system" {
             guard #available(macOS 13.0, *) else { fail("System audio requires macOS 13 or later") }
             let capture = SystemCapture()
             do { try await capture.start(); while true { try await Task.sleep(nanoseconds: 1_000_000_000) } }

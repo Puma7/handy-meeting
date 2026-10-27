@@ -148,6 +148,15 @@ export interface TranscriptSource {
   endMs: number;
   text: string;
 }
+/** Why the backend discarded a model statement; discarded text is never stored. */
+export type RejectionReason =
+  | "invalidText"
+  | "evidenceCount"
+  | "quoteNotLiteral"
+  | "ownerOrDueOutsideTasks"
+  | "unverifiedOwnerOrDue"
+  | "invalidNameCandidate"
+  | "itemLimit";
 export interface AnalysisResult {
   id: string;
   meetingId: string;
@@ -158,9 +167,27 @@ export interface AnalysisResult {
     name: string;
     kind: AnalysisKind;
     items: NoteFact[];
+    rejected?: Partial<Record<RejectionReason, number>>;
   }[];
   sources: TranscriptSource[];
   createdAt: string;
+  promptVersion?: string;
+  resultSchema?: number;
+  /** False for a result of an earlier prompt version: shown read-only, never continued. */
+  currentPrompt?: boolean;
+}
+/** A stored work state the backend left untouched and did not show. */
+export interface SkippedAnalysis {
+  id: string;
+  reason: "damaged" | "newerFormat" | "otherMeeting";
+}
+export interface AnalysisListing {
+  analyses: AnalysisResult[];
+  skipped: SkippedAnalysis[];
+}
+export interface PendingListing {
+  items: PendingAnalysis[];
+  skipped: SkippedAnalysis[];
 }
 export interface StartRequest {
   title: string;
@@ -179,6 +206,9 @@ export interface PendingAnalysis {
   endpoint: string;
   confirmedTasks: number;
   totalTasks: number;
+  promptVersion: string;
+  /** Only runs of the current prompt version may be continued. */
+  resumable: boolean;
 }
 export interface NotesRequest {
   jobId?: string;
@@ -256,6 +286,7 @@ export interface DesktopApi {
   getUpdateProgress?(): Promise<UpdateProgress>;
   cancelUpdate?(): Promise<void>;
   installUpdate?(): Promise<void>;
+  openReleasePage?(): Promise<void>;
   getSpeakerLabels?(
     meetingId: string,
   ): Promise<SpeakerDocument & { sources: Record<string, string> }>;
@@ -289,8 +320,8 @@ export interface DesktopApi {
   resumeMeeting(id: string): Promise<Meeting>;
   importLegacy(manifest: string): Promise<Meeting>;
   generateNotes(request: NotesRequest): Promise<AnalysisResult>;
-  listAnalyses(meetingId: string): Promise<AnalysisResult[]>;
-  listUnfinishedAnalyses(meetingId: string): Promise<PendingAnalysis[]>;
+  listAnalyses(meetingId: string): Promise<AnalysisListing>;
+  listUnfinishedAnalyses(meetingId: string): Promise<PendingListing>;
   listTextModels(endpoint: string): Promise<string[]>;
   getNotesProgress(): Promise<NotesProgress | null>;
   cancelNotes(jobId: string): Promise<boolean>;
@@ -406,6 +437,12 @@ export interface UpdateProgress {
   elapsedMs: number;
   error: string | null;
   attempt?: number;
+  /** Operating system of this build: "windows", "linux", "macos", ... */
+  platform?: string;
+  /** Official release package for this platform, when the release lists one. */
+  assetName?: string | null;
+  /** Only the verified Windows setup can be downloaded inside the app. */
+  canDownload?: boolean;
 }
 export interface SpeakerDocument {
   revision: number;
@@ -413,18 +450,23 @@ export interface SpeakerDocument {
   assignments: SpeakerAssignment[];
 }
 
+export interface ArchiveReceipt {
+  archiveId: string;
+  meetingId: string;
+  kind: string;
+  archiveBytes: number;
+  originalBytes: number;
+  createdAt: string;
+}
 export interface ArchiveEntry {
-  receipt: {
-    archiveId: string;
-    meetingId: string;
-    kind: string;
-    archiveBytes: number;
-    originalBytes: number;
-    createdAt: string;
-  };
+  archiveId: string;
+  /** Null when the receipt could not be read; its files are still preserved. */
+  receipt: ArchiveReceipt | null;
   title: string;
   sessionPresent: boolean;
   sourceCopyRetained: boolean;
+  /** Which record could not be read. Such entries offer no restore or compaction. */
+  unreadable: "receipt" | "labels" | null;
 }
 export interface UnfinishedDeletion {
   logId: string;

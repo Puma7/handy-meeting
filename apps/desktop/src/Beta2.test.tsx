@@ -105,7 +105,10 @@ function apiFixture() {
     resumeMeeting: vi.fn(),
     importLegacy: vi.fn(),
     generateNotes: vi.fn(),
-    listAnalyses: vi.fn(async (id) => analyses.get(id) ?? []),
+    listAnalyses: vi.fn(async (id) => ({
+      analyses: analyses.get(id) ?? [],
+      skipped: [],
+    })),
     listTextModels: vi
       .fn()
       .mockResolvedValue(["synthetic-local", "synthetic-alternative"]),

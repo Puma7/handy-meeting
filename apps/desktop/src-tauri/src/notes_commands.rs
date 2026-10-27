@@ -6,7 +6,7 @@ use tauri::State;
 pub(crate) async fn list_unfinished_analyses(
     service: State<'_, Arc<Service>>,
     meeting_id: String,
-) -> AppResult<Vec<meeting_notes::PendingAnalysis>> {
+) -> AppResult<meeting_notes::PendingListing> {
     let service = Arc::clone(&service);
     blocking(move || crate::notes_service::pending_analyses(&service, &meeting_id)).await
 }

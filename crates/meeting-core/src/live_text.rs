@@ -1,6 +1,6 @@
 //! Readable derived TXT follows confirmed journals; failures never control capture.
 use crate::{
-    storage::{atomic_json, reject_link, render_transcript},
+    storage::{atomic_json, exists_no_link, reject_link, render_transcript},
     Result, SessionData,
 };
 use serde::{Deserialize, Serialize};
@@ -9,6 +9,7 @@ use std::{
     fs,
     io::{Read, Write},
     path::Path,
+    time::Duration,
 };
 const HEADER:&str="HandyMeeting derived transcript v1\nJournal-backed readable copy; section times are not word timestamps.\n\n";
 /// Ownership record for the derived TXT. `sha256`/`bytes` name the content this writer
@@ -57,6 +58,27 @@ fn read_receipt(path: &Path) -> Result<Receipt> {
 pub(crate) fn refresh(folder: &Path, data: &SessionData) -> Result<()> {
     write(folder, data, &mut |_| Ok(()))
 }
+/// Longest pause between attempts; the pauses double from 10 ms, about 1.3 s in total.
+const LONGEST_RETRY_PAUSE: Duration = Duration::from_millis(640);
+/// Repeats a refresh after an I/O error, such as a scanner or reader briefly holding the
+/// TXT or its receipt open on Windows. Without this, one such error left the copy stale
+/// until the next checkpoint, or for good after the last one. Ownership refusals are not
+/// I/O errors and fail at once; every attempt checks ownership again.
+pub(crate) fn retry_io(
+    mut attempt: impl FnMut() -> Result<()>,
+    mut pause: impl FnMut(Duration),
+) -> Result<()> {
+    let mut delay = Duration::from_millis(10);
+    loop {
+        match attempt() {
+            Err(error) if delay <= LONGEST_RETRY_PAUSE && error.is::<std::io::Error>() => {
+                pause(delay);
+                delay *= 2;
+            }
+            outcome => return outcome,
+        }
+    }
+}
 fn write(
     folder: &Path,
     data: &SessionData,
@@ -72,8 +94,7 @@ fn write(
     let bytes = text.as_bytes();
     let next = digest(bytes);
     let mut current = next.clone();
-    if file.exists() {
-        reject_link(&file)?;
+    if exists_no_link(&file)? {
         let mut previous = Vec::new();
         fs::File::open(&file)?
             .take(32 * 1024 * 1024 + 1)
@@ -121,7 +142,7 @@ mod tests {
     use super::*;
     use crate::{PcmWriter, SessionStore, TranscriptCheckpoint};
     fn eventually(mut condition: impl FnMut() -> bool) {
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         while !condition() {
             assert!(
                 std::time::Instant::now() < deadline,
@@ -151,6 +172,7 @@ mod tests {
                 tentative: String::new(),
                 processed_samples: p.confirmed_sample_count,
                 final_text: true,
+                revision_after_restart: false,
             })
             .unwrap();
     }
@@ -179,6 +201,56 @@ mod tests {
         eventually(|| {
             fs::read_to_string(&file).is_ok_and(|text| text.contains("More confirmed words."))
         });
+    }
+    #[test]
+    fn a_briefly_failing_refresh_is_repeated_but_an_ownership_refusal_is_not() {
+        // Synthetic I/O failures stand in for a Windows sharing violation.
+        let busy = || -> Result<()> {
+            Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "busy").into())
+        };
+        let mut calls = 0;
+        let mut pauses = Vec::new();
+        let outcome = retry_io(
+            || {
+                calls += 1;
+                if calls < 3 {
+                    busy()
+                } else {
+                    Ok(())
+                }
+            },
+            |delay| pauses.push(delay),
+        );
+        assert!(outcome.is_ok());
+        assert_eq!(calls, 3);
+        assert_eq!(
+            pauses,
+            [Duration::from_millis(10), Duration::from_millis(20)]
+        );
+
+        let mut calls = 0;
+        let outcome = retry_io(
+            || {
+                calls += 1;
+                Err("Readable text was changed outside this writer; it was preserved".into())
+            },
+            |_| panic!("an ownership refusal must not wait"),
+        );
+        assert!(outcome.is_err());
+        assert_eq!(calls, 1);
+
+        let mut calls = 0;
+        let mut waited = Duration::ZERO;
+        let outcome = retry_io(
+            || {
+                calls += 1;
+                busy()
+            },
+            |delay| waited += delay,
+        );
+        assert!(outcome.is_err());
+        assert_eq!(calls, 8);
+        assert!(waited < Duration::from_millis(1300));
     }
     #[test]
     fn index_inspection_reads_confirmed_text_that_only_the_journal_holds() {

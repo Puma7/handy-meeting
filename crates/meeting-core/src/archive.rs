@@ -18,16 +18,7 @@ const MAX_TOTAL: u64 = 64 * 1024 * 1024 * 1024;
 const MAX_MANIFEST: u64 = 64 * 1024 * 1024;
 fn operation_lock(root: &Path) -> Result<File> {
     metadata::checked_directory(root)?;
-    let path = root.join("archive-maintenance.lock");
-    if path.exists() {
-        reject_link(&path)?;
-    }
-    let file = OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(path)?;
+    let file = metadata::open_lock_file(&root.join("archive-maintenance.lock"))?;
     metadata::lock_soon(&file)?;
     Ok(file)
 }
@@ -319,16 +310,7 @@ pub fn create(
         return Err("Invalid archive request".into());
     }
     let labels = metadata::directory(root)?;
-    let lock_path = labels.join(format!("{id}.lock"));
-    if lock_path.exists() {
-        reject_link(&lock_path)?;
-    }
-    let lock = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(lock_path)?;
+    let lock = metadata::open_lock_file(&labels.join(format!("{id}.lock")))?;
     metadata::lock_soon(&lock)?;
     let meta = metadata::read(root, id)?;
     if meta.revision != expected_metadata || meta.pinned {
@@ -342,16 +324,7 @@ pub fn create(
             Err(e) => return Err(e.into()),
         }
         metadata::checked_directory(&folder)?;
-        let path = folder.join(format!("{id}.lock"));
-        if path.exists() {
-            reject_link(&path)?;
-        }
-        let lock = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open(path)?;
+        let lock = metadata::open_lock_file(&folder.join(format!("{id}.lock")))?;
         metadata::lock_soon(&lock)?;
         Some(lock)
     } else {
@@ -852,9 +825,7 @@ pub fn move_source_into_archive(
     }
     let destination = archives.join(format!("{}.source", receipt.archive_id));
     let placement = archives.join(format!("{}.placement.json", receipt.archive_id));
-    if destination.exists() || placement.exists() {
-        return Err("Existing archive placement preserved; inspect its previous operation".into());
-    }
+    retire_interrupted_placement(&archives, receipt, &placement, &destination)?;
     let mut record = serde_json::json!({"archiveId":receipt.archive_id,"meetingId":receipt.meeting_id,"phase":"prepared","sourceCopyRetained":true,"archiveSHA256":receipt.archive_sha256});
     atomic_json(&placement, &record)?;
     if cancel.load(Ordering::Acquire) {
@@ -867,10 +838,67 @@ pub fn move_source_into_archive(
     drop(relocation_guard);
     Ok(destination)
 }
+/// Retained records of earlier move attempts that stopped after `prepared`.
+const MAX_PLACEMENT_ATTEMPTS: usize = 100;
+fn placement_attempt(archives: &Path, archive_id: &str, number: usize) -> PathBuf {
+    archives.join(format!("{archive_id}.placement.attempt-{number}.json"))
+}
+/// True only when nothing, not even a dangling link, exists at `path`.
+fn absent(path: &Path) -> Result<bool> {
+    match fs::symlink_metadata(path) {
+        Ok(_) => Ok(false),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(true),
+        Err(e) => Err(e.into()),
+    }
+}
+/// A move that stopped between its `prepared` record and the rename (crash or cancellation)
+/// leaves the source in normal history and no `.source` folder. That record is kept as a
+/// numbered attempt file, never overwritten, so the verified move can be repeated. Any other
+/// existing placement or retained source blocks the move.
+fn retire_interrupted_placement(
+    archives: &Path,
+    receipt: &Receipt,
+    placement: &Path,
+    destination: &Path,
+) -> Result<()> {
+    let blocked = || "Existing archive placement preserved; inspect its previous operation";
+    if !absent(destination)? {
+        return Err(blocked().into());
+    }
+    if absent(placement)? {
+        return Ok(());
+    }
+    regular(placement)?;
+    let mut bytes = Vec::new();
+    File::open(placement)?.take(65537).read_to_end(&mut bytes)?;
+    if bytes.len() > 65536 {
+        return Err(blocked().into());
+    }
+    let record: serde_json::Value = serde_json::from_slice(&bytes).map_err(|_| blocked())?;
+    if record["phase"].as_str() != Some("prepared")
+        || record["archiveId"].as_str() != Some(receipt.archive_id.as_str())
+        || record["meetingId"].as_str() != Some(receipt.meeting_id.as_str())
+        || record["archiveSHA256"].as_str() != Some(receipt.archive_sha256.as_str())
+    {
+        return Err(blocked().into());
+    }
+    for number in 1..=MAX_PLACEMENT_ATTEMPTS {
+        let retained = placement_attempt(archives, &receipt.archive_id, number);
+        if absent(&retained)? {
+            fs::rename(placement, &retained)?;
+            #[cfg(unix)]
+            File::open(archives)?.sync_all()?;
+            return Ok(());
+        }
+    }
+    Err("Too many interrupted archive moves are retained; inspect them before moving again".into())
+}
 
 pub fn read_archived_transcript(folder: &Path) -> Result<Option<SessionData>> {
     metadata::checked_directory(folder)?;
     let path = folder.join("audio-archive.json");
+    // A dangling link is refused, not read as "no archive" (`exists` follows links).
+    metadata::reject_link_if_present(&path)?;
     if !path.exists() {
         return Ok(None);
     }
@@ -920,6 +948,7 @@ pub fn read_archived_transcript(folder: &Path) -> Result<Option<SessionData>> {
     Ok(Some(data))
 }
 fn read_audio_marker(path: &Path) -> Result<Option<AudioArchive>> {
+    metadata::reject_link_if_present(path)?;
     if !path.exists() {
         return Ok(None);
     }
@@ -1158,10 +1187,23 @@ pub struct ArchivePage {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ArchiveEntry {
-    pub receipt: Receipt,
+    pub archive_id: String,
+    /// Absent when the receipt itself could not be read; its files are still preserved.
+    pub receipt: Option<Receipt>,
     pub title: String,
     pub session_present: bool,
     pub source_copy_retained: bool,
+    /// Set when part of this entry could not be read. Such entries offer no actions.
+    pub unreadable: Option<Unreadable>,
+}
+/// Which record of an archive entry could not be read. All files stay unchanged.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Unreadable {
+    /// Missing, linked, oversized, corrupt or from a newer version (unknown fields).
+    Receipt,
+    /// The meeting's saved labels could not be read.
+    Labels,
 }
 fn receipt_at(folder: &Path, id: &str) -> Result<Receipt> {
     if !metadata::valid_id(id) || id.starts_with("legacy-") {
@@ -1213,19 +1255,35 @@ pub fn list(root: &Path, offset: usize, limit: usize) -> Result<ArchivePage> {
     let more = ids.len() > offset.saturating_add(limit);
     let mut items = Vec::new();
     for id in ids.iter().skip(offset).take(limit) {
-        let receipt = receipt_at(&folder, id)?;
-        let labels = metadata::read(root, &receipt.meeting_id)?;
+        // One unreadable entry (e.g. a receipt from a newer version) must not hide the page.
+        let source_copy_retained = folder.join(format!("{id}.source")).exists();
+        let Ok(receipt) = receipt_at(&folder, id) else {
+            items.push(ArchiveEntry {
+                archive_id: id.clone(),
+                receipt: None,
+                title: id.clone(),
+                session_present: false,
+                source_copy_retained,
+                unreadable: Some(Unreadable::Receipt),
+            });
+            continue;
+        };
+        let fallback = if receipt.title.is_empty() {
+            receipt.meeting_id.clone()
+        } else {
+            receipt.title.clone()
+        };
+        let (title, unreadable) = match metadata::read(root, &receipt.meeting_id) {
+            Ok(labels) => (labels.title.unwrap_or(fallback), None),
+            Err(_) => (fallback, Some(Unreadable::Labels)),
+        };
         items.push(ArchiveEntry {
-            title: labels.title.unwrap_or_else(|| {
-                if receipt.title.is_empty() {
-                    receipt.meeting_id.clone()
-                } else {
-                    receipt.title.clone()
-                }
-            }),
+            archive_id: id.clone(),
+            title,
             session_present: root.join("sessions").join(&receipt.meeting_id).exists(),
-            source_copy_retained: folder.join(format!("{id}.source")).exists(),
-            receipt,
+            source_copy_retained,
+            receipt: Some(receipt),
+            unreadable,
         });
     }
     Ok(ArchivePage { items, more })
@@ -1260,16 +1318,7 @@ pub fn compact_source_copy(
         return Err("Only whole-meeting source copies can be compacted".into());
     }
     let labels = metadata::directory(root)?;
-    let lock_path = labels.join(format!("{}.lock", receipt.meeting_id));
-    if lock_path.exists() {
-        reject_link(&lock_path)?;
-    }
-    let lock = OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(lock_path)?;
+    let lock = metadata::open_lock_file(&labels.join(format!("{}.lock", receipt.meeting_id)))?;
     metadata::lock_soon(&lock)?;
     if metadata::read(root, &receipt.meeting_id)?.pinned {
         return Err("VIP meeting is protected from archive compaction".into());
@@ -1436,6 +1485,12 @@ fn deletion_inventory(root: &Path, id: &str, cancel: &AtomicBool) -> Result<Dele
         ] {
             if placement.exists() {
                 push_delete_file(root, &placement, cancel, &mut files)?;
+            }
+        }
+        for number in 1..=MAX_PLACEMENT_ATTEMPTS {
+            let attempt = placement_attempt(&archives, aid, number);
+            if !absent(&attempt)? {
+                push_delete_file(root, &attempt, cancel, &mut files)?;
             }
         }
         let source = archives.join(format!("{aid}.source"));
@@ -1653,16 +1708,7 @@ fn annotation_locks(root: &Path, id: &str) -> Result<Vec<File>> {
             fs::create_dir(&parent)?;
         }
         metadata::checked_directory(&parent)?;
-        let path = parent.join(format!("{id}.lock"));
-        if path.exists() {
-            reject_link(&path)?;
-        }
-        let lock = OpenOptions::new()
-            .create(true)
-            .truncate(false)
-            .read(true)
-            .write(true)
-            .open(path)?;
+        let lock = metadata::open_lock_file(&parent.join(format!("{id}.lock")))?;
         metadata::lock_soon(&lock)?;
         locks.push(lock);
     }
@@ -1992,6 +2038,7 @@ mod tests {
                 tentative: String::new(),
                 processed_samples: 1600,
                 final_text: true,
+                revision_after_restart: false,
             })
             .unwrap();
         store.set_status("recorded").unwrap();
@@ -2668,6 +2715,169 @@ mod tests {
             b"Preserve my later edit"
         );
         assert!(restore_new(root.path(), &current.archive_id, &AtomicBool::new(false)).is_ok());
+    }
+    #[test]
+    fn archive_list_shows_unreadable_receipts_and_labels_as_preserved_entries() {
+        let root = tempfile::tempdir().unwrap();
+        let cancel = AtomicBool::new(false);
+        let id = fixture(root.path());
+        let readable = create(root.path(), &id, 0, "whole-meeting", &cancel, |_, _| {}).unwrap();
+        let other = fixture(root.path());
+        let labels_broken =
+            create(root.path(), &other, 0, "whole-meeting", &cancel, |_, _| {}).unwrap();
+        let labels = root
+            .path()
+            .join("user-metadata")
+            .join(format!("{other}.json"));
+        fs::write(&labels, b"broken retained labels").unwrap();
+        let archives = root.path().join("archives");
+        // A receipt written by a newer version with a field this version does not know.
+        let newer_id = "0".repeat(32);
+        let mut newer = serde_json::to_value(&readable).unwrap();
+        newer["archiveId"] = serde_json::json!(newer_id);
+        newer["fieldFromNewerVersion"] = serde_json::json!(true);
+        let newer_path = archives.join(format!("{newer_id}.receipt.json"));
+        let newer_bytes = serde_json::to_vec(&newer).unwrap();
+        fs::write(&newer_path, &newer_bytes).unwrap();
+        let corrupt_id = "f".repeat(32);
+        let corrupt_path = archives.join(format!("{corrupt_id}.receipt.json"));
+        fs::write(&corrupt_path, b"corrupt retained receipt").unwrap();
+        let page = list(root.path(), 0, 25).unwrap();
+        assert_eq!(page.items.len(), 4);
+        assert!(!page.more);
+        let entry = |aid: &str| page.items.iter().find(|e| e.archive_id == aid).unwrap();
+        for aid in [&newer_id, &corrupt_id] {
+            assert!(entry(aid).receipt.is_none());
+            assert_eq!(entry(aid).unreadable, Some(Unreadable::Receipt));
+        }
+        let fine = entry(&readable.archive_id);
+        assert_eq!(fine.unreadable, None);
+        assert_eq!(fine.receipt.as_ref().unwrap().meeting_id, id);
+        let broken = entry(&labels_broken.archive_id);
+        assert_eq!(broken.unreadable, Some(Unreadable::Labels));
+        assert_eq!(broken.title, "Archive fixture");
+        assert_eq!(broken.receipt.as_ref().unwrap().meeting_id, other);
+        // The page stays bounded and listing never changes the unreadable files.
+        let first = list(root.path(), 0, 1).unwrap();
+        assert_eq!(first.items.len(), 1);
+        assert!(first.more);
+        assert!(list(root.path(), 0, 51).is_err());
+        assert_eq!(fs::read(&newer_path).unwrap(), newer_bytes);
+        assert_eq!(
+            fs::read(&corrupt_path).unwrap(),
+            b"corrupt retained receipt"
+        );
+        assert_eq!(fs::read(&labels).unwrap(), b"broken retained labels");
+        assert!(restore(root.path(), &newer_id, &cancel).is_err());
+        assert_eq!(fs::read(&newer_path).unwrap(), newer_bytes);
+    }
+    #[test]
+    fn source_move_interrupted_after_prepared_record_can_be_repeated_and_keeps_that_record() {
+        let root = tempfile::tempdir().unwrap();
+        let cancel = AtomicBool::new(false);
+        let id = fixture(root.path());
+        let receipt = create(root.path(), &id, 0, "whole-meeting", &cancel, |_, _| {}).unwrap();
+        let archives = root.path().join("archives");
+        let source = root.path().join("sessions").join(&id);
+        let placement = archives.join(format!("{}.placement.json", receipt.archive_id));
+        let destination = archives.join(format!("{}.source", receipt.archive_id));
+        let attempt = archives.join(format!("{}.placement.attempt-1.json", receipt.archive_id));
+        let record = |phase: &str| {
+            serde_json::to_vec_pretty(&serde_json::json!({"archiveId":receipt.archive_id,"meetingId":receipt.meeting_id,"phase":phase,"sourceCopyRetained":true,"archiveSHA256":receipt.archive_sha256})).unwrap()
+        };
+        // A completed placement record is never replaced.
+        fs::write(&placement, record("archived")).unwrap();
+        assert!(move_source_into_archive(root.path(), &receipt, 0, &cancel).is_err());
+        assert_eq!(fs::read(&placement).unwrap(), record("archived"));
+        // State after a crash between the `prepared` record and the rename.
+        fs::write(&placement, record("prepared")).unwrap();
+        fs::create_dir(&destination).unwrap();
+        assert!(move_source_into_archive(root.path(), &receipt, 0, &cancel).is_err());
+        fs::remove_dir(&destination).unwrap();
+        fs::write(source.join("late-user-file.txt"), b"Preserve my later edit").unwrap();
+        assert!(move_source_into_archive(root.path(), &receipt, 0, &cancel).is_err());
+        assert_eq!(fs::read(&placement).unwrap(), record("prepared"));
+        assert!(!attempt.exists());
+        fs::remove_file(source.join("late-user-file.txt")).unwrap();
+        let moved = move_source_into_archive(root.path(), &receipt, 0, &cancel).unwrap();
+        assert!(!source.exists());
+        assert!(moved.join("session.json").is_file());
+        assert_eq!(
+            fs::read(&attempt).unwrap(),
+            record("prepared"),
+            "evidence kept"
+        );
+        let now: serde_json::Value =
+            serde_json::from_slice(&fs::read(&placement).unwrap()).unwrap();
+        assert_eq!(now["phase"], "archived");
+        // The retained attempt belongs to the meeting's confirmed permanent deletion.
+        let (hash, _) = deletion_fingerprint(root.path(), &id, &cancel).unwrap();
+        delete_archived_meeting(
+            root.path(),
+            &id,
+            0,
+            &hash,
+            &format!("DELETE {id}"),
+            &cancel,
+            |_, _| {},
+        )
+        .unwrap();
+        let left: Vec<_> = fs::read_dir(&archives)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert!(left.is_empty(), "{left:?}");
+    }
+    #[cfg(unix)]
+    #[test]
+    fn a_dangling_audio_archive_receipt_link_is_refused_not_read_as_missing() {
+        let root = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let id = fixture(root.path());
+        let folder = root.path().join("sessions").join(&id);
+        assert!(read_archived_transcript(&folder).unwrap().is_none());
+        let receipt = folder.join("audio-archive.json");
+        std::os::unix::fs::symlink(outside.path().join("elsewhere.json"), &receipt).unwrap();
+        assert!(!receipt.exists(), "the link dangles");
+        assert!(read_archived_transcript(&folder).is_err());
+        assert!(read_audio_marker(&receipt).is_err());
+        assert!(fs::symlink_metadata(&receipt)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+    }
+    #[cfg(unix)]
+    #[test]
+    fn dangling_archive_lock_links_are_rejected_without_creating_their_targets() {
+        let root = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let cancel = AtomicBool::new(false);
+        let id = fixture(root.path());
+        let target = outside.path().join("created-through-link");
+        let maintenance = root.path().join("archive-maintenance.lock");
+        std::os::unix::fs::symlink(&target, &maintenance).unwrap();
+        assert!(!maintenance.exists(), "the link dangles");
+        assert!(create(root.path(), &id, 0, "whole-meeting", &cancel, |_, _| {}).is_err());
+        assert!(!target.exists(), "no file is created through the link");
+        fs::remove_file(&maintenance).unwrap();
+        for parent in ["user-metadata", "speaker-labels"] {
+            let folder = root.path().join(parent);
+            fs::create_dir_all(&folder).unwrap();
+            let lock = folder.join(format!("{id}.lock"));
+            std::os::unix::fs::symlink(&target, &lock).unwrap();
+            assert!(create(root.path(), &id, 0, "whole-meeting", &cancel, |_, _| {}).is_err());
+            assert!(
+                !target.exists(),
+                "no {parent} lock is created through the link"
+            );
+            fs::remove_file(&lock).unwrap();
+        }
+        assert!(
+            !root.path().join("archives").exists() || {
+                fs::read_dir(root.path().join("archives")).unwrap().count() == 0
+            }
+        );
+        create(root.path(), &id, 0, "whole-meeting", &cancel, |_, _| {}).unwrap();
     }
     #[test]
     fn relocation_guard_keeps_other_new_writers_out_after_releasing_windows_internal_handle() {

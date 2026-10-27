@@ -12,9 +12,15 @@ use std::{
 enum Action {
     Record { root: PathBuf, seconds: u64 },
     Recover { root: PathBuf },
+    ListDevices,
 }
 
 fn parse(args: &[String]) -> meeting_core::Result<Action> {
+    if let [flag] = args {
+        if flag == "--list-devices" {
+            return Ok(Action::ListDevices);
+        }
+    }
     if let [flag, root] = args {
         if flag == "--recover" {
             return Ok(Action::Recover { root: root.into() });
@@ -22,7 +28,8 @@ fn parse(args: &[String]) -> meeting_core::Result<Action> {
     }
     if !(2..=3).contains(&args.len()) {
         return Err(
-            "Supply NEW_OUTPUT SECONDS [--allow-long-recording], or --recover OUTPUT".into(),
+            "Supply NEW_OUTPUT SECONDS [--allow-long-recording], --recover OUTPUT or --list-devices"
+                .into(),
         );
     }
     let seconds: u64 = args[1].parse()?;
@@ -144,6 +151,14 @@ fn main() -> meeting_core::Result<()> {
     match parse(&std::env::args().skip(1).collect::<Vec<_>>())? {
         Action::Record { root, seconds } => record(&root, seconds),
         Action::Recover { root } => recover(&root),
+        // Read-only: the platform adapter's actual device query; nothing is recorded.
+        Action::ListDevices => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&meeting_core::list_devices()?)?
+            );
+            Ok(())
+        }
     }
 }
 
@@ -227,6 +242,11 @@ mod tests {
         assert!(parse(&args(&["new-output", "7201", "--allow-long-recording"])).is_err());
         assert!(parse(&args(&["new-output", "7200", "--allow-long-recording"])).is_ok());
         assert!(parse(&args(&["new-output", "30", "unknown"])).is_err());
+        assert_eq!(
+            parse(&args(&["--list-devices"])).unwrap(),
+            Action::ListDevices
+        );
+        assert!(parse(&args(&["--list-devices", "extra"])).is_err());
     }
 
     #[test]

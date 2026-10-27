@@ -9,9 +9,11 @@ export function nameCandidates(analyses: AnalysisResult[], meeting: Meeting) {
     analysisId: string;
   }[] = [];
   for (const analysis of analyses) {
+    // Results of an earlier prompt version stay read-only and never feed new speaker labels.
     if (
       analysis.meetingId !== meeting.id ||
-      analysis.template.id !== SPEAKER_NAME_TEMPLATE.id
+      analysis.template.id !== SPEAKER_NAME_TEMPLATE.id ||
+      analysis.currentPrompt === false
     )
       continue;
     for (const section of analysis.sections)

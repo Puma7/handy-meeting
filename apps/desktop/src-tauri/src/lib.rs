@@ -238,13 +238,24 @@ impl Service {
             None
         };
         let recording = inner.active.as_ref().is_some_and(|a| a.capture.is_some());
-        let capture_failed = inner
-            .active
-            .as_ref()
-            .and_then(|a| a.capture.as_ref())
-            .is_some_and(|c| !c.is_running());
+        let capture = inner.active.as_ref().and_then(|a| a.capture.as_ref());
+        let capture_failed = capture.is_some_and(|c| !c.is_running());
+        let stopped_tracks = capture.map(|c| c.stopped_tracks()).unwrap_or_default();
         let error = if capture_failed {
             Some("Die Audioaufnahme wurde unterbrochen. Bereits gesicherte Daten bleiben erhalten; bitte das Meeting beenden und das Audiogerät prüfen.".into())
+        } else if !stopped_tracks.is_empty() {
+            let names = stopped_tracks
+                .iter()
+                .map(|s| {
+                    if *s == "microphone" {
+                        "Mikrofon / microphone"
+                    } else {
+                        "Systemaudio / system audio"
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            Some(format!("Eine Audiospur nimmt nicht mehr auf: {names}. Die übrige Spur läuft weiter, gesicherte Daten bleiben erhalten; bitte das Gerät prüfen. / One audio track stopped recording; the other track continues and saved audio is retained."))
         } else {
             inner.error.clone()
         };
@@ -273,6 +284,10 @@ impl Service {
             .map(PathBuf::from)
             .or(self.lock()?.executable.clone());
         let attempt = (|| {
+            // A chosen path is recorded below either way, but only a Handy program is started.
+            if path.as_deref().is_some_and(|p| !plausible_handy_path(p)) {
+                return Err("Bitte die Handy-Programmdatei auswählen (handy, Handy.exe, Handy.app oder eine Handy-AppImage). / Choose the Handy program itself.".to_string());
+            }
             let bridge = HandyBridge::discover(path.as_deref()).map_err(|e| e.to_string())?;
             let catalog = bridge.refresh().map_err(|e| e.to_string())?;
             let models = catalog
@@ -478,14 +493,24 @@ impl Service {
             self.agent.capture_ended();
         }
         active.stop.store(true, Ordering::Release);
-        for worker in active.workers.drain(..) {
-            if worker.join().is_err() {
-                let _=active.store.notice("Ein Erkennungsprozess wurde unterbrochen. Offene Abschnitte können später nachgeholt werden.");
+        // Audio is final once capture has stopped. Recognition of the remaining sections can take
+        // minutes on slow hardware, so it continues as a capture-less catch-up (like `resume`)
+        // instead of holding the transition; `reap_finished` collects it later.
+        let catching_up = active.workers.iter().any(|worker| !worker.is_finished());
+        if catching_up {
+            if capture_result.is_ok() {
+                let _ = active.store.set_status("catching-up");
             }
-        }
-        if let Ok(data) = active.store.snapshot() {
-            if library_service::update(&self.root, &data).is_err() {
-                let _ = active.store.notice("Die Aufnahme ist gespeichert; bitte den lokalen Suchindex unter Einstellungen aktualisieren. / Recording saved; refresh the local search index in Settings.");
+        } else {
+            for worker in active.workers.drain(..) {
+                if worker.join().is_err() {
+                    let _=active.store.notice("Ein Erkennungsprozess wurde unterbrochen. Offene Abschnitte können später nachgeholt werden.");
+                }
+            }
+            if let Ok(data) = active.store.snapshot() {
+                if library_service::update(&self.root, &data).is_err() {
+                    let _ = active.store.notice("Die Aufnahme ist gespeichert; bitte den lokalen Suchindex unter Einstellungen aktualisieren. / Recording saved; refresh the local search index in Settings.");
+                }
             }
         }
         let result: AppResult<MeetingView> = if capture_result.is_err() {
@@ -498,11 +523,26 @@ impl Service {
                 .map_err(|_| "Der gespeicherte Sitzungsstand konnte nicht gelesen werden.".into())
         };
         let mut inner = self.lock()?;
+        if catching_up {
+            inner.active = Some(active);
+        }
         inner.transitioning = false;
         if let Err(error) = &result {
             inner.error = Some(error.clone());
         }
         result
+    }
+    /// Polling cleanup. It runs only while no start, stop or resume holds the transition
+    /// gate, so a session set aside for settling cannot race a new recording into the
+    /// active slot; those transitions collect finished work themselves.
+    fn reap_when_idle(&self) -> AppResult<()> {
+        match self.transition.try_lock() {
+            Ok(_gate) => self.reap_finished(),
+            Err(std::sync::TryLockError::WouldBlock) => Ok(()),
+            Err(std::sync::TryLockError::Poisoned(_)) => {
+                Err("Aufnahmesteuerung ist gesperrt.".into())
+            }
+        }
     }
     fn reap_finished(&self) -> AppResult<()> {
         let finished = {
@@ -516,13 +556,46 @@ impl Service {
             }
         };
         if let Some(mut active) = finished {
+            let mut interrupted = false;
             for worker in active.workers.drain(..) {
-                let _ = worker.join();
+                interrupted |= worker.join().is_err();
             }
             self.lock()?.view = Some(active.store.clone());
-            Self::finalize_completed_recognition(&active.store)?;
+            if interrupted {
+                let _ = active.store.notice("Ein Erkennungsprozess wurde unterbrochen. Offene Abschnitte können später nachgeholt werden.");
+            }
+            if let Err(error) = Self::settle_catch_up(&active.store) {
+                // The workers are joined; keep the session so the next poll retries the
+                // status write instead of leaving it "catching-up". Callers hold the
+                // transition gate, so no new session can have taken the slot meanwhile;
+                // a session that did is never replaced.
+                let mut inner = self.lock()?;
+                if inner.active.is_none() {
+                    inner.active = Some(active);
+                }
+                return Err(error);
+            }
             if let Ok(data) = active.store.snapshot() {
-                let _ = library_service::update(&self.root, &data);
+                if library_service::update(&self.root, &data).is_err() {
+                    let _ = active.store.notice("Die Aufnahme ist gespeichert; bitte den lokalen Suchindex unter Einstellungen aktualisieren. / Recording saved; refresh the local search index in Settings.");
+                }
+            }
+        }
+        Ok(())
+    }
+    /// Records the end of a session whose recognition workers are all finished.
+    fn settle_catch_up(store: &SessionStore) -> AppResult<()> {
+        if !Self::finalize_completed_recognition(store)? {
+            // No worker remains: a catch-up that ended with open sections must not stay
+            // "catching-up", which blocks new recordings and the resume action.
+            let caught_up = store
+                .preview_snapshot(0)
+                .is_ok_and(|data| data.status == "catching-up");
+            if caught_up {
+                store
+                    .set_status("recorded")
+                    .map_err(|_| "Sitzungsstatus konnte nicht gesichert werden.")?;
+                let _ = store.notice("Die Erkennung wurde ohne vollständiges Ergebnis beendet. Audio ist gespeichert; offene Abschnitte können über Wiederaufnehmen nachgeholt werden. / Recognition ended with open sections. Audio is saved; resume to process them.");
             }
         }
         Ok(())
@@ -799,6 +872,21 @@ fn validate_id(id: &str) -> AppResult<()> {
     }
     Ok(())
 }
+/// Defence in depth for an executable path that arrives through IPC: only something named like
+/// the Handy program (or its macOS bundle) is ever started for model discovery.
+fn plausible_handy_path(path: &Path) -> bool {
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    name.starts_with("handy")
+        && (name == "handy"
+            || name.ends_with(".exe")
+            || name.ends_with(".app")
+            || name.ends_with(".appimage")
+            || !name.contains('.'))
+}
 fn valid_legacy_id(id: &str) -> bool {
     id.strip_prefix("legacy-")
         .is_some_and(|s| s.len() == 16 && s.bytes().all(|c| c.is_ascii_hexdigit()))
@@ -868,7 +956,13 @@ async fn blocking<T: Send + 'static>(
 #[tauri::command]
 async fn get_app_state(service: State<'_, Arc<Service>>) -> AppResult<AppView> {
     let service = Arc::clone(&service);
-    blocking(move || service.state()).await
+    blocking(move || {
+        // A finished catch-up after stop or resume is collected here, so it never keeps
+        // reporting active work. A failed collection is retried on the next poll.
+        let _ = service.reap_when_idle();
+        service.state()
+    })
+    .await
 }
 #[tauri::command]
 async fn refresh_handy(
@@ -1014,9 +1108,10 @@ async fn generate_notes(
 async fn list_analyses(
     service: State<'_, Arc<Service>>,
     meeting_id: String,
-) -> AppResult<Vec<meeting_notes::Analysis>> {
+) -> AppResult<meeting_notes::AnalysisListing> {
     let service = Arc::clone(&service);
-    blocking(move||{if valid_legacy_id(&meeting_id){return Ok(vec![]);}validate_id(&meeting_id)?;let root=service.root.join("sessions").join(meeting_id).join("analyses");if !root.exists(){return Ok(vec![]);}let mut results=vec![];for entry in fs::read_dir(root).map_err(|_|"Gespeicherte Auswertungen konnten nicht gelesen werden.")?.flatten(){let path=entry.path().join("result.json");if path.exists(){let result=meeting_notes::read_analysis(&path).map_err(|_|"Eine gespeicherte Auswertung besteht die Quellenprüfung nicht. Originaldateien bleiben erhalten.")?;results.push(result);}}results.sort_by(|a,b|b.created_at.cmp(&a.created_at));Ok(results)}).await
+    // Each result is checked on its own: damaged files are reported as skipped, earlier prompt versions stay listed read-only.
+    blocking(move||{if valid_legacy_id(&meeting_id){return Ok(Default::default());}validate_id(&meeting_id)?;let root=service.root.join("sessions").join(&meeting_id).join("analyses");if !root.exists(){return Ok(Default::default());}meeting_notes::list_analyses(&root,&meeting_id).map_err(|_|"Gespeicherte Auswertungen konnten nicht gelesen werden. Originaldateien bleiben erhalten.".into())}).await
 }
 
 pub fn run() {
@@ -1032,7 +1127,7 @@ pub fn run() {
         if std::env::args().skip(1).eq(["--agent", "serve"]) { agent::start_stdio(Arc::clone(&service)).map_err(std::io::Error::other)?; }
         tauri::async_runtime::spawn_blocking(move|| {let _=service.refresh(None);});
         Ok(())
-    }).invoke_handler(tauri::generate_handler![get_app_state,retention_commands::list_audio_copies,retention_commands::transcribe_audio_copy,retention_commands::compact_archive,retention_commands::list_archives,retention_commands::list_unfinished_deletions,retention_commands::resume_permanent_deletion,retention_commands::restore_archive,retention_commands::apply_retention,retention_commands::get_retention_policy,retention_commands::save_retention_policy,retention_commands::preview_retention,retention_commands::get_retention_plan,retention_commands::get_maintenance_progress,retention_commands::cancel_maintenance,library_commands::edit_meeting_metadata,library_commands::search_meetings,library_commands::rebuild_search_index,library_commands::get_library_progress,library_commands::cancel_library_job,speaker_commands::get_speaker_labels,speaker_commands::save_speaker_labels,speaker_commands::start_speaker_experiment,speaker_commands::get_speaker_progress,speaker_commands::get_speaker_sections,speaker_commands::cancel_speaker_experiment,update_commands::check_for_update,update_commands::download_update,update_commands::get_update_progress,update_commands::cancel_update,update_commands::install_update,refresh_handy,list_devices,start_meeting,stop_meeting,agent_decide_recording,agent_revoke,list_meetings,get_meeting,resume_meeting,import_legacy,copy_text,open_meeting_folder,export_transcript,generate_notes,list_analyses,notes_commands::list_unfinished_analyses,notes_commands::list_text_models,notes_commands::get_notes_progress,notes_commands::cancel_notes,notes_commands::notes_markdown,template_commands::list_templates,template_commands::save_templates,template_commands::import_templates,credential_commands::credential_status,credential_commands::save_credential,credential_commands::remove_credential])
+    }).invoke_handler(tauri::generate_handler![get_app_state,retention_commands::list_audio_copies,retention_commands::transcribe_audio_copy,retention_commands::compact_archive,retention_commands::list_archives,retention_commands::list_unfinished_deletions,retention_commands::resume_permanent_deletion,retention_commands::restore_archive,retention_commands::apply_retention,retention_commands::get_retention_policy,retention_commands::save_retention_policy,retention_commands::preview_retention,retention_commands::get_retention_plan,retention_commands::get_maintenance_progress,retention_commands::cancel_maintenance,library_commands::edit_meeting_metadata,library_commands::search_meetings,library_commands::rebuild_search_index,library_commands::get_library_progress,library_commands::cancel_library_job,speaker_commands::get_speaker_labels,speaker_commands::save_speaker_labels,speaker_commands::start_speaker_experiment,speaker_commands::get_speaker_progress,speaker_commands::get_speaker_sections,speaker_commands::cancel_speaker_experiment,update_commands::check_for_update,update_commands::download_update,update_commands::get_update_progress,update_commands::cancel_update,update_commands::install_update,update_commands::open_release_page,refresh_handy,list_devices,start_meeting,stop_meeting,agent_decide_recording,agent_revoke,list_meetings,get_meeting,resume_meeting,import_legacy,copy_text,open_meeting_folder,export_transcript,generate_notes,list_analyses,notes_commands::list_unfinished_analyses,notes_commands::list_text_models,notes_commands::get_notes_progress,notes_commands::cancel_notes,notes_commands::notes_markdown,template_commands::list_templates,template_commands::save_templates,template_commands::import_templates,credential_commands::credential_status,credential_commands::save_credential,credential_commands::remove_credential])
     .on_window_event(|window,event|{if let tauri::WindowEvent::CloseRequested{api,..}=event{let service=window.state::<Arc<Service>>();let blocked=service.lock().is_ok_and(|inner|inner.transitioning||inner.active.as_ref().is_some_and(|a|a.capture.is_some()));if blocked{api.prevent_close();if let Ok(mut inner)=service.lock(){inner.error=Some(if inner.transitioning { "Ein Vorgang läuft noch. Bitte warten, bis Audioabschluss und Verarbeitung beendet sind.".into() } else { "Bitte zuerst „Meeting beenden“ wählen. Audio wird gesichert und offene Abschnitte werden verarbeitet.".into() });}let _=window.emit("recording-close-blocked",());}}})
     .run(tauri::generate_context!()).expect("HandyMeeting konnte nicht gestartet werden.");
 }
@@ -1241,6 +1336,25 @@ mod service_tests {
     }
 
     #[test]
+    fn only_handy_named_programs_are_accepted_as_explicit_executables() {
+        for ok in [
+            "/usr/bin/handy",
+            "C:/Program Files/Handy/Handy.exe",
+            "/Applications/Handy.app",
+            "/home/u/Applications/Handy_0.9.8_amd64.AppImage",
+        ] {
+            assert!(plausible_handy_path(Path::new(ok)), "{ok}");
+        }
+        for bad in [
+            "/bin/sh",
+            "C:/Windows/System32/cmd.exe",
+            "/tmp/handy.sh",
+            "/tmp/payload",
+        ] {
+            assert!(!plausible_handy_path(Path::new(bad)), "{bad}");
+        }
+    }
+    #[test]
     fn invalid_explicit_installation_never_reverts_to_an_earlier_executable() {
         let root = fixture_root("installation-choice");
         let service = Service::new(root.clone()).unwrap();
@@ -1293,6 +1407,155 @@ mod service_tests {
     }
 
     #[test]
+    fn stop_returns_while_recognition_catches_up_and_a_poll_collects_it_later() {
+        let root = fixture_root("stop-catch-up");
+        let store = SessionStore::create(
+            &root.join("sessions"),
+            "Synthetic slow backlog",
+            "fixture-model",
+            "fixture-output",
+            None,
+        )
+        .unwrap();
+        let mut writer = meeting_core::PcmWriter::new(store.clone(), "system").unwrap();
+        writer.append(&[1_i16, 2, 3, 4]).unwrap();
+        writer.finish().unwrap();
+        drop(writer);
+        store.set_status("recorded").unwrap();
+        let service = Service::new(root.clone()).unwrap();
+        // A recognition worker that is still busy with the backlog when the user stops.
+        let (release, wait) = std::sync::mpsc::channel::<()>();
+        let worker = std::thread::spawn(move || {
+            let _ = wait.recv();
+        });
+        service.lock().unwrap().active = Some(Active {
+            owner: None,
+            store: store.clone(),
+            capture: None,
+            stop: Arc::new(AtomicBool::new(false)),
+            workers: vec![worker],
+        });
+        let started = std::time::Instant::now();
+        let view = service.stop().unwrap();
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+        assert_eq!(view.data.status, "catching-up");
+        {
+            let inner = service.lock().unwrap();
+            assert!(!inner.transitioning, "stop must not hold the transition");
+            assert!(inner.active.as_ref().is_some_and(|a| a.capture.is_none()));
+        }
+        release.send(()).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while service.lock().unwrap().active.is_some() {
+            assert!(std::time::Instant::now() < deadline);
+            service.reap_finished().unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        // Synthetic: the worker ended without recognising the open part, so the catch-up
+        // must give way to a resumable state instead of blocking new recordings.
+        let data = store.snapshot().unwrap();
+        assert_eq!(data.status, "recorded");
+        assert!(data
+            .warnings
+            .iter()
+            .any(|w| w.contains("resume to process them")));
+    }
+
+    #[test]
+    fn a_failed_catch_up_worker_leaves_a_resumable_session() {
+        let root = fixture_root("catch-up-panic");
+        let store = SessionStore::create(
+            &root.join("sessions"),
+            "Synthetic failed catch-up",
+            "fixture-model",
+            "fixture-output",
+            None,
+        )
+        .unwrap();
+        let mut writer = meeting_core::PcmWriter::new(store.clone(), "system").unwrap();
+        writer.append(&[1_i16, 2, 3, 4]).unwrap();
+        writer.finish().unwrap();
+        drop(writer);
+        store.set_status("catching-up").unwrap();
+        let service = Service::new(root.clone()).unwrap();
+        // Synthetic: a recognition worker that panics after the user stopped.
+        let worker = std::thread::spawn(|| panic!("synthetic recognition failure"));
+        while !worker.is_finished() {
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        service.lock().unwrap().active = Some(Active {
+            owner: None,
+            store: store.clone(),
+            capture: None,
+            stop: Arc::new(AtomicBool::new(true)),
+            workers: vec![worker],
+        });
+        service.reap_finished().unwrap();
+        assert!(service.lock().unwrap().active.is_none());
+        let data = store.snapshot().unwrap();
+        assert_eq!(data.status, "recorded");
+        assert!(data.warnings.iter().any(|w| w.contains("unterbrochen")));
+        // Audio is untouched.
+        assert_eq!(data.parts[0].confirmed_sample_count, 4);
+    }
+
+    #[test]
+    fn a_failed_catch_up_status_write_is_retried_and_an_index_failure_is_reported() {
+        let root = fixture_root("catch-up-retry");
+        let store = SessionStore::create(
+            &root.join("sessions"),
+            "Synthetic blocked status write",
+            "fixture-model",
+            "fixture-output",
+            None,
+        )
+        .unwrap();
+        let mut writer = meeting_core::PcmWriter::new(store.clone(), "system").unwrap();
+        writer.append(&[1_i16, 2, 3, 4]).unwrap();
+        writer.finish().unwrap();
+        drop(writer);
+        store.set_status("catching-up").unwrap();
+        let service = Service::new(root.clone()).unwrap();
+        let worker = std::thread::spawn(|| {});
+        while !worker.is_finished() {
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        service.lock().unwrap().active = Some(Active {
+            owner: None,
+            store: store.clone(),
+            capture: None,
+            stop: Arc::new(AtomicBool::new(true)),
+            workers: vec![worker],
+        });
+        // Polling leaves the session alone while a transition holds the gate.
+        {
+            let _gate = service.transition.lock().unwrap();
+            service.reap_when_idle().unwrap();
+            assert!(service.lock().unwrap().active.is_some());
+        }
+        // Synthetic: a directory in place of session.json makes the status write fail.
+        let manifest = store.folder().join("session.json");
+        let saved = std::fs::read(&manifest).unwrap();
+        std::fs::remove_file(&manifest).unwrap();
+        std::fs::create_dir(&manifest).unwrap();
+        assert!(service.reap_when_idle().is_err());
+        assert!(service.lock().unwrap().active.is_some());
+        assert_eq!(store.snapshot().unwrap().status, "catching-up");
+        std::fs::remove_dir(&manifest).unwrap();
+        std::fs::write(&manifest, saved).unwrap();
+        // Synthetic: a file in place of the index folder makes the search refresh fail.
+        let index = root.join("library-index");
+        assert!(!index.exists());
+        std::fs::write(&index, b"synthetic, blocks the search index").unwrap();
+        service.reap_when_idle().unwrap();
+        assert!(service.lock().unwrap().active.is_none());
+        let data = store.snapshot().unwrap();
+        assert_eq!(data.status, "recorded");
+        assert_eq!(data.parts[0].confirmed_sample_count, 4);
+        assert!(data.warnings.iter().any(|w| w.contains("Suchindex")));
+    }
+
+    #[test]
     fn resume_finalizes_durable_final_text_after_host_exit_without_loading_a_model() {
         for global_status in ["recorded", "catching-up"] {
             let root = fixture_root("resume-final-checkpoint");
@@ -1323,6 +1586,7 @@ mod service_tests {
                     tentative: String::new(),
                     processed_samples: part.confirmed_sample_count,
                     final_text: true,
+                    revision_after_restart: false,
                 })
                 .unwrap();
             if global_status == "catching-up" {

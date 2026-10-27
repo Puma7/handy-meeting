@@ -1,6 +1,8 @@
+use crate::validation::{read_checkpoint, validate_rejections, verify_facts};
 use crate::{
     validate_answer, validate_template, Analysis, AnalysisControl, AnalysisProgress, Connection,
-    PendingAnalysis, Section, Source, Template, TextClient, PROMPT_VERSION,
+    PendingAnalysis, Rejections, Section, Source, Template, TextClient, PROMPT_VERSION,
+    RESULT_SCHEMA,
 };
 use anyhow::{ensure, Context, Result};
 use serde::Serialize;
@@ -21,6 +23,46 @@ fn create_json(path: &Path, data: &impl Serialize) -> Result<()> {
     Ok(())
 }
 
+/// A stored file uses a result schema this build does not know, e.g. one written by a newer
+/// version. It is left untouched and reported instead of being guessed at.
+#[derive(Debug)]
+pub struct UnsupportedFormat(pub u32);
+impl std::fmt::Display for UnsupportedFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Dieser Auswertungsstand verwendet ein unbekanntes Speicherformat ({}). Er bleibt unverändert erhalten.", self.0)
+    }
+}
+impl std::error::Error for UnsupportedFormat {}
+
+/// Stored prompt and schema versions are labels of the work state, not compatibility gates:
+/// earlier prompt versions stay readable, only resuming requires the current one.
+fn validate_versions(stored: &Analysis) -> Result<()> {
+    if !(1..=RESULT_SCHEMA).contains(&stored.result_schema) {
+        return Err(UnsupportedFormat(stored.result_schema).into());
+    }
+    ensure!(
+        !stored.prompt_version.trim().is_empty()
+            && stored.prompt_version.len() <= 100
+            && !stored.prompt_version.chars().any(char::is_control),
+        "Gespeicherte Promptfassung ist ungültig."
+    );
+    Ok(())
+}
+
+pub(crate) fn is_linked(metadata: &fs::Metadata) -> bool {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        metadata.file_attributes() & 0x400 != 0
+    }
+    #[cfg(not(windows))]
+    {
+        metadata.file_type().is_symlink()
+    }
+}
+
+/// Reads a finished result of any known prompt version. Callers that continue or extend work
+/// must compare `prompt_version` with [`PROMPT_VERSION`] themselves.
 pub fn read_analysis(path: &Path) -> Result<Analysis> {
     ensure!(
         fs::metadata(path)?.len() <= 64_000_000,
@@ -48,20 +90,26 @@ fn validate_sources(sources: &[Source]) -> Result<()> {
 }
 
 /// Reading a saved request never creates a model client or restores cloud consent.
+/// Only snapshots of the current prompt version are returned, because this is the resume gate.
 pub fn read_snapshot(path: &Path) -> Result<Analysis> {
-    let metadata = fs::symlink_metadata(path)?;
-    #[cfg(windows)]
-    let linked = {
-        use std::os::windows::fs::MetadataExt;
-        metadata.file_attributes() & 0x400 != 0
-    };
-    #[cfg(not(windows))]
-    let linked = metadata.file_type().is_symlink();
+    let snapshot = inspect_snapshot(path)?;
     ensure!(
-        metadata.is_file() && !linked && metadata.len() <= 64_000_000,
+        snapshot.prompt_version == PROMPT_VERSION,
+        "Dieser Arbeitsstand wurde mit einer anderen Promptfassung ({}) erstellt. Er bleibt unverändert erhalten, wird aber nicht fortgesetzt. Bitte eine neue Auswertung starten.",
+        snapshot.prompt_version
+    );
+    Ok(snapshot)
+}
+
+/// Integrity check of a run snapshot independent of its prompt version (read-only discovery).
+fn inspect_snapshot(path: &Path) -> Result<Analysis> {
+    let metadata = fs::symlink_metadata(path)?;
+    ensure!(
+        metadata.is_file() && !is_linked(&metadata) && metadata.len() <= 64_000_000,
         "Gespeicherter Arbeitsstand ist nicht sicher lesbar."
     );
     let snapshot: Analysis = serde_json::from_slice(&fs::read(path)?)?;
+    validate_versions(&snapshot)?;
     validate_template(&snapshot.template)?;
     validate_sources(&snapshot.sources)?;
     ensure!(
@@ -70,7 +118,6 @@ pub fn read_snapshot(path: &Path) -> Result<Analysis> {
             && !snapshot.meeting_id.is_empty()
             && snapshot.meeting_id.len() <= 128
             && snapshot.source_hash == source_hash(&snapshot.sources)?
-            && snapshot.prompt_version == PROMPT_VERSION
             && snapshot.sections.is_empty()
             && ["local", "cloud"].contains(&snapshot.mode.as_str())
             && !snapshot.model.is_empty()
@@ -86,7 +133,7 @@ pub fn read_pending_analysis(folder: &Path) -> Result<Option<PendingAnalysis>> {
     if folder.join("result.json").exists() || !folder.join("snapshot.json").exists() {
         return Ok(None);
     }
-    let snapshot = read_snapshot(&folder.join("snapshot.json"))?;
+    let snapshot = inspect_snapshot(&folder.join("snapshot.json"))?;
     ensure!(
         folder.file_name().and_then(|s| s.to_str()) == Some(snapshot.id.as_str()),
         "Arbeitsstand und Auswertungsordner passen nicht zusammen."
@@ -104,15 +151,19 @@ pub fn read_pending_analysis(folder: &Path) -> Result<Option<PendingAnalysis>> {
                         && metadata.len() <= 4_000_000,
                     "Bestätigter Auswertungsabschnitt ist nicht sicher lesbar."
                 );
-                let parsed = validate_answer(&fs::read_to_string(&path)?, sources, &step.kind)?;
+                let parsed = read_checkpoint(&fs::read_to_string(&path)?, sources, &step.kind)?;
                 // A rejected name batch is requested again on resume, so it is not confirmed work.
-                if crate::name_candidates::validate_items(&snapshot.template.id, &parsed).is_ok() {
+                if crate::name_candidates::validate_items(&snapshot.template.id, &parsed.items)
+                    .is_ok()
+                {
                     confirmed_tasks += 1;
                 }
             }
         }
     }
     Ok(Some(PendingAnalysis {
+        resumable: snapshot.prompt_version == PROMPT_VERSION,
+        prompt_version: snapshot.prompt_version,
         id: snapshot.id,
         meeting_id: snapshot.meeting_id,
         source_hash: snapshot.source_hash,
@@ -126,11 +177,11 @@ pub fn read_pending_analysis(folder: &Path) -> Result<Option<PendingAnalysis>> {
     }))
 }
 pub(crate) fn validate_analysis(result: &Analysis) -> Result<()> {
+    validate_versions(result)?;
     validate_template(&result.template)?;
     crate::name_candidates::validate(result)?;
     ensure!(
         source_hash(&result.sources)? == result.source_hash
-            && result.prompt_version == PROMPT_VERSION
             && result.sections.len() == result.template.steps.len(),
         "Auswertungsstand ist beschädigt oder nicht kompatibel."
     );
@@ -139,13 +190,13 @@ pub(crate) fn validate_analysis(result: &Analysis) -> Result<()> {
             section.id == step.id && section.name == step.name && section.kind == step.kind,
             "Auswertung und Vorlagenstand passen nicht zusammen."
         );
-        for chunk in section.items.chunks(20) {
-            validate_answer(
-                &serde_json::to_string(&serde_json::json!({"items":chunk}))?,
-                &result.sources,
-                &section.kind,
-            )?;
-        }
+        verify_facts(&section.items, &result.sources, &section.kind)?;
+        validate_rejections(&section.rejected)?;
+        // Schema 1 failed on any invalid statement, so it can never record discarded ones.
+        ensure!(
+            result.result_schema >= 2 || section.rejected.is_empty(),
+            "Auswertungsstand ist beschädigt oder nicht kompatibel."
+        );
     }
     ensure!(
         result
@@ -228,6 +279,7 @@ pub fn analyze_controlled(
         mode: connection.mode.clone(),
         endpoint: client.base.to_string(),
         prompt_version: PROMPT_VERSION.to_string(),
+        result_schema: RESULT_SCHEMA,
     };
     if resume.is_some() {
         let previous = read_snapshot(&folder.join("snapshot.json"))?;
@@ -253,6 +305,7 @@ pub fn analyze_controlled(
                     && result.model == analysis.model
                     && result.mode == analysis.mode
                     && result.endpoint == analysis.endpoint
+                    && result.prompt_version == PROMPT_VERSION
                     && serde_json::to_vec(&result.template)?
                         == serde_json::to_vec(&analysis.template)?,
                 "Gespeicherte Auswertung passt nicht zum Arbeitsstand."
@@ -291,6 +344,7 @@ pub fn analyze_controlled(
     on_progress(progress.clone());
     for (step_index, step) in analysis.template.steps.iter().enumerate() {
         let mut items = Vec::new();
+        let mut rejected = Rejections::new();
         for (batch_index, sources) in batches.iter().enumerate() {
             control.check()?;
             progress.step_name = Some(step.name.clone());
@@ -301,8 +355,10 @@ pub fn analyze_controlled(
             if path.exists() {
                 progress.stage = "validating".into();
                 on_progress(progress.clone());
-                let parsed = validate_answer(&fs::read_to_string(&path)?, sources, &step.kind)?;
-                if crate::name_candidates::validate_items(&analysis.template.id, &parsed).is_ok() {
+                let parsed = read_checkpoint(&fs::read_to_string(&path)?, sources, &step.kind)?;
+                if crate::name_candidates::validate_items(&analysis.template.id, &parsed.items)
+                    .is_ok()
+                {
                     resumed = Some(parsed);
                 } else {
                     // Keep the rejected answer as evidence and request this batch again.
@@ -318,24 +374,30 @@ pub fn analyze_controlled(
                 control.check()?;
                 progress.stage = "validating".into();
                 on_progress(progress.clone());
-                let parsed = validate_answer(&answer, sources, &step.kind)?;
-                crate::name_candidates::validate_items(&analysis.template.id, &parsed)?;
+                // Invalid statements are discarded and counted; only valid ones are saved.
+                let parsed = validate_answer(&answer, sources, &step.kind, &analysis.template.id)?;
+                crate::name_candidates::validate_items(&analysis.template.id, &parsed.items)?;
                 control.check()?;
                 progress.stage = "saving".into();
                 on_progress(progress.clone());
-                create_json(&path, &serde_json::json!({"items":parsed}))?;
+                create_json(&path, &parsed)?;
                 parsed
             };
             progress.confirmed_tasks += 1;
             progress.stage = "saving".into();
             on_progress(progress.clone());
-            items.extend(parsed);
+            items.extend(parsed.items);
+            for (reason, count) in parsed.rejected {
+                let total = rejected.entry(reason).or_default();
+                *total = total.saturating_add(count);
+            }
         }
         analysis.sections.push(Section {
             id: step.id.clone(),
             name: step.name.clone(),
             kind: step.kind.clone(),
             items,
+            rejected,
         });
     }
     control.check()?;
@@ -410,6 +472,20 @@ pub fn render_text(analysis: &Analysis) -> String {
                 text.push_str(&format!("  [{}] {}\n", e.source_id, e.quote));
             }
         }
+        if let Some(note) = rejected_note(section) {
+            text.push_str(&format!("{note}\n"));
+        }
     }
     text
+}
+
+/// Discarded statements are counted, never shown; this note keeps the gap visible in exports.
+pub(crate) fn rejected_note(section: &Section) -> Option<String> {
+    let total = section
+        .rejected
+        .values()
+        .fold(0_usize, |sum, count| sum.saturating_add(*count));
+    (total > 0).then(|| {
+        format!("Hinweis: {total} KI-Aussage(n) wurden verworfen, weil sie die Beleg- oder Umfangsprüfung nicht bestanden haben.")
+    })
 }
