@@ -175,11 +175,12 @@ pub fn manifest_fingerprint(folder: &Path) -> Result<String> {
     ] {
         let path = folder.join(name);
         hash.update(name.as_bytes());
+        // A dangling link is refused, not fingerprinted as a missing file.
+        metadata::reject_link_if_present(&path)?;
         if !path.exists() {
             hash.update(b"missing");
             continue;
         }
-        reject_link(&path)?;
         let mut file = File::open(path)?;
         loop {
             let n = file.read(&mut buffer)?;
@@ -498,6 +499,20 @@ mod tests {
             .unwrap()
             .file_type()
             .is_symlink());
+    }
+    #[cfg(unix)]
+    #[test]
+    fn a_dangling_manifest_link_is_refused_not_fingerprinted_as_missing() {
+        let root = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let id = "12345678901234567890123456789012";
+        manifest(root.path(), id, "2024-01-01T00:00:00Z", "complete");
+        let folder = root.path().join("sessions").join(id);
+        assert!(manifest_fingerprint(&folder).is_ok());
+        let backup = folder.join("session.json.bak");
+        std::os::unix::fs::symlink(outside.path().join("elsewhere.json"), &backup).unwrap();
+        assert!(!backup.exists(), "the link dangles");
+        assert!(manifest_fingerprint(&folder).is_err());
     }
     #[test]
     fn preview_fingerprint_detects_a_late_unknown_file_and_missing_policy_cannot_reset_history() {

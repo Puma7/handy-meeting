@@ -897,6 +897,8 @@ fn retire_interrupted_placement(
 pub fn read_archived_transcript(folder: &Path) -> Result<Option<SessionData>> {
     metadata::checked_directory(folder)?;
     let path = folder.join("audio-archive.json");
+    // A dangling link is refused, not read as "no archive" (`exists` follows links).
+    metadata::reject_link_if_present(&path)?;
     if !path.exists() {
         return Ok(None);
     }
@@ -946,6 +948,7 @@ pub fn read_archived_transcript(folder: &Path) -> Result<Option<SessionData>> {
     Ok(Some(data))
 }
 fn read_audio_marker(path: &Path) -> Result<Option<AudioArchive>> {
+    metadata::reject_link_if_present(path)?;
     if !path.exists() {
         return Ok(None);
     }
@@ -2824,6 +2827,24 @@ mod tests {
             .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
             .collect();
         assert!(left.is_empty(), "{left:?}");
+    }
+    #[cfg(unix)]
+    #[test]
+    fn a_dangling_audio_archive_receipt_link_is_refused_not_read_as_missing() {
+        let root = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let id = fixture(root.path());
+        let folder = root.path().join("sessions").join(&id);
+        assert!(read_archived_transcript(&folder).unwrap().is_none());
+        let receipt = folder.join("audio-archive.json");
+        std::os::unix::fs::symlink(outside.path().join("elsewhere.json"), &receipt).unwrap();
+        assert!(!receipt.exists(), "the link dangles");
+        assert!(read_archived_transcript(&folder).is_err());
+        assert!(read_audio_marker(&receipt).is_err());
+        assert!(fs::symlink_metadata(&receipt)
+            .unwrap()
+            .file_type()
+            .is_symlink());
     }
     #[cfg(unix)]
     #[test]
