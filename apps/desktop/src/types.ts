@@ -224,6 +224,11 @@ export interface DesktopApi {
   compactArchive?(archiveId: string, confirmed: boolean): Promise<string>;
   listArchives?(offset: number, limit: number): Promise<ArchivePage>;
   restoreArchive?(archiveId: string, confirmed: boolean): Promise<string>;
+  listUnfinishedDeletions?(): Promise<UnfinishedDeletion[]>;
+  resumePermanentDeletion?(
+    logId: string,
+    confirmation: string,
+  ): Promise<string>;
   applyRetention?(
     planId: string,
     candidateIndex: number,
@@ -419,6 +424,13 @@ export interface ArchiveEntry {
   title: string;
   sessionPresent: boolean;
   sourceCopyRetained: boolean;
+}
+export interface UnfinishedDeletion {
+  logId: string;
+  meetingId: string;
+  deletedFiles: number;
+  totalFiles: number;
+  confirmedAt: string;
 }
 export interface ArchivePage {
   items: ArchiveEntry[];

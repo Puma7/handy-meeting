@@ -20,6 +20,9 @@ export const desktopApi: DesktopApi = {
     desktopInvoke("list_archives", { offset, limit }),
   restoreArchive: (archiveId, confirmed) =>
     desktopInvoke("restore_archive", { archiveId, confirmed }),
+  listUnfinishedDeletions: () => desktopInvoke("list_unfinished_deletions"),
+  resumePermanentDeletion: (logId, confirmation) =>
+    desktopInvoke("resume_permanent_deletion", { logId, confirmation }),
   applyRetention: (planId, candidateIndex, confirmation) =>
     desktopInvoke("apply_retention", { planId, candidateIndex, confirmation }),
   getRetentionPolicy: () => desktopInvoke("get_retention_policy"),

@@ -144,6 +144,42 @@ pub(crate) async fn list_archives(
     let service = Arc::clone(&service);
     blocking(move||meeting_core::archive::list(&service.root,offset,limit).map_err(|_|"Archive list could not be read. Existing files are preserved; inspect the local archive folder. / Archivliste konnte nicht gelesen werden. Vorhandene Dateien bleiben erhalten.".into())).await
 }
+#[tauri::command]
+pub(crate) async fn list_unfinished_deletions(
+    service: State<'_, Arc<Service>>,
+) -> AppResult<Vec<meeting_core::archive::UnfinishedDeletion>> {
+    let service = Arc::clone(&service);
+    blocking(move || {
+        meeting_core::archive::unfinished_deletions(&service.root).map_err(|_| {
+            "Unfinished deletions could not be read; files are preserved. / Unterbrochene Löschungen konnten nicht gelesen werden; Dateien bleiben erhalten.".into()
+        })
+    })
+    .await
+}
+/// Continue a stopped, already confirmed permanent deletion; the typed confirmation is required again.
+#[tauri::command(async)]
+pub(crate) fn resume_permanent_deletion(
+    service: State<'_, Arc<Service>>,
+    log_id: String,
+    confirmation: String,
+) -> AppResult<String> {
+    let owned = Arc::clone(&service);
+    let guard = reserve(&owned)?;
+    service
+        .maintenance_jobs
+        .start_work("permanent-deletion-resume", move |id, jobs, cancel| {
+            let _guard = guard;
+            let meeting = meeting_core::archive::resume_deletion(
+                &owned.root,
+                &log_id,
+                &confirmation,
+                cancel,
+                |n, total| jobs.update_work(id, n, total),
+            )?;
+            meeting_core::library::LibraryIndex::open(&owned.root)?.remove(&meeting)?;
+            Ok(())
+        })
+}
 // Runs off the UI thread: it may wait on the recording transition lock or on disk.
 #[tauri::command(async)]
 pub(crate) fn restore_archive(

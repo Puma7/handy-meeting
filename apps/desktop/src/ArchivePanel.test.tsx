@@ -134,3 +134,37 @@ it("requires separate confirmation before removing a redundant raw copy", async 
   );
   await waitFor(() => expect(compact).toHaveBeenCalledWith(archiveId, true));
 });
+it("continues a stopped permanent deletion only after the exact typed confirmation", async () => {
+  const resume = vi.fn().mockResolvedValue("job");
+  const meetingId = "d".repeat(32);
+  const api = {
+    listArchives: vi.fn().mockResolvedValue({ items: [], more: false }),
+    listUnfinishedDeletions: vi.fn().mockResolvedValue([
+      {
+        logId: "delete-" + "e".repeat(32),
+        meetingId,
+        deletedFiles: 2,
+        totalFiles: 5,
+        confirmedAt: "2026-10-27T00:00:00Z",
+      },
+    ]),
+    resumePermanentDeletion: resume,
+  } as unknown as DesktopApi;
+  render(<ArchivePanel api={api} locale="en" job={null} />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Review continuation" }),
+  );
+  const go = screen.getByRole("button", { name: "Continue deletion" });
+  expect((go as HTMLButtonElement).disabled).toBe(true);
+  const input = screen.getByLabelText(`Type "DELETE ${meetingId}" to confirm`);
+  await userEvent.type(input, "DELETE");
+  expect((go as HTMLButtonElement).disabled).toBe(true);
+  await userEvent.type(input, ` ${meetingId}`);
+  await userEvent.click(go);
+  await waitFor(() =>
+    expect(resume).toHaveBeenCalledWith(
+      "delete-" + "e".repeat(32),
+      `DELETE ${meetingId}`,
+    ),
+  );
+});

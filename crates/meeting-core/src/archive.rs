@@ -1635,22 +1635,8 @@ pub fn deletion_fingerprint(
         inventory.newest,
     ))
 }
-pub fn delete_archived_meeting(
-    root: &Path,
-    id: &str,
-    expected_meta: u64,
-    expected_hash: &str,
-    confirmation: &str,
-    cancel: &AtomicBool,
-    mut progress: impl FnMut(u64, u64),
-) -> Result<()> {
-    if !metadata::valid_id(id) || id.starts_with("legacy-") {
-        return Err("Invalid archived meeting identity".into());
-    }
-    let _operation = operation_lock(root)?;
-    if confirmation != format!("DELETE {id}") {
-        return Err("Permanent deletion requires the exact meeting confirmation".into());
-    }
+/// Label and speaker-annotation locks for one meeting, held across a destructive operation.
+fn annotation_locks(root: &Path, id: &str) -> Result<Vec<File>> {
     let metadata_dir = metadata::directory(root)?;
     let mut locks = Vec::new();
     for parent in [metadata_dir, root.join("speaker-labels")] {
@@ -1671,6 +1657,25 @@ pub fn delete_archived_meeting(
         metadata::lock_soon(&lock)?;
         locks.push(lock);
     }
+    Ok(locks)
+}
+pub fn delete_archived_meeting(
+    root: &Path,
+    id: &str,
+    expected_meta: u64,
+    expected_hash: &str,
+    confirmation: &str,
+    cancel: &AtomicBool,
+    mut progress: impl FnMut(u64, u64),
+) -> Result<()> {
+    if !metadata::valid_id(id) || id.starts_with("legacy-") {
+        return Err("Invalid archived meeting identity".into());
+    }
+    let _operation = operation_lock(root)?;
+    if confirmation != format!("DELETE {id}") {
+        return Err("Permanent deletion requires the exact meeting confirmation".into());
+    }
+    let _locks = annotation_locks(root, id)?;
     let labels = metadata::read(root, id)?;
     if labels.pinned || labels.revision != expected_meta {
         return Err("VIP protection or labels changed; permanent deletion blocked".into());
@@ -1730,6 +1735,177 @@ pub fn delete_archived_meeting(
     record["phase"] = serde_json::json!("complete");
     atomic_json(&log, &record)?;
     Ok(())
+}
+
+/// A permanent deletion that stopped before completion, from its own maintenance log.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnfinishedDeletion {
+    pub log_id: String,
+    pub meeting_id: String,
+    pub deleted_files: u64,
+    pub total_files: u64,
+    pub confirmed_at: String,
+}
+fn deletion_log(root: &Path, log_id: &str) -> Result<(PathBuf, serde_json::Value)> {
+    if !log_id
+        .strip_prefix("delete-")
+        .is_some_and(metadata::valid_id)
+    {
+        return Err("Invalid deletion log identity".into());
+    }
+    let logs = metadata::checked_directory(&root.join("maintenance-log"))?;
+    let path = logs.join(format!("{log_id}.json"));
+    regular(&path)?;
+    let mut bytes = Vec::new();
+    File::open(&path)?
+        .take(MAX_MANIFEST + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > MAX_MANIFEST {
+        return Err("Oversized deletion log".into());
+    }
+    Ok((path, serde_json::from_slice(&bytes)?))
+}
+/// Lists deletions whose log ended before `complete` (cancelled, failed or interrupted).
+pub fn unfinished_deletions(root: &Path) -> Result<Vec<UnfinishedDeletion>> {
+    let logs = root.join("maintenance-log");
+    if !logs.exists() {
+        return Ok(Vec::new());
+    }
+    metadata::checked_directory(&logs)?;
+    let mut result = Vec::new();
+    for entry in fs::read_dir(&logs)? {
+        let name = entry?.file_name().to_string_lossy().into_owned();
+        let Some(log_id) = name.strip_suffix(".json") else {
+            continue;
+        };
+        if !log_id.starts_with("delete-") {
+            continue;
+        }
+        let Ok((_, record)) = deletion_log(root, log_id) else {
+            continue;
+        };
+        if !matches!(record["phase"].as_str(), Some("confirmed" | "deleting")) {
+            continue;
+        }
+        let Some(meeting_id) = record["meetingId"]
+            .as_str()
+            .filter(|m| metadata::valid_id(m))
+        else {
+            continue;
+        };
+        result.push(UnfinishedDeletion {
+            log_id: log_id.to_owned(),
+            meeting_id: meeting_id.to_owned(),
+            deleted_files: record["deletedFiles"].as_u64().unwrap_or(0),
+            total_files: record["totalFiles"].as_u64().unwrap_or(0),
+            confirmed_at: record["at"].as_str().unwrap_or_default().to_owned(),
+        });
+        if result.len() > 1000 {
+            break;
+        }
+    }
+    result.sort_by(|a, b| b.confirmed_at.cmp(&a.confirmed_at));
+    Ok(result)
+}
+/// Continue a confirmed permanent deletion from its own log. Only the logged files are touched:
+/// absent ones count as done, present ones must still match their logged size and SHA-256.
+pub fn resume_deletion(
+    root: &Path,
+    log_id: &str,
+    confirmation: &str,
+    cancel: &AtomicBool,
+    mut progress: impl FnMut(u64, u64),
+) -> Result<String> {
+    let _operation = operation_lock(root)?;
+    let (log, mut record) = deletion_log(root, log_id)?;
+    if !matches!(record["phase"].as_str(), Some("confirmed" | "deleting")) {
+        return Err("This deletion is not unfinished".into());
+    }
+    let id = record["meetingId"]
+        .as_str()
+        .filter(|m| metadata::valid_id(m) && !m.starts_with("legacy-"))
+        .ok_or("Invalid deletion log identity")?
+        .to_owned();
+    if confirmation != format!("DELETE {id}") {
+        return Err("Permanent deletion requires the exact meeting confirmation".into());
+    }
+    if root.join("sessions").join(&id).exists() {
+        return Err("The meeting is back in normal history; deletion stays stopped".into());
+    }
+    let _locks = annotation_locks(root, &id)?;
+    let files: Vec<DeleteFile> = serde_json::from_value(record["inventory"].clone())?;
+    let labels = format!("user-metadata/{id}.json");
+    match metadata::read(root, &id) {
+        Ok(meta) if meta.pinned => {
+            return Err("VIP protection was set; deletion stays stopped".into());
+        }
+        Ok(_) => (),
+        // The confirmed run already removed the current labels; their history may remain.
+        Err(_) if !root.join(&labels).exists() && files.iter().any(|f| f.name == labels) => (),
+        Err(e) => return Err(e),
+    }
+    let base = root.canonicalize()?;
+    let total = files.len() as u64;
+    let mut parents = HashSet::new();
+    for (n, item) in files.iter().enumerate() {
+        if cancel.load(Ordering::Acquire) {
+            return Err("Permanent deletion stopped again. Remaining confirmed files are retained; it can be continued.".into());
+        }
+        let relative = Path::new(&item.name);
+        if relative.components().count() < 2
+            || !relative
+                .components()
+                .all(|c| matches!(c, std::path::Component::Normal(_)))
+        {
+            return Err("Invalid path in deletion log; remaining files retained".into());
+        }
+        let mut parent = root.to_path_buf();
+        let mut missing_parent = false;
+        for part in relative
+            .parent()
+            .ok_or("Invalid deletion parent")?
+            .components()
+        {
+            parent.push(part);
+            if !parent.exists() {
+                missing_parent = true;
+                break;
+            }
+            metadata::checked_directory(&parent)?;
+        }
+        let path = root.join(relative);
+        if !missing_parent && fs::symlink_metadata(&path).is_ok() {
+            regular(&path)?;
+            if !path.canonicalize()?.starts_with(&base) {
+                return Err("Deletion path left the storage folder; retained".into());
+            }
+            let (size, hash) = digest_cancellable(&path, Some(cancel))?;
+            if size != item.bytes || hash != item.sha256 {
+                return Err("A file changed since the deletion was confirmed; remaining files retained. Consult the maintenance log.".into());
+            }
+            fs::remove_file(&path)?;
+        }
+        let mut dir = relative.parent();
+        while let Some(d) = dir.filter(|d| d.components().count() > 1) {
+            parents.insert(d.to_path_buf());
+            dir = d.parent();
+        }
+        record["deletedFiles"] = serde_json::json!(n + 1);
+        record["phase"] = serde_json::json!("deleting");
+        record["resumedAt"] = serde_json::json!(chrono::Utc::now().to_rfc3339());
+        atomic_json(&log, &record)?;
+        progress(n as u64 + 1, total);
+    }
+    // Only now-empty folders below the top-level storage folders; never a recursive delete.
+    let mut parents: Vec<_> = parents.into_iter().collect();
+    parents.sort_by_key(|p| std::cmp::Reverse(p.components().count()));
+    for dir in parents {
+        let _ = fs::remove_dir(root.join(dir));
+    }
+    record["phase"] = serde_json::json!("complete");
+    atomic_json(&log, &record)?;
+    Ok(id)
 }
 
 #[cfg(test)]
@@ -1947,7 +2123,15 @@ mod tests {
         let page = list(root.path(), 0, 25).unwrap();
         assert!(!page.items[0].session_present);
         let restored = restore_new(root.path(), &receipt.archive_id, &cancel).unwrap();
-        assert_eq!(restored, root.path().join("sessions").join(&id));
+        // The storage root is canonical internally (/private/var on macOS, \\?\ on Windows).
+        assert_eq!(
+            restored.canonicalize().unwrap(),
+            root.path()
+                .join("sessions")
+                .join(&id)
+                .canonicalize()
+                .unwrap()
+        );
         assert!(restored.join("session.json").is_file());
         assert!(
             stale.join(&id).join("audio").join("partial.pcm").is_file(),
@@ -2177,6 +2361,90 @@ mod tests {
             .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
             .collect();
         assert!(left.is_empty(), "{left:?}");
+    }
+    #[test]
+    fn stopped_permanent_deletion_can_be_continued_from_its_log() {
+        let root = tempfile::tempdir().unwrap();
+        let id = fixture(root.path());
+        let cancel = AtomicBool::new(false);
+        metadata::edit(root.path(), &id, 0, Some("To delete".into()), false).unwrap();
+        let receipt = create(root.path(), &id, 1, "whole-meeting", &cancel, |_, _| {}).unwrap();
+        move_source_into_archive(root.path(), &receipt, 1, &cancel).unwrap();
+        let (hash, _) = deletion_fingerprint(root.path(), &id, &cancel).unwrap();
+        let stop = AtomicBool::new(false);
+        let zip = root
+            .path()
+            .join("archives")
+            .join(format!("{}.zip", receipt.archive_id));
+        // Stop right after the ZIP itself was removed: the copy is now incomplete.
+        assert!(delete_archived_meeting(
+            root.path(),
+            &id,
+            1,
+            &hash,
+            &format!("DELETE {id}"),
+            &stop,
+            |_, _| if !zip.exists() {
+                stop.store(true, Ordering::Release)
+            }
+        )
+        .is_err());
+        assert!(!zip.exists());
+        assert!(
+            deletion_fingerprint(root.path(), &id, &cancel).is_err(),
+            "a fresh preview cannot cover the remaining files"
+        );
+        let open = unfinished_deletions(root.path()).unwrap();
+        assert_eq!(open.len(), 1);
+        assert_eq!(open[0].meeting_id, id);
+        assert!(open[0].deleted_files < open[0].total_files);
+        assert!(
+            resume_deletion(root.path(), &open[0].log_id, "DELETE", &cancel, |_, _| {}).is_err()
+        );
+        // A file changed after confirmation is never deleted by the continuation.
+        let receipt_file = root
+            .path()
+            .join("archives")
+            .join(format!("{}.receipt.json", receipt.archive_id));
+        let original = fs::read(&receipt_file).unwrap();
+        fs::write(&receipt_file, b"changed later").unwrap();
+        assert!(resume_deletion(
+            root.path(),
+            &open[0].log_id,
+            &format!("DELETE {id}"),
+            &cancel,
+            |_, _| {}
+        )
+        .is_err());
+        assert_eq!(fs::read(&receipt_file).unwrap(), b"changed later");
+        fs::write(&receipt_file, original).unwrap();
+        resume_deletion(
+            root.path(),
+            &open[0].log_id,
+            &format!("DELETE {id}"),
+            &cancel,
+            |_, _| {},
+        )
+        .unwrap();
+        assert!(unfinished_deletions(root.path()).unwrap().is_empty());
+        let left: Vec<_> = fs::read_dir(root.path().join("archives"))
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert!(left.is_empty(), "{left:?}");
+        assert!(!root
+            .path()
+            .join("user-metadata")
+            .join(format!("{id}.json"))
+            .exists());
+        assert!(resume_deletion(
+            root.path(),
+            &open[0].log_id,
+            &format!("DELETE {id}"),
+            &cancel,
+            |_, _| {}
+        )
+        .is_err());
     }
     #[test]
     fn hostile_archive_paths_are_rejected_before_any_restore_destination_is_created() {

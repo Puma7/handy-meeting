@@ -6,6 +6,7 @@ import type {
   DesktopApi,
   LibraryProgress,
   Locale,
+  UnfinishedDeletion,
 } from "../types";
 export default function ArchivePanel({
   api,
@@ -22,7 +23,10 @@ export default function ArchivePanel({
     [error, setError] = useState<string | null>(null),
     [selected, setSelected] = useState<ArchiveEntry | null>(null),
     [compact, setCompact] = useState<ArchiveEntry | null>(null),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [unfinished, setUnfinished] = useState<UnfinishedDeletion[]>([]),
+    [resuming, setResuming] = useState<UnfinishedDeletion | null>(null),
+    [typed, setTyped] = useState("");
   // Only the newest request may update the page; older pages arrive late after quick paging.
   const generation = useRef(0);
   const load = useCallback(async () => {
@@ -30,8 +34,10 @@ export default function ArchivePanel({
     const current = ++generation.current;
     try {
       const next = await api.listArchives(offset, 25);
+      const stopped = (await api.listUnfinishedDeletions?.()) ?? [];
       if (current !== generation.current) return;
       setPage(next);
+      setUnfinished(stopped);
       setError(null);
     } catch (e) {
       if (current === generation.current) setError(errorMessage(e));
@@ -83,6 +89,68 @@ export default function ArchivePanel({
           : "Restoration verifies every file again and never overwrites an existing meeting. The archive copy is retained. Permanent deletion is available only through a fresh retention preview."}
       </p>
       {error && <p role="alert">{error}</p>}
+      {unfinished.length > 0 && api.resumePermanentDeletion && (
+        <div className="notice warning">
+          <strong>
+            {de
+              ? "Unterbrochene endgültige Löschung"
+              : "Stopped permanent deletion"}
+          </strong>
+          <p>
+            {de
+              ? "Diese bereits bestätigten Löschungen wurden nicht abgeschlossen. Fortsetzen löscht nur noch die protokollierten, unveränderten Dateien; geänderte Dateien stoppen den Vorgang und bleiben erhalten."
+              : "These confirmed deletions did not finish. Continuing deletes only the logged, unchanged files; a changed file stops the run and is kept."}
+          </p>
+          <ul>
+            {unfinished.map((item) => (
+              <li key={item.logId}>
+                <code>{item.meetingId}</code> · {item.deletedFiles}/
+                {item.totalFiles} · {item.confirmedAt}{" "}
+                <button
+                  className="secondary"
+                  disabled={busy || running}
+                  onClick={() => {
+                    setResuming(item);
+                    setTyped("");
+                  }}
+                >
+                  {de ? "Fortsetzen prüfen" : "Review continuation"}
+                </button>
+              </li>
+            ))}
+          </ul>
+          {resuming && (
+            <div>
+              <label>
+                {de
+                  ? `Zur Bestätigung „DELETE ${resuming.meetingId}“ eingeben`
+                  : `Type "DELETE ${resuming.meetingId}" to confirm`}
+                <input
+                  value={typed}
+                  onChange={(e) => setTyped(e.target.value)}
+                />
+              </label>
+              <button
+                className="danger"
+                disabled={
+                  busy || running || typed !== `DELETE ${resuming.meetingId}`
+                }
+                onClick={() => {
+                  const target = resuming;
+                  setBusy(true);
+                  setError(null);
+                  void api.resumePermanentDeletion!(target.logId, typed)
+                    .then(() => setResuming(null))
+                    .catch((e) => setError(errorMessage(e)))
+                    .finally(() => setBusy(false));
+                }}
+              >
+                {de ? "Löschung fortsetzen" : "Continue deletion"}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
       <button
         className="text-button"
         disabled={busy || running}
