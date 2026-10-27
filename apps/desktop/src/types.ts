@@ -405,6 +405,7 @@ export interface UpdateProgress {
   totalBytes: number;
   elapsedMs: number;
   error: string | null;
+  attempt?: number;
 }
 export interface SpeakerDocument {
   revision: number;

@@ -94,7 +94,7 @@ export default function UpdatePanel({
         cancelled: "Download cancelled",
       };
   // A cancelled download was the user's own choice; a failure stays until dismissed.
-  const failureKey = `${job?.version ?? ""}:${job?.error ?? ""}`;
+  const failureKey = `${job?.attempt ?? ""}:${job?.version ?? ""}:${job?.error ?? ""}`;
   if (
     footer &&
     !running &&

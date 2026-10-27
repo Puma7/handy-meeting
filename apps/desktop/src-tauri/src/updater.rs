@@ -24,6 +24,8 @@ pub(super) struct View {
     pub total_bytes: u64,
     pub elapsed_ms: u64,
     pub error: Option<String>,
+    /// Increases with every check or download, so the UI can scope a dismissal to one attempt.
+    pub attempt: u64,
 }
 #[derive(Clone)]
 struct Candidate {
@@ -168,6 +170,7 @@ impl Updater {
         s.view.status = status.into();
         s.view.error = None;
         s.view.elapsed_ms = 0;
+        s.view.attempt += 1;
         s.started = Some(Instant::now());
         self.cancel.store(false, Ordering::Release);
         Ok(())

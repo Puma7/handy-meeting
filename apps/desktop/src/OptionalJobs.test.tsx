@@ -274,3 +274,26 @@ it("does not keep a cancelled download in the footer and lets a failure be dismi
   await userEvent.click(await screen.findByRole("button", { name: "Dismiss" }));
   expect(container.textContent).toBe("");
 });
+it("shows a repeated failure again after a new attempt", async () => {
+  let attempt = 1;
+  const api = {
+    checkForUpdate: vi.fn(),
+    getUpdateProgress: vi.fn(async () => ({
+      status: "failed",
+      version: "1.0.3",
+      releaseUrl: null,
+      receivedBytes: 0,
+      totalBytes: 0,
+      elapsedMs: 0,
+      error: "offline",
+      attempt,
+    })),
+  } as unknown as DesktopApi;
+  const { container } = render(<UpdatePanel api={api} locale="en" footer />);
+  await userEvent.click(await screen.findByRole("button", { name: "Dismiss" }));
+  expect(container.textContent).toBe("");
+  attempt = 2;
+  expect(
+    await screen.findByRole("button", { name: "Dismiss" }, { timeout: 2000 }),
+  ).toBeTruthy();
+});
