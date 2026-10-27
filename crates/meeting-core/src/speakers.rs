@@ -50,6 +50,8 @@ pub fn read(root: &Path, id: &str) -> Result<SpeakerDocument> {
     }
     metadata::checked_directory(&folder)?;
     let path = folder.join(format!("{id}.json"));
+    // A dangling link is not an absent file and must not read as "no confirmed labels".
+    metadata::reject_link_if_present(&path)?;
     if !path.exists() {
         let history = folder.join(format!("{id}-history"));
         if history.exists() {
@@ -105,16 +107,7 @@ pub fn save(
         }
     }
     let folder = directory(root)?;
-    let path = folder.join(format!("{}.lock", data.id));
-    if path.exists() {
-        reject_link(&path)?;
-    }
-    let lock = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(path)?;
+    let lock = metadata::open_lock_file(&folder.join(format!("{}.lock", data.id)))?;
     crate::metadata::lock_soon(&lock)
         .map_err(|_| "Speaker annotations are being edited elsewhere")?;
     let old = read(root, &data.id)?;
@@ -178,5 +171,23 @@ mod tests {
         wrong.evidence = "Invented quote".into();
         assert!(save(root.path(), &data, 1, true, vec![wrong]).is_err());
         assert_eq!(read(root.path(), &data.id).unwrap().assignments.len(), 1);
+    }
+    #[cfg(unix)]
+    #[test]
+    fn dangling_speaker_lock_link_is_rejected_without_creating_its_target() {
+        let root = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let data = data();
+        let folder = directory(root.path()).unwrap();
+        let target = outside.path().join("created-through-link");
+        std::os::unix::fs::symlink(&target, folder.join(format!("{}.lock", data.id))).unwrap();
+        assert!(save(root.path(), &data, 0, true, vec![]).is_err());
+        assert!(!target.exists(), "no file is created through the link");
+        assert!(!folder.join(format!("{}.json", data.id)).exists());
+        fs::remove_file(folder.join(format!("{}.lock", data.id))).unwrap();
+        std::os::unix::fs::symlink(&target, folder.join(format!("{}.json", data.id))).unwrap();
+        assert!(read(root.path(), &data.id).is_err());
+        assert!(save(root.path(), &data, 0, true, vec![]).is_err());
+        assert!(!target.exists());
     }
 }

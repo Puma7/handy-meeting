@@ -7,6 +7,8 @@ import type { DesktopApi } from "./types";
 it("never restores a whole meeting over an existing session and requires a separate confirmation", async () => {
   const restore = vi.fn().mockResolvedValue("job");
   const entry = {
+    archiveId: "a".repeat(32),
+    unreadable: null,
     receipt: {
       archiveId: "a".repeat(32),
       meetingId: "b".repeat(32),
@@ -25,6 +27,7 @@ it("never restores a whole meeting over an existing session and requires a separ
         entry,
         {
           ...entry,
+          archiveId: "c".repeat(32),
           receipt: { ...entry.receipt, archiveId: "c".repeat(32) },
           title: "Already restored",
           sessionPresent: true,
@@ -105,6 +108,8 @@ it("requires separate confirmation before removing a redundant raw copy", async 
     listArchives: vi.fn().mockResolvedValue({
       items: [
         {
+          archiveId,
+          unreadable: null,
           receipt: {
             archiveId,
             meetingId: "a".repeat(32),
@@ -167,4 +172,68 @@ it("continues a stopped permanent deletion only after the exact typed confirmati
       `DELETE ${meetingId}`,
     ),
   );
+});
+it("shows unreadable archive entries as preserved, without restore or compaction actions", async () => {
+  const restore = vi.fn().mockResolvedValue("job");
+  const compact = vi.fn().mockResolvedValue("job");
+  const readable = {
+    archiveId: "a".repeat(32),
+    unreadable: null,
+    receipt: {
+      archiveId: "a".repeat(32),
+      meetingId: "b".repeat(32),
+      kind: "whole-meeting",
+      archiveBytes: 1000,
+      originalBytes: 2000,
+      createdAt: "2026-01-01T00:00:00Z",
+    },
+    title: "Readable archive",
+    sessionPresent: false,
+    sourceCopyRetained: true,
+  };
+  const api = {
+    listArchives: vi.fn().mockResolvedValue({
+      items: [
+        {
+          archiveId: "0".repeat(32),
+          receipt: null,
+          title: "0".repeat(32),
+          sessionPresent: false,
+          sourceCopyRetained: true,
+          unreadable: "receipt",
+        },
+        {
+          ...readable,
+          archiveId: "c".repeat(32),
+          receipt: { ...readable.receipt, archiveId: "c".repeat(32) },
+          title: "Archive with unreadable labels",
+          unreadable: "labels",
+        },
+        readable,
+      ],
+      more: false,
+    }),
+    restoreArchive: restore,
+    compactArchive: compact,
+  } as unknown as DesktopApi;
+  render(<ArchivePanel api={api} locale="en" job={null} />);
+  expect(await screen.findByText("Unreadable archive")).toBeTruthy();
+  expect(screen.getByText("0".repeat(32))).toBeTruthy();
+  expect(screen.getByText("Archive with unreadable labels")).toBeTruthy();
+  expect(screen.getByText("Readable archive")).toBeTruthy();
+  expect(
+    screen.getByText(/archive receipt cannot be read/).textContent,
+  ).toContain("All files are kept unchanged");
+  expect(
+    screen.getByText(/saved meeting labels cannot be read/).textContent,
+  ).toContain("kept unchanged");
+  // Only the readable entry offers actions.
+  expect(
+    screen.getAllByRole("button", { name: "Review restoration" }),
+  ).toHaveLength(1);
+  expect(
+    screen.getAllByRole("button", { name: "Keep archive compactly" }),
+  ).toHaveLength(1);
+  expect(restore).not.toHaveBeenCalled();
+  expect(compact).not.toHaveBeenCalled();
 });
