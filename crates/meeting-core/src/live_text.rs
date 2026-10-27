@@ -150,6 +150,7 @@ mod tests {
                 tentative: String::new(),
                 processed_samples: p.confirmed_sample_count,
                 final_text: true,
+                revision_after_restart: false,
             })
             .unwrap();
     }

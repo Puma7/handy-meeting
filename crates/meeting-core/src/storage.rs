@@ -525,12 +525,12 @@ impl SessionStore {
     pub fn append_transcript(&self, mut checkpoint: TranscriptCheckpoint) -> Result<()> {
         // Serializes transcript records: sequence assignment, journal order and publish
         // order stay identical. Only this path changes text fields and the sequence.
-        let _journal = self
+        let journal = self
             .writers
             .transcript
             .lock()
             .map_err(|_| "Transcript journal lock was poisoned")?;
-        let next = {
+        let (next, notice) = {
             let guard = self.inner.lock().map_err(|_| "Session lock was poisoned")?;
             let part = guard
                 .data
@@ -549,7 +549,10 @@ impl SessionStore {
             if checkpoint.sequence != 0 && checkpoint.sequence != next {
                 return Err("Unexpected transcript sequence".into());
             }
-            next
+            let notice = checkpoint
+                .revision_after_restart
+                .then(|| revision_notice(part));
+            (next, notice)
         };
         checkpoint.sequence = next;
         checkpoint.at = now();
@@ -568,6 +571,12 @@ impl SessionStore {
         guard.data.snapshot_sequence = next;
         drop(guard);
         self.queue_text_mirror();
+        drop(journal);
+        if let Some(notice) = notice {
+            // The marked checkpoint is already durable and authoritative; journal replay
+            // re-derives this notice on reopen if the manifest write fails here.
+            let _ = self.notice(&notice);
+        }
         Ok(())
     }
 
@@ -745,19 +754,27 @@ fn replay_transcript_journal(
         &folder.join("transcript-journal.jsonl"),
         malformed,
         |checkpoint| {
-            if let Some(part) = data
+            let Some(part) = data
                 .parts
                 .iter_mut()
                 .find(|part| part.file == checkpoint.file)
-            {
-                validate_checkpoint(part, &checkpoint)?;
-                if checkpoint.sequence >= part.transcript_sequence {
-                    validate_continuity(part, &checkpoint)?;
-                    apply_checkpoint(part, &checkpoint);
-                }
-                data.snapshot_sequence = data.snapshot_sequence.max(checkpoint.sequence);
-            } else {
+            else {
                 return Err("Text journal references unknown audio".into());
+            };
+            validate_checkpoint(part, &checkpoint)?;
+            let mut notice = None;
+            if checkpoint.sequence >= part.transcript_sequence {
+                validate_continuity(part, &checkpoint)?;
+                // Re-derived from the journal, so the notice survives a crash between
+                // the durable checkpoint and its manifest update.
+                notice = checkpoint
+                    .revision_after_restart
+                    .then(|| revision_notice(part));
+                apply_checkpoint(part, &checkpoint);
+            }
+            data.snapshot_sequence = data.snapshot_sequence.max(checkpoint.sequence);
+            if let Some(notice) = notice {
+                note_data(data, &notice);
             }
             Ok(())
         },
@@ -984,22 +1001,50 @@ fn validate_checkpoint(part: &AudioPart, checkpoint: &TranscriptCheckpoint) -> R
     Ok(())
 }
 
+/// Whether `committed`/`full` continue the stored confirmed prefix of `part`. Text of
+/// another model or of a part without confirmed text never conflicts.
+pub fn continues_confirmed_text(
+    part: &AudioPart,
+    model_id: &str,
+    committed: &str,
+    full: &str,
+) -> bool {
+    part.model_id.as_deref() != Some(model_id)
+        || part.committed_text.is_empty()
+        || (committed.starts_with(&part.committed_text) && full.starts_with(&part.committed_text))
+}
+
+/// Progress never moves backward, also not for a marked revision. A change of the
+/// confirmed prefix is accepted only as an explicitly marked new text version after a
+/// recognition restart (#20); unmarked, it is rejected, so text is never replaced
+/// silently.
 fn validate_continuity(part: &AudioPart, checkpoint: &TranscriptCheckpoint) -> Result<()> {
-    if part.model_id.as_deref() == Some(checkpoint.model_id.as_str()) {
-        if checkpoint.processed_samples < part.processed_samples {
-            return Err(
-                "Confirmed transcript progress cannot move backward during recognition restart"
-                    .into(),
-            );
-        }
-        if !part.committed_text.is_empty()
-            && (!checkpoint.committed.starts_with(&part.committed_text)
-                || !checkpoint.full.starts_with(&part.committed_text))
-        {
-            return Err("Confirmed transcript prefix changed during recognition restart; previous confirmed text remains visible".into());
-        }
+    if part.model_id.as_deref() == Some(checkpoint.model_id.as_str())
+        && checkpoint.processed_samples < part.processed_samples
+    {
+        return Err(
+            "Confirmed transcript progress cannot move backward during recognition restart".into(),
+        );
     }
-    Ok(())
+    if continues_confirmed_text(
+        part,
+        &checkpoint.model_id,
+        &checkpoint.committed,
+        &checkpoint.full,
+    ) || checkpoint.revision_after_restart
+    {
+        return Ok(());
+    }
+    Err("Confirmed transcript prefix changed during recognition restart; previous confirmed text remains visible".into())
+}
+
+/// Shown once per part; the audio is intact, so this never marks capture incomplete.
+fn revision_notice(part: &AudioPart) -> String {
+    format!(
+        "{} {}: Die Erkennung nach einem Neustart ergab für diesen Abschnitt einen anderen bestätigten Text; der frühere Text bleibt im Transkriptjournal erhalten. / Recognition after a restart produced different confirmed text for this section; the earlier text is kept in the transcript journal.",
+        part.source,
+        time(part.start_sample)
+    )
 }
 fn apply_checkpoint(part: &mut AudioPart, checkpoint: &TranscriptCheckpoint) {
     part.text = Some(checkpoint.full.clone());
@@ -1265,6 +1310,7 @@ mod tests {
                     tentative: String::new(),
                     processed_samples: part.confirmed_sample_count,
                     final_text: false,
+                    revision_after_restart: false,
                 })
             })
         };
