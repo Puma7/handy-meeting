@@ -253,6 +253,299 @@ describe("migration frontend boundaries (synthetic IPC)", () => {
     fireEvent.focus(window);
     expect(api.refreshHandy).toHaveBeenCalledTimes(1);
   });
+  it.each(["success", "failure"] as const)(
+    "checks a confirmed native selection after an overlapping automatic refresh ends with %s",
+    async (automaticOutcome) => {
+      let now = 100000;
+      vi.spyOn(Date, "now").mockImplementation(() => now);
+      const scheduleInterval = globalThis.setInterval;
+      vi.spyOn(globalThis, "setInterval").mockImplementation(
+        (handler, delay, ...args) =>
+          delay === 1500
+            ? (0 as unknown as ReturnType<typeof setInterval>)
+            : scheduleInterval(handler, delay, ...args),
+      );
+      const nativePath = "/confirmed-other-install/Handy.exe";
+      let current = state();
+      let finishAutomatic!: (handy: NonNullable<AppState["handy"]>) => void;
+      let failAutomatic!: (error: Error) => void;
+      let finishChoice!: (path: string) => void;
+      let finishNative!: (handy: NonNullable<AppState["handy"]>) => void;
+      const automatic = new Promise<NonNullable<AppState["handy"]>>(
+        (resolve, reject) => {
+          finishAutomatic = resolve;
+          failAutomatic = reject;
+        },
+      );
+      const choice = new Promise<string>((resolve) => {
+        finishChoice = resolve;
+      });
+      const nativeVerification = new Promise<NonNullable<AppState["handy"]>>(
+        (resolve) => {
+          finishNative = resolve;
+        },
+      );
+      const selectedCatalogue = {
+        ...state().handy!,
+        executable: nativePath,
+        models: [
+          {
+            id: "native-model",
+            name: "Model from confirmed installation",
+            isDownloaded: true,
+            supportsStreaming: true,
+          },
+        ],
+      };
+      const api = fakeApi();
+      api.chooseHandyExecutable = vi.fn(() => choice);
+      vi.mocked(api.getAppState).mockImplementation(async () => current);
+      vi.mocked(api.refreshHandy)
+        .mockImplementationOnce(() => automatic)
+        .mockImplementation(async (path) => {
+          if (path !== nativePath)
+            throw new Error("Synthetic wrong origin after native selection");
+          return nativeVerification;
+        });
+      render(<App api={api} />);
+      await ready();
+      await userEvent.click(
+        screen.getByRole("button", { name: "Einstellungen" }),
+      );
+      const choose = screen.getByRole("button", {
+        name: "Handy-Programm auswählen …",
+      });
+      now += 31000;
+      // Both actions begin before the pending automatic status read commits its
+      // busy render. The native dialog itself stays pending independently.
+      await act(async () => {
+        fireEvent.focus(window);
+        fireEvent.click(choose);
+        await Promise.resolve();
+      });
+      expect(api.chooseHandyExecutable).toHaveBeenCalledOnce();
+      await waitFor(() => expect(api.refreshHandy).toHaveBeenCalledTimes(1));
+      expect(api.refreshHandy).toHaveBeenNthCalledWith(1, null);
+      await act(async () => finishChoice(nativePath));
+      expect(api.refreshHandy).toHaveBeenCalledTimes(1);
+      expect(
+        (
+          screen.getByLabelText(
+            "Handy-Programmdatei (optional)",
+          ) as HTMLInputElement
+        ).value,
+      ).toBe(nativePath);
+      await userEvent.click(screen.getByRole("button", { name: "Meeting" }));
+      const queuedStart = screen.getByRole("button", {
+        name: "Bitte warten …",
+      });
+      expect((queuedStart as HTMLButtonElement).disabled).toBe(true);
+      await userEvent.click(queuedStart);
+      expect(api.startMeeting).not.toHaveBeenCalled();
+      await act(async () => {
+        if (automaticOutcome === "failure")
+          failAutomatic(new Error("Synthetic older automatic query failed"));
+        else finishAutomatic(current.handy!);
+      });
+      await waitFor(() => expect(api.refreshHandy).toHaveBeenCalledTimes(2));
+      expect(api.refreshHandy).toHaveBeenNthCalledWith(2, nativePath);
+      const checkingStart = screen.getByRole("button", {
+        name: "Bitte warten …",
+      });
+      expect((checkingStart as HTMLButtonElement).disabled).toBe(true);
+      now += 31000;
+      fireEvent.focus(window);
+      expect(api.refreshHandy).toHaveBeenCalledTimes(2);
+      await userEvent.click(
+        screen.getByRole("button", { name: "Einstellungen" }),
+      );
+      expect(
+        (
+          screen.getByLabelText(
+            "Handy-Programmdatei (optional)",
+          ) as HTMLInputElement
+        ).value,
+      ).toBe(nativePath);
+      await act(async () => {
+        current = { ...current, handy: selectedCatalogue };
+        finishNative(selectedCatalogue);
+      });
+      await userEvent.click(screen.getByRole("button", { name: "Meeting" }));
+      await screen.findByRole("option", {
+        name: "Model from confirmed installation",
+      });
+      expect(
+        screen.queryByRole("option", { name: "Installed streaming model" }),
+      ).toBeNull();
+      expect(
+        screen.queryByText("Synthetic older automatic query failed"),
+      ).toBeNull();
+      await userEvent.selectOptions(
+        screen.getByLabelText("Streaming-Modell aus Handy"),
+        "native-model",
+      );
+      await ready();
+      expect(current.handy?.executable).toBe(nativePath);
+      expect(api.startMeeting).not.toHaveBeenCalled();
+    },
+  );
+  it("retains active capture and blocks fallback when recording postpones a queued native choice", async () => {
+    let now = 100000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    let periodicPoll!: () => void;
+    const scheduleInterval = globalThis.setInterval;
+    vi.spyOn(globalThis, "setInterval").mockImplementation(
+      (handler, delay, ...args) => {
+        if (delay === 1500 && typeof handler === "function") {
+          periodicPoll = () => handler(...args);
+          return 0 as unknown as ReturnType<typeof setInterval>;
+        }
+        return scheduleInterval(handler, delay, ...args);
+      },
+    );
+    const nativePath = "/confirmed-later/Handy.exe";
+    let current = state();
+    let finishAutomatic!: (value: NonNullable<AppState["handy"]>) => void;
+    let finishChoice!: (path: string) => void;
+    const automatic = new Promise<NonNullable<AppState["handy"]>>((resolve) => {
+      finishAutomatic = resolve;
+    });
+    const choice = new Promise<string>((resolve) => {
+      finishChoice = resolve;
+    });
+    const api = fakeApi();
+    api.chooseHandyExecutable = vi.fn(() => choice);
+    vi.mocked(api.getAppState).mockImplementation(async () => current);
+    vi.mocked(api.refreshHandy)
+      .mockImplementationOnce(() => automatic)
+      .mockImplementation(async (path) => {
+        if (path === null) return state().handy!;
+        if (path !== nativePath)
+          throw new Error("Synthetic old-origin fallback");
+        current = {
+          ...current,
+          handy: { ...state().handy!, executable: nativePath },
+        };
+        return current.handy!;
+      });
+    vi.mocked(api.stopMeeting).mockImplementation(async () => {
+      current = { ...current, activeMeeting: meeting, recording: false };
+      return meeting;
+    });
+    render(<App api={api} />);
+    await ready();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Einstellungen" }),
+    );
+    now += 31000;
+    await act(async () => {
+      fireEvent.focus(window);
+      fireEvent.click(
+        screen.getByRole("button", { name: "Handy-Programm auswählen …" }),
+      );
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(api.refreshHandy).toHaveBeenCalledTimes(1));
+    await act(async () => finishChoice(nativePath));
+    current = {
+      ...current,
+      recording: true,
+      activeMeeting: { ...meeting, status: "recording" },
+    };
+    await act(async () => finishAutomatic(current.handy!));
+    await act(async () => periodicPoll());
+    await userEvent.click(screen.getByRole("button", { name: "Meeting" }));
+    const stop = await screen.findByRole("button", { name: "Meeting beenden" });
+    expect((stop as HTMLButtonElement).disabled).toBe(false);
+    expect(api.stopMeeting).not.toHaveBeenCalled();
+    expect(api.refreshHandy).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole("alert")).toHaveProperty(
+      "textContent",
+      expect.stringContaining(
+        "gewählte Programmdatei wurde noch nicht geprüft",
+      ),
+    );
+    await userEvent.click(stop);
+    const start = await screen.findByRole("button", {
+      name: "Aufnahme starten",
+    });
+    await userEvent.click(start);
+    expect((start as HTMLButtonElement).disabled).toBe(true);
+    expect(api.startMeeting).not.toHaveBeenCalled();
+    now += 31000;
+    await act(async () => {
+      fireEvent.focus(window);
+      await Promise.resolve();
+    });
+    expect(api.refreshHandy).toHaveBeenCalledTimes(1);
+    expect((start as HTMLButtonElement).disabled).toBe(true);
+    await userEvent.click(start);
+    expect(api.startMeeting).not.toHaveBeenCalled();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Aktualisieren" }),
+    );
+    await waitFor(() => expect(api.refreshHandy).toHaveBeenCalledTimes(2));
+    expect(api.refreshHandy).toHaveBeenNthCalledWith(2, nativePath);
+    await userEvent.selectOptions(
+      screen.getByLabelText("Streaming-Modell aus Handy"),
+      "installed-stream",
+    );
+    await ready();
+    expect(api.startMeeting).not.toHaveBeenCalled();
+  });
+  it("blocks the old catalogue when a confirmed native choice cannot read fresh state", async () => {
+    let now = 100000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    const api = fakeApi();
+    const path = "/confirmed-state-unavailable/Handy.exe";
+    api.chooseHandyExecutable = vi.fn().mockResolvedValue(path);
+    vi.mocked(api.refreshHandy).mockImplementation(async (explicit) => ({
+      ...state().handy!,
+      executable: explicit === path ? path : state().handy!.executable,
+    }));
+    render(<App api={api} />);
+    await ready();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Einstellungen" }),
+    );
+    vi.mocked(api.getAppState).mockRejectedValueOnce(
+      new Error("Synthetic state unavailable before explicit verification"),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Handy-Programm auswählen …" }),
+    );
+    await screen.findByText(
+      "Synthetic state unavailable before explicit verification",
+    );
+    expect(api.refreshHandy).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Meeting" }));
+    const start = screen.getByRole("button", { name: "Aufnahme starten" });
+    await userEvent.click(start);
+    expect(api.startMeeting).not.toHaveBeenCalled();
+    expect((start as HTMLButtonElement).disabled).toBe(true);
+    now += 31000;
+    await act(async () => {
+      fireEvent.focus(window);
+      await Promise.resolve();
+    });
+    expect(api.refreshHandy).not.toHaveBeenCalled();
+    expect((start as HTMLButtonElement).disabled).toBe(true);
+    await userEvent.click(start);
+    expect(api.startMeeting).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole("option", { name: "Installed streaming model" }),
+    ).toBeNull();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Aktualisieren" }),
+    );
+    await waitFor(() => expect(api.refreshHandy).toHaveBeenCalledWith(path));
+    await userEvent.selectOptions(
+      screen.getByLabelText("Streaming-Modell aus Handy"),
+      "installed-stream",
+    );
+    await ready();
+    expect(api.startMeeting).not.toHaveBeenCalled();
+  });
   it("keeps automatically discovered Handy origin through a focus refresh and a later recording start", async () => {
     let now = 100000;
     vi.spyOn(Date, "now").mockImplementation(() => now);

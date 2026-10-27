@@ -237,6 +237,54 @@ class ReleaseGuards(unittest.TestCase):
                     publisher.existing_complete('owner/repo', 'v1.0.0', COMMIT, FINGERPRINT)
 
 
+class SourceExportContract(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('pwsh'), 'PowerShell required for the real source exporter')
+    def test_nested_private_build_and_browser_proofs_never_enter_the_source_bundle(self):
+        with tempfile.TemporaryDirectory(prefix='meeting-source-fixture-') as temp:
+            # An isolated checkout may itself live below a parent's .build directory.
+            root = (pathlib.Path(temp) / '.build' / 'isolated-source').resolve()
+            root.mkdir(parents=True)
+            script = root / 'scripts/export-source.ps1'
+            script.parent.mkdir()
+            shutil.copyfile(pathlib.Path(__file__).with_name(script.name), script)
+            kept = {
+                'apps/desktop/package.json': json.dumps({'version': '0.0.0-test'}).encode(),
+                'apps/desktop/src/App.tsx': b'export const syntheticPublicSource = true;\n',
+            }
+            excluded = [
+                'apps/desktop/.build/probe/private.json',
+                'scripts/.build/probe/private.md',
+                'apps/desktop/.vite/cache.json',
+                'apps/desktop/test-results/receipt.json',
+                'apps/desktop/playwright-report/report.html',
+                '.build/earlier-proof/retained.json',
+            ]
+            private = b'{"syntheticPrivateProbe":"never-export"}\n'
+            for name, data in list(kept.items()) + [(name, private) for name in excluded]:
+                file = root / name
+                file.parent.mkdir(parents=True, exist_ok=True)
+                file.write_bytes(data)
+            result = subprocess.run([shutil.which('pwsh'), '-NoProfile', '-NonInteractive', '-File', str(script)], cwd=root, capture_output=True, text=True, timeout=60)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            receipt = json.loads(result.stdout.lstrip('\ufeff'))
+            with zipfile.ZipFile(receipt['Archive']) as bundle:
+                names = {name.replace('\\', '/') for name in bundle.namelist()}
+                manifest = json.loads(bundle.read('SOURCE_MANIFEST.json').decode('utf-8-sig'))
+                rows = {row['Path'].replace('\\', '/'): row for row in manifest}
+                for name in excluded:
+                    self.assertNotIn(name, names)
+                    self.assertNotIn(name, rows)
+                    self.assertEqual((root / name).read_bytes(), private)
+                for name, data in kept.items():
+                    self.assertIn(name, names)
+                    self.assertEqual(rows[name]['Bytes'], len(data))
+                    self.assertEqual(rows[name]['SHA256'].lower(), hashlib.sha256(data).hexdigest())
+                self.assertEqual(receipt['Files'], len(rows))
+                self.assertEqual(names, set(rows) | {'SOURCE_MANIFEST.json'})
+            self.assertFalse(receipt['UserRecordingsIncluded'])
+            self.assertFalse(receipt['Published'])
+
+
 class WindowsZipContract(unittest.TestCase):
     @unittest.skipUnless(shutil.which('pwsh'), 'PowerShell required for the Windows-only ZIP packager')
     def test_branded_launcher_is_packaged_and_instructions_name_the_existing_file(self):

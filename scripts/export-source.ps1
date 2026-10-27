@@ -15,7 +15,9 @@ $names+=('Meeting for Handy ' + $version + ' starten.cmd')
 foreach ($name in $names) { $path=Join-Path $root $name; if (Test-Path -LiteralPath $path -PathType Leaf) { $files+=Get-Item -LiteralPath $path } }
 foreach ($folder in $roots) {
  $path=Join-Path $root $folder
- if (Test-Path -LiteralPath $path) { $files+=Get-ChildItem -LiteralPath $path -File -Recurse -Force | Where-Object { $_.FullName -notmatch '[\\/](bin|obj|node_modules|__pycache__|\.git|target|dist|gen)[\\/]' -and $_.Extension -ne '.tsbuildinfo' } }
+ # Exclude private/generated directories at every depth, including local UI probes.
+ # Keep this boundary aligned with the source fingerprint's build-output exclusions.
+ if (Test-Path -LiteralPath $path) { $files+=Get-ChildItem -LiteralPath $path -File -Recurse -Force | Where-Object { [IO.Path]::GetRelativePath($root,$_.FullName) -notmatch '(^|[\\/])(bin|obj|node_modules|__pycache__|\.git|target|dist|gen|\.build|\.vite|test-results|playwright-report)([\\/]|$)' -and $_.Extension -ne '.tsbuildinfo' } }
 }
 $manifest=foreach ($file in $files) {
  $relative=[IO.Path]::GetRelativePath($root,$file.FullName)

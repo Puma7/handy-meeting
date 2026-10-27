@@ -169,6 +169,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     initialCatalogSeen = useRef(false),
     lastModelRefresh = useRef(Date.now()),
     modelRefreshInFlight = useRef<Promise<void> | null>(null),
+    nativeChoiceSequence = useRef(0),
+    pendingNativeChoice = useRef<{ id: number; path: string } | null>(null),
     catalogueFailure = useRef<string | null>(null),
     mounted = useRef(true),
     copyTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -444,6 +446,15 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
   }, [api]);
   const refreshModels = useCallback(
     async (automatic: boolean, selectedPath?: string) => {
+      if (selectedPath !== undefined) {
+        pendingNativeChoice.current = {
+          id: ++nativeChoiceSequence.current,
+          path: selectedPath,
+        };
+      }
+      // A native confirmation remains an unverified choice across failed or
+      // postponed queries. Manual Refresh must validate that exact choice.
+      const choice = automatic ? null : pendingNativeChoice.current;
       const current = latestRuntime.current;
       const blocked = (state: AppState | null) =>
         Boolean(
@@ -455,7 +466,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         );
       if (
         automatic &&
-        (!initialCatalogSeen.current ||
+        (pendingNativeChoice.current !== null ||
+          !initialCatalogSeen.current ||
           !current.connected ||
           current.busy ||
           current.isStopping ||
@@ -463,12 +475,38 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
           Date.now() - lastModelRefresh.current < 30000)
       )
         return;
-      if (modelRefreshInFlight.current) return modelRefreshInFlight.current;
+      const previous = modelRefreshInFlight.current;
+      if (previous && choice === null) return previous;
       let queriedHandy = false;
       const pending = (async () => {
+        // This new native choice owns the queue immediately. Drain the older
+        // query, then verify the chosen path even if the older query failed.
+        if (previous) {
+          try {
+            await previous;
+          } catch {
+            // The previous query owns its error and catalogue-failure gate.
+          }
+          if (!mounted.current) return;
+        }
+        if (choice && pendingNativeChoice.current?.id !== choice.id) return;
         // Recheck the backend before spawning Handy: the last rendered status can
         // predate a recording or ASR catch-up started by another command.
         const fresh = await api.getAppState();
+        if (
+          mounted.current &&
+          choice !== null &&
+          (blocked(fresh) || latestRuntime.current.isStopping)
+        ) {
+          const reason =
+            locale === "de"
+              ? "Die gewählte Programmdatei wurde noch nicht geprüft. Beende zuerst die laufende Aufnahme oder Verarbeitung und klicke dann auf „Aktualisieren“."
+              : "The selected program has not been checked yet. Finish the current recording or processing, then click Refresh.";
+          catalogueFailure.current = reason;
+          setHandyRefreshFailure(reason);
+          setModelId("");
+          throw new Error(reason);
+        }
         if (
           !mounted.current ||
           (automatic && !fresh.handy) ||
@@ -484,7 +522,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         // must not turn an automatic refresh into an explicit file selection.
         const handy = await api
           .refreshHandy(
-            automatic ? null : (selectedPath ?? (handyPath.trim() || null)),
+            automatic ? null : (choice?.path ?? (handyPath.trim() || null)),
           )
           .catch(async (failure) => {
             const reason = errorMessage(failure) || t.modelUnavailable;
@@ -501,6 +539,14 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             throw failure;
           });
         if (!mounted.current) return;
+        // An older automatic query, or an earlier same-path confirmation, has
+        // no authority to release the latest still-pending native choice.
+        if (
+          pendingNativeChoice.current !== null &&
+          pendingNativeChoice.current.id !== choice?.id
+        )
+          return;
+        if (choice && handy.error == null) pendingNativeChoice.current = null;
         // Only a successful program/model query may clear a prior failure gate;
         // an older getAppState response has no authority to clear it.
         catalogueFailure.current =
@@ -511,18 +557,34 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         setApp((previous) =>
           previous ? { ...previous, handy } : { ...fresh, handy },
         );
-        if (handy.error) setError(handy.error);
+        if (catalogueFailure.current !== null)
+          setError(catalogueFailure.current);
+        else if (choice !== null) setError(null);
       })();
       modelRefreshInFlight.current = pending;
       try {
         await pending;
+      } catch (failure) {
+        // A confirmed choice that failed before querying Handy is unverified too.
+        // Never release the queue back to the previous installation's catalogue.
+        if (choice !== null && !queriedHandy) {
+          const reason = errorMessage(failure) || t.modelUnavailable;
+          catalogueFailure.current = reason;
+          if (mounted.current) {
+            setHandyRefreshFailure(reason);
+            setModelId("");
+          }
+        }
+        throw failure;
       } finally {
-        modelRefreshInFlight.current = null;
+        if (modelRefreshInFlight.current === pending) {
+          modelRefreshInFlight.current = null;
+          if (mounted.current) setRefreshingHandy(false);
+        }
         if (queriedHandy) lastModelRefresh.current = Date.now();
-        if (mounted.current) setRefreshingHandy(false);
       }
     },
-    [api, handyPath, poll, t.modelUnavailable],
+    [api, handyPath, poll, locale, t.modelUnavailable],
   );
   useEffect(() => {
     const onFocus = () => {
@@ -677,6 +739,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     await action(async () => {
       if (catalogueFailure.current !== null)
         throw new Error(catalogueFailure.current);
+      if (pendingNativeChoice.current !== null) throw new Error(t.busy);
+      if (modelRefreshInFlight.current) throw new Error(t.busy);
       const item = await api.startMeeting({
         title: title.trim() || defaultMeetingTitle(locale),
         modelId,

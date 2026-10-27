@@ -1,10 +1,11 @@
-"""Synthetic filesystem guards only; no native execution, devices, or downloads."""
+"""Synthetic filesystem/X11-output guards; no native GUI, devices, or downloads."""
 import contextlib
 import hashlib
 import importlib.util
 import io
 import json
 import pathlib
+import subprocess
 import tempfile
 import unittest
 from unittest import mock
@@ -247,6 +248,111 @@ class PortableArtifactGuards(unittest.TestCase):
         (output / "Applications").mkdir(parents=True)
         with self.assertRaisesRegex(RuntimeError, "unexpected"):
             artifacts.collect_proofs("osx-arm64", work)
+
+
+class GuiSmokeWindowGuards(unittest.TestCase):
+    """Exercise the actual embedded Linux probe with synthetic command output only."""
+
+    @classmethod
+    def setUpClass(cls):
+        script = pathlib.Path(__file__).with_name("check-gui-smoke.sh").read_text(encoding="utf-8")
+        cls.code = script.split("<<'PY_X11_WINDOWS'", 1)[1].split("\n", 1)[1].split("\nPY_X11_WINDOWS", 1)[0]
+        cls.namespace = {"__name__": "synthetic_x11_probe"}
+        exec(compile(cls.code, "check-gui-smoke.sh:PY_X11_WINDOWS", "exec"), cls.namespace)
+        config = pathlib.Path(__file__).parent.parent / "apps/desktop/src-tauri/tauri.conf.json"
+        cls.title = cls.namespace["configured_title"](config)
+
+    def window(self, **changes):
+        value = {"id": "0x200004", "pid": 1234, "title": self.title,
+                 "class": "HandyMeeting", "mapped": "IsViewable", "width": 1180,
+                 "height": 820, "properties_status": 0, "attributes_status": 0}
+        value.update(changes)
+        return value
+
+    def count(self, windows, tree_status=0):
+        by_id = {window["id"]: window for window in windows}
+        observed = []
+
+        def probe(arguments, **options):
+            observed.append(arguments)
+            self.assertGreater(options["timeout"], 0)
+            self.assertLessEqual(options["timeout"], 3)
+            self.assertEqual(options["env"]["LC_ALL"], "C")
+            self.assertTrue(options["capture_output"])
+            if arguments == ["xwininfo", "-root", "-tree"]:
+                tree = "\n".join(f'     {item["id"]} {json.dumps(item["title"])}: ("synthetic" {json.dumps(item["class"])}) 1180x820+0+0' for item in windows)
+                return subprocess.CompletedProcess(arguments, tree_status, tree, "")
+            window = by_id[arguments[2]]
+            if arguments[0] == "xprop":
+                self.assertEqual(arguments[3:], ["_NET_WM_PID", "_NET_WM_NAME", "WM_NAME"])
+                properties = window.get("properties")
+                if properties is None:
+                    owner = f'_NET_WM_PID(CARDINAL) = {window["pid"]}' if window["pid"] is not None else "_NET_WM_PID:  not found."
+                    properties = owner + "\n_NET_WM_NAME(UTF8_STRING) = " + json.dumps(window["title"])
+                return subprocess.CompletedProcess(arguments, window["properties_status"], properties, "")
+            self.assertEqual(arguments, ["xwininfo", "-id", window["id"], "-stats"])
+            attributes = f'  Map State: {window["mapped"]}\n  Width: {window["width"]}\n  Height: {window["height"]}\n'
+            return subprocess.CompletedProcess(arguments, window["attributes_status"], attributes, "")
+
+        with mock.patch.object(subprocess, "run", side_effect=probe):
+            result = self.namespace["count_owned_windows"](1234, self.title)
+        return result, observed
+
+    def test_only_current_title_visible_window_of_the_exact_child_counts(self):
+        valid = self.window()
+        unrelated = self.window(id="0x600001", pid=9999)
+        self.assertEqual(self.count([valid, unrelated])[0], 1)
+        # Recursive tree output must not count the same XID twice.
+        self.assertEqual(self.count([valid, valid])[0], 1)
+        legacy_name = self.window(properties=f'_NET_WM_PID(CARDINAL) = 1234\n_NET_WM_NAME:  not found.\nWM_NAME(STRING) = {json.dumps(self.title)}')
+        self.assertEqual(self.count([legacy_name])[0], 1)
+
+    def test_old_title_class_only_foreign_missing_owner_and_unmapped_windows_do_not_pass(self):
+        for case, changes in [
+            ("foreign same-title window", {"pid": 9999}),
+            ("old title owned by child", {"title": "HandyMeeting"}),
+            ("old title unrelated window", {"pid": 9999, "title": "HandyMeeting"}),
+            ("WM_CLASS-only match", {"title": "Unrelated helper", "class": "HandyMeeting"}),
+            ("missing PID", {"pid": None}),
+            ("malformed PID", {"pid": "1234 trailing"}),
+            ("not mapped", {"mapped": "IsUnMapped"}),
+            ("hidden by parent", {"mapped": "IsUnviewable"}),
+            ("zero width", {"width": 0}),
+            ("zero height", {"height": 0}),
+            ("unreadable properties", {"properties_status": 1}),
+            ("unreadable visibility", {"attributes_status": 1}),
+        ]:
+            with self.subTest(case=case):
+                self.assertEqual(self.count([self.window(**changes)])[0], 0)
+
+    def test_modern_title_mismatch_or_malformed_identity_never_uses_a_legacy_fallback(self):
+        title = json.dumps(self.title)
+        for properties in [
+            f'_NET_WM_PID(CARDINAL) = 1234\n_NET_WM_NAME(UTF8_STRING) = "HandyMeeting"\nWM_NAME(STRING) = {title}',
+            f'_NET_WM_PID(CARDINAL) = 1234\n_NET_WM_NAME(UTF8_STRING) = malformed\nWM_NAME(STRING) = {title}',
+            f'_NET_WM_PID(STRING) = "1234"\n_NET_WM_NAME(UTF8_STRING) = {title}',
+            f'_NET_WM_PID(CARDINAL) = 1234\n_NET_WM_PID(CARDINAL) = 9999\n_NET_WM_NAME(UTF8_STRING) = {title}',
+            f'_NET_WM_PID(CARDINAL) = 1234\n_NET_WM_NAME(UTF8_STRING) = {title}\n_NET_WM_NAME(UTF8_STRING) = {title}',
+        ]:
+            with self.subTest(properties=properties):
+                count, observed = self.count([self.window(properties=properties)])
+                self.assertEqual(count, 0)
+                self.assertFalse(any(arguments[-1] == "-stats" for arguments in observed))
+
+    def test_failed_enumeration_or_timed_out_probe_cannot_report_success(self):
+        with self.assertRaisesRegex(RuntimeError, "enumeration failed"):
+            self.count([self.window()], tree_status=1)
+        for failure in [FileNotFoundError("synthetic missing xprop"), subprocess.TimeoutExpired("xwininfo", 3)]:
+            with self.subTest(failure=type(failure).__name__), mock.patch.object(subprocess, "run", side_effect=failure), self.assertRaises(type(failure)):
+                self.namespace["count_owned_windows"](1234, self.title)
+
+    def test_cli_probe_failure_exits_unsuccessfully_without_a_positive_count(self):
+        output, errors = io.StringIO(), io.StringIO()
+        with mock.patch("sys.argv", ["synthetic-probe", "1234", "synthetic-config"]), mock.patch.object(pathlib.Path, "read_text", return_value=json.dumps({"app": {"windows": [{"title": self.title}]}})), mock.patch.object(subprocess, "run", side_effect=FileNotFoundError("synthetic missing tool")), contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors), self.assertRaises(SystemExit) as stopped:
+            exec(compile(self.code, "check-gui-smoke.sh:PY_X11_WINDOWS", "exec"), {"__name__": "__main__"})
+        self.assertEqual(stopped.exception.code, 1)
+        self.assertEqual(output.getvalue(), "")
+        self.assertIn("detection failed", errors.getvalue())
 
 
 if __name__ == "__main__":
