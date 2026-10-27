@@ -97,10 +97,14 @@ Section "HandyMeeting" Main
   SetOverwrite off
   !include "${INSTALL_FILES}"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
-  nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -File "$INSTDIR\ManageStartMenu.ps1" -Mode install -InstallDirectory "$INSTDIR"'
+  nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -File "$INSTDIR\ManageStartMenu.ps1" -Mode install -InstallDirectory "$INSTDIR" -Version "${APP_VERSION}"'
   Pop $0
   Pop $1
   StrCmp $0 "0" shortcut_ready
+  StrCmp $0 "4" 0 shortcut_blocked
+  DetailPrint "The HandyMeeting Start menu link keeps opening the newer installed version. This version remains available in its program folder."
+  Goto shortcut_ready
+  shortcut_blocked:
   DetailPrint "Existing/custom Start menu links were preserved, or shortcut creation was blocked. HandyMeeting.exe remains available in the new program folder."
   shortcut_ready:
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-${APP_VERSION}" "DisplayName" "HandyMeeting ${APP_VERSION}"
@@ -115,6 +119,7 @@ SectionEnd
 Section "Uninstall"
   SetShellVarContext current
   SetRegView 64
+  ; An owned link to this version moves to the newest remaining registered installation.
   nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -File "$INSTDIR\ManageStartMenu.ps1" -Mode uninstall -InstallDirectory "$INSTDIR"'
   Pop $0
   Pop $1
