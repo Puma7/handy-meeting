@@ -3,6 +3,7 @@
 ## 1.0.3 — recording reliability, recovery and platform follow-ups (in development)
 
 - Stop a meeting without waiting for the recognition backlog; the session shows "catching up" and completes in the background. A track that stops while the other continues is reported on its own (#17, #20).
+- When recognition continues on CPU after a GPU failure and decodes a section differently, keep the result as an explicitly marked new text version instead of leaving the section pending forever; earlier text stays in the journal (#20).
 - Close every audio part at its confirmed prefix when a session is opened, record the end of capture for every post-recording status, and write journals and the manifest outside the shared session lock so a slow disk cannot delay audio capture (#15, #16, #18).
 - Reject dangling links before opening or creating session, archive, label, speaker and retention files; keep a readable TXT owned across a crash during its refresh; retry briefly when a session lease is still held by a closing process (#21).
 - Show an unreadable archive entry as preserved instead of hiding the whole archive list; let an interrupted archive move be repeated while keeping its earlier placement record (#21).
