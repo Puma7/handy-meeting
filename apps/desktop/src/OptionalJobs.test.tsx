@@ -202,3 +202,75 @@ it("filters forged, stale and wrong-meeting name candidates before they can pref
   owner.sections[0].items[0].owner = "Anna";
   expect(nameCandidates([owner], meeting)).toEqual([]);
 });
+it("keeps cancel available while the download request is still running", async () => {
+  let status = "available";
+  const api = {
+    checkForUpdate: vi.fn(),
+    downloadUpdate: vi.fn(() => {
+      status = "downloading";
+      return new Promise(() => {});
+    }),
+    cancelUpdate: vi.fn().mockResolvedValue(undefined),
+    getUpdateProgress: vi.fn(async () => ({
+      status,
+      version: "1.0.3",
+      releaseUrl: null,
+      receivedBytes: 1,
+      totalBytes: 10,
+      elapsedMs: 5,
+      error: null,
+    })),
+  } as unknown as DesktopApi;
+  render(<UpdatePanel api={api} locale="en" />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Download Windows installer" }),
+  );
+  const cancel = await screen.findByRole("button", { name: "Cancel download" });
+  expect((cancel as HTMLButtonElement).disabled).toBe(false);
+  await userEvent.click(cancel);
+  expect(api.cancelUpdate).toHaveBeenCalledOnce();
+});
+it("blocks installation while archive maintenance is running", async () => {
+  const api = {
+    checkForUpdate: vi.fn(),
+    installUpdate: vi.fn(),
+    getMaintenanceProgress: vi.fn().mockResolvedValue({ status: "running" }),
+    getLibraryProgress: vi.fn().mockResolvedValue(null),
+    getUpdateProgress: vi.fn().mockResolvedValue({
+      status: "ready",
+      version: "1.0.3",
+      releaseUrl: null,
+      receivedBytes: 10,
+      totalBytes: 10,
+      elapsedMs: 20,
+      error: null,
+    }),
+  } as unknown as DesktopApi;
+  render(<UpdatePanel api={api} locale="en" />);
+  await screen.findByText(/archive maintenance and indexing first/);
+  const button = screen.getByRole("button", {
+    name: "Start installer and close app",
+  });
+  expect((button as HTMLButtonElement).disabled).toBe(true);
+});
+it("does not keep a cancelled download in the footer and lets a failure be dismissed", async () => {
+  let status = "cancelled";
+  const api = {
+    checkForUpdate: vi.fn(),
+    getUpdateProgress: vi.fn(async () => ({
+      status,
+      version: "1.0.3",
+      releaseUrl: null,
+      receivedBytes: 0,
+      totalBytes: 0,
+      elapsedMs: 0,
+      error: status === "failed" ? "offline" : null,
+    })),
+  } as unknown as DesktopApi;
+  const { container } = render(<UpdatePanel api={api} locale="en" footer />);
+  await new Promise((r) => setTimeout(r, 30));
+  expect(container.textContent).toBe("");
+  status = "failed";
+  await userEvent.click(await screen.findByRole("button", { name: "Dismiss" }));
+  expect(container.textContent).toBe("");
+});

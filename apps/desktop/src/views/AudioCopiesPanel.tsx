@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { errorMessage } from "../api";
 import type {
   AudioCopy,
@@ -26,18 +26,31 @@ export default function AudioCopiesPanel({
     [accepted, setAccepted] = useState(false),
     [error, setError] = useState<string | null>(null),
     [busy, setBusy] = useState(false);
+  const generation = useRef(0);
   const load = useCallback(async () => {
     if (!api.listAudioCopies) return;
+    const current = ++generation.current;
     try {
-      setCopies(await api.listAudioCopies(offset));
+      const next = await api.listAudioCopies(offset);
+      if (current !== generation.current) return;
+      setCopies(next);
+      setSelected((old) =>
+        old && next.some((copy) => copy.runId === old.runId) ? old : null,
+      );
       setError(null);
     } catch (e) {
-      setError(errorMessage(e));
+      if (current === generation.current) setError(errorMessage(e));
     }
   }, [api, offset]);
   useEffect(() => {
     void load();
   }, [load, job?.jobId, job?.status]);
+  useEffect(
+    () => () => {
+      generation.current++;
+    },
+    [],
+  );
   if (!api.listAudioCopies) return null;
   const running = job?.status === "running";
   async function start() {

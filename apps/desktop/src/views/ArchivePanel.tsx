@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { errorMessage } from "../api";
 import type {
   ArchiveEntry,
@@ -23,18 +23,29 @@ export default function ArchivePanel({
     [selected, setSelected] = useState<ArchiveEntry | null>(null),
     [compact, setCompact] = useState<ArchiveEntry | null>(null),
     [busy, setBusy] = useState(false);
+  // Only the newest request may update the page; older pages arrive late after quick paging.
+  const generation = useRef(0);
   const load = useCallback(async () => {
     if (!api.listArchives) return;
+    const current = ++generation.current;
     try {
-      setPage(await api.listArchives(offset, 25));
+      const next = await api.listArchives(offset, 25);
+      if (current !== generation.current) return;
+      setPage(next);
       setError(null);
     } catch (e) {
-      setError(errorMessage(e));
+      if (current === generation.current) setError(errorMessage(e));
     }
   }, [api, offset]);
   useEffect(() => {
     void load();
   }, [load, job?.jobId, job?.status]);
+  useEffect(
+    () => () => {
+      generation.current++;
+    },
+    [],
+  );
   if (!api.listArchives) return null;
   const running = job?.status === "running";
   async function restore() {

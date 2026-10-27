@@ -17,7 +17,9 @@ export default function UpdatePanel({
   const de = locale === "de";
   const [job, setJob] = useState<UpdateProgress | null>(null),
     [error, setError] = useState<string | null>(null),
-    [request, setRequest] = useState(false);
+    [request, setRequest] = useState(false),
+    [jobsRunning, setJobsRunning] = useState(false),
+    [dismissed, setDismissed] = useState<string | null>(null);
   useEffect(() => {
     if (!api.getUpdateProgress) return;
     let active = true,
@@ -27,8 +29,16 @@ export default function UpdatePanel({
       polling = true;
       try {
         const value = await api.getUpdateProgress!();
+        // Archive maintenance and indexing also block installation in the backend.
+        const others = footer
+          ? []
+          : await Promise.all([
+              api.getMaintenanceProgress?.() ?? null,
+              api.getLibraryProgress?.() ?? null,
+            ]);
         if (active) {
           setJob(value);
+          setJobsRunning(others.some((p) => p?.status === "running"));
           setError(null);
         }
       } catch (e) {
@@ -43,8 +53,9 @@ export default function UpdatePanel({
       active = false;
       clearInterval(timer);
     };
-  }, [api]);
+  }, [api, footer]);
   if (!api.checkForUpdate) return null;
+  const installBlocked = blocked || jobsRunning;
   const running = job?.status === "checking" || job?.status === "downloading";
   async function action(run: () => Promise<unknown>) {
     setRequest(true);
@@ -82,11 +93,12 @@ export default function UpdatePanel({
         failed: "Update failed",
         cancelled: "Download cancelled",
       };
+  // A cancelled download was the user's own choice; a failure stays until dismissed.
+  const failureKey = `${job?.version ?? ""}:${job?.error ?? ""}`;
   if (
     footer &&
     !running &&
-    job?.status !== "failed" &&
-    job?.status !== "cancelled"
+    (job?.status !== "failed" || dismissed === failureKey)
   )
     return null;
   const content = (
@@ -142,7 +154,7 @@ export default function UpdatePanel({
           {job?.status === "ready" && (
             <button
               className="primary"
-              disabled={request || blocked}
+              disabled={request || installBlocked}
               onClick={() => {
                 if (
                   window.confirm(
@@ -159,11 +171,11 @@ export default function UpdatePanel({
                 : "Start installer and close app"}
             </button>
           )}
-          {blocked && job?.status === "ready" && (
+          {installBlocked && job?.status === "ready" && (
             <p>
               {de
-                ? "Bitte zuerst Aufnahme, Erkennung und Auswertung abschließen."
-                : "Finish recording, recognition and analysis first."}
+                ? "Bitte zuerst Aufnahme, Erkennung, Auswertung, Archivpflege und Indexierung abschließen."
+                : "Finish recording, recognition, analysis, archive maintenance and indexing first."}
             </p>
           )}
           <p>
@@ -183,12 +195,21 @@ export default function UpdatePanel({
         </>
       )}
       {job?.status === "downloading" && (
+        // Cancellation only sets a flag, so it stays available while the download request runs.
         <button
           className="secondary"
-          disabled={request}
-          onClick={() => void action(api.cancelUpdate!)}
+          onClick={() =>
+            void Promise.resolve(api.cancelUpdate!()).catch((e) =>
+              setError(errorMessage(e)),
+            )
+          }
         >
           {de ? "Download abbrechen" : "Cancel download"}
+        </button>
+      )}
+      {footer && job?.status === "failed" && (
+        <button className="secondary" onClick={() => setDismissed(failureKey)}>
+          {de ? "Ausblenden" : "Dismiss"}
         </button>
       )}
     </>

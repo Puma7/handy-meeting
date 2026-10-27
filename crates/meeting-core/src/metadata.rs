@@ -11,6 +11,23 @@ use std::{
     path::{Path, PathBuf},
 };
 
+/// Annotation and maintenance locks are short-lived. A child process started elsewhere in
+/// this app can briefly inherit an open lock handle between fork and exec, so retry for a
+/// moment before reporting a real concurrent edit.
+pub(crate) fn lock_soon(file: &fs::File) -> std::io::Result<()> {
+    let mut attempts = 0;
+    loop {
+        match file.try_lock_exclusive() {
+            Ok(()) => return Ok(()),
+            Err(error) if attempts >= 25 => return Err(error),
+            Err(_) => {
+                attempts += 1;
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Metadata {
@@ -110,8 +127,7 @@ pub fn edit(
         .read(true)
         .write(true)
         .open(lock_path)?;
-    lock.try_lock_exclusive()
-        .map_err(|_| "Meeting metadata is being edited in another window")?;
+    lock_soon(&lock).map_err(|_| "Meeting metadata is being edited in another window")?;
     let old = read(root, id)?;
     if old.revision != expected {
         return Err("Meeting metadata changed; reload before saving".into());

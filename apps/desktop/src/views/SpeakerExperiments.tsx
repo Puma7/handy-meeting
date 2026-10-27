@@ -29,9 +29,12 @@ export default function SpeakerExperiments({
   const [model, setModel] = useState(""),
     [job, setJob] = useState<SpeakerProgress | null>(null),
     [saved, setSaved] = useState<SavedSpeakerSections | null>(null),
-    [error, setError] = useState<string | null>(null),
+    [actionError, setError] = useState<string | null>(null),
+    // A transient polling failure clears on the next successful poll; action errors stay.
+    [pollError, setPollError] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
     [hidden, setHidden] = useState<string | null>(null);
+  const error = actionError ?? pollError;
   useEffect(() => {
     if (!api.getSpeakerProgress) return;
     let active = true,
@@ -41,9 +44,12 @@ export default function SpeakerExperiments({
       polling = true;
       try {
         const next = await api.getSpeakerProgress!();
-        if (active) setJob(next);
+        if (active) {
+          setJob(next);
+          setPollError(null);
+        }
       } catch (e) {
-        if (active) setError(errorMessage(e));
+        if (active) setPollError(errorMessage(e));
       } finally {
         polling = false;
       }

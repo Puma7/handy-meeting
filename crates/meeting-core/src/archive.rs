@@ -4,7 +4,6 @@ use crate::{
     storage::{atomic_json, reject_link},
     Result, SessionData, SessionStore,
 };
-use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -29,7 +28,7 @@ fn operation_lock(root: &Path) -> Result<File> {
         .read(true)
         .write(true)
         .open(path)?;
-    file.try_lock_exclusive()?;
+    metadata::lock_soon(&file)?;
     Ok(file)
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -330,7 +329,7 @@ pub fn create(
         .create(true)
         .truncate(false)
         .open(lock_path)?;
-    lock.try_lock_exclusive()?;
+    metadata::lock_soon(&lock)?;
     let meta = metadata::read(root, id)?;
     if meta.revision != expected_metadata || meta.pinned {
         return Err("Meeting labels changed or this meeting is VIP protected".into());
@@ -353,7 +352,7 @@ pub fn create(
             .create(true)
             .truncate(false)
             .open(path)?;
-        lock.try_lock_exclusive()?;
+        metadata::lock_soon(&lock)?;
         Some(lock)
     } else {
         None
@@ -398,6 +397,12 @@ pub fn create(
     }
     metadata::checked_directory(&archives)?;
     let archive_id = uuid::Uuid::new_v4().simple().to_string();
+    // Written before the ZIP so an interrupted copy stays attributable to its meeting,
+    // and permanent deletion can find it even without a receipt.
+    atomic_json(
+        &archives.join(format!("{archive_id}.pending.json")),
+        &serde_json::json!({"meetingId": id, "kind": kind}),
+    )?;
     let path = archives.join(format!("{archive_id}.zip"));
     let output = OpenOptions::new()
         .write(true)
@@ -631,9 +636,19 @@ pub fn restore_new(root: &Path, archive_id: &str, cancel: &AtomicBool) -> Result
         );
     }
     let sessions = metadata::checked_directory(&root.join("sessions"))?;
-    let target = sessions.join(&manifest.meeting_id);
+    let destination = sessions.join(&manifest.meeting_id);
+    if destination.exists() {
+        return Err("A session folder with this identity already exists and was preserved".into());
+    }
+    // Extract into an owned staging folder; the session appears only after every byte verified.
+    // A cancelled or failed attempt keeps its staging folder and never blocks a later retry.
+    let staging = archives.join(format!(
+        "{archive_id}.restoring-{}",
+        uuid::Uuid::new_v4().simple()
+    ));
+    fs::create_dir(&staging)?;
+    let target = staging.join(&manifest.meeting_id);
     fs::create_dir(&target)?;
-    // Reserve a new destination. Incomplete restores never expose a session manifest.
     let mut reader = zip::ZipArchive::new(File::open(&path)?)?;
     let mut files = manifest.files.clone();
     for directory in &manifest.directories {
@@ -695,6 +710,17 @@ pub fn restore_new(root: &Path, archive_id: &str, cancel: &AtomicBool) -> Result
             return Err("Restore content mismatch; partial new folder retained".into());
         }
     }
+    drop(reader);
+    if crate::inspect_manifest(&target)?.id != manifest.meeting_id {
+        return Err("Restored session identity mismatch; staging folder retained".into());
+    }
+    if destination.exists() {
+        return Err("A session folder with this identity appeared and was preserved".into());
+    }
+    fs::rename(&target, &destination)?;
+    // Only the now-empty staging parent is removed; never a recursive delete.
+    let _ = fs::remove_dir(&staging);
+    let target = destination;
     let store = SessionStore::open(&target)?;
     let mut conflicts = Vec::new();
     for sidecar in &manifest.retained_sidecars {
@@ -779,7 +805,7 @@ pub fn move_source_into_archive(
     let lock_path = labels.join(format!("{}.lock", receipt.meeting_id));
     reject_link(&lock_path)?;
     let lock = OpenOptions::new().read(true).write(true).open(lock_path)?;
-    lock.try_lock_exclusive()?;
+    metadata::lock_soon(&lock)?;
     let meta = metadata::read(root, &receipt.meeting_id)?;
     if meta.pinned || meta.revision != expected_metadata {
         return Err("Meeting became protected or labels changed; original source retained".into());
@@ -893,6 +919,20 @@ pub fn read_archived_transcript(folder: &Path) -> Result<Option<SessionData>> {
     data.warnings.push("Audio ist verlustfrei lokal archiviert. Zum erneuten Erkennen zuerst Audio aus dem Archiv wiederherstellen. / Audio is archived locally without loss. Restore audio before recognition.".into());
     Ok(Some(data))
 }
+fn read_audio_marker(path: &Path) -> Result<Option<AudioArchive>> {
+    if !path.exists() {
+        return Ok(None);
+    }
+    regular(path)?;
+    let mut bytes = Vec::new();
+    File::open(path)?
+        .take(MAX_MANIFEST + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > MAX_MANIFEST {
+        return Err("Oversized audio archive receipt".into());
+    }
+    Ok(Some(serde_json::from_slice(&bytes)?))
+}
 /// Replace only verified raw copies by a verified lossless audio archive after explicit preview.
 pub fn archive_audio(
     root: &Path,
@@ -901,13 +941,26 @@ pub fn archive_audio(
     cancel: &AtomicBool,
     progress: impl FnMut(u64, u64),
 ) -> Result<Receipt> {
+    if !metadata::valid_id(id) || id.starts_with("legacy-") {
+        return Err("Invalid archive request".into());
+    }
+    let marker_path =
+        metadata::checked_directory(&root.join("sessions").join(id))?.join("audio-archive.json");
+    // Checked before any ZIP is written, so a blocked request leaves no duplicate copy.
+    let previous = read_audio_marker(&marker_path)?;
+    if previous.as_ref().is_some_and(|old| !old.restored) {
+        return Err(
+            "Existing audio archive marker preserved; restore it before creating another archive"
+                .into(),
+        );
+    }
     let receipt = create(root, id, expected_metadata, "audio-only", cancel, progress)?;
     let folder = metadata::checked_directory(&root.join("sessions").join(id))?;
     let labels = metadata::directory(root)?;
     let lock_path = labels.join(format!("{id}.lock"));
     reject_link(&lock_path)?;
     let lock = OpenOptions::new().read(true).write(true).open(lock_path)?;
-    lock.try_lock_exclusive()?;
+    metadata::lock_soon(&lock)?;
     let meta = metadata::read(root, id)?;
     if meta.pinned || meta.revision != expected_metadata {
         return Err(
@@ -951,11 +1004,28 @@ pub fn archive_audio(
         return Err("Original transcript metadata needs recovery before audio archiving; original audio retained".into());
     }
     let path = folder.join("audio-archive.json");
-    if path.exists() {
-        return Err(
-            "Existing audio archive marker preserved; restore it before creating another archive"
-                .into(),
-        );
+    let current = read_audio_marker(&path)?;
+    match (&previous, &current) {
+        (None, None) => (),
+        (Some(old), Some(now))
+            if now.restored && now.receipt.archive_id == old.receipt.archive_id =>
+        {
+            // Keep the restored archive's provenance beside the session; never overwrite it.
+            let history = folder.join(format!(
+                "audio-archive.{}.restored.json",
+                old.receipt.archive_id
+            ));
+            if history.exists() {
+                return Err("Earlier audio archive provenance preserved; original audio and new archive retained".into());
+            }
+            fs::rename(&path, &history)?;
+        }
+        _ => {
+            return Err(
+                "Audio archive marker changed during archiving; original audio and new archive retained"
+                    .into(),
+            )
+        }
     }
     // The readable confirmed transcript is committed before any raw copy is removed.
     atomic_json(&path, &marker)?;
@@ -999,7 +1069,12 @@ pub fn restore_audio(root: &Path, id: &str, cancel: &AtomicBool) -> Result<Sessi
         return Err("Oversized audio archive receipt".into());
     }
     let mut marker: AudioArchive = serde_json::from_slice(&bytes)?;
-    if marker.restored || marker.receipt.meeting_id != id || marker.receipt.kind != "audio-only" {
+    if marker.restored
+        || marker.receipt.meeting_id != id
+        || marker.receipt.kind != "audio-only"
+        || !metadata::valid_id(&marker.receipt.archive_id)
+        || marker.receipt.archive_id.starts_with("legacy-")
+    {
         return Err("No matching archived audio needs restoration".into());
     }
     read_archived_transcript(&folder)?.ok_or("Archived transcript not available")?;
@@ -1195,7 +1270,7 @@ pub fn compact_source_copy(
         .read(true)
         .write(true)
         .open(lock_path)?;
-    lock.try_lock_exclusive()?;
+    metadata::lock_soon(&lock)?;
     if metadata::read(root, &receipt.meeting_id)?.pinned {
         return Err("VIP meeting is protected from archive compaction".into());
     }
@@ -1354,9 +1429,14 @@ fn deletion_inventory(root: &Path, id: &str, cancel: &AtomicBool) -> Result<Dele
         for path in [zip, entry.path()] {
             push_delete_file(root, &path, cancel, &mut files)?;
         }
-        let placement = archives.join(format!("{aid}.placement.json"));
-        if placement.exists() {
-            push_delete_file(root, &placement, cancel, &mut files)?;
+        // atomic_json keeps the previous placement phase as a .bak next to the record.
+        for placement in [
+            archives.join(format!("{aid}.placement.json")),
+            archives.join(format!("{aid}.placement.json.bak")),
+        ] {
+            if placement.exists() {
+                push_delete_file(root, &placement, cancel, &mut files)?;
+            }
         }
         let source = archives.join(format!("{aid}.source"));
         if source.exists() {
@@ -1399,6 +1479,62 @@ fn deletion_inventory(root: &Path, id: &str, cancel: &AtomicBool) -> Result<Dele
     }
     if !whole {
         return Err("No complete whole-meeting archive; permanent deletion blocked".into());
+    }
+    // Copies outside the receipt catalog: interrupted archive writes and restore staging.
+    for entry in fs::read_dir(&archives)? {
+        let entry = entry?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if let Some(aid) = name.strip_suffix(".pending.json") {
+            if pending_meeting(&entry.path())? != id {
+                continue;
+            }
+            push_delete_file(root, &entry.path(), cancel, &mut files)?;
+            let zip = archives.join(format!("{aid}.zip"));
+            if zip.exists() && !archives.join(format!("{aid}.receipt.json")).exists() {
+                regular(&zip)?;
+                push_delete_file(root, &zip, cancel, &mut files)?;
+            }
+        } else if let Some(aid) = name.strip_suffix(".zip") {
+            if archives.join(format!("{aid}.receipt.json")).exists()
+                || archives.join(format!("{aid}.pending.json")).exists()
+            {
+                continue;
+            }
+            // Older or foreign copy without attribution: only its own manifest can identify it.
+            match verify(&entry.path(), Some(cancel), |_, _| {}) {
+                Ok(manifest) if manifest.meeting_id != id => (),
+                Ok(_) => push_delete_file(root, &entry.path(), cancel, &mut files)?,
+                Err(_) => {
+                    return Err(format!(
+                        "Unidentified archive copy archives/{name} found; permanent deletion blocked until it is inspected"
+                    )
+                    .into())
+                }
+            }
+        } else if name.contains(".restoring-") {
+            let staging = metadata::checked_directory(&entry.path())?;
+            let inner = staging.join(id);
+            if !inner.exists() {
+                continue;
+            }
+            metadata::checked_directory(&inner)?;
+            let mut found = Vec::new();
+            let mut dirs = Vec::new();
+            inventory(&inner, &inner, &mut found, &mut dirs)?;
+            for (_, path) in found {
+                push_delete_file(root, &path, cancel, &mut files)?;
+            }
+            for dir in dirs {
+                directories.push(
+                    inner.join(
+                        dir.strip_prefix("session/")
+                            .ok_or("Invalid staging directory")?,
+                    ),
+                );
+            }
+            directories.push(inner);
+            directories.push(staging);
+        }
     }
     for sidecar in sidecars(root, id)? {
         push_delete_file(root, &root.join(sidecar.name), cancel, &mut files)?;
@@ -1443,6 +1579,22 @@ fn deletion_inventory(root: &Path, id: &str, cancel: &AtomicBool) -> Result<Dele
         directories,
         newest,
     })
+}
+fn pending_meeting(path: &Path) -> Result<String> {
+    regular(path)?;
+    let mut bytes = Vec::new();
+    File::open(path)?.take(4097).read_to_end(&mut bytes)?;
+    if bytes.len() > 4096 {
+        return Err("Oversized pending archive record".into());
+    }
+    let value: serde_json::Value = serde_json::from_slice(&bytes)?;
+    let id = value["meetingId"]
+        .as_str()
+        .ok_or("Invalid pending archive record")?;
+    if !metadata::valid_id(id) {
+        return Err("Invalid pending archive record".into());
+    }
+    Ok(id.to_owned())
 }
 fn push_delete_file(
     root: &Path,
@@ -1516,7 +1668,7 @@ pub fn delete_archived_meeting(
             .read(true)
             .write(true)
             .open(path)?;
-        lock.try_lock_exclusive()?;
+        metadata::lock_soon(&lock)?;
         locks.push(lock);
     }
     let labels = metadata::read(root, id)?;
@@ -1583,6 +1735,8 @@ pub fn delete_archived_meeting(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(windows)]
+    use fs2::FileExt;
     use crate::{PcmWriter, TranscriptCheckpoint};
     #[test]
     fn compact_archive_protects_changes_and_vip_and_resumes_after_cancellation() {
@@ -1767,6 +1921,86 @@ mod tests {
         assert!(read_archived_transcript(&folder).unwrap().is_none());
     }
     #[test]
+    fn interrupted_whole_meeting_restore_never_blocks_a_verified_retry() {
+        let root = tempfile::tempdir().unwrap();
+        let id = fixture(root.path());
+        let cancel = AtomicBool::new(false);
+        let receipt = create(root.path(), &id, 0, "whole-meeting", &cancel, |_, _| {}).unwrap();
+        move_source_into_archive(root.path(), &receipt, 0, &cancel).unwrap();
+        fs::remove_dir_all(
+            root.path()
+                .join("archives")
+                .join(format!("{}.source", receipt.archive_id)),
+        )
+        .unwrap();
+        // Leftover of an earlier attempt that stopped mid-extraction.
+        let stale = root
+            .path()
+            .join("archives")
+            .join(format!("{}.restoring-earlier", receipt.archive_id));
+        fs::create_dir_all(stale.join(&id).join("audio")).unwrap();
+        fs::write(
+            stale.join(&id).join("audio").join("partial.pcm"),
+            b"partial",
+        )
+        .unwrap();
+        let page = list(root.path(), 0, 25).unwrap();
+        assert!(!page.items[0].session_present);
+        let restored = restore_new(root.path(), &receipt.archive_id, &cancel).unwrap();
+        assert_eq!(restored, root.path().join("sessions").join(&id));
+        assert!(restored.join("session.json").is_file());
+        assert!(
+            stale.join(&id).join("audio").join("partial.pcm").is_file(),
+            "earlier evidence retained"
+        );
+        let staging: Vec<_> = fs::read_dir(root.path().join("archives"))
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|n| n.contains(".restoring-") && !n.ends_with("-earlier"))
+            .collect();
+        assert!(
+            staging.is_empty(),
+            "published staging folder is renamed, not copied"
+        );
+        assert!(restore_new(root.path(), &receipt.archive_id, &cancel).is_err());
+    }
+    #[test]
+    fn restored_audio_can_be_archived_again_without_duplicate_zips_or_lost_provenance() {
+        let root = tempfile::tempdir().unwrap();
+        let id = fixture(root.path());
+        let folder = root.path().join("sessions").join(&id);
+        let cancel = AtomicBool::new(false);
+        let zips = || {
+            fs::read_dir(root.path().join("archives"))
+                .unwrap()
+                .filter(|e| {
+                    e.as_ref()
+                        .unwrap()
+                        .path()
+                        .extension()
+                        .and_then(|x| x.to_str())
+                        == Some("zip")
+                })
+                .count()
+        };
+        let first = archive_audio(root.path(), &id, 0, &cancel, |_, _| {}).unwrap();
+        assert_eq!(zips(), 1);
+        // Still archived: rejected before another lossless copy is written.
+        assert!(archive_audio(root.path(), &id, 0, &cancel, |_, _| {}).is_err());
+        assert_eq!(zips(), 1);
+        restore_audio(root.path(), &id, &cancel).unwrap();
+        let second = archive_audio(root.path(), &id, 0, &cancel, |_, _| {}).unwrap();
+        assert_ne!(first.archive_id, second.archive_id);
+        assert_eq!(zips(), 2);
+        let history = folder.join(format!("audio-archive.{}.restored.json", first.archive_id));
+        let old: serde_json::Value = serde_json::from_slice(&fs::read(history).unwrap()).unwrap();
+        assert_eq!(old["restored"], true);
+        assert_eq!(old["receipt"]["archiveId"], first.archive_id.as_str());
+        assert!(read_archived_transcript(&folder).unwrap().is_some());
+        let restored = restore_audio(root.path(), &id, &cancel).unwrap();
+        assert!(folder.join("audio").join(&restored.parts[0].file).is_file());
+    }
+    #[test]
     fn archive_browser_restores_verified_sources_and_purge_requires_unchanged_group_and_exact_confirmation(
     ) {
         let root = tempfile::tempdir().unwrap();
@@ -1881,15 +2115,68 @@ mod tests {
             .join(other)
             .join("session.json")
             .is_file());
-        let log = fs::read_dir(root.path().join("maintenance-log"))
+        // atomic_json keeps a .json.bak of the previous phase; directory order is filesystem-specific.
+        let logs: Vec<_> = fs::read_dir(root.path().join("maintenance-log"))
             .unwrap()
-            .next()
-            .unwrap()
-            .unwrap()
-            .path();
-        let record: serde_json::Value = serde_json::from_slice(&fs::read(log).unwrap()).unwrap();
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| path.extension().and_then(|e| e.to_str()) == Some("json"))
+            .collect();
+        assert_eq!(logs.len(), 1);
+        let record: serde_json::Value =
+            serde_json::from_slice(&fs::read(&logs[0]).unwrap()).unwrap();
         assert_eq!(record["phase"], "complete");
         assert_eq!(record["deletedFiles"], record["totalFiles"]);
+    }
+    #[test]
+    fn permanent_deletion_includes_interrupted_copies_and_blocks_on_unidentified_zips() {
+        let root = tempfile::tempdir().unwrap();
+        let id = fixture(root.path());
+        let cancel = AtomicBool::new(false);
+        let receipt = create(root.path(), &id, 0, "whole-meeting", &cancel, |_, _| {}).unwrap();
+        move_source_into_archive(root.path(), &receipt, 0, &cancel).unwrap();
+        let archives = root.path().join("archives");
+        // An archive write that stopped before its receipt, and a stopped restore.
+        fs::write(
+            archives.join("0123456789abcdef0123456789abcdef.pending.json"),
+            serde_json::to_vec(&serde_json::json!({"meetingId": id, "kind": "whole-meeting"}))
+                .unwrap(),
+        )
+        .unwrap();
+        fs::write(
+            archives.join("0123456789abcdef0123456789abcdef.zip"),
+            b"partial copy",
+        )
+        .unwrap();
+        let staging = archives.join(format!("{}.restoring-stopped", receipt.archive_id));
+        fs::create_dir_all(staging.join(&id).join("audio")).unwrap();
+        fs::write(staging.join(&id).join("audio").join("part.pcm"), b"pcm").unwrap();
+        let unknown = archives.join("fedcba9876543210fedcba9876543210.zip");
+        fs::write(&unknown, b"not attributable").unwrap();
+        assert!(deletion_fingerprint(root.path(), &id, &cancel).is_err());
+        fs::remove_file(&unknown).unwrap();
+        let (hash, _) = deletion_fingerprint(root.path(), &id, &cancel).unwrap();
+        delete_archived_meeting(
+            root.path(),
+            &id,
+            0,
+            &hash,
+            &format!("DELETE {id}"),
+            &cancel,
+            |_, _| {},
+        )
+        .unwrap();
+        assert!(!archives
+            .join("0123456789abcdef0123456789abcdef.zip")
+            .exists());
+        assert!(!archives
+            .join("0123456789abcdef0123456789abcdef.pending.json")
+            .exists());
+        assert!(!staging.exists());
+        let left: Vec<_> = fs::read_dir(&archives)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert!(left.is_empty(), "{left:?}");
     }
     #[test]
     fn hostile_archive_paths_are_rejected_before_any_restore_destination_is_created() {

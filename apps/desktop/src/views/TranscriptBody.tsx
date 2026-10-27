@@ -46,7 +46,9 @@ export default function TranscriptBody({
                 ? "transcript-part-" + encodeURIComponent(part.file)
                 : undefined
             }
-            data-highlighted={part.file === selectedFile || undefined}
+            data-highlighted={
+              (Boolean(selectedFile) && part.file === selectedFile) || undefined
+            }
             key={part.file ?? part.source + part.startSample + index}
           >
             <div className="part-meta">

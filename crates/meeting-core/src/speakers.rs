@@ -4,7 +4,6 @@ use crate::{
     storage::{atomic_json, reject_link},
     Result, SessionData,
 };
-use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -116,7 +115,7 @@ pub fn save(
         .create(true)
         .truncate(false)
         .open(path)?;
-    lock.try_lock_exclusive()
+    crate::metadata::lock_soon(&lock)
         .map_err(|_| "Speaker annotations are being edited elsewhere")?;
     let old = read(root, &data.id)?;
     if old.revision != expected {

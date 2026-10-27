@@ -130,6 +130,31 @@ mod tests {
         });
     }
     #[test]
+    fn explicit_status_update_rewrites_text_recovered_from_journals_after_a_crash() {
+        let root = tempfile::tempdir().unwrap();
+        let store =
+            SessionStore::create(root.path(), "Meeting", "fixture-model", "output", None).unwrap();
+        let folder = store.folder().to_owned();
+        let mut writer = PcmWriter::new(store.clone(), "system").unwrap();
+        writer.append(&[1; 160]).unwrap();
+        writer.finish().unwrap();
+        drop(writer);
+        checkpoint(&store, "Recovered confirmed sentence.");
+        let file = folder.join("transcript.txt");
+        eventually(|| folder.join("transcript.txt.receipt.json").is_file());
+        drop(store);
+        // Simulate an exit after the journal commit but before the mirror wrote.
+        fs::remove_file(&file).unwrap();
+        fs::remove_file(folder.join("transcript.txt.receipt.json")).unwrap();
+        let reopened = SessionStore::open(&folder).unwrap();
+        assert!(!file.exists(), "opening stays read-only");
+        reopened.set_status("complete").unwrap();
+        eventually(|| {
+            fs::read_to_string(&file)
+                .is_ok_and(|text| text.contains("Recovered confirmed sentence."))
+        });
+    }
+    #[test]
     fn user_edited_text_is_preserved_without_blocking_confirmed_journal_writes() {
         let root = tempfile::tempdir().unwrap();
         let store =
@@ -162,6 +187,8 @@ mod tests {
             .warnings
             .iter()
             .any(|s| s.contains("TXT")));
+        // A derived-text failure must not exclude intact audio from retention.
+        assert!(!store.snapshot().unwrap().capture_incomplete);
     }
     #[test]
     fn coalesced_writes_flush_latest_text_before_releasing_the_session() {

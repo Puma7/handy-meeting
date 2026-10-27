@@ -7,7 +7,6 @@ use crate::{
     Result,
 };
 use chrono::{DateTime, Utc};
-use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -112,7 +111,7 @@ pub fn save_policy(root: &Path, expected: u64, mut next: Policy) -> Result<Polic
         .read(true)
         .write(true)
         .open(lock_path)?;
-    lock.try_lock_exclusive()?;
+    metadata::lock_soon(&lock)?;
     let old = read_policy(root)?;
     if old.revision != expected || next.revision != expected {
         return Err("Retention policy changed; reload before saving".into());

@@ -86,15 +86,18 @@ impl SessionStore {
             .name("meeting-readable-text".into())
             .spawn(move || {
                 while receiver.recv().is_ok() {
-                    let Some(inner) = weak.upgrade() else { break };
-                    let data = match inner.lock() {
-                        Ok(guard) => guard.data.clone(),
-                        Err(_) => break,
+                    // Hold a strong reference only while copying, so owner checks stay exact.
+                    let data = {
+                        let Some(inner) = weak.upgrade() else { break };
+                        let Ok(guard) = inner.lock() else { break };
+                        guard.data.clone()
                     };
                     // All filesystem work is outside the audio checkpoint lock.
                     if crate::live_text::refresh(&path, &data).is_err() {
-                        if let Ok(mut guard) = inner.lock() {
-                            warn_data(&mut guard.data, TXT_WARNING);
+                        if let Some(inner) = weak.upgrade() {
+                            if let Ok(mut guard) = inner.lock() {
+                                note_data(&mut guard.data, TXT_WARNING);
+                            }
                         }
                     }
                 }
@@ -116,7 +119,7 @@ impl SessionStore {
                 Err(mpsc::TrySendError::Disconnected(()))
             ) {
                 if let Ok(mut guard) = self.inner.lock() {
-                    warn_data(&mut guard.data, TXT_WARNING);
+                    note_data(&mut guard.data, TXT_WARNING);
                 }
             }
         }
@@ -226,7 +229,14 @@ impl SessionStore {
     pub fn folder(&self) -> &Path {
         &self.folder
     }
-    pub(crate) fn into_relocation_guard(self) -> Result<RelocationGuard> {
+    pub(crate) fn into_relocation_guard(mut self) -> Result<RelocationGuard> {
+        // As sole owner, finish the derived TXT writer first; it can briefly hold the session.
+        if let Some(mirror) = Arc::get_mut(&mut self.mirror) {
+            mirror.sender.take();
+            if let Some(worker) = mirror.worker.take() {
+                let _ = worker.join();
+            }
+        }
         if Arc::strong_count(&self.inner) != 1 {
             return Err(
                 "Other session readers or writers are still active; archive move stopped".into(),
@@ -566,6 +576,9 @@ impl SessionStore {
         }
         atomic_json(&self.folder.join("session.json"), &updated)?;
         guard.data = updated;
+        drop(guard);
+        // An explicit update reconciles text recovered from the journals after a crash.
+        self.queue_text_mirror();
         Ok(())
     }
 
@@ -748,6 +761,10 @@ pub(crate) fn now() -> String {
 }
 fn warn_data(data: &mut SessionData, text: &str) {
     data.capture_incomplete = true;
+    note_data(data, text);
+}
+/// The readable TXT is derived from the journals; its failures never imply lost audio.
+fn note_data(data: &mut SessionData, text: &str) {
     if !data.warnings.iter().any(|old| old == text) {
         data.warnings.push(text.into());
     }
