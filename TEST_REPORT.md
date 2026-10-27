@@ -444,3 +444,14 @@ Limits remain: physical capture/interruption/endurance on this new implementatio
 ### PR27 integration of PR26 update URLs
 
 The four files from predecessor f9499e8e4a760c1504de89eb52c1f702319ee09a were merged cleanly into this follow-up, including the official renamed-repository updater URLs and its new regression. Full local Rust scope now225passed/2childfixturesignored; current frontend/update checks and source proof are retained in .build/next-section-20261027. Only our follow-up branch is updated. Predecessor branch remains Claude-owned.
+
+
+### PR27 review correction and latest predecessor integration
+
+The current follow-up integrates predecessor c72e6bf8668868fb2b913fb43d1675a4434f41c2 into our branch only. Retention rejects dangling manifest links before treating a path as missing. Both incoming Unix regressions are retained; the split audio-marker reader already performs the stronger symlink_metadata/regular-file rejection, so that protection was preserved.
+
+Codex reviewed 0778324bcf5cce3f2d809fbe2d73eb203dc15125: code review completed with one P2; security review completed without findings. The P2 is corrected: a saved unavailable optional FFmpeg selection can explicitly be cleared, then disabled/unrelated retention settings can be saved with null. Clearing preserves the executable and recordings, invalidates stale previews and never saves or applies a rule by itself. Two DE/EN regressions reproduce the saved-path lockout and cover picker cancellation and separate saving.
+
+After these changes: full local Windows workspace225Rust tests passed,2dedicated child fixtures ignored; full-scope no-default-features Clippy with warnings denied and formatting passed. All103UI tests/12files,TypeScript,Viteproductionbuild passed. Mandatory verify.ps1 passed18PCM/35Notes/28Templates/8Agent plus monitor in a new isolated program folder. Edge1280x900 and390x844 synthetic IPC checks additionally passed the missing-FFmpeg error, cancellation, clear action and separate save-with-null flow with no horizontal overflow or console errors. Actual native dialogs/devices were not opened. The two Unix-only regressions await target CI.
+
+Earlier GitHub checks and reviews belong to their exact earlier heads. The corrected tree requires fresh current-head CI and reviews; no new release, tag or public installer is claimed. Original logs, prior receipts, screenshots, older releases and all user data remain retained.

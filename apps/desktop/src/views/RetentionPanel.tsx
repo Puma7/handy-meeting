@@ -159,6 +159,15 @@ export default function RetentionPanel({
       setBusy(false);
     }
   }
+  function clearFfmpeg() {
+    if (!draft || busy || running) return;
+    setDraft({ ...draft, ffmpegExecutable: null });
+    setError(null);
+    setPlan(null);
+    setSelected(null);
+    setAccepted(false);
+    setConfirmation("");
+  }
   async function apply() {
     if (!plan || selected === null || !candidate || !api.applyRetention) return;
     setBusy(true);
@@ -325,6 +334,18 @@ export default function RetentionPanel({
               ? "FFmpeg im Dateidialog auswählen …"
               : "Choose FFmpeg in file dialog …"}
           </button>
+          <button
+            className="secondary"
+            disabled={busy || running || !draft.ffmpegExecutable}
+            onClick={clearFfmpeg}
+          >
+            {de ? "FFmpeg-Auswahl entfernen" : "Clear FFmpeg selection"}
+          </button>
+          <p className="muted">
+            {de
+              ? "Das Entfernen ändert nur die Programmauswahl. Programmdatei und Aufnahmen bleiben erhalten. Übernimm die Änderung mit „Regeln speichern“, bevor du eine neue Vorschau erstellst."
+              : "Clearing changes only the program selection. The program file and recordings are retained. Apply the change with Save rules before creating a new preview."}
+          </p>
           <p className="muted">
             {de
               ? "Die ausgewählte Programmdatei wird geprüft. Wähle und bestätige sie nach jedem App-Neustart sowie nach einem Austausch erneut, bevor du sie verwendest. Der gespeicherte Pfad allein ist keine neue Freigabe. Abbrechen lässt die bisherige Wahl unverändert."

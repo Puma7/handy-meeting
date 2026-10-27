@@ -14,6 +14,87 @@ const disabled: RetentionPolicy = {
   codec: "flac",
   ffmpegExecutable: null,
 };
+it.each(["en", "de"] as const)(
+  "clears a saved unavailable FFmpeg path before separately saving disabled rules (%s)",
+  async (locale) => {
+    const de = locale === "de";
+    const saved = {
+      ...disabled,
+      revision: 7,
+      convertAfterDays: 60,
+      ffmpegExecutable: "/unavailable/ffmpeg",
+    };
+    const choose = vi.fn().mockResolvedValue(null);
+    const save = vi.fn(async (_revision, policy) => {
+      if (policy.ffmpegExecutable)
+        throw new Error(
+          "Synthetic saved program is unavailable; choose it again or clear the selection",
+        );
+      return { ...policy, revision: 8 };
+    });
+    const preview = vi.fn();
+    const apply = vi.fn();
+    const api = {
+      getRetentionPolicy: vi.fn().mockResolvedValue(saved),
+      chooseFfmpegExecutable: choose,
+      saveRetentionPolicy: save,
+      previewRetention: preview,
+      applyRetention: apply,
+    } as unknown as DesktopApi;
+    render(<RetentionPanel api={api} locale={locale} />);
+    const path = (await screen.findByLabelText(
+      de
+        ? "Separat installiertes FFmpeg · nur für optionale Formatumwandlung"
+        : "Separately installed FFmpeg · only for optional format conversion",
+    )) as HTMLInputElement;
+    expect(path.value).toBe(saved.ffmpegExecutable);
+    await userEvent.click(
+      screen.getByRole("checkbox", {
+        name: de
+          ? "Zusätzliche Audiokopie umwandeln nach Tagen"
+          : "Convert an additional audio copy after days",
+      }),
+    );
+    const saveButton = () =>
+      screen.getByRole("button", {
+        name: de ? "Regeln speichern" : "Save rules",
+      });
+    await userEvent.click(saveButton());
+    await screen.findByText(/Synthetic saved program is unavailable/);
+    expect(save).toHaveBeenCalledOnce();
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: de
+          ? "FFmpeg im Dateidialog auswählen …"
+          : "Choose FFmpeg in file dialog …",
+      }),
+    );
+    expect(choose).toHaveBeenCalledOnce();
+    expect(path.value).toBe(saved.ffmpegExecutable);
+    expect(save).toHaveBeenCalledOnce();
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: de ? "FFmpeg-Auswahl entfernen" : "Clear FFmpeg selection",
+      }),
+    );
+    expect(path.value).toBe("");
+    expect(save).toHaveBeenCalledOnce();
+    expect(preview).not.toHaveBeenCalled();
+    expect(apply).not.toHaveBeenCalled();
+    for (const box of screen.getAllByRole("checkbox"))
+      expect((box as HTMLInputElement).checked).toBe(false);
+    await userEvent.click(saveButton());
+    await waitFor(() =>
+      expect(save).toHaveBeenLastCalledWith(7, {
+        ...saved,
+        convertAfterDays: null,
+        ffmpegExecutable: null,
+      }),
+    );
+    expect(preview).not.toHaveBeenCalled();
+    expect(apply).not.toHaveBeenCalled();
+  },
+);
 it("selects FFmpeg through the native chooser, retains cancellation and saves only after the user's separate action", async () => {
   const choose = vi
     .fn()

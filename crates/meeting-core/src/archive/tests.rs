@@ -948,6 +948,24 @@ fn source_move_interrupted_after_prepared_record_can_be_repeated_and_keeps_that_
 }
 #[cfg(unix)]
 #[test]
+fn a_dangling_audio_archive_receipt_link_is_refused_not_read_as_missing() {
+    let root = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let id = fixture(root.path());
+    let folder = root.path().join("sessions").join(&id);
+    assert!(read_archived_transcript(&folder).unwrap().is_none());
+    let receipt = folder.join("audio-archive.json");
+    std::os::unix::fs::symlink(outside.path().join("elsewhere.json"), &receipt).unwrap();
+    assert!(!receipt.exists(), "the link dangles");
+    assert!(read_archived_transcript(&folder).is_err());
+    assert!(audio::read_audio_marker(&receipt).is_err());
+    assert!(fs::symlink_metadata(&receipt)
+        .unwrap()
+        .file_type()
+        .is_symlink());
+}
+#[cfg(unix)]
+#[test]
 fn dangling_archive_lock_links_are_rejected_without_creating_their_targets() {
     let root = tempfile::tempdir().unwrap();
     let outside = tempfile::tempdir().unwrap();
