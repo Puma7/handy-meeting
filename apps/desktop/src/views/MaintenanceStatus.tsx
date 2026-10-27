@@ -2,50 +2,50 @@ import { useEffect, useState } from "react";
 import { RefreshCw, Square } from "lucide-react";
 import { clock } from "../domain";
 import { errorMessage } from "../api";
+import { startAdaptivePoll } from "../jobPolling";
 import type { DesktopApi, Locale, LibraryProgress } from "../types";
 export default function MaintenanceStatus({
   api,
   locale,
   onProgress,
+  hidden: suppressed = false,
 }: {
   api: DesktopApi;
   locale: Locale;
   onProgress?: (job: LibraryProgress) => void;
+  /** Another instance shows the same job on this page; keep dismissals but do not poll. */
+  hidden?: boolean;
 }) {
   const [job, setJob] = useState<LibraryProgress | null>(null),
     [error, setError] = useState<string | null>(null),
     [hidden, setHidden] = useState<string | null>(null);
   const de = locale === "de";
   useEffect(() => {
-    if (!api.getMaintenanceProgress) return;
+    if (suppressed || !api.getMaintenanceProgress) return;
     let active = true,
-      polling = false;
-    async function poll() {
-      if (polling) return;
-      polling = true;
+      running = false;
+    const stop = startAdaptivePoll(async () => {
       try {
         const value = await api.getMaintenanceProgress!();
+        running = value?.status === "running";
         if (active) {
           setJob(value);
           setError(null);
         }
       } catch (e) {
         if (active) setError(errorMessage(e));
-      } finally {
-        polling = false;
       }
-    }
-    void poll();
-    const timer = setInterval(() => void poll(), 500);
+      return running;
+    });
     return () => {
       active = false;
-      clearInterval(timer);
+      stop();
     };
-  }, [api]);
+  }, [api, suppressed]);
   useEffect(() => {
     if (job) onProgress?.(job);
   }, [job?.jobId, job?.status, onProgress]);
-  if (!job || job.jobId === hidden) return null;
+  if (suppressed || !job || job.jobId === hidden) return null;
   const running = job.status === "running";
   const title = de ? "Aufbewahrung und Archiv" : "Retention and archive";
   const operation =

@@ -44,3 +44,37 @@ pub(crate) async fn install_update(
   match command.spawn(){Ok(_)=>{app.exit(0);Ok(())},Err(_)=>{service.lock()?.transitioning=false;Err("The verified installer could not start. Your current app and recordings are unchanged. / Der geprüfte Installer konnte nicht gestartet werden; die aktuelle App bleibt geöffnet.".into())}}
  }).await
 }
+/// Opens only the official release page held by the updater; the WebView passes no URL.
+#[tauri::command]
+pub(crate) async fn open_release_page(service: State<'_, Arc<Service>>) -> AppResult<()> {
+    let service = Arc::clone(&service);
+    blocking(move || {
+        let page = service.updater.release_page()?;
+        let mut child = browser_command(&page).spawn().map_err(|_| {
+            format!("Could not open the browser. Open {page} in your browser to see the official downloads. / Browser konnte nicht geöffnet werden; bitte die Seite manuell öffnen.")
+        })?;
+        // Reap the short-lived launcher without waiting for the browser window.
+        std::thread::spawn(move || {
+            let _ = child.wait();
+        });
+        Ok(())
+    })
+    .await
+}
+fn browser_command(page: &str) -> std::process::Command {
+    #[cfg(windows)]
+    let mut command = {
+        use std::os::windows::process::CommandExt;
+        let base = std::env::var_os("SystemRoot").unwrap_or_else(|| "C:\\Windows".into());
+        let mut command =
+            std::process::Command::new(std::path::PathBuf::from(base).join("explorer.exe"));
+        command.creation_flags(0x08000000);
+        command
+    };
+    #[cfg(target_os = "macos")]
+    let mut command = std::process::Command::new("/usr/bin/open");
+    #[cfg(target_os = "linux")]
+    let mut command = std::process::Command::new("xdg-open");
+    command.arg(page);
+    command
+}

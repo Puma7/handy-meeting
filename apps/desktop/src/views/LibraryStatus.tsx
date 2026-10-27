@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { RefreshCw, X, Square } from "lucide-react";
 import { errorMessage } from "../api";
 import { clock } from "../domain";
+import { startAdaptivePoll } from "../jobPolling";
 import type { DesktopApi, LibraryProgress, Locale } from "../types";
 export default function LibraryStatus({
   api,
@@ -22,10 +23,12 @@ export default function LibraryStatus({
   }, [job?.jobId, job?.status]);
   useEffect(() => {
     if (!connected || !api.getLibraryProgress) return;
-    let disposed = false;
-    async function poll() {
+    let disposed = false,
+      running = false;
+    const stop = startAdaptivePoll(async () => {
       try {
         const next = await api.getLibraryProgress?.();
+        running = next?.status === "running";
         if (!disposed) {
           setJob(next ?? null);
           setError(null);
@@ -33,12 +36,11 @@ export default function LibraryStatus({
       } catch (e) {
         if (!disposed) setError(errorMessage(e));
       }
-    }
-    void poll();
-    const timer = setInterval(() => void poll(), 1000);
+      return running;
+    });
     return () => {
       disposed = true;
-      clearInterval(timer);
+      stop();
     };
   }, [api, connected]);
   if (!job || job.jobId === hidden) return null;

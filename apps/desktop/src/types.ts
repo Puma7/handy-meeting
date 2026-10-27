@@ -286,6 +286,7 @@ export interface DesktopApi {
   getUpdateProgress?(): Promise<UpdateProgress>;
   cancelUpdate?(): Promise<void>;
   installUpdate?(): Promise<void>;
+  openReleasePage?(): Promise<void>;
   getSpeakerLabels?(
     meetingId: string,
   ): Promise<SpeakerDocument & { sources: Record<string, string> }>;
@@ -436,6 +437,12 @@ export interface UpdateProgress {
   elapsedMs: number;
   error: string | null;
   attempt?: number;
+  /** Operating system of this build: "windows", "linux", "macos", ... */
+  platform?: string;
+  /** Official release package for this platform, when the release lists one. */
+  assetName?: string | null;
+  /** Only the verified Windows setup can be downloaded inside the app. */
+  canDownload?: boolean;
 }
 export interface SpeakerDocument {
   revision: number;

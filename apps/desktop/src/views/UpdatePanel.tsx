@@ -1,18 +1,22 @@
-import { useState, useEffect } from "react";
-import { RefreshCw, Download } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { RefreshCw, Download, ExternalLink } from "lucide-react";
 import { errorMessage } from "../api";
 import { clock } from "../domain";
+import { requestJobStatusRefresh, startAdaptivePoll } from "../jobPolling";
 import type { DesktopApi, Locale, UpdateProgress } from "../types";
 export default function UpdatePanel({
   api,
   locale,
   footer = false,
   blocked = false,
+  hidden: suppressed = false,
 }: {
   api: DesktopApi;
   locale: Locale;
   footer?: boolean;
   blocked?: boolean;
+  /** The full update panel is on screen; keep the dismissal but do not poll or render. */
+  hidden?: boolean;
 }) {
   const de = locale === "de";
   const [job, setJob] = useState<UpdateProgress | null>(null),
@@ -20,13 +24,13 @@ export default function UpdatePanel({
     [request, setRequest] = useState(false),
     [jobsRunning, setJobsRunning] = useState(false),
     [dismissed, setDismissed] = useState<string | null>(null);
+  // A check or download request can run before its status becomes visible.
+  const requesting = useRef(false);
   useEffect(() => {
-    if (!api.getUpdateProgress) return;
+    if (suppressed || !api.getUpdateProgress) return;
     let active = true,
-      polling = false;
-    async function poll() {
-      if (polling) return;
-      polling = true;
+      busy = false;
+    const stop = startAdaptivePoll(async () => {
       try {
         const value = await api.getUpdateProgress!();
         // Archive maintenance and indexing also block installation in the backend.
@@ -36,39 +40,61 @@ export default function UpdatePanel({
               api.getMaintenanceProgress?.() ?? null,
               api.getLibraryProgress?.() ?? null,
             ]);
+        const othersRunning = others.some((p) => p?.status === "running");
+        busy =
+          value.status === "checking" ||
+          value.status === "downloading" ||
+          othersRunning;
         if (active) {
           setJob(value);
-          setJobsRunning(others.some((p) => p?.status === "running"));
+          setJobsRunning(othersRunning);
           setError(null);
         }
       } catch (e) {
         if (active) setError(errorMessage(e));
-      } finally {
-        polling = false;
       }
-    }
-    void poll();
-    const timer = setInterval(() => void poll(), 500);
+      return busy || requesting.current;
+    });
     return () => {
       active = false;
-      clearInterval(timer);
+      stop();
     };
-  }, [api, footer]);
-  if (!api.checkForUpdate) return null;
+  }, [api, footer, suppressed]);
+  if (!api.checkForUpdate || suppressed) return null;
   const installBlocked = blocked || jobsRunning;
   const running = job?.status === "checking" || job?.status === "downloading";
+  // Only the verified Windows setup is downloaded in the app; other systems use the release page.
+  const windows = (job?.platform ?? "windows") === "windows";
+  const canDownload = job?.canDownload ?? windows;
+  const releasePage =
+    job?.releaseUrl ?? "https://github.com/Puma7/handy-meeting/releases";
   async function action(run: () => Promise<unknown>) {
+    requesting.current = true;
     setRequest(true);
     setError(null);
     try {
-      await run();
+      const pending = run();
+      requestJobStatusRefresh();
+      await pending;
       if (api.getUpdateProgress) setJob(await api.getUpdateProgress());
     } catch (e) {
       setError(errorMessage(e));
     } finally {
+      requesting.current = false;
       setRequest(false);
     }
   }
+  async function openReleasePage() {
+    setError(null);
+    try {
+      // The WebView has no opener permission; the app opens only its official release page.
+      if (api.openReleasePage) await api.openReleasePage();
+      else window.open(releasePage, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  }
+  const externalPackage = job?.status === "available" && !canDownload;
   const title = de ? "App aktualisieren" : "Update app";
   const labels: Record<string, string> = de
     ? {
@@ -129,9 +155,13 @@ export default function UpdatePanel({
       {!footer && (
         <>
           <p>
-            {de
-              ? "Updates werden nur auf deinen Klick geprüft. Der Windows-Installer wird mit Größe und GitHub-SHA256 geprüft; das Setup ist weiterhin unsigniert. Die Installation startet erst nach deinem zweiten Klick und beendet nur diese App, wenn keine Aufnahme, Erkennung oder Auswertung läuft."
-              : "Updates are checked only when you click. The Windows installer is verified against its size and GitHub SHA256; setup remains unsigned. Installation requires another click and closes only this app when recording, recognition and analysis are finished."}
+            {windows
+              ? de
+                ? "Updates werden nur auf deinen Klick geprüft. Der Windows-Installer wird mit Größe und GitHub-SHA256 geprüft; das Setup ist weiterhin unsigniert. Die Installation startet erst nach deinem zweiten Klick und beendet nur diese App, wenn keine Aufnahme, Erkennung oder Auswertung läuft."
+                : "Updates are checked only when you click. The Windows installer is verified against its size and GitHub SHA256; setup remains unsigned. Installation requires another click and closes only this app when recording, recognition and analysis are finished."
+              : de
+                ? "Updates werden nur auf deinen Klick geprüft. Auf diesem System lädt und installiert HandyMeeting Updates nicht selbst: Lade das passende Paket von der offiziellen Release-Seite und installiere es dort. Aufnahmen bleiben erhalten."
+                : "Updates are checked only when you click. On this system HandyMeeting does not download or install updates itself: get the matching package from the official release page and install it there. Recordings are kept."}
           </p>
           <button
             className="secondary"
@@ -141,7 +171,18 @@ export default function UpdatePanel({
             <RefreshCw size={15} />
             {de ? "Nach Updates suchen" : "Check for updates"}
           </button>
-          {job?.status === "available" && (
+          {externalPackage && (
+            <p>
+              {job?.assetName
+                ? de
+                  ? `Paket für dieses System: ${job?.assetName}. Öffne die offizielle Release-Seite, um es herunterzuladen.`
+                  : `Package for this system: ${job?.assetName}. Open the official release page to download it.`
+                : de
+                  ? "Diese Version listet noch kein Paket für dieses System. Die offizielle Release-Seite zeigt den aktuellen Stand."
+                  : "This release lists no package for this system yet. The official release page shows the current state."}
+            </p>
+          )}
+          {job?.status === "available" && canDownload && (
             <button
               className="secondary"
               disabled={request}
@@ -179,18 +220,19 @@ export default function UpdatePanel({
             </p>
           )}
           <p>
-            <a
-              href={
-                job?.releaseUrl ??
-                "https://github.com/Puma7/handy-meeting/releases"
-              }
-              target="_blank"
-              rel="noreferrer"
+            <button
+              className={externalPackage ? "secondary" : "text-button"}
+              onClick={() => void openReleasePage()}
             >
-              {de
-                ? "Offizielle Downloads und Hinweise"
-                : "Official downloads and release notes"}
-            </a>
+              <ExternalLink size={14} />
+              {externalPackage
+                ? de
+                  ? "Offizielle Release-Seite öffnen"
+                  : "Open official release page"
+                : de
+                  ? "Offizielle Downloads und Hinweise"
+                  : "Official downloads and release notes"}
+            </button>
           </p>
         </>
       )}

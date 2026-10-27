@@ -1,8 +1,15 @@
 import { expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import UpdatePanel from "./views/UpdatePanel";
 import SpeakerExperiments from "./views/SpeakerExperiments";
+import MaintenanceStatus from "./views/MaintenanceStatus";
+import LibraryStatus from "./views/LibraryStatus";
+import {
+  ACTIVE_POLL_MS,
+  IDLE_POLL_MS,
+  requestJobStatusRefresh,
+} from "./jobPolling";
 import { nameCandidates, SPEAKER_NAME_TEMPLATE } from "./speaker-proposals";
 import type { DesktopApi, Meeting, AnalysisResult } from "./types";
 const meeting: Meeting = {
@@ -284,6 +291,8 @@ it("does not keep a cancelled download in the footer and lets a failure be dismi
   await new Promise((r) => setTimeout(r, 30));
   expect(container.textContent).toBe("");
   status = "failed";
+  // Idle status bars wait for their slow interval unless a new job is announced.
+  act(() => requestJobStatusRefresh());
   await userEvent.click(await screen.findByRole("button", { name: "Dismiss" }));
   expect(container.textContent).toBe("");
 });
@@ -306,7 +315,193 @@ it("shows a repeated failure again after a new attempt", async () => {
   await userEvent.click(await screen.findByRole("button", { name: "Dismiss" }));
   expect(container.textContent).toBe("");
   attempt = 2;
+  act(() => requestJobStatusRefresh());
   expect(
     await screen.findByRole("button", { name: "Dismiss" }, { timeout: 2000 }),
   ).toBeTruthy();
+});
+it("polls status bars slowly while idle and quickly only while a job runs", async () => {
+  vi.useFakeTimers();
+  try {
+    let status = "complete";
+    const job = () => ({
+      jobId: "synthetic-job",
+      kind: "cleanup-preview",
+      status,
+      confirmedTasks: 1,
+      totalTasks: 1,
+      elapsedMs: 10,
+      skipped: 0,
+      error: null,
+      cancelRequested: false,
+    });
+    const maintenance = vi.fn(async () => job());
+    const library = vi.fn(async () => job());
+    const speaker = vi.fn(async () => null);
+    const update = vi.fn(async () => ({
+      status: "current",
+      version: null,
+      releaseUrl: null,
+      receivedBytes: 0,
+      totalBytes: 0,
+      elapsedMs: 0,
+      error: null,
+    }));
+    const api = {
+      checkForUpdate: vi.fn(),
+      startSpeakerExperiment: vi.fn(),
+      getMaintenanceProgress: maintenance,
+      getLibraryProgress: library,
+      getSpeakerProgress: speaker,
+      getUpdateProgress: update,
+    } as unknown as DesktopApi;
+    render(
+      <>
+        <MaintenanceStatus api={api} locale="en" />
+        <LibraryStatus api={api} connected locale="en" />
+        <SpeakerExperiments api={api} locale="en" footer />
+        <UpdatePanel api={api} locale="en" footer />
+      </>,
+    );
+    await act(async () => {});
+    const pollers = [maintenance, library, speaker, update];
+    for (const poll of pollers) expect(poll).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(IDLE_POLL_MS - 100);
+    });
+    for (const poll of pollers) expect(poll).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    for (const poll of pollers) expect(poll).toHaveBeenCalledTimes(2);
+    status = "running";
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(IDLE_POLL_MS);
+    });
+    expect(maintenance).toHaveBeenCalledTimes(3);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ACTIVE_POLL_MS * 2);
+    });
+    expect(maintenance).toHaveBeenCalledTimes(5);
+    expect(library).toHaveBeenCalledTimes(5);
+    expect(speaker).toHaveBeenCalledTimes(3);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+it("keeps footer duplicates of settings panels hidden without polling", async () => {
+  const maintenance = vi.fn().mockResolvedValue({
+    jobId: "synthetic-job",
+    kind: "cleanup-preview",
+    status: "running",
+    confirmedTasks: 0,
+    totalTasks: 1,
+    elapsedMs: 10,
+    skipped: 0,
+    error: null,
+    cancelRequested: false,
+  });
+  const update = vi.fn().mockResolvedValue({
+    status: "downloading",
+    version: "1.0.3",
+    releaseUrl: null,
+    receivedBytes: 1,
+    totalBytes: 10,
+    elapsedMs: 5,
+    error: null,
+  });
+  const api = {
+    checkForUpdate: vi.fn(),
+    getMaintenanceProgress: maintenance,
+    getUpdateProgress: update,
+  } as unknown as DesktopApi;
+  const { container, rerender } = render(
+    <>
+      <MaintenanceStatus api={api} locale="en" hidden />
+      <UpdatePanel api={api} locale="en" footer hidden />
+    </>,
+  );
+  await new Promise((r) => setTimeout(r, 30));
+  expect(container.textContent).toBe("");
+  expect(maintenance).not.toHaveBeenCalled();
+  expect(update).not.toHaveBeenCalled();
+  rerender(
+    <>
+      <MaintenanceStatus api={api} locale="en" />
+      <UpdatePanel api={api} locale="en" footer />
+    </>,
+  );
+  expect(
+    await screen.findByRole("status", { name: "Retention and archive" }),
+  ).toBeTruthy();
+  expect(
+    await screen.findByRole("status", { name: "Update app" }),
+  ).toBeTruthy();
+});
+it("sends Linux and macOS users to the official release page instead of a Windows download", async () => {
+  const open = vi.fn().mockResolvedValue(undefined);
+  const download = vi.fn();
+  const api = {
+    checkForUpdate: vi.fn(),
+    downloadUpdate: download,
+    openReleasePage: open,
+    getUpdateProgress: vi.fn().mockResolvedValue({
+      status: "available",
+      version: "1.0.3",
+      releaseUrl: "https://github.com/Puma7/handy-meeting/releases/tag/v1.0.3",
+      receivedBytes: 0,
+      totalBytes: 0,
+      elapsedMs: 5,
+      error: null,
+      platform: "linux",
+      assetName: "HandyMeeting-1.0.3-linux-amd64.deb",
+      canDownload: false,
+    }),
+  } as unknown as DesktopApi;
+  const { container } = render(<UpdatePanel api={api} locale="en" />);
+  expect(
+    await screen.findByText(/HandyMeeting-1\.0\.3-linux-amd64\.deb/),
+  ).toBeTruthy();
+  expect(
+    screen.queryByRole("button", { name: "Download Windows installer" }),
+  ).toBeNull();
+  expect(container.textContent).not.toMatch(/Windows installer is verified/);
+  // No WebView link that needs opener permissions; the backend opens the official page.
+  expect(container.querySelector("a[target]")).toBeNull();
+  await userEvent.click(
+    screen.getByRole("button", { name: "Open official release page" }),
+  );
+  expect(open).toHaveBeenCalledOnce();
+  expect(download).not.toHaveBeenCalled();
+});
+it("explains a missing platform package and still offers the release page", async () => {
+  const api = {
+    checkForUpdate: vi.fn(),
+    openReleasePage: vi.fn().mockRejectedValue("Browser unavailable"),
+    getUpdateProgress: vi.fn().mockResolvedValue({
+      status: "available",
+      version: "1.0.3",
+      releaseUrl: null,
+      receivedBytes: 0,
+      totalBytes: 0,
+      elapsedMs: 5,
+      error: null,
+      platform: "macos",
+      assetName: null,
+      canDownload: false,
+    }),
+  } as unknown as DesktopApi;
+  render(<UpdatePanel api={api} locale="de" />);
+  expect(
+    await screen.findByText(/listet noch kein Paket für dieses System/),
+  ).toBeTruthy();
+  expect(
+    screen.queryByRole("button", { name: "Windows-Installer laden" }),
+  ).toBeNull();
+  await userEvent.click(
+    screen.getByRole("button", { name: "Offizielle Release-Seite öffnen" }),
+  );
+  expect((await screen.findByRole("alert")).textContent).toBe(
+    "Browser unavailable",
+  );
 });
