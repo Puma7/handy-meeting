@@ -2035,6 +2035,7 @@ mod tests {
                 tentative: String::new(),
                 processed_samples: 1600,
                 final_text: true,
+                revision_after_restart: false,
             })
             .unwrap();
         store.set_status("recorded").unwrap();

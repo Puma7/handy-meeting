@@ -49,6 +49,7 @@ fn checkpoint(part: &AudioPart, text: &str) -> TranscriptCheckpoint {
         tentative: String::new(),
         processed_samples: part.confirmed_sample_count,
         final_text: true,
+        revision_after_restart: false,
     }
 }
 
@@ -780,4 +781,175 @@ fn stopped_session_with_failed_chunk_close_reopens_closed_at_confirmed_prefix() 
         assert_eq!(data.parts[0].text.as_deref(), Some("Confirmed prefix."));
         assert_eq!(hash(&audio), audio_before);
     }
+}
+
+/// Synthetic closed one-part session whose confirmed text is "Confirmed system.".
+fn closed_fixture(root: &Path) -> SessionStore {
+    let store = SessionStore::create(
+        root,
+        "Synthetic restart revision fixture",
+        "synthetic-model",
+        "generated system",
+        None,
+    )
+    .unwrap();
+    let mut writer = PcmWriter::new(store.clone(), "system").unwrap();
+    writer.append(&vec![128_i16; 16_000]).unwrap();
+    writer.finish().unwrap();
+    drop(writer);
+    store.set_status("recorded").unwrap();
+    let part = store.snapshot().unwrap().parts[0].clone();
+    store
+        .append_transcript(checkpoint(&part, "Confirmed system."))
+        .unwrap();
+    store
+}
+
+fn revision(part: &AudioPart, text: &str) -> TranscriptCheckpoint {
+    TranscriptCheckpoint {
+        revision_after_restart: true,
+        ..checkpoint(part, text)
+    }
+}
+
+fn revision_notices(warnings: &[String]) -> usize {
+    warnings
+        .iter()
+        .filter(|warning| warning.contains("the earlier text is kept in the transcript journal"))
+        .count()
+}
+
+/// Synthetic regression for #20: a recognition restart (e.g. GPU to CPU) decodes the
+/// same audio differently. Only the explicitly marked checkpoint becomes a new text
+/// version; every earlier journal line stays byte-identical and the audio is intact.
+#[test]
+fn marked_restart_revision_is_a_new_version_that_keeps_earlier_lines_and_survives_reopen() {
+    let root = tempfile::tempdir().unwrap();
+    let store = closed_fixture(root.path());
+    let folder = store.folder().to_owned();
+    let part = store.snapshot().unwrap().parts[0].clone();
+    let audio = store.audio_path(&part).unwrap();
+    let audio_before = hash(&audio);
+    let journal = folder.join("transcript-journal.jsonl");
+    let original = fs::read(&journal).unwrap();
+    // Unmarked divergence is still rejected and writes nothing.
+    assert!(store
+        .append_transcript(checkpoint(&part, "Revised system."))
+        .is_err());
+    // The marker never allows progress to move backward.
+    let mut backward = revision(&part, "Revised system.");
+    backward.processed_samples = 8_000;
+    assert!(store.append_transcript(backward).is_err());
+    assert_eq!(fs::read(&journal).unwrap(), original);
+
+    store
+        .append_transcript(revision(&part, "Revised system."))
+        .unwrap();
+    let data = store.snapshot().unwrap();
+    assert_eq!(data.parts[0].text.as_deref(), Some("Revised system."));
+    assert_eq!(data.parts[0].committed_text, "Revised system.");
+    assert_eq!(data.parts[0].processed_samples, 16_000);
+    assert_eq!(data.parts[0].status, "complete");
+    assert!(!data.capture_incomplete);
+    assert_eq!(revision_notices(&data.warnings), 1);
+    // A second restart revision of the same part keeps a single notice.
+    let revised = data.parts[0].clone();
+    store
+        .append_transcript(revision(&revised, "Revised again."))
+        .unwrap();
+    assert_eq!(revision_notices(&store.snapshot().unwrap().warnings), 1);
+
+    let versions = fs::read(&journal).unwrap();
+    assert!(versions.starts_with(&original));
+    let added: Vec<_> = String::from_utf8(versions[original.len()..].to_vec())
+        .unwrap()
+        .lines()
+        .map(str::to_owned)
+        .collect();
+    assert_eq!(added.len(), 2);
+    assert!(added
+        .iter()
+        .all(|line| line.contains("\"revisionAfterRestart\":true")));
+    assert!(String::from_utf8_lossy(&versions).contains("\"committed\":\"Confirmed system.\""));
+
+    drop(store);
+    let reopened = SessionStore::open(&folder).unwrap();
+    let data = reopened.snapshot().unwrap();
+    assert_eq!(data.parts[0].text.as_deref(), Some("Revised again."));
+    assert_eq!(data.parts[0].status, "complete");
+    assert!(!data.capture_incomplete);
+    assert_eq!(revision_notices(&data.warnings), 1);
+    assert_eq!(fs::read(&journal).unwrap(), versions);
+    assert_eq!(hash(&audio), audio_before);
+}
+
+/// Synthetic crash window: the marked checkpoint is durable, but the manifest still
+/// predates it. Journal replay accepts the marked line, re-derives the notice and
+/// yields the new text as current.
+#[test]
+fn journal_replay_accepts_marked_revision_and_rederives_its_notice() {
+    let root = tempfile::tempdir().unwrap();
+    let store = closed_fixture(root.path());
+    let folder = store.folder().to_owned();
+    let manifest = fs::read(folder.join("session.json")).unwrap();
+    let part = store.snapshot().unwrap().parts[0].clone();
+    store
+        .append_transcript(revision(&part, "Revised system."))
+        .unwrap();
+    drop(store);
+    let journal = fs::read(folder.join("transcript-journal.jsonl")).unwrap();
+    // Simulate a crash before the manifest update of the marked checkpoint.
+    fs::write(folder.join("session.json"), &manifest).unwrap();
+    let data = SessionStore::open(&folder).unwrap().snapshot().unwrap();
+    assert_eq!(data.parts[0].text.as_deref(), Some("Revised system."));
+    assert_eq!(data.parts[0].status, "complete");
+    assert!(!data.capture_incomplete);
+    assert_eq!(revision_notices(&data.warnings), 1);
+    assert_eq!(
+        fs::read(folder.join("transcript-journal.jsonl")).unwrap(),
+        journal
+    );
+}
+
+/// Synthetic: an unmarked journal line that changes the confirmed prefix is still
+/// refused on reopen, and no original file is rewritten.
+#[test]
+fn journal_replay_still_rejects_unmarked_prefix_change() {
+    let root = tempfile::tempdir().unwrap();
+    let store = closed_fixture(root.path());
+    let folder = store.folder().to_owned();
+    let data = store.snapshot().unwrap();
+    let mut line = checkpoint(&data.parts[0], "Silently replaced.");
+    line.sequence = data.snapshot_sequence + 1;
+    drop(store);
+    let journal = folder.join("transcript-journal.jsonl");
+    let mut bytes = serde_json::to_vec(&line).unwrap();
+    bytes.push(b'\n');
+    OpenOptions::new()
+        .append(true)
+        .open(&journal)
+        .unwrap()
+        .write_all(&bytes)
+        .unwrap();
+    let before = fs::read(&journal).unwrap();
+    let manifest = fs::read(folder.join("session.json")).unwrap();
+    assert!(SessionStore::open(&folder).is_err());
+    assert_eq!(fs::read(&journal).unwrap(), before);
+    assert_eq!(fs::read(folder.join("session.json")).unwrap(), manifest);
+}
+
+#[test]
+fn journal_line_without_revision_field_parses_and_keeps_its_bytes() {
+    let old = r#"{"sequence":7,"at":"2026-01-02T03:04:05+00:00","file":"system-000000000000.wav","modelId":"synthetic-model","full":"Old text.","committed":"Old text.","tentative":"","processedSamples":16000,"final":true}"#;
+    let parsed: TranscriptCheckpoint = serde_json::from_str(old).unwrap();
+    assert!(!parsed.revision_after_restart);
+    assert_eq!(serde_json::to_string(&parsed).unwrap(), old);
+    let marked = TranscriptCheckpoint {
+        revision_after_restart: true,
+        ..parsed
+    };
+    let encoded = serde_json::to_string(&marked).unwrap();
+    assert!(encoded.ends_with(r#""final":true,"revisionAfterRestart":true}"#));
+    let decoded: TranscriptCheckpoint = serde_json::from_str(&encoded).unwrap();
+    assert!(decoded.revision_after_restart);
 }

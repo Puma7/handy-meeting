@@ -48,6 +48,7 @@ fn main() -> meeting_core::Result<()> {
                 tentative: String::new(),
                 processed_samples: part.confirmed_sample_count,
                 final_text: true,
+                revision_after_restart: false,
             })?;
         }
     }

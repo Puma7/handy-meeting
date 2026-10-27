@@ -1439,6 +1439,7 @@ mod service_tests {
                     tentative: String::new(),
                     processed_samples: part.confirmed_sample_count,
                     final_text: true,
+                    revision_after_restart: false,
                 })
                 .unwrap();
             if global_status == "catching-up" {
