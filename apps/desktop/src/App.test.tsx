@@ -253,6 +253,135 @@ describe("migration frontend boundaries (synthetic IPC)", () => {
     fireEvent.focus(window);
     expect(api.refreshHandy).toHaveBeenCalledTimes(1);
   });
+  it("keeps automatically discovered Handy origin through a focus refresh and a later recording start", async () => {
+    let now = 100000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    let current: AppState = {
+      ...state(),
+      handy: { ...state().handy!, executable: "/auto-discovered/Handy.exe" },
+    };
+    let discoveredOrigin = true;
+    const api = fakeApi();
+    vi.mocked(api.getAppState).mockImplementation(async () => current);
+    // Synthetic contract of the native origin boundary: displaying a discovered
+    // path does not grant explicit-file permission. A rejected explicit request
+    // clears its discovery origin, so a later start must not silently fall back.
+    vi.mocked(api.refreshHandy).mockImplementation(async (explicit) => {
+      if (explicit !== null || !discoveredOrigin) {
+        discoveredOrigin = false;
+        current = {
+          ...current,
+          handy: {
+            ...current.handy!,
+            models: [],
+            error: "Synthetic native selection required",
+          },
+        };
+        throw new Error("Synthetic native selection required");
+      }
+      return current.handy!;
+    });
+    vi.mocked(api.startMeeting).mockImplementation(async () => {
+      if (!discoveredOrigin)
+        throw new Error("Synthetic native selection required before capture");
+      const active = { ...meeting, status: "recording" };
+      current = { ...current, activeMeeting: active, recording: true };
+      return active;
+    });
+    render(<App api={api} />);
+    await ready();
+    now += 31000;
+    fireEvent.focus(window);
+    await waitFor(() => expect(api.refreshHandy).toHaveBeenCalledTimes(1));
+    expect(api.refreshHandy).toHaveBeenCalledWith(null);
+    await ready();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Aufnahme starten" }),
+    );
+    expect(
+      await screen.findByRole("button", { name: "Meeting beenden" }),
+    ).toBeTruthy();
+    expect(api.startMeeting).toHaveBeenCalledOnce();
+    expect(discoveredOrigin).toBe(true);
+    expect(
+      screen.queryByText("Synthetic native selection required"),
+    ).toBeNull();
+  });
+  it("keeps a manual native choice explicit and shows changed-file errors without automatic fallback", async () => {
+    let now = 100000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    const nativePath = "/native-selected/Handy.exe";
+    let unchanged = true;
+    let manualChoice = false;
+    let current = state();
+    const api = fakeApi();
+    api.chooseHandyExecutable = vi.fn().mockResolvedValue(nativePath);
+    vi.mocked(api.getAppState).mockImplementation(async () => current);
+    vi.mocked(api.refreshHandy).mockImplementation(async (explicit) => {
+      if (explicit === nativePath) manualChoice = true;
+      if (!manualChoice || !unchanged) {
+        current = {
+          ...current,
+          handy: {
+            executable: nativePath,
+            version: null,
+            models: [],
+            error: "Synthetic selected program changed; choose it again",
+          },
+        };
+        throw new Error("Synthetic selected program changed; choose it again");
+      }
+      current = {
+        ...current,
+        handy: { ...state().handy!, executable: nativePath },
+      };
+      return current.handy!;
+    });
+    render(<App api={api} />);
+    await ready();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Einstellungen" }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Handy-Programm auswählen …" }),
+    );
+    await waitFor(() => expect(api.refreshHandy).toHaveBeenCalledTimes(1));
+    expect(api.refreshHandy).toHaveBeenNthCalledWith(1, nativePath);
+    await waitFor(() =>
+      expect(
+        (
+          screen.getByRole("button", {
+            name: "Aktualisieren",
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(false),
+    );
+    unchanged = false;
+    await userEvent.click(
+      screen.getByRole("button", { name: "Aktualisieren" }),
+    );
+    await waitFor(() => expect(api.refreshHandy).toHaveBeenCalledTimes(2));
+    expect(api.refreshHandy).toHaveBeenNthCalledWith(2, nativePath);
+    expect(await screen.findByRole("alert")).toHaveProperty(
+      "textContent",
+      expect.stringContaining(
+        "Synthetic selected program changed; choose it again",
+      ),
+    );
+    now += 31000;
+    fireEvent.focus(window);
+    await waitFor(() => expect(api.refreshHandy).toHaveBeenCalledTimes(3));
+    expect(api.refreshHandy).toHaveBeenNthCalledWith(3, null);
+    expect(current.handy?.executable).toBe(nativePath);
+    expect(current.handy?.models).toEqual([]);
+    expect(screen.getByRole("alert")).toHaveProperty(
+      "textContent",
+      expect.stringContaining(
+        "Synthetic selected program changed; choose it again",
+      ),
+    );
+    expect(api.startMeeting).not.toHaveBeenCalled();
+  });
   it("rechecks fresh backend state before a focus refresh and retries after catch-up ends", async () => {
     let now = 100000;
     vi.spyOn(Date, "now").mockImplementation(() => now);

@@ -300,7 +300,12 @@ impl Service {
             data_directory: self.root.to_string_lossy().into_owned(),
             notes_running: self.notes_jobs.running(),
             transitioning: inner.transitioning,
-            agent: self.agent.view()?,
+            agent: self.agent.view_for_capture(
+                inner
+                    .active
+                    .as_ref()
+                    .and_then(|active| active.owner.as_deref()),
+            )?,
         })
     }
     fn refresh(
@@ -312,19 +317,21 @@ impl Service {
             .lock()
             .map_err(|_| "Die Handy-Modellabfrage ist gesperrt.")?;
         let explicitly_selected = explicit.is_some();
-        let path = explicit
-            .map(PathBuf::from)
-            .or(self.lock()?.executable.clone());
+        let explicit = explicit.map(PathBuf::from);
+        let cached = self.lock()?.executable.clone();
+        let path = explicit.clone().or(cached.clone());
+        let mut discovered = false;
         let attempt = (|| {
             // A chosen path is recorded below either way, but only a Handy program is started.
             if path.as_deref().is_some_and(|p| !plausible_handy_path(p)) {
                 return Err("Bitte die Handy-Programmdatei auswählen (handy, Handy.exe, Handy.app oder eine Handy-AppImage). / Choose the Handy program itself.".to_string());
             }
-            if let Some(path) = path.as_deref() {
-                self.selections
-                    .verify(path_selection::Purpose::Handy, path)?;
-            }
-            let bridge = HandyBridge::discover(path.as_deref()).map_err(|e| e.to_string())?;
+            let discovery_path = self
+                .selections
+                .handy_discovery_path(explicit.as_deref(), cached.as_deref())?;
+            discovered = discovery_path.is_none();
+            let bridge =
+                HandyBridge::discover(discovery_path.as_deref()).map_err(|e| e.to_string())?;
             let catalog = bridge.refresh().map_err(|e| e.to_string())?;
             let models = catalog
                 .models
@@ -362,7 +369,7 @@ impl Service {
         }
         match &attempt {
             Ok((bridge, _, status)) => {
-                if !explicitly_selected && path.is_none() {
+                if discovered {
                     self.selections
                         .remember_discovered_handy(bridge.executable())?;
                 }

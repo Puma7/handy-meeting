@@ -430,6 +430,270 @@ fn archive_browser_restores_verified_sources_and_purge_requires_unchanged_group_
     assert!(restored.join("session.json").is_file());
     assert!(deletion_fingerprint(root.path(), &id, &cancel).is_err());
 }
+
+fn legacy_receipt_fixture(root: &Path) -> (String, Receipt, PathBuf) {
+    legacy_receipt_fixture_with_dates(root, "2000-01-01T00:00:00Z", "2000-01-01T00:00:01Z")
+}
+fn legacy_receipt_fixture_with_dates(
+    root: &Path,
+    started: &str,
+    ended: &str,
+) -> (String, Receipt, PathBuf) {
+    let id = fixture(root);
+    let manifest_path = root.join("sessions").join(&id).join("session.json");
+    let mut manifest: serde_json::Value =
+        serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
+    // An old meeting newly archived today must not become deletion-eligible
+    // merely because the old receipt omitted its archive creation date.
+    manifest["startedAt"] = serde_json::json!(started);
+    manifest["endedAt"] = serde_json::json!(ended);
+    fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+    let cancel = AtomicBool::new(false);
+    let receipt = create(root, &id, 0, "whole-meeting", &cancel, |_, _| {}).unwrap();
+    move_source_into_archive(root, &receipt, 0, &cancel).unwrap();
+    let path = root
+        .join("archives")
+        .join(format!("{}.receipt.json", receipt.archive_id));
+    let mut legacy: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    legacy.as_object_mut().unwrap().remove("createdAt");
+    fs::write(&path, serde_json::to_vec(&legacy).unwrap()).unwrap();
+    (id, receipt, path)
+}
+
+#[test]
+fn legacy_archive_with_newer_start_date_never_ages_from_an_earlier_meeting_end() {
+    let root = tempfile::tempdir().unwrap();
+    let now = chrono::Utc::now();
+    let started = now + chrono::Duration::days(365 * 25);
+    let ended = now - chrono::Duration::days(365 * 25);
+    // Synthetic imported/clock-rollback metadata: archive verification does not
+    // assert that start <= end, so deletion must consider every known timestamp.
+    let (id, receipt, path) =
+        legacy_receipt_fixture_with_dates(root.path(), &started.to_rfc3339(), &ended.to_rfc3339());
+    let cancel = AtomicBool::new(false);
+    let before = fs::read(&path).unwrap();
+    let zip = root
+        .path()
+        .join("archives")
+        .join(format!("{}.zip", receipt.archive_id));
+    let original_zip = fs::read(&zip).unwrap();
+    let (_, newest) = deletion_fingerprint(root.path(), &id, &cancel).unwrap();
+    assert!(
+        chrono::DateTime::parse_from_rfc3339(&newest).unwrap() >= started,
+        "A newer known start must extend protection, never be discarded in favour of an older end"
+    );
+    crate::retention::save_policy(
+        root.path(),
+        0,
+        crate::retention::Policy {
+            delete_archives_after_days: Some(30),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let preview = crate::retention::preview(
+        root.path(),
+        now + chrono::Duration::days(31),
+        &cancel,
+        |_, _| {},
+    )
+    .unwrap();
+    assert!(preview.candidates.is_empty());
+    assert!(preview.protected >= 1);
+    assert_eq!(preview.unreadable, 0);
+    assert_eq!(fs::read(&path).unwrap(), before);
+    assert_eq!(fs::read(&zip).unwrap(), original_zip);
+    assert!(!root.path().join("maintenance-log").exists());
+}
+
+#[test]
+fn legacy_receipts_keep_all_files_and_conservative_archive_age_before_explicit_deletion() {
+    let root = tempfile::tempdir().unwrap();
+    let before_creation = chrono::Utc::now() - chrono::Duration::seconds(2);
+    let (id, receipt, receipt_path) = legacy_receipt_fixture(root.path());
+    let cancel = AtomicBool::new(false);
+    let zip = root
+        .path()
+        .join("archives")
+        .join(format!("{}.zip", receipt.archive_id));
+    let source = root
+        .path()
+        .join("archives")
+        .join(format!("{}.source", receipt.archive_id));
+    let zip_bytes = fs::read(&zip).unwrap();
+    let receipt_bytes = fs::read(&receipt_path).unwrap();
+    let (hash, newest) = deletion_fingerprint(root.path(), &id, &cancel).unwrap();
+    assert!(chrono::DateTime::parse_from_rfc3339(&newest).unwrap() >= before_creation);
+    let inventory = deletion::deletion_inventory(root.path(), &id, &cancel).unwrap();
+    assert!(inventory
+        .files
+        .iter()
+        .any(|f| f.name == format!("archives/{}.zip", receipt.archive_id)));
+    assert!(inventory
+        .files
+        .iter()
+        .any(|f| f.name == format!("archives/{}.receipt.json", receipt.archive_id)));
+    assert!(inventory.files.iter().any(|f| f
+        .name
+        .starts_with(&format!("archives/{}.source/", receipt.archive_id))));
+    let policy = crate::retention::Policy {
+        delete_archives_after_days: Some(30),
+        ..Default::default()
+    };
+    crate::retention::save_policy(root.path(), 0, policy).unwrap();
+    let now = chrono::Utc::now();
+    let too_recent = crate::retention::preview(
+        root.path(),
+        now + chrono::Duration::hours(1),
+        &cancel,
+        |_, _| {},
+    )
+    .unwrap();
+    assert!(too_recent.candidates.is_empty());
+    assert!(too_recent.protected >= 1);
+    assert_eq!(
+        too_recent.unreadable, 0,
+        "A valid legacy receipt is supported, not classified as damaged"
+    );
+    // Synthetic calendar advancement, not a real thirty-one-day waiting test.
+    let eligible = crate::retention::preview(
+        root.path(),
+        now + chrono::Duration::days(31),
+        &cancel,
+        |_, _| {},
+    )
+    .unwrap();
+    assert_eq!(eligible.candidates.len(), 1);
+    assert_eq!(
+        eligible.candidates[0].action,
+        crate::retention::Action::DeleteArchivedMeeting
+    );
+    assert_eq!(eligible.candidates[0].original_manifest_sha256, hash);
+    assert!(
+        delete_archived_meeting(root.path(), &id, 0, &hash, "DELETE", &cancel, |_, _| {}).is_err()
+    );
+    assert!(delete_archived_meeting(
+        root.path(),
+        &id,
+        0,
+        &hash,
+        &format!("DELETE {id}"),
+        &AtomicBool::new(true),
+        |_, _| {}
+    )
+    .is_err());
+    assert_eq!(fs::read(&zip).unwrap(), zip_bytes);
+    assert_eq!(fs::read(&receipt_path).unwrap(), receipt_bytes);
+    assert!(source.is_dir());
+    // The explicit low-level deletion API still requires the exact current inventory
+    // and confirmation; preview itself never mutates or silently migrates receipts.
+    delete_archived_meeting(
+        root.path(),
+        &id,
+        0,
+        &hash,
+        &format!("DELETE {id}"),
+        &cancel,
+        |_, _| {},
+    )
+    .unwrap();
+    assert!(!zip.exists());
+    assert!(!receipt_path.exists());
+    assert!(!source.exists());
+}
+
+#[test]
+fn malformed_nonempty_archive_dates_remain_protected_without_deleting_any_original() {
+    let root = tempfile::tempdir().unwrap();
+    let (id, receipt, path) = legacy_receipt_fixture(root.path());
+    let cancel = AtomicBool::new(false);
+    let (prior_hash, _) = deletion_fingerprint(root.path(), &id, &cancel).unwrap();
+    let zip = root
+        .path()
+        .join("archives")
+        .join(format!("{}.zip", receipt.archive_id));
+    let zip_bytes = fs::read(&zip).unwrap();
+    crate::retention::save_policy(
+        root.path(),
+        0,
+        crate::retention::Policy {
+            delete_archives_after_days: Some(1),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    for invalid in [" ", "not-a-date", "2026-13-45T00:00:00Z"] {
+        let mut value: serde_json::Value =
+            serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        value["createdAt"] = serde_json::json!(invalid);
+        let bad = serde_json::to_vec(&value).unwrap();
+        fs::write(&path, &bad).unwrap();
+        assert!(deletion_fingerprint(root.path(), &id, &cancel).is_err());
+        let preview = crate::retention::preview(
+            root.path(),
+            chrono::Utc::now() + chrono::Duration::days(365),
+            &cancel,
+            |_, _| {},
+        )
+        .unwrap();
+        assert!(preview.candidates.is_empty());
+        assert!(preview.protected >= 1);
+        assert!(preview.unreadable >= 1);
+        assert!(delete_archived_meeting(
+            root.path(),
+            &id,
+            0,
+            &prior_hash,
+            &format!("DELETE {id}"),
+            &cancel,
+            |_, _| {}
+        )
+        .is_err());
+        assert_eq!(fs::read(&path).unwrap(), bad);
+        assert_eq!(fs::read(&zip).unwrap(), zip_bytes);
+    }
+    assert!(!root.path().join("maintenance-log").exists());
+}
+
+#[test]
+fn changed_legacy_archive_age_provenance_invalidates_a_byte_identical_old_preview() {
+    let root = tempfile::tempdir().unwrap();
+    let (id, receipt, path) = legacy_receipt_fixture(root.path());
+    let cancel = AtomicBool::new(false);
+    let (old_hash, old_date) = deletion_fingerprint(root.path(), &id, &cancel).unwrap();
+    let before = fs::read(&path).unwrap();
+    // Synthetic filesystem timestamp change, with all archive and receipt bytes intact.
+    let touched = std::time::SystemTime::now() + std::time::Duration::from_secs(3 * 86400);
+    OpenOptions::new()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_times(std::fs::FileTimes::new().set_modified(touched))
+        .unwrap();
+    let (new_hash, new_date) = deletion_fingerprint(root.path(), &id, &cancel).unwrap();
+    assert_ne!(new_hash, old_hash);
+    assert!(
+        chrono::DateTime::parse_from_rfc3339(&new_date).unwrap()
+            > chrono::DateTime::parse_from_rfc3339(&old_date).unwrap()
+    );
+    assert!(delete_archived_meeting(
+        root.path(),
+        &id,
+        0,
+        &old_hash,
+        &format!("DELETE {id}"),
+        &cancel,
+        |_, _| {}
+    )
+    .is_err());
+    assert_eq!(fs::read(&path).unwrap(), before);
+    assert!(root
+        .path()
+        .join("archives")
+        .join(format!("{}.zip", receipt.archive_id))
+        .is_file());
+    assert!(!root.path().join("maintenance-log").exists());
+}
 #[test]
 fn permanent_deletion_removes_all_verified_archive_copies_and_annotations_but_preserves_other_meetings(
 ) {

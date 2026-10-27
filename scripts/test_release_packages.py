@@ -1,5 +1,9 @@
 """Synthetic package/proof fixtures only: never install software or publish a release."""
 import importlib.util
+import hashlib
+import shutil
+import subprocess
+import zipfile
 import json
 import pathlib
 import tempfile
@@ -231,6 +235,55 @@ class ReleaseGuards(unittest.TestCase):
             with mock.patch.object(publisher, 'gh', side_effect=cli):
                 with self.assertRaisesRegex(ValueError, 'Unexpected existing release assets'):
                     publisher.existing_complete('owner/repo', 'v1.0.0', COMMIT, FINGERPRINT)
+
+
+class WindowsZipContract(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('pwsh'), 'PowerShell required for the Windows-only ZIP packager')
+    def test_branded_launcher_is_packaged_and_instructions_name_the_existing_file(self):
+        # Synthetic file-only receipt, isolated from real build proofs. Never executes a payload.
+        with tempfile.TemporaryDirectory(prefix='meeting-zip-fixture-') as temp:
+            root = pathlib.Path(temp).resolve()
+            scripts = root / 'scripts'
+            scripts.mkdir()
+            packager = scripts / 'package-rust-windows.ps1'
+            shutil.copyfile(pathlib.Path(__file__).with_name(packager.name), packager)
+            version = '0.0.0-test'
+            config = root / 'apps/desktop/src-tauri/tauri.conf.json'
+            config.parent.mkdir(parents=True)
+            config.write_text(json.dumps({'version': version}), encoding='utf-8')
+            dist = root / ('dist-rust-' + version)
+            dist.mkdir()
+            executable = dist / 'HandyMeeting.exe'
+            executable.write_bytes(b'non-executable synthetic packaging fixture')
+            launcher = root / ('Meeting for Handy ' + version + ' starten.cmd')
+            launcher.write_bytes(b'synthetic launcher fixture; never execute')
+            def invoke(*args):
+                return subprocess.run([shutil.which('pwsh'), '-NoProfile', '-NonInteractive', '-File', str(packager), *args], cwd=root, capture_output=True, text=True, timeout=60)
+            fingerprint = invoke('-SourceFingerprintOnly')
+            self.assertEqual(fingerprint.returncode, 0, fingerprint.stderr)
+            digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+            receipt = {'success': True, 'version': version, 'releaseBinaryChecksPassed': True, 'legacyChecksExecuted': True, 'sourceFingerprintSHA256': fingerprint.stdout.strip(), 'programDirectory': dist.name, 'executableSHA256': digest(executable), 'programFiles': [{'path': executable.name, 'sha256': digest(executable)}], 'launcherFile': launcher.name, 'launcherSHA256': digest(launcher)}
+            proof = root / '.build'
+            proof.mkdir()
+            (proof / 'rust-release-verification.json').write_text(json.dumps(receipt), encoding='utf-8')
+            (proof / 'rust-verification.json').write_text(json.dumps({'success': True, 'sourceFingerprintSHA256': receipt['sourceFingerprintSHA256']}), encoding='utf-8')
+            output = root / 'packages'
+            result = invoke('-OutputDirectory', str(output))
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            archive = output / ('HandyMeeting-' + version + '-windows-x64.zip')
+            with zipfile.ZipFile(archive) as package:
+                names = package.namelist()
+                self.assertIn('HandyMeeting/' + launcher.name, names)
+                self.assertEqual(package.read('HandyMeeting/' + launcher.name), launcher.read_bytes())
+                instructions = package.read('HandyMeeting/START-HERE.txt').decode('utf-8')
+                self.assertIn('open ' + launcher.name + '.', instructions)
+                self.assertIn('Meeting for Handy ' + version, instructions)
+                self.assertIn('HandyMeeting/RustBeta', instructions)
+                self.assertEqual(package.read('HandyMeeting/' + dist.name + '/HandyMeeting.exe'), executable.read_bytes())
+            original = archive.read_bytes()
+            repeated = invoke('-OutputDirectory', str(output))
+            self.assertNotEqual(repeated.returncode, 0)
+            self.assertEqual(archive.read_bytes(), original)
 
 
 class InstallerGuards(unittest.TestCase):

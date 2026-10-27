@@ -474,10 +474,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         lastModelRefresh.current = Date.now();
         queriedHandy = true;
         setRefreshingHandy(true);
+        // The backend retains discovery/native origin. A displayed cached path
+        // must not turn an automatic refresh into an explicit file selection.
         const handy = await api.refreshHandy(
-          automatic
-            ? (fresh.handy?.executable ?? null)
-            : (selectedPath ?? (handyPath.trim() || null)),
+          automatic ? null : (selectedPath ?? (handyPath.trim() || null)),
         );
         if (!mounted.current) return;
         requestSequence.current++;

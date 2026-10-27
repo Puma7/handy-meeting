@@ -34,7 +34,12 @@ struct Grant {
     sha256: String,
 }
 #[derive(Default)]
-pub(crate) struct Selections(Mutex<HashMap<Purpose, Grant>>);
+pub(crate) struct Selections {
+    native: Mutex<HashMap<Purpose, Grant>>,
+    // Origin only: an OS-discovered installation can be rediscovered after an
+    // update. It is never a grant for a renderer-supplied explicit path.
+    discovered_handy: Mutex<Option<PathBuf>>,
+}
 
 fn inspect(purpose: Purpose, path: &Path) -> AppResult<Grant> {
     if !path.is_absolute() || path.to_string_lossy().chars().any(char::is_control) {
@@ -113,7 +118,7 @@ fn inspect(purpose: Purpose, path: &Path) -> AppResult<Grant> {
 }
 impl Selections {
     pub(crate) fn verify(&self, purpose: Purpose, path: &Path) -> AppResult<()> {
-        let approved = self.0.lock().map_err(|_| "Native file selections are unavailable")?.get(&purpose).cloned().ok_or("Choose and confirm this file in the native system dialog first. / Bitte diese Datei zuerst im Systemdialog auswählen und bestätigen.")?;
+        let approved = self.native.lock().map_err(|_| "Native file selections are unavailable")?.get(&purpose).cloned().ok_or("Choose and confirm this file in the native system dialog first. / Bitte diese Datei zuerst im Systemdialog auswählen und bestätigen.")?;
         // Refuse an unrelated renderer path before opening or hashing its contents.
         if path.canonicalize().ok().as_ref() != Some(&approved.path) {
             return Err("This path was not selected for this operation. Choose it in the native system dialog first. / Dieser Pfad wurde für diesen Vorgang nicht ausgewählt. Bitte zuerst den Systemdialog verwenden.".into());
@@ -126,7 +131,7 @@ impl Selections {
     }
     fn remember(&self, purpose: Purpose, selected: Grant) -> AppResult<String> {
         let path = selected.path.to_string_lossy().into_owned();
-        self.0
+        self.native
             .lock()
             .map_err(|_| "Native file selections are unavailable")?
             .insert(purpose, selected);
@@ -147,8 +152,45 @@ impl Selections {
         self.remember(purpose, grant).map(Some)
     }
     pub(crate) fn remember_discovered_handy(&self, path: &Path) -> AppResult<()> {
-        self.remember(Purpose::Handy, inspect(Purpose::Handy, path)?)?;
+        let verified = inspect(Purpose::Handy, path)?;
+        *self
+            .discovered_handy
+            .lock()
+            .map_err(|_| "Handy discovery state is unavailable")? = Some(verified.path);
         Ok(())
+    }
+    pub(crate) fn handy_discovery_path(
+        &self,
+        explicit: Option<&Path>,
+        cached: Option<&Path>,
+    ) -> AppResult<Option<PathBuf>> {
+        if let Some(path) = explicit {
+            // An explicit request, even an invalid one, must not fall back to
+            // an earlier automatically discovered executable on the next call.
+            *self
+                .discovered_handy
+                .lock()
+                .map_err(|_| "Handy discovery state is unavailable")? = None;
+            self.verify(Purpose::Handy, path)?;
+            return Ok(Some(path.to_owned()));
+        }
+        let Some(path) = cached else {
+            return Ok(None);
+        };
+        let discovered = self
+            .discovered_handy
+            .lock()
+            .map_err(|_| "Handy discovery state is unavailable")?
+            .as_deref()
+            == Some(path);
+        if discovered {
+            // Search the known installation locations again rather than reusing
+            // an old fingerprint/path when Handy has installed an update.
+            Ok(None)
+        } else {
+            self.verify(Purpose::Handy, path)?;
+            Ok(Some(path.to_owned()))
+        }
     }
     /// Only internal synthetic CLI fixtures use this; this is not an IPC command.
     pub(crate) fn approve_generated_legacy_fixture(&self, path: &Path) -> AppResult<()> {
@@ -200,6 +242,90 @@ pub(crate) async fn choose_legacy_manifest(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn discovered_handy_updates_rediscover_without_becoming_native_path_grants() {
+        let root = std::env::temp_dir().join(format!(
+            "meeting-discovered-update-{}",
+            meeting_notes::new_job_id()
+        ));
+        fs::create_dir(&root).unwrap();
+        let path = root.join("Handy.exe");
+        fs::write(&path, b"synthetic installed v1; never executed").unwrap();
+        let path = path.canonicalize().unwrap();
+        let selections = Selections::default();
+        selections.remember_discovered_handy(&path).unwrap();
+        assert_eq!(
+            selections.handy_discovery_path(None, Some(&path)).unwrap(),
+            None
+        );
+        assert!(
+            selections.verify(Purpose::Handy, &path).is_err(),
+            "Auto discovery is not native consent"
+        );
+        fs::write(&path, b"synthetic installed v2; never executed").unwrap();
+        assert_eq!(selections.handy_discovery_path(None,Some(&path)).unwrap(),None,"Updated discovered bytes must trigger fresh OS discovery, not a stale native hash check");
+        selections.remember_discovered_handy(&path).unwrap();
+        assert!(
+            selections
+                .handy_discovery_path(Some(&path), Some(&path))
+                .is_err(),
+            "Explicit renderer paths still require real native approval"
+        );
+        assert!(
+            selections.handy_discovery_path(None, Some(&path)).is_err(),
+            "An invalid explicit choice cannot silently revert to automatic trust"
+        );
+        let grant = inspect(Purpose::Handy, &path).unwrap();
+        selections
+            .finish_native_choice(Purpose::Handy, grant, true)
+            .unwrap();
+        assert_eq!(
+            selections
+                .handy_discovery_path(Some(&path), Some(&path))
+                .unwrap(),
+            Some(path.clone())
+        );
+        assert_eq!(
+            selections.handy_discovery_path(None, Some(&path)).unwrap(),
+            Some(path.clone())
+        );
+        fs::write(&path, b"synthetic installed v3; never executed").unwrap();
+        assert!(
+            selections.handy_discovery_path(None, Some(&path)).is_err(),
+            "A native-confirmed file replacement still needs new consent"
+        );
+    }
+    #[test]
+    fn removed_discovered_handy_path_can_be_rediscovered_at_a_new_installation() {
+        let root = std::env::temp_dir().join(format!(
+            "meeting-discovered-move-{}",
+            meeting_notes::new_job_id()
+        ));
+        fs::create_dir(&root).unwrap();
+        let old = root.join("Handy-old.exe");
+        fs::write(&old, b"synthetic old install").unwrap();
+        let old = old.canonicalize().unwrap();
+        let selections = Selections::default();
+        selections.remember_discovered_handy(&old).unwrap();
+        fs::remove_file(&old).unwrap();
+        assert_eq!(
+            selections.handy_discovery_path(None, Some(&old)).unwrap(),
+            None,
+            "Missing old binary must not block fresh system discovery"
+        );
+        let new = root.join("Handy-new.exe");
+        fs::write(&new, b"synthetic newer install").unwrap();
+        let new = new.canonicalize().unwrap();
+        selections.remember_discovered_handy(&new).unwrap();
+        assert_eq!(
+            selections.handy_discovery_path(None, Some(&new)).unwrap(),
+            None
+        );
+        assert!(
+            selections.verify(Purpose::Handy, &new).is_err(),
+            "Discovery must not confer renderer path authority"
+        );
+    }
     #[test]
     fn native_denial_or_change_while_confirming_never_creates_a_grant() {
         let root = std::env::temp_dir().join(format!(

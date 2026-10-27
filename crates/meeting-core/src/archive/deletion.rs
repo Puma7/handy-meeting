@@ -13,6 +13,55 @@ pub(super) struct DeleteInventory {
     pub(super) files: Vec<DeleteFile>,
     pub(super) directories: Vec<PathBuf>,
     pub(super) newest: String,
+    legacy_age_evidence: bool,
+}
+
+/// Legacy receipts had no archive creation date. A meeting's end alone is not
+/// conservative: an old meeting may have been archived or copied only today.
+/// Use the newest available ZIP/receipt filesystem provenance and verified
+/// meeting date, while keeping a nonempty malformed receipt date fail-closed.
+fn receipt_age(
+    receipt: &Receipt,
+    manifest: &Manifest,
+    zip: &Path,
+    receipt_path: &Path,
+) -> Result<(chrono::DateTime<chrono::Utc>, bool)> {
+    if !receipt.created_at.is_empty() {
+        return Ok((
+            chrono::DateTime::parse_from_rfc3339(&receipt.created_at)?.with_timezone(&chrono::Utc),
+            false,
+        ));
+    }
+    let mut newest = chrono::DateTime::parse_from_rfc3339(&manifest.session.started_at)?
+        .with_timezone(&chrono::Utc);
+    if let Some(ended) = manifest.session.ended_at.as_deref() {
+        // Imported/clock-rollback metadata can have an end before the start.
+        // Never discard a newer known date when deciding whether deletion is old enough.
+        newest =
+            newest.max(chrono::DateTime::parse_from_rfc3339(ended)?.with_timezone(&chrono::Utc));
+    }
+    for path in [zip, receipt_path] {
+        let metadata = regular(path)?;
+        newest = newest.max(chrono::DateTime::<chrono::Utc>::from(metadata.modified()?));
+        // Some Unix filesystems do not expose birth time; their modified time
+        // remains mandatory. A recent copy with birth time extends protection.
+        if let Ok(created) = metadata.created() {
+            newest = newest.max(chrono::DateTime::<chrono::Utc>::from(created));
+        }
+    }
+    Ok((newest, true))
+}
+
+fn inventory_hash(inventory: &DeleteInventory) -> Result<String> {
+    let bytes = if inventory.legacy_age_evidence {
+        // Date fallback is part of the preview authority. Touching/replacing an
+        // otherwise byte-identical legacy archive must invalidate an older plan.
+        serde_json::to_vec(&("legacy-archive-age-v1", &inventory.files, &inventory.newest))?
+    } else {
+        // Preserve the fingerprint contract of already-dated receipts.
+        serde_json::to_vec(&inventory.files)?
+    };
+    Ok(format!("{:x}", Sha256::digest(bytes)))
 }
 pub(super) fn deletion_inventory(
     root: &Path,
@@ -31,7 +80,8 @@ pub(super) fn deletion_inventory(
     let archives = metadata::checked_directory(&root.join("archives"))?;
     let mut files = Vec::new();
     let mut directories = Vec::new();
-    let mut newest = String::new();
+    let mut newest = None;
+    let mut legacy_age_evidence = false;
     let mut whole = false;
     for entry in fs::read_dir(&archives)? {
         let entry = entry?;
@@ -45,11 +95,6 @@ pub(super) fn deletion_inventory(
             continue;
         }
         whole |= receipt.kind == "whole-meeting";
-        let at = chrono::DateTime::parse_from_rfc3339(&receipt.created_at)?;
-        let at = at.with_timezone(&chrono::Utc).to_rfc3339();
-        if at > newest {
-            newest = at;
-        }
         let zip = archives.join(format!("{aid}.zip"));
         let (size, hash) = digest_cancellable(&zip, Some(cancel))?;
         if size != receipt.archive_bytes || hash != receipt.archive_sha256 {
@@ -59,6 +104,9 @@ pub(super) fn deletion_inventory(
         if manifest.meeting_id != id || manifest.kind != receipt.kind {
             return Err("Archive identity mismatch; retained".into());
         }
+        let (at, legacy) = receipt_age(&receipt, &manifest, &zip, &entry.path())?;
+        newest = Some(newest.map_or(at, |prior: chrono::DateTime<chrono::Utc>| prior.max(at)));
+        legacy_age_evidence |= legacy;
         for path in [zip, entry.path()] {
             push_delete_file(root, &path, cancel, &mut files)?;
         }
@@ -225,7 +273,10 @@ pub(super) fn deletion_inventory(
     Ok(DeleteInventory {
         files,
         directories,
-        newest,
+        newest: newest
+            .ok_or("No verified archive date; permanent deletion blocked")?
+            .to_rfc3339(),
+        legacy_age_evidence,
     })
 }
 pub(super) fn pending_meeting(path: &Path) -> Result<String> {
@@ -275,13 +326,7 @@ pub fn deletion_fingerprint(
     cancel: &AtomicBool,
 ) -> Result<(String, String)> {
     let inventory = deletion_inventory(root, id, cancel)?;
-    Ok((
-        format!(
-            "{:x}",
-            Sha256::digest(serde_json::to_vec(&inventory.files)?)
-        ),
-        inventory.newest,
-    ))
+    Ok((inventory_hash(&inventory)?, inventory.newest))
 }
 /// Label and speaker-annotation locks for one meeting, held across a destructive operation.
 pub(super) fn annotation_locks(root: &Path, id: &str) -> Result<Vec<File>> {
@@ -320,10 +365,7 @@ pub fn delete_archived_meeting(
         return Err("VIP protection or labels changed; permanent deletion blocked".into());
     }
     let mut inventory = deletion_inventory(root, id, cancel)?;
-    let hash = format!(
-        "{:x}",
-        Sha256::digest(serde_json::to_vec(&inventory.files)?)
-    );
+    let hash = inventory_hash(&inventory)?;
     if hash != expected_hash {
         return Err("Archive inventory changed since preview; create a new preview".into());
     }
