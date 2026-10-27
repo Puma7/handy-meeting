@@ -1078,7 +1078,7 @@ pub fn run() {
         Arc::new(Service::new(root).expect("Lokale Sitzungsablage konnte nicht geöffnet werden."));
     tauri::Builder::default().manage(service).setup(|app| {
         let service=Arc::clone(app.state::<Arc<Service>>().inner());
-        let _=service.library_jobs.start_scan(service.root.clone());
+        let _=service.library_jobs.start_scan(service.root.clone(), false);
         if std::env::args().skip(1).eq(["--agent", "serve"]) { agent::start_stdio(Arc::clone(&service)).map_err(std::io::Error::other)?; }
         tauri::async_runtime::spawn_blocking(move|| {let _=service.refresh(None);});
         Ok(())

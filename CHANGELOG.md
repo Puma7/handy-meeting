@@ -14,6 +14,15 @@
 - `localhost` reaches a local text-model server on IPv4 or IPv6 loopback without system DNS or proxies. Linux: versioned Handy AppImages in `~/Applications` are found, and the DEB adds `/usr/bin/handymeeting`. macOS: choose a real microphone. CI gains a virtual PulseAudio capture check and a GUI launch smoke check (#24).
 - Start only Handy- and FFmpeg-named programs chosen through the app, and add a locked `cargo audit` CI gate (#25).
 
+## 1.0.2 — library, retention and update controls (in development)
+
+- Show analysis stage, confirmed steps and elapsed time while a meeting is processed; failed or rejected steps stay resumable without repeating confirmed work.
+- Add meeting names, VIP flags and a rebuildable local search index for history, with search hits that open the highlighted source section.
+- Add disabled-by-default retention policies with a reviewed preview, verified archives, restore, FLAC/Opus audio copies and permanent deletion only after typed confirmation. An interrupted deletion is listed and can be resumed; it removes only logged files whose hash still matches.
+- Add optional, separately confirmed speaker experiments and evidence-checked name suggestions. Original transcripts are never changed.
+- Check official releases on request; Windows downloads the installer with size and SHA-256 checks and installs only after confirmation, while Linux and macOS link to the release page. Installation waits for recordings and background jobs.
+- Keep a single stable Start menu link owned by the installer; user-changed links are preserved.
+
 ## 1.0.1 — installer and recovery fixes
 
 - Fix first-time Windows setup when the default parent folders do not exist; retain exclusive destination reservation and existing user files. Native regression checks cover missing nested parents, occupied directories and parent paths blocked by files. Full CI installation now starts with a fresh nested path.

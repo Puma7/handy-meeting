@@ -132,7 +132,8 @@ impl Jobs {
         }
         false
     }
-    pub fn start_scan(self: &Arc<Self>, root: PathBuf) -> Result<String, String> {
+    /// `rebuild` is a user request: an index SQLite cannot read is moved aside and recreated.
+    pub fn start_scan(self: &Arc<Self>, root: PathBuf, rebuild: bool) -> Result<String, String> {
         let id = meeting_notes::new_job_id();
         let cancel = Arc::new(AtomicBool::new(false));
         let started = Instant::now();
@@ -171,7 +172,7 @@ impl Jobs {
                 let sessions = root.join("sessions");
                 let sessions = metadata::checked_directory(&sessions)?;
                 let total = fs::read_dir(&sessions)?.count() as u64;
-                let mut index = LibraryIndex::open(&root)?;
+                let mut index = if rebuild { LibraryIndex::open_for_rebuild(&root)?.0 } else { LibraryIndex::open(&root)? };
                 let mut entries=fs::read_dir(&sessions)?;
                 let mut number=0u64;
                 loop {
@@ -319,5 +320,44 @@ mod clock_tests {
         assert!(done.error.unwrap().contains("Synthetic failure"));
         std::thread::sleep(std::time::Duration::from_millis(20));
         assert_eq!(jobs.snapshot().unwrap().elapsed_ms, done.elapsed_ms);
+    }
+    fn finished(jobs: &Arc<Jobs>) -> Progress {
+        let deadline = Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            let progress = jobs.snapshot().unwrap();
+            if progress.status != "running" {
+                return progress;
+            }
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+    }
+    #[test]
+    fn only_a_user_rebuild_replaces_an_unreadable_index_and_keeps_its_bytes() {
+        // Synthetic damage to the derived index; no session folder is touched.
+        let root = std::env::temp_dir().join(format!(
+            "handymeeting-index-{}",
+            meeting_notes::new_job_id()
+        ));
+        fs::create_dir_all(root.join("sessions")).unwrap();
+        let folder = root.join("library-index");
+        fs::create_dir(&folder).unwrap();
+        let damaged = b"synthetic unreadable index ".repeat(300);
+        fs::write(folder.join("library.sqlite3"), &damaged).unwrap();
+        let jobs = Arc::new(Jobs::default());
+        jobs.start_scan(root.clone(), false).unwrap();
+        assert_eq!(finished(&jobs).status, "failed");
+        assert_eq!(fs::read(folder.join("library.sqlite3")).unwrap(), damaged);
+        jobs.start_scan(root.clone(), true).unwrap();
+        assert_eq!(finished(&jobs).status, "complete");
+        let aside: Vec<_> = fs::read_dir(&folder)
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .filter(|p| p.is_dir())
+            .collect();
+        assert_eq!(aside.len(), 1);
+        assert_eq!(fs::read(aside[0].join("library.sqlite3")).unwrap(), damaged);
+        assert!(LibraryIndex::open(&root).is_ok());
+        fs::remove_dir_all(&root).unwrap();
     }
 }

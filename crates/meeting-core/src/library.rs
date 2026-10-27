@@ -58,6 +58,44 @@ impl SearchHit {
 }
 
 impl LibraryIndex {
+    /// Opens the index for a user-requested rebuild. A database SQLite cannot read, or one
+    /// that fails its integrity checks, is moved aside, never deleted, and a fresh index is created in its place. Returns the
+    /// folder that now holds the unreadable files.
+    pub fn open_for_rebuild(root: &Path) -> Result<(Self, Option<std::path::PathBuf>)> {
+        match Self::open(root) {
+            // A readable header can still hide damaged tables or FTS postings, and
+            // unchanged sessions are skipped by the scan, so check before reuse.
+            // The damaged connection is closed before its files are moved.
+            Ok(index) => {
+                if !index.damaged()? {
+                    return Ok((index, None));
+                }
+            }
+            Err(error) if unreadable_database(error.as_ref()) => (),
+            Err(error) => return Err(error),
+        }
+        let aside = set_aside_unreadable(root)?;
+        Ok((Self::open(root)?, Some(aside)))
+    }
+    /// SQLite's quick check plus the FTS5 integrity check. Only corruption reports `true`.
+    fn damaged(&self) -> Result<bool> {
+        let quick: String = match self.db.query_row("PRAGMA quick_check", [], |r| r.get(0)) {
+            Ok(value) => value,
+            Err(error) if unreadable_database(&error) => return Ok(true),
+            Err(error) => return Err(error.into()),
+        };
+        if quick != "ok" {
+            return Ok(true);
+        }
+        match self.db.execute(
+            "INSERT INTO transcript_search(transcript_search) VALUES('integrity-check')",
+            [],
+        ) {
+            Ok(_) => Ok(false),
+            Err(error) if unreadable_database(&error) => Ok(true),
+            Err(error) => Err(error.into()),
+        }
+    }
     pub fn open(root: &Path) -> Result<Self> {
         metadata::checked_directory(root)?;
         let folder = root.join("library-index");
@@ -334,6 +372,55 @@ fn hit(row: &rusqlite::Row<'_>) -> rusqlite::Result<SearchHit> {
     })
 }
 
+fn unreadable_database(error: &(dyn std::error::Error + 'static)) -> bool {
+    error.downcast_ref::<rusqlite::Error>().is_some_and(|e| {
+        matches!(
+            e.sqlite_error_code(),
+            Some(rusqlite::ErrorCode::NotADatabase | rusqlite::ErrorCode::DatabaseCorrupt)
+        )
+    })
+}
+const INDEX_FILES: [&str; 3] = [
+    "library.sqlite3",
+    "library.sqlite3-wal",
+    "library.sqlite3-shm",
+];
+/// Only regular index files are moved; a link or a missing folder stops the recovery
+/// before any file moves. A failed move puts the already moved files back.
+fn set_aside_unreadable(root: &Path) -> Result<std::path::PathBuf> {
+    let folder = metadata::checked_directory(&root.join("library-index"))?;
+    let mut present = Vec::new();
+    for name in INDEX_FILES {
+        match fs::symlink_metadata(folder.join(name)) {
+            Ok(meta) if meta.file_type().is_file() => present.push(name),
+            Ok(_) => return Err("Search index file is not a regular file".into()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
+            Err(e) => return Err(e.into()),
+        }
+    }
+    let aside = folder.join(format!(
+        "unreadable-{}-{}",
+        chrono::Utc::now().format("%Y%m%dT%H%M%SZ"),
+        uuid::Uuid::new_v4().simple()
+    ));
+    fs::create_dir(&aside)?;
+    move_index_files(&folder, &aside, &present)?;
+    Ok(aside)
+}
+fn move_index_files(folder: &Path, aside: &Path, names: &[&str]) -> Result<()> {
+    for (done, name) in names.iter().enumerate() {
+        if let Err(error) = fs::rename(folder.join(name), aside.join(name)) {
+            for moved in &names[..done] {
+                // Best effort: a file that cannot be moved back stays intact in `aside`.
+                let _ = fs::rename(aside.join(moved), folder.join(moved));
+            }
+            // Removes only an empty folder; anything left in it is kept.
+            let _ = fs::remove_dir(aside);
+            return Err(error.into());
+        }
+    }
+    Ok(())
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -372,6 +459,99 @@ mod tests {
             fs::read(sessions.join(present.id).join("user-note.txt")).unwrap(),
             b"retained"
         );
+    }
+    #[test]
+    fn rebuild_moves_an_unreadable_index_aside_and_starts_fresh() {
+        // Synthetic damage: the derived index file holds bytes SQLite cannot read.
+        let root = tempfile::tempdir().unwrap();
+        let folder = root.path().join("library-index");
+        fs::create_dir(&folder).unwrap();
+        let damaged = b"not a sqlite database, synthetic damage ".repeat(200);
+        fs::write(folder.join("library.sqlite3"), &damaged).unwrap();
+        assert!(LibraryIndex::open(root.path()).is_err());
+        let (mut index, aside) = LibraryIndex::open_for_rebuild(root.path()).unwrap();
+        let aside = aside.expect("the unreadable index is set aside");
+        // The root is canonical internally (/private/var on macOS, \\?\ on Windows).
+        assert!(aside.starts_with(folder.canonicalize().unwrap()));
+        assert_eq!(fs::read(aside.join("library.sqlite3")).unwrap(), damaged);
+        let d = data("0123456789abcdef0123456789abcdef");
+        index
+            .upsert(&d, &metadata::Metadata::default(), "fixture")
+            .unwrap();
+        drop(index);
+        assert_eq!(
+            LibraryIndex::open(root.path())
+                .unwrap()
+                .search("Prüfbericht", 0, 20)
+                .unwrap()
+                .total,
+            1
+        );
+        // A readable index is reused as it is.
+        let (_, again) = LibraryIndex::open_for_rebuild(root.path()).unwrap();
+        assert!(again.is_none());
+    }
+    #[test]
+    fn rebuild_replaces_an_index_whose_fts_postings_are_damaged() {
+        // Synthetic damage: the SQLite header is intact but FTS posting blocks are gone.
+        let root = tempfile::tempdir().unwrap();
+        let mut index = LibraryIndex::open(root.path()).unwrap();
+        let d = data("0123456789abcdef0123456789abcdef");
+        index
+            .upsert(&d, &metadata::Metadata::default(), "fixture")
+            .unwrap();
+        drop(index);
+        let path = root.path().join("library-index/library.sqlite3");
+        let raw = Connection::open(&path).unwrap();
+        assert!(
+            raw.execute("DELETE FROM transcript_search_data WHERE id > 10", [])
+                .unwrap()
+                > 0
+        );
+        drop(raw);
+        let reopened = LibraryIndex::open(root.path()).unwrap();
+        assert!(reopened.damaged().unwrap());
+        drop(reopened);
+        let (index, aside) = LibraryIndex::open_for_rebuild(root.path()).unwrap();
+        assert!(aside.unwrap().join("library.sqlite3").is_file());
+        assert!(!index.damaged().unwrap());
+        assert_eq!(index.search("", 0, 25).unwrap().total, 0);
+    }
+    #[test]
+    fn a_failed_move_puts_the_index_files_back() {
+        // Synthetic failure: a folder already occupies the WAL destination.
+        let root = tempfile::tempdir().unwrap();
+        let folder = root.path().join("library-index");
+        let aside = folder.join("unreadable-test");
+        fs::create_dir_all(aside.join("library.sqlite3-wal")).unwrap();
+        fs::write(folder.join("library.sqlite3"), b"db").unwrap();
+        fs::write(folder.join("library.sqlite3-wal"), b"wal").unwrap();
+        let names = ["library.sqlite3", "library.sqlite3-wal"];
+        assert!(move_index_files(&folder, &aside, &names).is_err());
+        assert_eq!(fs::read(folder.join("library.sqlite3")).unwrap(), b"db");
+        assert_eq!(
+            fs::read(folder.join("library.sqlite3-wal")).unwrap(),
+            b"wal"
+        );
+        // The occupied folder is not empty, so it is kept rather than removed.
+        assert!(aside.join("library.sqlite3-wal").is_dir());
+        assert!(!aside.join("library.sqlite3").exists());
+    }
+    #[cfg(unix)]
+    #[test]
+    fn rebuild_never_moves_a_linked_index() {
+        let root = tempfile::tempdir().unwrap();
+        let folder = root.path().join("library-index");
+        fs::create_dir(&folder).unwrap();
+        let target = root.path().join("elsewhere.sqlite3");
+        fs::write(&target, b"user file").unwrap();
+        std::os::unix::fs::symlink(&target, folder.join("library.sqlite3")).unwrap();
+        assert!(LibraryIndex::open_for_rebuild(root.path()).is_err());
+        assert!(fs::symlink_metadata(folder.join("library.sqlite3"))
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        assert_eq!(fs::read(&target).unwrap(), b"user file");
     }
     fn data(id: &str) -> SessionData {
         serde_json::from_value(serde_json::json!({"schemaVersion":2,"id":id,"title":"Original title","startedAt":"2026-10-27T06:00:00Z","status":"complete","modelId":"synthetic","parts":[{"file":"system-0.wav","source":"system","startSample":16000,"sampleCount":32000,"confirmedSampleCount":32000,"text":"Anna bestätigt den Prüfbericht am Freitag.","status":"complete"}]})).unwrap()

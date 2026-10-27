@@ -237,3 +237,31 @@ it("shows unreadable archive entries as preserved, without restore or compaction
   expect(restore).not.toHaveBeenCalled();
   expect(compact).not.toHaveBeenCalled();
 });
+it("keeps the archive list when the deletion log cannot be read", async () => {
+  const api = {
+    listArchives: vi.fn().mockResolvedValue({
+      items: [
+        {
+          archiveId: "a".repeat(32),
+          unreadable: null,
+          receipt: {
+            archiveId: "a".repeat(32),
+            meetingId: "b".repeat(32),
+            kind: "whole-meeting",
+            archiveBytes: 1000,
+            originalBytes: 2000,
+            createdAt: "2026-01-01T00:00:00Z",
+          },
+          title: "Still browsable",
+          sessionPresent: false,
+          sourceCopyRetained: false,
+        },
+      ],
+      more: false,
+    }),
+    listUnfinishedDeletions: vi.fn().mockRejectedValue("log unreadable"),
+  } as unknown as DesktopApi;
+  render(<ArchivePanel api={api} locale="en" job={null} />);
+  expect(await screen.findByText("Still browsable")).toBeTruthy();
+  expect(await screen.findByRole("alert")).toBeTruthy();
+});

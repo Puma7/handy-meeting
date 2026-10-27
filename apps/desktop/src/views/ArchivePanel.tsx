@@ -26,7 +26,8 @@ export default function ArchivePanel({
     [busy, setBusy] = useState(false),
     [unfinished, setUnfinished] = useState<UnfinishedDeletion[]>([]),
     [resuming, setResuming] = useState<UnfinishedDeletion | null>(null),
-    [typed, setTyped] = useState("");
+    [typed, setTyped] = useState(""),
+    [logError, setLogError] = useState<string | null>(null);
   // Only the newest request may update the page; older pages arrive late after quick paging.
   const generation = useRef(0);
   const load = useCallback(async () => {
@@ -34,10 +35,17 @@ export default function ArchivePanel({
     const current = ++generation.current;
     try {
       const next = await api.listArchives(offset, 25);
-      const stopped = (await api.listUnfinishedDeletions?.()) ?? [];
+      // An unreadable deletion log must not hide the archive list or block restoration.
+      let stoppedError: string | null = null;
+      const stopped =
+        (await api.listUnfinishedDeletions?.().catch((e) => {
+          stoppedError = errorMessage(e);
+          return [];
+        })) ?? [];
       if (current !== generation.current) return;
       setPage(next);
       setUnfinished(stopped);
+      setLogError(stoppedError);
       setError(null);
     } catch (e) {
       if (current === generation.current) setError(errorMessage(e));
@@ -89,6 +97,7 @@ export default function ArchivePanel({
           : "Restoration verifies every file again and never overwrites an existing meeting. The archive copy is retained. Permanent deletion is available only through a fresh retention preview."}
       </p>
       {error && <p role="alert">{error}</p>}
+      {logError && <p role="alert">{logError}</p>}
       {unfinished.length > 0 && api.resumePermanentDeletion && (
         <div className="notice warning">
           <strong>

@@ -95,15 +95,36 @@ try {
         try {
             & $windowsPowerShell -NoProfile -Command 'try { Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Restricted -Force -ErrorAction Stop } catch { }' | Out-Null
             $effectivePolicy = (& $windowsPowerShell -NoProfile -Command 'Get-ExecutionPolicy' | Out-String).Trim()
+            if ($effectivePolicy -ne 'Restricted') { throw ('The Restricted execution policy is not in effect for this check; found ' + $effectivePolicy + '.') }
             $ownedInstall = Join-Path $work 'owned-shortcut-install'
             $child = Start-Process -FilePath $package -ArgumentList @('/S',('/D=' + $ownedInstall)) -WindowStyle Hidden -Wait -PassThru
             if ($child.ExitCode -ne 0) { throw 'Reinstall for the owned-shortcut check failed.' }
             if (-not (Test-Path -LiteralPath $stableShortcut) -or $shortcutShell.CreateShortcut($stableShortcut).TargetPath -ne (Join-Path $ownedInstall 'HandyMeeting.exe')) { throw ('Stable shortcut was not created under execution policy ' + $effectivePolicy + '.') }
+            # 1.0.2 candidates wrote Link and Target but no hash here: Get-FileHash could not load
+            # under Restricted, so the real uninstaller treated its own link as user-owned.
+            $ownership = Get-ItemProperty -LiteralPath 'HKCU:\Software\HandyMeeting\StartMenuLink' -ErrorAction SilentlyContinue
+            if (-not $ownership -or -not $ownership.SHA256 -or $ownership.SHA256 -ne (Get-FileHash -LiteralPath $stableShortcut -Algorithm SHA256).Hash -or $ownership.Target -ne [IO.Path]::GetFullPath((Join-Path $ownedInstall 'HandyMeeting.exe'))) { throw ('Installer left an incomplete Start menu ownership record under execution policy ' + $effectivePolicy + '.') }
             $child = Start-Process -FilePath (Join-Path $ownedInstall 'Uninstall.exe') -ArgumentList @('/S',('_?=' + $ownedInstall)) -WindowStyle Hidden -Wait -PassThru
             if ($child.ExitCode -ne 0) { throw 'Uninstall for the owned-shortcut check failed.' }
-            if (Test-Path -LiteralPath $stableShortcut) { throw ('Uninstall left its own unchanged shortcut under execution policy ' + $effectivePolicy + '.') }
+            if (Test-Path -LiteralPath $stableShortcut) {
+                # Diagnose whether the ownership logic or the uninstaller's invocation failed.
+                $record = Get-ItemProperty -LiteralPath 'HKCU:\Software\HandyMeeting\StartMenuLink' -ErrorAction SilentlyContinue
+                $diagnostic = [ordered]@{
+                    effectivePolicy = $effectivePolicy
+                    recordLink = $record.Link
+                    recordTarget = $record.Target
+                    recordSHA256 = $record.SHA256
+                    linkSHA256 = (Get-FileHash -LiteralPath $stableShortcut -Algorithm SHA256).Hash
+                    expectedTarget = [IO.Path]::GetFullPath((Join-Path $ownedInstall 'HandyMeeting.exe'))
+                    installDirectoryRemains = Test-Path -LiteralPath $ownedInstall
+                }
+                & $windowsPowerShell -NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -File (Join-Path $root 'scripts/manage-start-menu.ps1') -Mode uninstall -InstallDirectory $ownedInstall
+                $diagnostic.directManagerExit = $LASTEXITCODE
+                $diagnostic.removedByDirectManager = -not (Test-Path -LiteralPath $stableShortcut)
+                throw ('Uninstall left its own unchanged shortcut: ' + ($diagnostic | ConvertTo-Json -Compress))
+            }
             if (Test-Path -LiteralPath 'HKCU:\Software\HandyMeeting\StartMenuLink') { throw 'Uninstall left the shortcut ownership record.' }
-            $restrictedPolicyChecked = $effectivePolicy -eq 'Restricted'
+            $restrictedPolicyChecked = $true
         } finally {
             $restore = if ($previousPolicy) { $previousPolicy } else { 'Undefined' }
             & $windowsPowerShell -NoProfile -Command ('try { Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy ' + $restore + ' -Force -ErrorAction Stop } catch { }') | Out-Null
