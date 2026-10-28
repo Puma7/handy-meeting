@@ -66,6 +66,15 @@ export default function RecordingControls({
           </button>
         )}
       </div>
+      {/* Also reachable without hover: keyboard and touch users open it explicitly. */}
+      <details className="capture-control-help">
+        <summary>
+          {de
+            ? "Was bewirken Pause und Stummschaltung?"
+            : "What do pause and mute do?"}
+        </summary>
+        <p>{help}</p>
+      </details>
       {(control.paused ||
         (control.microphoneMuted && control.hasMicrophone)) && (
         <p role="status" className="notice warning">

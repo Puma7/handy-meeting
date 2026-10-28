@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { StrictMode } from "react";
 import App from "./App";
 import { testServices } from "./test-services";
@@ -545,6 +545,8 @@ it("never sends a key typed for another route to a local model chosen from the p
 });
 
 it("shows the detected local servers on the analysis page when the configured endpoint has no model", async () => {
+  // Earlier tests remember a local endpoint; this case starts from the default port.
+  localStorage.clear();
   // 1.0.5 feedback: LM Studio/Ollama were installed but the analysis page only showed an
   // error at the default port; the detection was hidden behind a collapsed section.
   const meeting: Meeting = {
@@ -570,9 +572,10 @@ it("shows the detected local servers on the analysis page when the configured en
     getMeeting: vi.fn().mockResolvedValue(meeting),
     listAnalyses: vi.fn().mockResolvedValue({ analyses: [], skipped: [] }),
     getNotesProgress: vi.fn().mockResolvedValue(null),
-    listTextModels: vi
-      .fn()
-      .mockRejectedValue("Synthetic: no local server at 127.0.0.1:1234"),
+    listTextModels: vi.fn(async (endpoint: string) => {
+      if (endpoint.includes(":11434")) return ["gemma4:e4b"];
+      throw "Synthetic: no local server at 127.0.0.1:1234";
+    }),
     refreshHandy: vi.fn().mockResolvedValue({
       executable: "native-choice",
       version: "synthetic",
@@ -584,10 +587,23 @@ it("shows the detected local servers on the analysis page when the configured en
   await userEvent.click(
     await screen.findByRole("button", { name: "Nachbearbeitung" }),
   );
-  expect(
+  await userEvent.click(
     await screen.findByRole("button", { name: "Verwenden: gemma4:e4b" }),
-  ).toBeTruthy();
+  );
   expect(api.localModelSetup).toHaveBeenCalled();
+  // CodeRabbit review 5683206688: the chosen server's models load without a manual refresh.
+  await waitFor(() =>
+    expect(api.listTextModels).toHaveBeenCalledWith(
+      "http://127.0.0.1:11434/v1/",
+    ),
+  );
+  const select = screen.getByRole("combobox", { name: "Textmodell" });
+  await waitFor(() =>
+    expect((select as HTMLSelectElement).value).toBe("gemma4:e4b"),
+  );
+  expect(
+    within(select).queryByRole("option", { name: /Noch nicht erkannt/ }),
+  ).toBeNull();
 });
 
 it("offers the start only for endpoints the backend transport accepts", () => {

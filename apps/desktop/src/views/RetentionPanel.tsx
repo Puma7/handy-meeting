@@ -543,6 +543,23 @@ export default function RetentionPanel({
           >
             {de ? "FFmpeg-Auswahl entfernen" : "Clear FFmpeg selection"}
           </button>
+          <details className="field-help">
+            <summary>
+              {de
+                ? "Hinweise zur FFmpeg-Auswahl"
+                : "About the FFmpeg selection"}
+            </summary>
+            <p>
+              {de
+                ? "Die ausgewählte Programmdatei wird geprüft. Wähle und bestätige sie nach jedem App-Neustart sowie nach einem Austausch erneut, bevor du sie verwendest. Der gespeicherte Pfad allein ist keine neue Freigabe. Abbrechen lässt die bisherige Wahl unverändert."
+                : "The selected program is checked. Choose and confirm it again after each app restart or replacement before using it. The saved path alone does not grant renewed permission. Cancelling preserves the previous selection."}
+            </p>
+            <p>
+              {de
+                ? "Das Entfernen ändert nur die Programmauswahl. Programmdatei und Aufnahmen bleiben erhalten. Übernimm die Änderung mit „Regeln speichern“, bevor du eine neue Vorschau erstellst."
+                : "Clearing changes only the program selection. The program file and recordings are retained. Apply the change with Save rules before creating a new preview."}
+            </p>
+          </details>
           <button
             className="secondary"
             disabled={busy || running || !changed}

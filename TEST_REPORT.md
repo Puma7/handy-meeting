@@ -699,3 +699,11 @@ Ohne eigenen Regressionstest:
 Nicht übernommen: Die Kurzfassung erzwingt keine Übernahme früherer Punkte. Sie ist auf 8 Punkte begrenzt und darf zusammenfassen. Jede belegte Aussage bleibt in den Detaillisten und in den unveränderlichen Fenster- und Kurzfassungsdateien erhalten.
 
 Ergebnisse: 294 Rust-Tests bestanden (2 ignoriert), 160 Vitest-Fälle, Clippy, fmt, tsc, prettier und die Release-Skripttests bestanden. `makensis -WX` kompiliert ohne Warnung.
+
+**CodeRabbit-Review 5683206688 bearbeitet:**
+- **Lokales Modell übernehmen:** Nach „Verwenden“ eines erkannten lokalen Servers lädt die Nachbearbeitung dessen Modelle sofort. Vorher blieb die Liste bis zu einem manuellen Neuladen leer. Der Regressionstest schlug vor der Korrektur fehl.
+- **Pegelanzeige:** Der gehaltene Spitzenwert wird erst nach dem Rendern gespeichert, sodass verworfene Renders ihn nicht verändern.
+- **Hinweise ohne Maus:** Die Hinweise zu Pause und Stummschaltung sowie zur FFmpeg-Auswahl sind zusätzlich als eingeklappter Abschnitt per Tastatur und Touch erreichbar, nicht nur als Tooltip.
+- **Nicht übernommen:** eine Eigentumsprüfung für die Verknüpfung „Meeting for Handy“ beim Deinstallieren. Sie zeigt auf das Programm, das dabei entfernt wird; eigene Verknüpfungen mit anderem Namen bleiben unberührt.
+
+Ergebnis: 160 Vitest-Fälle bestanden, dazu `tsc` und `prettier`.

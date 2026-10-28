@@ -1722,6 +1722,19 @@ mark {
 .capture-control-panel p {
   margin: 10px 0 0;
 }
+.capture-control-help,
+.field-help {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--color-ink-2);
+}
+.capture-control-help summary,
+.field-help summary {
+  cursor: pointer;
+}
+.field-help p {
+  margin-top: 4px;
+}
 .transcript-format {
   display: grid;
   gap: 4px;

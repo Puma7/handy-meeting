@@ -187,11 +187,15 @@ it("does not offer app mute without a microphone track and explains that meeting
   );
   expect(screen.queryByRole("button", { name: /microphone/i })).toBeNull();
   const resume = screen.getByRole("button", { name: "Resume recording" });
-  // The explanation is a hover tooltip instead of a permanent paragraph.
+  // The explanation is a hover tooltip and a collapsed disclosure, not a permanent paragraph.
   expect(resume.getAttribute("title")).toMatch(
     /This does not mute Teams, Zoom/,
   );
-  expect(screen.queryByText(/This does not mute Teams, Zoom/)).toBeNull();
+  const help = screen
+    .getByText("What do pause and mute do?")
+    .closest("details");
+  expect(help?.open).toBe(false);
+  expect(help?.textContent).toMatch(/This does not mute Teams, Zoom/);
   expect(resume.getAttribute("aria-pressed")).toBe("true");
 });
 

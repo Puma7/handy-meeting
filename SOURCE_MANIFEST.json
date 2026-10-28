@@ -41,8 +41,8 @@
   },
   {
     "Path": "TEST_REPORT.md",
-    "SHA256": "740EF10B6B249052B1351763E57A49AAD6D259DB5B5C7B3006BD0FE187441D46",
-    "Bytes": 159959
+    "SHA256": "0BD2C244B8150AD59D78877BD1EA69ECFADAE9F155C008380BA3B8618A97949C",
+    "Bytes": 160877
   },
   {
     "Path": "DAUERTEST.md",
@@ -14236,8 +14236,8 @@
   },
   {
     "Path": "apps/desktop/src/views/AudioLevelMeter.tsx",
-    "SHA256": "B0248E73FBFC1227EC592C7AD4E6A602C8DDE704E629E5909DE5935FA07CB24A",
-    "Bytes": 4496
+    "SHA256": "8D6BD768F82FB5FCD261B426E759D200E21EFCD758D144B557B64382B467F1CE",
+    "Bytes": 4680
   },
   {
     "Path": "apps/desktop/src/views/AudioSources.tsx",
@@ -14296,13 +14296,13 @@
   },
   {
     "Path": "apps/desktop/src/views/NotesView.tsx",
-    "SHA256": "7D6383D29BB0F241D52D04D3FC6670CADB9F0F4A929584A000E2939FE473867C",
-    "Bytes": 26928
+    "SHA256": "23DC6DA764F9FB532BC90613C2B57A5827D7ABFF7A84CB5A48DE6103D3EA60DD",
+    "Bytes": 27590
   },
   {
     "Path": "apps/desktop/src/views/RecordingControls.tsx",
-    "SHA256": "07484004E98C3653638D0FD517EBAEE85AF8D0ECB316D98BC1A3DD83624F11C3",
-    "Bytes": 3099
+    "SHA256": "3FC8D9BB4C817E6A0EEF1D50947232001DDAE09BA029E77CB20C65A9DA6E8A2B",
+    "Bytes": 3426
   },
   {
     "Path": "apps/desktop/src/views/ResumeAnalysisDialog.tsx",
@@ -14311,8 +14311,8 @@
   },
   {
     "Path": "apps/desktop/src/views/RetentionPanel.tsx",
-    "SHA256": "B825B40C21955C8C0EB1A02E5CB8EFBA3FB505A1C1B5C2A43731BBC137604F29",
-    "Bytes": 27785
+    "SHA256": "4771BA7172F2871740A74D321B0A824F603C653C287C2145590F763680942022",
+    "Bytes": 29008
   },
   {
     "Path": "apps/desktop/src/views/SessionWarnings.tsx",
@@ -14466,8 +14466,8 @@
   },
   {
     "Path": "apps/desktop/src/RecordingControls.test.tsx",
-    "SHA256": "3CF8D947F76EFB6D17917D85C515B493D77ABD2808E1EFEC8DCA7FF91605AA9D",
-    "Bytes": 8114
+    "SHA256": "C1D6BBE3AE1AA42F1109D017F6DAC29DAA4D2F975F693A3F42949C0BEEB0A034",
+    "Bytes": 8257
   },
   {
     "Path": "apps/desktop/src/RetentionPanel.test.tsx",
@@ -14486,8 +14486,8 @@
   },
   {
     "Path": "apps/desktop/src/styles.css",
-    "SHA256": "4E5208635405B50528BD8C5D36C9E03DD127EA70777B0CBBC573C8C4BE4155F0",
-    "Bytes": 36094
+    "SHA256": "7E06E2CC0553194E143F5007F626A83E8D7A6FA00BC3B9C808C495AC69BA8547",
+    "Bytes": 36311
   },
   {
     "Path": "apps/desktop/src/test-services.ts",
@@ -14526,8 +14526,8 @@
   },
   {
     "Path": "apps/desktop/src/LiveNotes.test.tsx",
-    "SHA256": "34B5DFF0A9668BC16731A14B9258BB76F4621C58F6CDB91AEC548B4527376A73",
-    "Bytes": 18940
+    "SHA256": "A760E87412C86297F80219BD52D2244F7038AAA1E3694F751E9C397888F9F48C",
+    "Bytes": 19619
   },
   {
     "Path": "apps/desktop/src-tauri/capabilities/default.json",
