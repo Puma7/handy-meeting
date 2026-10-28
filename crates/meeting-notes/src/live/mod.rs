@@ -177,6 +177,9 @@ impl LiveRunner {
         Ok(outcome)
     }
 
+    /// Requests and validates one bounded text window before exclusively storing it.
+    /// Task deduplication includes owner and due date; every retained fact still needs
+    /// an existing source ID and literal quote from this window's original sources.
     fn summarize_window(
         &self,
         pending: &[LiveSource],

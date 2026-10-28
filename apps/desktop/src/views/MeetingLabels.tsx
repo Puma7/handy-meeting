@@ -2,6 +2,10 @@ import { useEffect, useState } from "react";
 import { Pencil, Pin, Save, X } from "lucide-react";
 import type { DesktopApi, Meeting, MeetingMetadata, Locale } from "../types";
 import { errorMessage } from "../api";
+/**
+ * Edits revision-checked display metadata while keeping VIP protection out of the rename form.
+ * A failed native save leaves the draft and original metadata available for correction.
+ */
 export default function MeetingLabels({
   api,
   meeting,

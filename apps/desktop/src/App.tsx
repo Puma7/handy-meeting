@@ -1411,8 +1411,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
           ),
         ));
 
-  // The live summary of the recording; without UI on other pages, so an automatic start
-  // also covers recordings started from History or Settings (e.g. an agent approval).
+  /**
+   * Binds live notes to the recording, including headless auto-start on other pages.
+   * Switching to a local model clears credentials and respects a running analysis lock.
+   */
   const livePanel = (headless: boolean) =>
     liveMeeting && !liveMeeting.readOnly ? (
       <LiveNotesPanel

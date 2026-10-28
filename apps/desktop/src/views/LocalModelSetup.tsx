@@ -97,6 +97,7 @@ export default function LocalModelSetup({
         : "unknown";
   const command = recommended ? `ollama pull ${recommended}` : "";
 
+  /** Requests an explicitly selected model download only while setup actions are unlocked. */
   async function startPull() {
     if (disabled || !recommended || !api.pullOllamaModel) return;
     setError(null);

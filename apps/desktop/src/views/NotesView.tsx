@@ -68,6 +68,10 @@ type Props = {
   showEvidence: (evidence: Evidence) => void;
   locale: Locale;
 };
+/**
+ * Orders post-processing around the selected meeting, shared connection, template and result.
+ * Execution and per-run cloud consent remain parent-owned; editing never starts a model call.
+ */
 export default function NotesView({
   connectionSettings,
   t,

@@ -11,6 +11,10 @@ import type {
   SpeakerProgress,
   SavedSpeakerSections,
 } from "../types";
+/**
+ * Checks a selected model before enabling optional, meeting-bound speaker experiments.
+ * Setup-only mode needs no recording and does not query meeting jobs or saved sections.
+ */
 export default function SpeakerExperiments({
   api,
   locale,
@@ -96,6 +100,7 @@ export default function SpeakerExperiments({
   const running = job?.status === "running";
   const label = de ? "Sprecherexperiment" : "Speaker experiment";
   const supported = checkedModels[model] === true;
+  /** Runs one native capability check under the shared recording/analysis admission gates. */
   async function checkModel() {
     if (
       !model ||
@@ -124,6 +129,7 @@ export default function SpeakerExperiments({
       onCheckingChange?.(false);
     }
   }
+  /** Starts one checked-model job for the current meeting and refreshes its owned progress. */
   async function start(mode: "live" | "post-meeting") {
     if (!meeting || !model || !supported || busy) return;
     setBusy(true);

@@ -346,6 +346,8 @@ fn read_record<T: serde::de::DeserializeOwned>(path: &Path) -> meeting_core::Res
     Ok(serde_json::from_slice(&bytes)?)
 }
 #[tauri::command]
+/// Returns up to 26 verified compact-copy records: 25 visible rows plus one lookahead.
+/// Bounded catalogue reads run off the UI thread and never alter retained audio copies.
 pub(crate) async fn list_audio_copies(
     service: State<'_, Arc<Service>>,
     offset: usize,

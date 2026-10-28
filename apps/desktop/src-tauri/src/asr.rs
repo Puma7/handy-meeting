@@ -537,21 +537,34 @@ impl Drop for Worker {
     }
 }
 
-pub fn spawn_track(
+/// The exact track owned by a recognizer, retained even after its thread has ended.
+/// Callers must still join the handle; completion only removes compute-priority admission.
+pub(crate) struct RecognitionWorker {
+    pub source: String,
+    pub handle: JoinHandle<()>,
+}
+
+/// Starts recognition independently of capture and retains its track identity for scheduling.
+pub(crate) fn spawn_track(
     store: SessionStore,
     model_path: PathBuf,
     backend_dir: PathBuf,
     source: String,
     stop: Arc<AtomicBool>,
-) -> JoinHandle<()> {
-    spawn_track_options(
+) -> RecognitionWorker {
+    let worker_source = source.clone();
+    let handle = spawn_track_options(
         store,
         model_path,
         backend_dir,
         source,
         stop,
         TrackRunOptions::default(),
-    )
+    );
+    RecognitionWorker {
+        source: worker_source,
+        handle,
+    }
 }
 
 #[derive(Clone, Default)]

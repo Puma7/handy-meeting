@@ -218,6 +218,45 @@ it("does not roll a hydrated transcript back to an older bounded preview", () =>
   );
 });
 
+it.each([undefined, 80, 90])(
+  "keeps newer text when an older full publication has audio sequence %s",
+  (snapshotSequence) => {
+    const latest = {
+      ...meeting,
+      snapshotSequence: 90,
+      parts: [{ ...parts[0], transcriptSequence: 9, text: "Neu bestätigt" }],
+    };
+    const stale = {
+      ...meeting,
+      snapshotSequence,
+      livePreviewLimited: false,
+      parts: [{ ...parts[0], transcriptSequence: 8, text: "Veraltet" }],
+    };
+    const merged = mergeLiveTranscript(latest, stale);
+    expect(merged.parts[0].text).toBe("Neu bestätigt");
+    expect(merged.snapshotSequence).toBe(90);
+  },
+);
+
+it.each([89, 90])(
+  "accepts newer ASR text independently of audio sequence %i",
+  (snapshotSequence) => {
+    const latest = {
+      ...meeting,
+      snapshotSequence: 90,
+      parts: [{ ...parts[0], transcriptSequence: 9, text: "Bisher bestätigt" }],
+    };
+    const next = {
+      ...meeting,
+      snapshotSequence,
+      parts: [{ ...parts[0], transcriptSequence: 10, text: "Neue Erkennung" }],
+    };
+    const merged = mergeLiveTranscript(latest, next);
+    expect(merged.parts[0].text).toBe("Neue Erkennung");
+    expect(merged.snapshotSequence).toBe(90);
+  },
+);
+
 it("keeps VIP actions out of the rename form and cancels without changing metadata", () => {
   const save = vi.fn();
   render(
@@ -267,6 +306,7 @@ it("refreshes catch-up text outside the recent preview and rejects late foreign 
   };
   const hydrated = hydrateLiveTranscript(current, full)!;
   expect(hydrated.parts[0].text).toBe("Später erkannter Anfang");
+  expect(hydrated.snapshotSequence).toBe(81);
   const preview = {
     ...meeting,
     snapshotSequence: 82,

@@ -7,6 +7,10 @@ import type {
   LibraryProgress,
   Locale,
 } from "../types";
+/**
+ * Lists retained compact-audio copies with a 26th-row lookahead for 25 visible rows.
+ * Explicit consent creates a separate transcription; original meetings remain unchanged.
+ */
 export default function AudioCopiesPanel({
   api,
   locale,

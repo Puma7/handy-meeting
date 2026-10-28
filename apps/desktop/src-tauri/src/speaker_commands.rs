@@ -2,6 +2,8 @@ use crate::{blocking, AppResult, Service};
 use std::sync::Arc;
 use tauri::State;
 #[tauri::command]
+/// Checks model capability off the UI thread under native operation admission.
+/// The check receives a separate evidence directory, without any meeting audio.
 pub(crate) async fn check_speaker_model(
     service: State<'_, Arc<Service>>,
     model_id: String,

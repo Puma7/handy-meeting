@@ -35,7 +35,6 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex, MutexGuard,
     },
-    thread::JoinHandle,
 };
 use tauri::{Emitter, Manager};
 type AppResult<T> = Result<T, String>;
@@ -131,7 +130,7 @@ struct Active {
     store: SessionStore,
     capture: Option<CaptureController>,
     stop: Arc<AtomicBool>,
-    workers: Vec<JoinHandle<()>>,
+    workers: Vec<asr::RecognitionWorker>,
 }
 #[derive(Default)]
 struct Inner {
@@ -617,14 +616,17 @@ impl Service {
         // Audio is final once capture has stopped. Recognition of the remaining sections can take
         // minutes on slow hardware, so it continues as a capture-less catch-up (like `resume`)
         // instead of holding the transition; `reap_finished` collects it later.
-        let catching_up = active.workers.iter().any(|worker| !worker.is_finished());
+        let catching_up = active
+            .workers
+            .iter()
+            .any(|worker| !worker.handle.is_finished());
         if catching_up {
             if capture_result.is_ok() {
                 let _ = active.store.set_status("catching-up");
             }
         } else {
             for worker in active.workers.drain(..) {
-                if worker.join().is_err() {
+                if worker.handle.join().is_err() {
                     let _=active.store.notice("Ein Erkennungsprozess wurde unterbrochen. Offene Abschnitte können später nachgeholt werden.");
                 }
             }
@@ -665,11 +667,13 @@ impl Service {
             }
         }
     }
+    /// Joins ended recognition owners after capture ends, retaining failed status writes
+    /// for retry and keeping unfinished audio available for explicit recognition resumption.
     fn reap_finished(&self) -> AppResult<()> {
         let finished = {
             let mut inner = self.lock()?;
             if inner.active.as_ref().is_some_and(|a| {
-                a.capture.is_none() && a.workers.iter().all(JoinHandle::is_finished)
+                a.capture.is_none() && a.workers.iter().all(|worker| worker.handle.is_finished())
             }) {
                 inner.active.take()
             } else {
@@ -679,7 +683,7 @@ impl Service {
         if let Some(mut active) = finished {
             let mut interrupted = false;
             for worker in active.workers.drain(..) {
-                interrupted |= worker.join().is_err();
+                interrupted |= worker.handle.join().is_err();
             }
             self.lock()?.view = Some(active.store.clone());
             if interrupted {

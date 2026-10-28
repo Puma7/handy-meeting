@@ -1,16 +1,14 @@
 import type { AudioPart, Meeting } from "./types";
 
-/** Recent native snapshots are a transport optimization, not a replacement transcript. */
+/**
+ * Merges full and bounded publications without discarding newer confirmed sections.
+ * Audio-journal sequence orders metadata; each transcript sequence orders its own text.
+ */
 export function mergeLiveTranscript(
   previous: Meeting | null,
   next: Meeting,
 ): Meeting {
-  if (
-    !previous ||
-    previous.id !== next.id ||
-    previous.modelId !== next.modelId ||
-    !next.livePreviewLimited
-  )
+  if (!previous || previous.id !== next.id || previous.modelId !== next.modelId)
     return next;
   const key = (part: AudioPart) =>
     part.file ?? `${part.source}:${part.startSample}`;
@@ -27,9 +25,22 @@ export function mergeLiveTranscript(
       parts.set(key(part), part);
   }
   return {
-    ...next,
+    ...(previous.snapshotSequence !== undefined &&
+    next.snapshotSequence !== undefined &&
+    next.snapshotSequence < previous.snapshotSequence
+      ? previous
+      : next),
     parts: [...parts.values()],
-    livePreviewLimited: Boolean(previous.livePreviewLimited),
+    snapshotSequence:
+      previous.snapshotSequence === undefined
+        ? next.snapshotSequence
+        : Math.max(
+            previous.snapshotSequence,
+            next.snapshotSequence ?? previous.snapshotSequence,
+          ),
+    livePreviewLimited: Boolean(
+      previous.livePreviewLimited && next.livePreviewLimited,
+    ),
   };
 }
 
@@ -58,5 +69,16 @@ export function hydrateLiveTranscript(
     )
       parts.set(key, part);
   }
-  return { ...current, parts: [...parts.values()], livePreviewLimited: false };
+  return {
+    ...current,
+    parts: [...parts.values()],
+    snapshotSequence:
+      current.snapshotSequence === undefined
+        ? full.snapshotSequence
+        : Math.max(
+            current.snapshotSequence,
+            full.snapshotSequence ?? current.snapshotSequence,
+          ),
+    livePreviewLimited: false,
+  };
 }

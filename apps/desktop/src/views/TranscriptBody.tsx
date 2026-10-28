@@ -3,6 +3,10 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { clock, trackName } from "../domain";
 import type { AudioPart, Locale } from "../types";
 import type { MessageKey } from "../i18n";
+/**
+ * Renders all retained transcript sections and searches their literal text without markup.
+ * Scroll following respects the reader's position; search highlights use original indices.
+ */
 export default function TranscriptBody({
   parts,
   locale,

@@ -9,6 +9,10 @@ import type {
   SpeakerDocument,
   SpeakerAssignment,
 } from "../types";
+/**
+ * Hydrates saved speaker names even while editing controls are closed, publishing only names
+ * whose original source hashes still match. Text revisions invalidate stale assignments.
+ */
 export default function SpeakerLabels({
   api,
   meeting,

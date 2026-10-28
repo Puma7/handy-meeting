@@ -10,6 +10,9 @@
 - Live task deduplication retains different owners and deadlines, and saved live summaries from another meeting are rejected without changing their files. Confirmed speaker names load even while editing controls are closed; model-discovery actions respect a running analysis lock.
 - Speaker capability can be checked in Settings before the first recording and is retained across unchanged automatic catalogue refreshes. Explicit loopback bind addresses are preserved. Catch-up refreshes and preview sequencing retain later text, stopped summaries clear their waiting label, and speaker-check evidence has a fixed 128-folder ceiling that preserves existing complete and partial records.
 - Ollama detection preserves an explicit HTTP port 80 and follows Ollama's distinct defaults for bare hosts and complete HTTP URLs.
+- A recognition track that has ended no longer blocks live summaries of confirmed text from the other track; pending audio remains available for later recognition.
+- Completed speaker-capability proofs can be reused after restart only for the same freshly verified model and native runtime identity; incomplete or conflicting records never enable a model.
+- Full transcript publications use the same per-section freshness rules as bounded previews, preserving newer recognition independently of audio-journal sequencing.
 - This source follow-up does not change the published 1.0.6 assets or authorize a new release. The real local text-model reference run and longer combined capture/recognition/model/GPU evidence remain open; see TEST_REPORT.md.
 
 ## 1.0.6 — live summary and easy local text models (in development)

@@ -85,6 +85,8 @@ impl Job {
             .lock()
             .is_ok_and(|s| ["starting", "waiting", "updating"].contains(&s.status.as_str()))
     }
+    /// Reads one job's scalar progress and retained view. Terminal jobs never advertise
+    /// a pending transcript wait, and retry backoff can only postpone the next update.
     fn status(&self) -> LiveNotesStatus {
         let interval_ms = self.interval_ms.load(Ordering::Acquire);
         let shared = self.shared.lock();
@@ -178,10 +180,12 @@ pub(crate) struct Snapshot {
     data: SessionData,
     /// The meeting still owns the active slot, so capture or recognition may add text.
     active: bool,
+    /// Only living recognizers can consume compute for their own pending track.
+    recognizing_tracks: [bool; 2],
 }
 impl Snapshot {
-    /// Recognition owns the compute budget while more than five seconds remain unprocessed.
-    /// A stopped/archived meeting is never delayed by this active-worker-only admission rule.
+    /// A living recognizer owns the compute budget while its track has over five seconds
+    /// unprocessed. Ended workers and archived meetings never defer confirmed-text analysis.
     fn recognition_needs_priority(&self) -> bool {
         if !self.active {
             return false;
@@ -195,7 +199,9 @@ impl Snapshot {
             };
             let pending = part.confirmed_sample_count.saturating_sub(processed);
             let index = usize::from(part.source == "microphone");
-            tracks[index] = tracks[index].saturating_add(pending);
+            if self.recognizing_tracks[index] {
+                tracks[index] = tracks[index].saturating_add(pending);
+            }
         }
         tracks.into_iter().max().unwrap_or(0) > u64::from(meeting_core::SAMPLE_RATE) * 5
     }
@@ -216,14 +222,30 @@ impl Service {
         let (active_store, view_store) = {
             let inner = self.lock()?;
             (
-                inner.active.as_ref().map(|a| a.store.clone()),
+                inner.active.as_ref().map(|a| {
+                    let mut recognizing_tracks = [false; 2];
+                    for worker in &a.workers {
+                        if !worker.handle.is_finished() {
+                            match worker.source.as_str() {
+                                "system" => recognizing_tracks[0] = true,
+                                "microphone" => recognizing_tracks[1] = true,
+                                _ => {}
+                            }
+                        }
+                    }
+                    (a.store.clone(), recognizing_tracks)
+                }),
                 inner.view.clone(),
             )
         };
-        if let Some(store) = active_store {
+        if let Some((store, recognizing_tracks)) = active_store {
             if let Ok(data) = store.snapshot() {
                 if data.id == id {
-                    return Ok(Snapshot { data, active: true });
+                    return Ok(Snapshot {
+                        data,
+                        active: true,
+                        recognizing_tracks,
+                    });
                 }
             }
         }
@@ -233,6 +255,7 @@ impl Service {
                     return Ok(Snapshot {
                         data,
                         active: false,
+                        recognizing_tracks: [false; 2],
                     });
                 }
             }
@@ -241,6 +264,7 @@ impl Service {
             return Ok(Snapshot {
                 data: data.clone(),
                 active: false,
+                recognizing_tracks: [false; 2],
             });
         }
         let folder = self.root.join("sessions").join(id);
@@ -255,6 +279,7 @@ impl Service {
         Ok(Snapshot {
             data,
             active: false,
+            recognizing_tracks: [false; 2],
         })
     }
 }
@@ -471,6 +496,8 @@ impl Worker {
         self.wait_with_manual(true);
     }
 
+    /// Waits cooperatively for cancellation, optionally allowing a queued manual update
+    /// to interrupt. ASR-priority waits retain manual work without spinning on that flag.
     fn wait_with_manual(&self, interrupt_for_manual: bool) {
         let until = Instant::now() + POLL;
         while Instant::now() < until && !self.control.is_cancelled() {
@@ -481,6 +508,9 @@ impl Worker {
         }
     }
 
+    /// Schedules text-only windows from confirmed sections, deferring only for living ASR
+    /// workers with backlog. Retries retain their trigger and backoff; cancellation wins
+    /// over later progress, and completed windows remain available after a stop.
     fn run(self, mut runner: LiveRunner) {
         let mut failures: u32 = 0;
         let mut overview_failures: u32 = 0;
@@ -666,32 +696,115 @@ mod tests {
         })).unwrap();
         assert!(Snapshot {
             data: data.clone(),
-            active: true
+            active: true,
+            recognizing_tracks: [true; 2],
         }
         .recognition_needs_priority());
         data.parts[0].processed_samples = 80_000;
         assert!(!Snapshot {
             data: data.clone(),
-            active: true
+            active: true,
+            recognizing_tracks: [true; 2],
         }
         .recognition_needs_priority());
         data.parts[0].processed_samples = 160_000;
         assert!(!Snapshot {
             data: data.clone(),
-            active: true
+            active: true,
+            recognizing_tracks: [true; 2],
         }
         .recognition_needs_priority());
         data.parts[0].model_id = Some("another-model".into());
         assert!(Snapshot {
             data: data.clone(),
-            active: true
+            active: true,
+            recognizing_tracks: [true; 2],
         }
         .recognition_needs_priority());
         assert!(!Snapshot {
             data,
-            active: false
+            active: false,
+            recognizing_tracks: [false; 2],
         }
         .recognition_needs_priority());
+    }
+
+    #[test]
+    fn ended_track_backlogs_do_not_starve_a_healthy_tracks_confirmed_text() {
+        for failed_track in ["system", "microphone"] {
+            for healthy_seconds in [1, 6] {
+                let root = fixture_root("ended-track-backlog");
+                let service = Service::new(root.clone()).unwrap();
+                let store = meeting_core::SessionStore::create(
+                    &root.join("sessions"),
+                    "Synthetic track failure",
+                    "synthetic",
+                    "s",
+                    None,
+                )
+                .unwrap();
+                let mut workers = Vec::new();
+                let (release, busy) = std::sync::mpsc::channel::<()>();
+                let mut busy = Some(busy);
+                for track in ["system", "microphone"] {
+                    let seconds = if track == failed_track {
+                        6
+                    } else {
+                        healthy_seconds
+                    };
+                    let mut writer = meeting_core::PcmWriter::new(store.clone(), track).unwrap();
+                    for _ in 0..seconds {
+                        writer
+                            .append(&vec![1_i16; meeting_core::SAMPLE_RATE as usize])
+                            .unwrap();
+                    }
+                    writer.finish().unwrap();
+                    let worker = if track == failed_track {
+                        let worker = thread::spawn(|| {});
+                        while !worker.is_finished() {
+                            thread::yield_now();
+                        }
+                        worker
+                    } else {
+                        let wait = busy.take().unwrap();
+                        thread::spawn(move || {
+                            let _ = wait.recv();
+                        })
+                    };
+                    workers.push(crate::asr::RecognitionWorker {
+                        source: track.into(),
+                        handle: worker,
+                    });
+                }
+                store.set_status("catching-up").unwrap();
+                let before = serde_json::to_vec(&store.snapshot().unwrap()).unwrap();
+                let id = store.snapshot().unwrap().id;
+                service.lock().unwrap().active = Some(crate::Active {
+                    _operation: None,
+                    owner: None,
+                    store: store.clone(),
+                    capture: None,
+                    stop: Arc::new(AtomicBool::new(true)),
+                    workers,
+                });
+                let snapshot = service.live_snapshot(&id, None).unwrap();
+                let defer = snapshot.recognition_needs_priority();
+                release.send(()).unwrap();
+                for worker in service.lock().unwrap().active.take().unwrap().workers {
+                    worker.handle.join().unwrap();
+                }
+                assert_eq!(
+                    serde_json::to_vec(&store.snapshot().unwrap()).unwrap(),
+                    before
+                );
+                assert_eq!(
+                    defer,
+                    healthy_seconds > 5,
+                    "ended {failed_track}, healthy backlog {healthy_seconds}s"
+                );
+                let _ = std::fs::remove_dir_all(root);
+            }
+        }
     }
 
     fn fixture_root(label: &str) -> std::path::PathBuf {
@@ -774,7 +887,10 @@ mod tests {
             store: store.clone(),
             capture: None,
             stop: Arc::new(AtomicBool::new(false)),
-            workers: vec![worker],
+            workers: vec![crate::asr::RecognitionWorker {
+                source: "system".into(),
+                handle: worker,
+            }],
         });
         service
             .live_notes

@@ -140,7 +140,10 @@ fn metadata_rename_remains_available_while_the_recording_operation_is_owned() {
         store: store.clone(),
         capture: None,
         stop: Arc::new(AtomicBool::new(false)),
-        workers: vec![worker],
+        workers: vec![crate::asr::RecognitionWorker {
+            source: "system".into(),
+            handle: worker,
+        }],
     });
     let saved = library_commands::edit_metadata(
         &service,
@@ -351,7 +354,10 @@ fn stop_returns_while_recognition_catches_up_and_a_poll_collects_it_later() {
         store: store.clone(),
         capture: None,
         stop: Arc::new(AtomicBool::new(false)),
-        workers: vec![worker],
+        workers: vec![crate::asr::RecognitionWorker {
+            source: "system".into(),
+            handle: worker,
+        }],
     });
     let started = std::time::Instant::now();
     let view = service.stop().unwrap();
@@ -409,7 +415,10 @@ fn a_failed_catch_up_worker_leaves_a_resumable_session() {
         store: store.clone(),
         capture: None,
         stop: Arc::new(AtomicBool::new(true)),
-        workers: vec![worker],
+        workers: vec![crate::asr::RecognitionWorker {
+            source: "system".into(),
+            handle: worker,
+        }],
     });
     service.reap_finished().unwrap();
     assert!(service.lock().unwrap().active.is_none());
@@ -449,7 +458,10 @@ fn a_failed_catch_up_status_write_is_retried_and_an_index_failure_is_reported() 
         store: store.clone(),
         capture: None,
         stop: Arc::new(AtomicBool::new(true)),
-        workers: vec![worker],
+        workers: vec![crate::asr::RecognitionWorker {
+            source: "system".into(),
+            handle: worker,
+        }],
     });
     // Polling leaves the session alone while a transition holds the gate.
     {
