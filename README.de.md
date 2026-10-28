@@ -88,7 +88,7 @@ Der sichtbare Name lautet **Meeting for Handy**. Daten-/Schlüssel-/Bundle-Kennu
 
 ## Entwicklung in Richtung 1.0.6 (unveröffentlicht)
 
-Eine **Live-Zusammenfassung** neben dem Transkript fasst ein laufendes Meeting fortlaufend zusammen: bisheriger Verlauf, Entscheidungen, Aufgaben, offene Fragen und wichtige Punkte, jeweils mit Originalbeleg und Audiospur. Sie aktualisiert sich im gewählten Abstand und früher nach längeren Redebeiträgen, arbeitet am besten mit einem kleinen lokalen Textmodell und lässt sich jederzeit zum Vorlesen kopieren. Die **Einrichtung lokaler Modelle** findet Ollama oder LM Studio, schlägt Gemma 4 E2B/E4B passend zum Arbeitsspeicher vor und kann den Vorschlag über Ollama laden. Aufbau und Grenzen: [Plan für 1.0.6](docs/1.0.6-LIVE-SUMMARY-PLAN.md).
+Eine **Live-Zusammenfassung** neben dem Transkript fasst ein laufendes Meeting fortlaufend zusammen: bisheriger Verlauf, Entscheidungen, Aufgaben, offene Fragen und wichtige Punkte, jeweils mit Originalbeleg und Audiospur. Sie aktualisiert sich im gewählten Abstand und früher, wenn auf einen längeren Beitrag einer Audiospur eine Antwort der anderen folgt, arbeitet am besten mit einem kleinen lokalen Textmodell und lässt sich jederzeit zum Vorlesen kopieren. Die **Einrichtung lokaler Modelle** findet Ollama oder LM Studio, schlägt Gemma 4 E2B/E4B passend zum Arbeitsspeicher vor und kann den Vorschlag über Ollama laden. Aufbau und Grenzen: [Plan für 1.0.6](docs/1.0.6-LIVE-SUMMARY-PLAN.md).
 
 ## Entwicklung in Richtung 1.0.5 (unveröffentlicht)
 
