@@ -5,6 +5,7 @@ from pathlib import Path
 
 
 def plan(event_name, event, requested):
+    """Select package work from an explicit draft state or a validated boolean input."""
     if requested not in ('', 'false', 'true'):
         raise ValueError('CI_PACKAGES must be a boolean workflow input')
     if event_name == 'pull_request':
@@ -23,6 +24,7 @@ def plan(event_name, event, requested):
 
 
 def main():
+    """Publish the selected scope without presenting omitted package checks as evidence."""
     result = plan(os.environ['GITHUB_EVENT_NAME'],
                   json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8')),
                   os.environ.get('CI_PACKAGES', ''))

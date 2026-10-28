@@ -1,4 +1,6 @@
 """Synthetic event fixtures; no GitHub mutations, builds or hardware claims."""
+import ast
+import fnmatch
 import importlib.util
 import json
 import os
@@ -22,10 +24,20 @@ def workflow(name):
 
 
 def job(text, name):
+    """Read a specific job so a guard elsewhere cannot satisfy its boundary assertions."""
     match = re.search(r'^  ' + re.escape(name) + r':\n(.*?)(?=^  [\w-]+:|\Z)', text, re.M | re.S)
     if not match:
         raise AssertionError('Missing workflow job: ' + name)
     return match.group(1)
+
+
+def pr_paths(text):
+    """Read the repository's inline/block PR filters for real changed-path fixtures."""
+    section = re.search(r'^  pull_request:\n(.*?)(?=^  [\w-]+:|\Z)', text, re.M | re.S).group(1)
+    inline = re.search(r'^    paths: (\[.*\])$', section, re.M)
+    if inline:
+        return ast.literal_eval(inline.group(1))
+    return re.findall(r"^      - '([^']+)'$", section, re.M)
 
 
 class EventRouting(unittest.TestCase):
@@ -73,6 +85,22 @@ class EventRouting(unittest.TestCase):
 
 
 class WorkflowBoundaries(unittest.TestCase):
+    def test_legacy_source_only_ready_changes_trigger_both_candidate_workflows(self):
+        for changed in ('src/HandyMeeting/Models.cs', 'verify.ps1'):
+            for name in ('rust.yml', 'rust-portable.yml'):
+                self.assertTrue(any(fnmatch.fnmatchcase(changed, pattern) for pattern in pr_paths(workflow(name))), (changed, name))
+
+    def test_platform_only_ready_changes_trigger_both_candidate_workflows(self):
+        for name in ('rust.yml', 'rust-portable.yml'):
+            self.assertTrue(any(fnmatch.fnmatchcase('platform/macos/AudioCapture.swift', pattern) for pattern in pr_paths(workflow(name))), name)
+
+    def test_both_candidate_workflow_definitions_and_native_inputs_share_pr_filters(self):
+        windows, portable = (pr_paths(workflow(name)) for name in ('rust.yml', 'rust-portable.yml'))
+        self.assertEqual(set(windows), set(portable))
+        for changed in ('.github/workflows/rust.yml', '.github/workflows/rust-portable.yml', 'global.json'):
+            for patterns in (windows, portable):
+                self.assertTrue(any(fnmatch.fnmatchcase(changed, pattern) for pattern in patterns), changed)
+
     def test_ready_transition_is_subscribed_and_shared_plan_controls_both_workflows(self):
         for name in ('rust.yml', 'rust-portable.yml'):
             text = workflow(name)

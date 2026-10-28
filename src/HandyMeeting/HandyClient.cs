@@ -123,6 +123,7 @@ public static class Transcription
             session.Data.Status = e is OperationCanceledException ? "recorded" : "error"; session.Save(); Export(session); throw;
         }
     }
+    /// <summary>Render a reviewable snapshot using section times; Markdown is inert while plain text retains supplied values.</summary>
     public static string Render(SessionStore session, bool markdown)
     {
         var output = new StringBuilder();

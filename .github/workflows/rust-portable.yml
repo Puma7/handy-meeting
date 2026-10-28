@@ -2,7 +2,7 @@ name: Rust portable desktop candidates
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
-    paths: ['Cargo.toml', 'Cargo.lock', '.gitattributes', 'rust-toolchain.toml', '.cargo/**', 'crates/**', 'apps/desktop/**', 'platform/**', 'scripts/**', 'licenses/**', 'assets/**', 'LICENSE', 'THIRD_PARTY_NOTICES.txt', '.github/workflows/rust-portable.yml']
+    paths: ['Cargo.toml', 'Cargo.lock', '.gitattributes', 'rust-toolchain.toml', '.cargo/**', 'crates/**', 'apps/desktop/**', 'platform/**', 'src/**', 'verify.ps1', 'global.json', 'scripts/**', 'licenses/**', 'assets/**', 'LICENSE', 'THIRD_PARTY_NOTICES.txt', '.github/workflows/rust-portable.yml', '.github/workflows/rust.yml']
   workflow_dispatch:
     inputs:
       packages:

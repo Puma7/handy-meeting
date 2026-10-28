@@ -14,6 +14,8 @@ Source checks and complete downloadable candidates serve different purposes. A g
 
 The ready-for-review transition is subscribed explicitly; it does not require an extra code push. Converting a PR back to draft also refreshes its scope and cancels obsolete PR work. Reusable release jobs receive `packages=true` explicitly. Full package mode retains every installer, credential, ABI, frontend, Rust, Linux virtual-audio and relocation check. The smaller no-ASR core matrix is omitted only when that same run already executes both no-ASR test/Clippy commands and the full native matrix in the same target checkout. No physical-device or endurance evidence is implied.
 
+Both candidate workflows use the same PR path filters. Legacy-only `src/**`/`verify.ps1`, portable-only `platform/**`, shared SDK settings and changes to either candidate workflow therefore trigger the complete ready-PR pair. Drafts still select source-only mode.
+
 The **Windows checks** workflow preserves the existing required `verify` context on every PR and remains manually available. Its additional branch/tag push trigger is removed: a same-repository PR update no longer runs it twice. The Rust workflow retains its own source-bound `./verify.ps1` result for candidate proofs. This small required PR check also runs on documentation changes; branch protection is not weakened to save runtime.
 
 ## Avoiding duplicate packages

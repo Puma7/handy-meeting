@@ -7,10 +7,11 @@ namespace HandyMeeting;
 
 internal static class MarkdownText
 {
-    internal static string Escape(string value)
+    /// <summary>Render supplied transcript metadata as literal Markdown; missing strings contribute no text.</summary>
+    internal static string Escape(string? value)
     {
         var output = new System.Text.StringBuilder();
-        foreach (var c in value)
+        foreach (var c in value ?? "")
         {
             if (c == '<') output.Append("&lt;");
             else if (c == '&') output.Append("&amp;");
@@ -46,6 +47,8 @@ public static class JsonData
             current = current.Parent;
         }
     }
+    /// <summary>Check an entry without accepting session-supplied links or an unexpected file/directory type.</summary>
+    /// <returns>False only when the entry or its parent is absent; unsafe or inaccessible entries fail closed.</returns>
     internal static bool CheckEntry(string path, bool directory = false, bool trustedRoot = false)
     {
         FileSystemInfo info = directory ? new DirectoryInfo(path) : new FileInfo(path);
@@ -59,6 +62,8 @@ public static class JsonData
         return true;
     }
     private static void WriteAtomic(string path, byte[] bytes) => WriteAtomic(path, output => output.Write(bytes));
+    /// <summary>Flush an exclusive pending file before replacing the canonical entry and retaining its previous bytes as a backup.</summary>
+    /// <remarks>Failed partial writes discard only this call's file. Complete pending bytes survive when the canonical copy is missing or cannot be checked.</remarks>
     internal static void WriteAtomic(string path, Action<FileStream> write)
     {
         path = Path.GetFullPath(path);
@@ -67,13 +72,34 @@ public static class JsonData
         Directory.CreateDirectory(folder);
         CheckDirectory(folder);
         var temporary = Path.Combine(folder, "." + Path.GetFileName(path) + "." + Guid.NewGuid().ToString("N") + ".pending");
-        using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
-        { write(output); output.Flush(true); }
-        // Failed placement retains our complete pending bytes. Never open, delete or
-        // truncate an unrelated pre-existing .tmp entry supplied with an imported session.
-        CheckDirectory(folder); CheckEntry(path + ".bak");
-        if (CheckEntry(path)) File.Replace(temporary, path, path + ".bak", true);
-        else File.Move(temporary, path);
+        var ownsTemporary = false;
+        var complete = false;
+        try
+        {
+            using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
+            {
+                ownsTemporary = true; // A failed exclusive create never owns a pre-existing entry.
+                write(output); output.Flush(true); complete = true;
+            }
+            CheckDirectory(folder); CheckEntry(path + ".bak");
+            if (CheckEntry(path)) File.Replace(temporary, path, path + ".bak", true);
+            else File.Move(temporary, path);
+        }
+        catch
+        {
+            // Only this call's pending file can be discarded. A complete copy is
+            // retained if the canonical destination is missing or cannot be checked.
+            if (ownsTemporary)
+            {
+                try
+                {
+                    CheckDirectory(folder);
+                    if ((!complete || CheckEntry(path)) && CheckEntry(temporary)) File.Delete(temporary);
+                }
+                catch (Exception cleanupError) when (cleanupError is IOException or UnauthorizedAccessException) { }
+            }
+            throw;
+        }
     }
 }
 

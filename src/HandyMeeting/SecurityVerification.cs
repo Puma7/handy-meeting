@@ -19,6 +19,7 @@ internal static class SecurityVerification
         var success = OperatingSystem.IsWindows() ? WindowsHardLink(Extended(name), Extended(target), 0) : UnixHardLink(target, name) == 0;
         if (!success) throw new IOException("Synthetic hard-link fixture could not be created: " + Marshal.GetLastPInvokeError());
     }
+    /// <summary>Exercise real filesystem links, atomic replacement and inert exports using only owned synthetic sessions.</summary>
     internal static void Run(string parent, Action<bool, string> check)
     {
         var root = Path.Combine(parent, "security-" + Guid.NewGuid().ToString("N"));
@@ -100,5 +101,67 @@ internal static class SecurityVerification
         check(!md.Contains("![remote](") && !md.Contains("<img") && !md.Contains("\n[ref]:") && !md.Contains("`code`"), "Transcript Markdown cannot activate supplied image, HTML, reference-link or code delimiters");
         check(md.Split("\\!\\[remote\\]", StringSplitOptions.None).Length == 5 && md.Contains("&lt;img") && md.Contains("&amp;copy;") && md.Contains("\\\\literal"), "Markdown escaping covers title, model, warnings and multiline transcript body");
         check(txt.Contains(hostile) && JsonSerializer.Serialize(JsonData.Read<SessionData>(Path.Combine(sessionFolder, "transcript.json")), JsonData.Options) == snapshot && JsonSerializer.Serialize(data, JsonData.Options) == snapshot, "TXT, JSON and original session values remain literal and unchanged");
+        ReviewRegressions(root, check);
+    }
+
+    /// <summary>Reproduce nullable imports and write/placement failures while checking preservation and bounded temporary-file cleanup.</summary>
+    private static void ReviewRegressions(string parent, Action<bool, string> check)
+    {
+        var root = Path.Combine(parent, "review-regressions"); Directory.CreateDirectory(root);
+        var results = new List<(bool Passed, string Label)>();
+        void Record(bool passed, string label) => results.Add((passed, label));
+        string[] Pending(string folder) => Directory.GetFiles(folder, ".*.pending");
+
+        var imported = Path.Combine(root, "nullable-session"); Directory.CreateDirectory(imported);
+        var manifest = Path.Combine(imported, "session.json");
+        File.WriteAllText(manifest, "{\"SchemaVersion\":1,\"Title\":\"Nullable imported metadata\",\"Status\":\"complete\",\"ModelId\":null,\"Warnings\":[null],\"Parts\":[]}");
+        var opened = false;
+        try { _ = SessionStore.Open(manifest); opened = true; }
+        catch (NullReferenceException) { }
+        Record(opened && new[] { "transcript.md", "transcript.txt", "transcript.json" }.All(name => File.Exists(Path.Combine(imported, name))), "Imported null model and warning values still allow reopening and every transcript export");
+        var exported = Path.Combine(imported, "transcript.json");
+        var nullsRetained = false;
+        if (File.Exists(exported))
+        {
+            using var json = JsonDocument.Parse(File.ReadAllText(exported));
+            nullsRetained = json.RootElement.GetProperty("ModelId").ValueKind == JsonValueKind.Null
+                && json.RootElement.GetProperty("Warnings")[0].ValueKind == JsonValueKind.Null;
+        }
+        Record(nullsRetained, "Nullable imported metadata is preserved in JSON rather than silently rewritten");
+
+        foreach (var exists in new[] { false, true })
+        {
+            var folder = Path.Combine(root, exists ? "partial-existing" : "partial-new"); Directory.CreateDirectory(folder);
+            var path = Path.Combine(folder, "state.json"); if (exists) File.WriteAllText(path, "original");
+            File.WriteAllText(path + ".tmp", "unrelated supplied temporary file");
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                try { JsonData.WriteAtomic(path, stream => { stream.Write("partial"u8); throw new IOException("Synthetic mid-write failure"); }); }
+                catch (IOException) { }
+            }
+            Record(Pending(folder).Length == 0 && (exists ? File.ReadAllText(path) == "original" : !File.Exists(path))
+                && File.ReadAllText(path + ".tmp") == "unrelated supplied temporary file", "Failed owned partial writes do not accumulate files or change original/supplied bytes: " + exists);
+        }
+        foreach (var exists in new[] { false, true })
+        {
+            var folder = Path.Combine(root, exists ? "placement-existing" : "placement-new"); Directory.CreateDirectory(folder);
+            var path = Path.Combine(folder, "state.json"); if (exists) File.WriteAllText(path, "original");
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                var backup = path + ".bak";
+                try { JsonData.WriteAtomic(path, stream => { stream.Write("complete new bytes"u8); Directory.CreateDirectory(backup); }); }
+                catch (InvalidDataException) { }
+                Directory.Delete(backup); // Only the empty directory created by this fixture.
+            }
+            var pending = Pending(folder);
+            Record(exists ? pending.Length == 0 && File.ReadAllText(path) == "original"
+                : pending.Length == 3 && !File.Exists(path) && pending.All(file => File.ReadAllText(file) == "complete new bytes"),
+                exists ? "Failed placement keeps the canonical original without accumulating owned pending files"
+                    : "Failed placement without a canonical destination retains every complete pending copy");
+        }
+        // Preserve the independently exercised outcomes even when an old implementation
+        // causes the first reported assertion to fail.
+        JsonData.Save(Path.Combine(root, "outcomes.json"), results.Select(item => new { item.Passed, item.Label }));
+        foreach (var result in results) check(result.Passed, result.Label);
     }
 }

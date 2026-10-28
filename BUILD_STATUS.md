@@ -336,3 +336,16 @@ Same-source duplicate builds were confirmed from GitHub Jobs timestamps: main, t
 Local checks at 2026-10-28T08:57:01.729797+00:00: all workflow files passed actionlint 1.7.12; 45 synthetic release/export/installer/publisher/routing regressions passed, including 13 new event/workflow cases. Required ./verify.ps1 passed 41 PCM/filesystem/export, 35 notes, 28 template, 8 agent and monitor checks in a new isolated program folder. The first restricted run could not read the installed Windows SDK; the permitted rerun passed without changing protection settings. No capture/model/frontend product code changed in this increment.
 
 New GitHub execution is pending for this prepared source. Earlier head 313b49a completed full actual native package checks; those remain earlier evidence and do not prove this workflow revision. No merge, tag, installation or release was performed.
+
+
+## 28 October 2026 - PR29 CodeRabbit round 1 corrections, prepared candidate
+
+Review5681024750 on4d916b3 reported five validated findings: mojibake in release text, public1.0.4 incorrectly labeled unreleased, mismatched Windows/portable PR path filters, nullable imported model/warning metadata breaking Markdown and session reopening, and accumulating owned pending files after failed writes/placement.
+
+The source now repairs the displayed punctuation/status and aligns both candidate workflows for legacy-only, platform-only, settings and workflow-definition changes. Markdown accepts missing string values without changing the stored JSON metadata. Atomic writes discard only exclusively acquired incomplete pending files, or complete pending files while an ordinary canonical destination still exists. Complete pending bytes are retained if that destination is missing or unsafe/unreadable. Cleanup never masks the original error and never touches supplied .tmp entries.
+
+Regression evidence is failing-before/passing-after: three new routing tests failed on the old filters; five of six independently exercised legacy import/temporary-file assertions failed before the fix, while the sole-complete-copy preservation case already passed and stays enforced. Final48 synthetic release/export/installer/publisher/routing cases passed; ./verify.ps1 passed47PCM/filesystem/export,35Notes,28Templates,8Agent plusMonitor in a fresh program folder, with warnings as errors. All workflow files passed actionlint1.7.12. Existing source/program/test snapshots remain retained; no actual capture/model/device or new endurance evidence is inferred.
+
+CodeRabbit also reports a non-blocking aggregate docstring warning(32.76%, target80%,116functions,31unsupported). Asked for exact missing functions, the provider could not retrieve an inventory or annotations (reply6466678730). Explicit contracts were added to the touched persistence/export/routing helpers. No reviewer configuration or threshold was changed and no measured80% or all-premerge-checks success is claimed.
+
+These are prepared corrections pending allowlisted publication and fresh current-head Codex/CodeRabbit/security/platform CI. Earlier clean4d916b3 Codex results are not assigned to the corrected source. Merge/tag remain gated.

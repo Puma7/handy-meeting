@@ -19,6 +19,8 @@ on:
       - 'LICENSE'
       - 'THIRD_PARTY_NOTICES.txt'
       - '.github/workflows/rust.yml'
+      - '.github/workflows/rust-portable.yml'
+      - 'platform/**'
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
@@ -38,6 +40,8 @@ on:
       - 'LICENSE'
       - 'THIRD_PARTY_NOTICES.txt'
       - '.github/workflows/rust.yml'
+      - '.github/workflows/rust-portable.yml'
+      - 'platform/**'
   workflow_dispatch:
     inputs:
       packages:
