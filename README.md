@@ -102,6 +102,10 @@ Recording pause/resume and independent app microphone mute keep the meeting time
 
 The visible name is **Meeting for Handy**. Existing data/key/bundle identifiers, executable filenames and the `HandyMeeting-<version>-...` download prefix stay compatible with earlier installations and updater clients. Earlier installed programs and their shortcuts are preserved. The new Windows Start menu entry is **Meeting for Handy**; an execution policy that blocks scripts is respected and the installer reports the retained executable location.
 
+## Development toward 1.0.6 (unreleased)
+
+A **live summary** panel beside the transcript summarizes a running meeting: summary so far, decisions, tasks, open questions and important points, each with its original evidence and audio track. It updates at a chosen interval and earlier after long contributions, works best with a small local text model, and can be copied to read out at any time. A **local model setup** finds Ollama or LM Studio, suggests Gemma 4 E2B/E4B from installed memory and can download the suggestion through Ollama. Design and limits: [1.0.6 plan](docs/1.0.6-LIVE-SUMMARY-PLAN.md).
+
 ## Development toward 1.0.5 (unreleased)
 
 The [28 October audit corrections](docs/AUDIT_FIXES_20261028.md) cover capture diagnostics, navigation and layout, legacy file preservation and safe exports, report provenance, source-export containment and background-job handling. These source changes are separate from the public 1.0.4 download. The source is prepared as release candidate 1.0.5; it has not been tagged or released. Current checks and remaining limits belong in [TEST_REPORT.md](TEST_REPORT.md).

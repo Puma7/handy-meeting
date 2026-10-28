@@ -86,6 +86,10 @@ Pause/Fortsetzen der Aufnahme und eine getrennte App-Mikrofonstummschaltung halt
 
 Der sichtbare Name lautet **Meeting for Handy**. Daten-/Schlüssel-/Bundle-Kennungen, interne Programmnamen und der Downloadpräfix `HandyMeeting-<Version>-...` bleiben für ältere Installationen und deren Updates erhalten. Frühere Programme und Verknüpfungen werden erhalten. Der neue Windows-Startmenüeintrag heißt **Meeting for Handy**; eine blockierende Skriptausführungsrichtlinie wird nicht abgeschwächt.
 
+## Entwicklung in Richtung 1.0.6 (unveröffentlicht)
+
+Eine **Live-Zusammenfassung** neben dem Transkript fasst ein laufendes Meeting fortlaufend zusammen: bisheriger Verlauf, Entscheidungen, Aufgaben, offene Fragen und wichtige Punkte, jeweils mit Originalbeleg und Audiospur. Sie aktualisiert sich im gewählten Abstand und früher nach längeren Redebeiträgen, arbeitet am besten mit einem kleinen lokalen Textmodell und lässt sich jederzeit zum Vorlesen kopieren. Die **Einrichtung lokaler Modelle** findet Ollama oder LM Studio, schlägt Gemma 4 E2B/E4B passend zum Arbeitsspeicher vor und kann den Vorschlag über Ollama laden. Aufbau und Grenzen: [Plan für 1.0.6](docs/1.0.6-LIVE-SUMMARY-PLAN.md).
+
 ## Entwicklung in Richtung 1.0.5 (unveröffentlicht)
 
 Die [Audit-Korrekturen vom 28. Oktober](docs/AUDIT_FIXES_20261028.md) betreffen Aufnahmediagnosen, Navigation und Darstellung, Datenerhalt und abgesicherte Exporte der früheren Prototypen, die Herkunft von Prüfergebnissen, begrenzte Quellexporte und Hintergrundaufgaben. Diese Quelländerungen sind getrennt vom öffentlichen Download 1.0.4. Der Quellstand ist als Release-Kandidat 1.0.5 vorbereitet; dafür gibt es noch keinen Tag oder veröffentlichten Release. Aktuelle Prüfungen und offene Grenzen stehen im [TEST_REPORT.md](TEST_REPORT.md).

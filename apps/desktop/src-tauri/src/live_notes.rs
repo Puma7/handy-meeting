@@ -22,6 +22,8 @@ const FIRST_BACKOFF: Duration = Duration::from_secs(20);
 const MAX_BACKOFF: Duration = Duration::from_secs(300);
 /// Without new text, a missing overview is retried at most this often.
 const OVERVIEW_RETRY: Duration = Duration::from_secs(60);
+/// After the meeting ended, a failing overview is attempted this often before the worker ends.
+const MAX_OVERVIEW_FAILURES: u32 = 3;
 pub(crate) const DEFAULT_INTERVAL_MS: u64 = 3 * 60_000;
 
 #[derive(Deserialize)]
@@ -283,6 +285,9 @@ impl LiveNotes {
         }
         // The meeting must exist and be readable before any model client is created.
         let data = service.live_snapshot(&request.meeting_id)?;
+        // Held by the worker until it ends, so archive moves or installation never run while
+        // live notes write into the session folder.
+        let lease = service.reserve_operation(crate::operations::Kind::LiveNotes)?;
         if request.use_saved_key {
             if !key.is_empty() {
                 return Err("Bitte entweder den gespeicherten Schlüssel oder einen Schlüssel nur für diese Sitzung wählen.".into());
@@ -328,6 +333,7 @@ impl LiveNotes {
             worker: None,
         };
         let worker = Worker {
+            _lease: lease,
             service: Arc::clone(service),
             meeting_id: request.meeting_id,
             control: job.control.clone(),
@@ -347,7 +353,15 @@ impl LiveNotes {
     }
 }
 
+/// Whether only the overview should be rebuilt now: a bounded number of attempts, never in a
+/// tight loop, also after the meeting has ended.
+fn overview_retry(due: bool, failures: u32, manual: bool, since_attempt: Option<Duration>) -> bool {
+    due && failures < MAX_OVERVIEW_FAILURES
+        && (manual || since_attempt.is_none_or(|elapsed| elapsed >= OVERVIEW_RETRY))
+}
+
 struct Worker {
+    _lease: crate::operations::Lease,
     service: Arc<Service>,
     meeting_id: String,
     control: AnalysisControl,
@@ -378,6 +392,7 @@ impl Worker {
 
     fn run(self, mut runner: LiveRunner) {
         let mut failures: u32 = 0;
+        let mut overview_failures: u32 = 0;
         let mut overview_attempt: Option<Instant> = None;
         self.set(|s| s.status = "waiting".into());
         while !self.control.is_cancelled() {
@@ -408,15 +423,19 @@ impl Worker {
                 manual,
                 finished,
             );
+            // A missing overview is retried at a bounded pace, also after the meeting ended.
+            let overview_open = runner.overview_due() && overview_failures < MAX_OVERVIEW_FAILURES;
             if trigger.is_none()
-                && runner.overview_due()
-                && (manual
-                    || finished
-                    || overview_attempt.is_none_or(|at| at.elapsed() >= OVERVIEW_RETRY))
+                && overview_retry(
+                    runner.overview_due(),
+                    overview_failures,
+                    manual,
+                    overview_attempt.map(|at| at.elapsed()),
+                )
             {
                 trigger = Some(Trigger::Manual);
             }
-            if finished && trigger.is_none() {
+            if finished && trigger.is_none() && !overview_open {
                 self.set(|s| {
                     s.status = "finished".into();
                     s.pending_chars = 0;
@@ -434,6 +453,12 @@ impl Worker {
                     match result {
                         Ok(outcome) => {
                             failures = 0;
+                            if outcome.overview_error.is_some() {
+                                overview_failures = overview_failures.saturating_add(1);
+                            } else if outcome.overview.is_some() {
+                                overview_failures = 0;
+                            }
+                            let summarized = outcome.window.is_some();
                             let view = runner.view();
                             self.set(|s| {
                                 s.status = "waiting".into();
@@ -443,8 +468,11 @@ impl Worker {
                                 s.retry_at = None;
                                 s.view = Some(view);
                             });
-                            // A remaining backlog is handled by the next decision without waiting.
-                            continue;
+                            // A remaining backlog is handled by the next decision without waiting;
+                            // an overview-only retry always waits.
+                            if summarized {
+                                continue;
+                            }
                         }
                         Err(error) => {
                             failures = failures.saturating_add(1);
@@ -536,6 +564,58 @@ mod tests {
         assert!(live_texts(&done).1);
         done.status = "catching-up".into();
         assert!(!live_texts(&done).1, "catch-up still produces text");
+    }
+
+    #[test]
+    fn a_failing_overview_is_retried_at_a_bounded_pace_and_then_given_up() {
+        let now = Some(Duration::from_secs(1));
+        let later = Some(OVERVIEW_RETRY);
+        assert!(overview_retry(true, 0, false, None));
+        assert!(!overview_retry(true, 0, false, now), "no tight retry loop");
+        assert!(overview_retry(true, 1, false, later));
+        assert!(
+            overview_retry(true, 1, true, now),
+            "a manual update may retry at once"
+        );
+        assert!(!overview_retry(true, MAX_OVERVIEW_FAILURES, true, later));
+        assert!(!overview_retry(false, 0, true, None));
+    }
+
+    #[test]
+    fn running_live_notes_keep_archive_and_installation_waiting_until_they_end() {
+        let root = fixture_root("lease");
+        let service = Arc::new(Service::new(root.clone()).unwrap());
+        let store =
+            SessionStore::create(&root.join("sessions"), "Synthetic", "m", "s", None).unwrap();
+        let id = store.snapshot().unwrap().id;
+        service.lock().unwrap().view = Some(store);
+        service
+            .live_notes
+            .start(&service, request(&id, "local", "http://127.0.0.1:9/v1/"))
+            .unwrap();
+        wait_for(&service, &id, "waiting");
+        for kind in [
+            crate::operations::Kind::Maintenance,
+            crate::operations::Kind::Installation,
+        ] {
+            assert!(service.reserve_operation(kind).is_err(), "{kind:?}");
+        }
+        // Post-meeting analysis is not blocked by live notes.
+        drop(
+            service
+                .reserve_operation(crate::operations::Kind::Analysis)
+                .unwrap(),
+        );
+        service.live_notes.stop().unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while service
+            .reserve_operation(crate::operations::Kind::Maintenance)
+            .is_err()
+        {
+            assert!(Instant::now() < deadline, "the lease ends with the worker");
+            thread::sleep(Duration::from_millis(20));
+        }
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

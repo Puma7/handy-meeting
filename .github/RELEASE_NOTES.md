@@ -1,6 +1,17 @@
-## Meeting for Handy 1.0.5
+## Meeting for Handy 1.0.6
 
 A release of the independent Rust/Tauri meeting companion for Handy. The release tag and attached manifests identify the exact application version, source commit and checked package bytes.
+
+### Live summary while recording
+
+- A side panel summarizes the running meeting: summary so far, decisions, tasks, open questions and important points. Read it out when someone asks what was discussed, or use it for the closing recap.
+- Updates every 1–15 minutes, earlier after a long contribution or a lot of new speech, on request, and once more when catch-up has finished. On half a screen the summary sits above the transcript; a focus button shows only the summary.
+- Every statement keeps its original quote and audio track (microphone or computer audio). Statements without a literal source are discarded and counted. Results stay reviewable AI drafts.
+- Local text models are the default and can start automatically with every recording. A cloud or company endpoint needs a text release for every start; no audio is sent.
+
+### Easy local text models
+
+- Finds Ollama and LM Studio on this computer and lists their models. Suggests `gemma4:e2b` (8 GB memory) or `gemma4:e4b` (16 GB or more) and can download the suggestion through a running Ollama. Nothing is downloaded without a click.
 
 ### Reliability and desktop clarity
 
