@@ -483,3 +483,67 @@ fn the_run_worked_on_last_is_shown_even_when_another_was_created_later() {
     );
     server.finish();
 }
+
+#[test]
+fn a_large_statement_backlog_is_covered_batch_by_batch_and_never_skipped() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("live-notes");
+    let full = |prefix: &str| -> Vec<serde_json::Value> {
+        (0..20)
+            .map(|i| fact(&format!("{prefix} {i}"), None, "C0", BUDGET))
+            .collect()
+    };
+    let tasks: Vec<_> = (0..20)
+        .map(|i| fact(&format!("Aufgabe {i}"), Some("Anna"), "C30", TASK))
+        .collect();
+    let server = Server::start(vec![
+        // Window 1 holds the maximum of 80 statements; its overview fails at first.
+        window_answer(full("Punkt"), full("Beschluss"), tasks, full("Frage")),
+        overview_answer(vec![]),
+        // Window 2 adds ten more statements while the first overview is still missing.
+        window_answer(
+            (0..10)
+                .map(|i| fact(&format!("Später {i}"), None, "C60", DECISION))
+                .collect(),
+            vec![],
+            vec![],
+            vec![],
+        ),
+        overview_answer(vec![fact("Budget", None, "C0", BUDGET)]),
+        overview_answer(vec![
+            fact("Budget", None, "C0", BUDGET),
+            fact("Anbieter", None, "C60", DECISION),
+        ]),
+    ]);
+    let mut runner =
+        LiveRunner::start(&root, "meeting-1", server.connection("synthetic"), "de").unwrap();
+    let control = AnalysisControl::default();
+    let mut texts = vec![
+        part("system-0", "system", 0, BUDGET),
+        part("system-30", "system", 30, TASK),
+    ];
+    let first = runner.pending(&texts);
+    let outcome = runner.update(&first, Trigger::Interval, &control).unwrap();
+    assert_eq!(outcome.accepted, 80);
+    assert!(outcome.overview_error.is_some());
+    texts.push(part("system-60", "system", 60, DECISION));
+    let second = runner.pending(&texts);
+    let outcome = runner.update(&second, Trigger::Interval, &control).unwrap();
+    assert_eq!(outcome.overview, Some(2), "two batches in one update");
+    assert!(!runner.overview_due());
+    let view = runner.view();
+    assert_eq!(view.overview_window, 2);
+    let bodies = server.finish();
+    let statements = |index: usize| {
+        let input: serde_json::Value =
+            serde_json::from_str(bodies[index]["messages"][1]["content"].as_str().unwrap())
+                .unwrap();
+        input["newStatements"].as_array().unwrap().len()
+    };
+    // Every statement reached an overview request: 80 from window 1, then 10 from window 2.
+    assert_eq!((statements(1), statements(3), statements(4)), (80, 80, 10));
+    // Stored overviews read back with their exact coverage.
+    let stored = load_run(&root.join(&runner.run().id)).unwrap();
+    let coverage: Vec<u32> = stored.overviews.iter().map(|o| o.window).collect();
+    assert_eq!(coverage, [1, 2]);
+}

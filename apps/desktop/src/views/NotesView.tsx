@@ -352,6 +352,9 @@ export default function NotesView({
                     locale={locale}
                     connected={connected}
                     onUse={(nextEndpoint, nextModel) => {
+                      // A key entered for another route must never reach the local server.
+                      setApiKey("");
+                      setUseSavedKey(false);
                       setEndpoint(nextEndpoint);
                       setTextModel(nextModel);
                     }}

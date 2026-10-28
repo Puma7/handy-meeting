@@ -36,12 +36,13 @@ export default function LocalModelSetup({
     [pull, setPull] = useState<ModelPullProgress | null>(null),
     [copied, setCopied] = useState(false);
   const mounted = useRef(true);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // Restored on every setup: StrictMode runs setup, cleanup and setup again.
+    mounted.current = true;
+    return () => {
       mounted.current = false;
-    },
-    [],
-  );
+    };
+  }, []);
   const check = useCallback(async () => {
     if (!api.localModelSetup || !connected) return;
     setLoading(true);

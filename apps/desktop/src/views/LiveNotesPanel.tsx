@@ -61,6 +61,12 @@ function trackLabel(track: string, de: boolean): string {
   return de ? "Computerton" : "Computer audio";
 }
 
+/** Compares routes like the native client: trailing slash and `localhost` loopback alias. */
+function normalizeEndpoint(endpoint: string): string {
+  const trimmed = endpoint.trim().replace("//localhost", "//127.0.0.1");
+  return trimmed.endsWith("/") ? trimmed : `${trimmed}/`;
+}
+
 function timeOf(item: LiveItem): number {
   return Math.min(...item.evidence.map((e) => e.startMs));
 }
@@ -80,9 +86,16 @@ export function liveNotesText(
   locale: Locale,
 ): string {
   const de = locale === "de";
+  // Every statement keeps its source identifiers and verbatim quotes, also outside the app.
   const line = (item: LiveItem) => {
     const extra = [item.owner, item.due].filter(Boolean).join(", ");
-    return `- ${item.text}${extra ? ` (${extra})` : ""}`;
+    const evidence = item.evidence.map(
+      (e) =>
+        `  [${e.sourceId} · ${clock(e.startMs)} · ${trackLabel(e.track, de)}] „${e.quote}“`,
+    );
+    return [`- ${item.text}${extra ? ` (${extra})` : ""}`, ...evidence].join(
+      "\n",
+    );
   };
   const block = (heading: string, items: LiveItem[]) =>
     items.length ? `\n${heading}\n${items.map(line).join("\n")}\n` : "";
@@ -176,12 +189,13 @@ export default function LiveNotesPanel({
     connection.model.trim() && connection.endpoint.trim(),
   );
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // Restored on every setup: StrictMode runs setup, cleanup and setup again.
+    mounted.current = true;
+    return () => {
       mounted.current = false;
-    },
-    [],
-  );
+    };
+  }, []);
   useEffect(() => {
     setCloudConsent(false);
     setStatus(null);
@@ -362,6 +376,25 @@ export default function LiveNotesPanel({
         return de ? "Aus" : "Off";
     }
   })();
+  // While running, the route of the active run is shown, never the editable settings.
+  const activeRoute =
+    running && view?.runId
+      ? { mode: view.mode, model: view.model, endpoint: view.endpoint }
+      : modelReady
+        ? {
+            mode: connection.mode,
+            model: connection.model,
+            endpoint: connection.endpoint,
+          }
+        : null;
+  const settingsChanged = Boolean(
+    running &&
+      view?.runId &&
+      (view.mode !== connection.mode ||
+        view.model !== connection.model.trim() ||
+        normalizeEndpoint(view.endpoint) !==
+          normalizeEndpoint(connection.endpoint)),
+  );
   const canStart =
     connected &&
     Boolean(meetingId) &&
@@ -424,20 +457,22 @@ export default function LiveNotesPanel({
       </div>
 
       <div className="live-model-line muted">
-        {modelReady ? (
+        {activeRoute ? (
           <>
             <span
-              className={connection.mode === "cloud" ? "chip warn" : "chip ok"}
+              className={activeRoute.mode === "cloud" ? "chip warn" : "chip ok"}
             >
-              {connection.mode === "cloud"
-                ? de
-                  ? "Cloud"
-                  : "Cloud"
-                : de
-                  ? "Lokal"
-                  : "Local"}
+              {activeRoute.mode === "cloud" ? "Cloud" : de ? "Lokal" : "Local"}
             </span>{" "}
-            {view?.model && running ? view.model : connection.model}
+            {activeRoute.model}
+            {activeRoute.mode === "cloud" && ` · ${activeRoute.endpoint}`}
+            {settingsChanged && (
+              <span role="status">
+                {de
+                  ? " · Geänderte Einstellungen gelten ab dem nächsten Start."
+                  : " · Changed settings apply from the next start."}
+              </span>
+            )}
           </>
         ) : (
           <span>

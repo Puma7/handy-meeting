@@ -1591,6 +1591,9 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
                   preferences={livePreferences}
                   setPreferences={setLivePreferences}
                   onUseLocalModel={(nextEndpoint, nextModel) => {
+                    // A key entered for another route must never reach the local server.
+                    setApiKey("");
+                    setUseSavedKey(false);
                     setMode("local");
                     setEndpoint(nextEndpoint);
                     setTextModel(nextModel);

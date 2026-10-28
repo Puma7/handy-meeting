@@ -163,11 +163,15 @@ impl LiveRunner {
             outcome.rejected = rejected_total(&window.rejected);
             self.state.windows.push(window);
         }
-        if self.overview_due() {
+        // A large backlog of statements is folded in batch by batch until it is covered.
+        while self.overview_due() {
             match self.rebuild_overview(control) {
                 Ok(index) => outcome.overview = index,
                 Err(error) if crate::is_cancelled(&error) => return Err(error),
-                Err(error) => outcome.overview_error = Some(error.to_string()),
+                Err(error) => {
+                    outcome.overview_error = Some(error.to_string());
+                    break;
+                }
             }
         }
         Ok(outcome)
@@ -235,7 +239,19 @@ impl LiveRunner {
     fn rebuild_overview(&mut self, control: &AnalysisControl) -> Result<Option<u32>> {
         let previous = self.state.overviews.last();
         let covered = previous.map_or(0, |o| o.window as usize);
-        let statements: Vec<prompt::Statement<'_>> = self.state.windows[covered..]
+        // Whole windows in order, as many as fit into one request (at least one). Only the
+        // windows actually sent count as covered; later ones follow in the next batch.
+        let mut batch_end = covered;
+        let mut batch_size = 0;
+        for window in &self.state.windows[covered..] {
+            let size = window.statement_count();
+            if batch_end > covered && batch_size + size > prompt::OVERVIEW_INPUT_STATEMENTS {
+                break;
+            }
+            batch_size += size;
+            batch_end += 1;
+        }
+        let statements: Vec<prompt::Statement<'_>> = self.state.windows[covered..batch_end]
             .iter()
             .flat_map(|w| {
                 w.lists()
@@ -258,7 +274,11 @@ impl LiveRunner {
         control.check()?;
         let answer: OverviewAnswer = serde_json::from_str(&answer)
             .context("Ungültige oder doppelte Felder in der KI-Antwort.")?;
-        let sources = self.state.all_sources();
+        // The overview may cite only sections that existed up to the windows it covers.
+        let sources: Vec<_> = self.state.windows[..batch_end]
+            .iter()
+            .flat_map(|w| w.sources.iter().map(LiveSource::as_source))
+            .collect();
         let checked = screen_facts(
             answer.items,
             &sources,
@@ -272,7 +292,7 @@ impl LiveRunner {
         }
         let overview = LiveOverview {
             index: self.state.overviews.len() as u32 + 1,
-            window: self.state.windows.len() as u32,
+            window: batch_end as u32,
             created_at: chrono::Utc::now().to_rfc3339(),
             items: checked.items,
             rejected: checked.rejected,

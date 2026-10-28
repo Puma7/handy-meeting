@@ -1,4 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import { StrictMode } from "react";
+import App from "./App";
+import { testServices } from "./test-services";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
 import LiveNotesPanel, {
@@ -6,7 +9,9 @@ import LiveNotesPanel, {
   type LiveConnection,
 } from "./views/LiveNotesPanel";
 import type {
+  AppState,
   DesktopApi,
+  Meeting,
   LiveItem,
   LiveNotesStatus,
   LiveView,
@@ -356,4 +361,180 @@ it("warns instead of suggesting a local model on too little memory", async () =>
   expect(
     await screen.findByText(/Für eine lokale Live-Zusammenfassung zu wenig/),
   ).toBeTruthy();
+});
+
+const ollamaReady: LocalModelSetupInfo = {
+  totalMemoryBytes: 16 * 1024 ** 3,
+  recommendation: {
+    tier: "standard",
+    model: "gemma4:e4b",
+    lmStudioSearch: "Gemma 4 E4B",
+  },
+  providers: [
+    {
+      id: "ollama",
+      name: "Ollama",
+      endpoint: "http://127.0.0.1:11434/v1/",
+      reachable: true,
+      models: ["gemma4:e4b"],
+      recommendedInstalled: true,
+    },
+  ],
+};
+
+it("keeps polling, starting and model discovery working under StrictMode", async () => {
+  const start = vi
+    .fn()
+    .mockResolvedValue(status({ status: "waiting", running: true }));
+  render(
+    <StrictMode>
+      <LiveNotesPanel
+        api={
+          {
+            copyText: vi.fn(),
+            getLiveNotes: vi.fn().mockResolvedValue(status()),
+            startLiveNotes: start,
+            localModelSetup: vi.fn().mockResolvedValue(ollamaReady),
+          } as unknown as DesktopApi
+        }
+        locale="de"
+        connected
+        meetingId={"m".repeat(32)}
+        meetingTitle="Synthetisches Meeting"
+        meetingActive
+        connection={local}
+        preferences={{ auto: true, intervalMinutes: 3 }}
+        setPreferences={vi.fn()}
+        onUseLocalModel={vi.fn()}
+        onOpenTextModelSettings={vi.fn()}
+        focus={false}
+        setFocus={vi.fn()}
+      />
+    </StrictMode>,
+  );
+  // The automatic start needs the polled "off" state, which only arrives while mounted.
+  await waitFor(() => expect(start).toHaveBeenCalled());
+  expect(await screen.findByText(/Läuft/)).toBeTruthy();
+  await userEvent.click(
+    screen.getByRole("button", { name: "Lokales Modell einrichten" }),
+  );
+  expect(
+    await screen.findByRole("button", { name: "Verwenden: gemma4:e4b" }),
+  ).toBeTruthy();
+});
+
+it("copies every statement with its source identifier, time, track and verbatim quote", () => {
+  const text = liveNotesText(view, "T", "de");
+  expect(text).toContain(
+    "- Budget Q3 besprochen\n  [C60 · 01:00 · Computerton] „Zitat zu Budget Q3 besprochen“",
+  );
+  expect(text).toContain(
+    "- Angebot verschicken (Anna, Freitag)\n  [C60 · 01:00 · Computerton] „Zitat zu Angebot verschicken“",
+  );
+});
+
+it("shows the running route, not settings that were changed for the next start", async () => {
+  setup(
+    {
+      getLiveNotes: vi.fn().mockResolvedValue(
+        status({
+          status: "waiting",
+          running: true,
+          view: {
+            ...view,
+            mode: "cloud",
+            model: "cloud-model",
+            endpoint: "https://openrouter.ai/api/v1/",
+          },
+        }),
+      ),
+      startLiveNotes: vi.fn(),
+    },
+    // The settings now point at a local model, but the cloud run is still active.
+    { connection: local },
+  );
+  expect(await screen.findByText("Cloud")).toBeTruthy();
+  expect(screen.getByText(/cloud-model/)).toBeTruthy();
+  expect(
+    screen.getByText(/Geänderte Einstellungen gelten ab dem nächsten Start/),
+  ).toBeTruthy();
+  expect(screen.queryByText("Lokal")).toBeNull();
+});
+
+it("never sends a key typed for another route to a local model chosen from the presets", async () => {
+  const meeting: Meeting = {
+    id: "c".repeat(32),
+    title: "Synthetic live",
+    startedAt: "2026-10-28T10:00:00Z",
+    durationMs: 5000,
+    status: "recording",
+    modelId: "synthetic",
+    warnings: [],
+    parts: [],
+  };
+  const state: AppState = {
+    version: "synthetic",
+    handy: null,
+    recording: true,
+    activeMeeting: meeting,
+    captureControl: {
+      paused: false,
+      microphoneMuted: false,
+      hasMicrophone: true,
+    },
+  };
+  const start = vi
+    .fn()
+    .mockResolvedValue(status({ status: "waiting", running: true }));
+  const api = {
+    ...testServices(),
+    getAppState: vi.fn(async () => structuredClone(state)),
+    listDevices: vi.fn().mockResolvedValue([]),
+    listMeetings: vi.fn().mockResolvedValue([]),
+    getMeeting: vi.fn().mockResolvedValue(meeting),
+    listAnalyses: vi.fn().mockResolvedValue({ analyses: [], skipped: [] }),
+    getNotesProgress: vi.fn().mockResolvedValue(null),
+    listTextModels: vi.fn().mockResolvedValue([]),
+    refreshHandy: vi.fn().mockResolvedValue({
+      executable: "native-choice",
+      version: "synthetic",
+      models: [],
+    }),
+    getLiveNotes: vi.fn().mockResolvedValue(status({ meetingId: meeting.id })),
+    startLiveNotes: start,
+    localModelSetup: vi.fn().mockResolvedValue(ollamaReady),
+  } as unknown as DesktopApi;
+  render(<App api={api} />);
+  await screen.findByRole("button", { name: "Live-Zusammenfassung starten" });
+  // A cloud key is typed on the analysis page.
+  await userEvent.click(
+    screen.getByRole("button", { name: "Nachbearbeitung" }),
+  );
+  await userEvent.selectOptions(
+    await screen.findByLabelText("Verarbeitung"),
+    "cloud",
+  );
+  await userEvent.type(
+    screen.getByLabelText("Schlüssel nur für diese App-Sitzung"),
+    "synthetic-cloud-key",
+  );
+  // Back on the recording page, a local model is chosen from the presets.
+  await userEvent.click(screen.getByRole("button", { name: "Meeting" }));
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Lokales Modell einrichten" }),
+  );
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Verwenden: gemma4:e4b" }),
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "Live-Zusammenfassung starten" }),
+  );
+  await waitFor(() => expect(start).toHaveBeenCalled());
+  expect(start.mock.calls[0][0]).toMatchObject({
+    mode: "local",
+    endpoint: "http://127.0.0.1:11434/v1/",
+    model: "gemma4:e4b",
+    apiKey: "",
+    useSavedKey: false,
+  });
 });

@@ -86,9 +86,6 @@ impl LoadedRun {
     pub(crate) fn sources(&self) -> impl Iterator<Item = &LiveSource> {
         self.windows.iter().flat_map(|w| w.sources.iter())
     }
-    pub(crate) fn all_sources(&self) -> Vec<Source> {
-        self.sources().map(LiveSource::as_source).collect()
-    }
 }
 
 pub(crate) fn is_hex_id(id: &str) -> bool {

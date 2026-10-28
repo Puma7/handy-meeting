@@ -280,28 +280,77 @@ fn pull(model: &str, cancel: &AtomicBool, mut progress: impl FnMut(PullLine)) ->
     pull_from(OLLAMA_PULL, model, cancel, &mut progress)
 }
 
+/// One message from the reader thread that follows Ollama's stream.
+enum PullEvent {
+    Line(PullLine),
+    Failed(String),
+}
+
 /// Follows Ollama's streamed pull answer line by line. Same transport rules as local text
-/// models: loopback only, no proxy, no redirects.
+/// models: loopback only, no proxy, no redirects. The blocking request runs on its own thread,
+/// so a cancel also ends a download whose server stalls before or between progress lines.
 fn pull_from(
     url: &str,
     model: &str,
     cancel: &AtomicBool,
     progress: &mut impl FnMut(PullLine),
 ) -> AppResult<()> {
-    let client = reqwest::blocking::Client::builder()
+    let (sender, events) = std::sync::mpsc::channel();
+    let url = url.to_owned();
+    let body = serde_json::json!({"model": model, "stream": true});
+    std::thread::Builder::new()
+        .name("ollama-pull-read".into())
+        .spawn(move || read_pull(&url, &body, &sender))
+        .map_err(|_| "Der Download konnte nicht gestartet werden.")?;
+    loop {
+        if cancel.load(Ordering::Acquire) {
+            // The reader ends when its connection closes; its messages are no longer read.
+            return Err("Download abgebrochen.".into());
+        }
+        match events.recv_timeout(Duration::from_millis(100)) {
+            Ok(PullEvent::Line(update)) => {
+                if let Some(error) = &update.error {
+                    return Err(format!(
+                        "Ollama meldet: {}",
+                        error.chars().take(300).collect::<String>()
+                    ));
+                }
+                let success = update.status == "success";
+                progress(update);
+                if success {
+                    return Ok(());
+                }
+            }
+            Ok(PullEvent::Failed(error)) => return Err(error),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                return Err("Ollama hat den Download ohne Abschluss beendet.".into())
+            }
+        }
+    }
+}
+
+fn read_pull(url: &str, body: &serde_json::Value, events: &std::sync::mpsc::Sender<PullEvent>) {
+    let fail = |message: &str| {
+        let _ = events.send(PullEvent::Failed(message.to_owned()));
+    };
+    let Ok(client) = reqwest::blocking::Client::builder()
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(Duration::from_secs(5))
         .timeout(None)
         .build()
-        .map_err(|_| "Lokale Verbindung konnte nicht vorbereitet werden.")?;
-    let response = client
-        .post(url)
-        .json(&serde_json::json!({"model": model, "stream": true}))
-        .send()
-        .map_err(|_| "Ollama ist nicht erreichbar. Bitte Ollama installieren und starten.")?;
+    else {
+        return fail("Lokale Verbindung konnte nicht vorbereitet werden.");
+    };
+    let response = match client.post(url).json(body).send() {
+        Ok(response) => response,
+        Err(_) => {
+            return fail("Ollama ist nicht erreichbar. Bitte Ollama installieren und starten.")
+        }
+    };
     if !response.status().is_success() {
-        return Err(format!(
+        return fail(&format!(
             "Ollama meldet HTTP {} für den Download.",
             response.status().as_u16()
         ));
@@ -309,32 +358,18 @@ fn pull_from(
     let mut reader = BufReader::new(std::io::Read::take(response, 64 * 1024 * 1024));
     let mut line = String::new();
     loop {
-        if cancel.load(Ordering::Acquire) {
-            return Err("Download abgebrochen.".into());
-        }
         line.clear();
-        let read = reader
-            .read_line(&mut line)
-            .map_err(|_| "Die Verbindung zu Ollama wurde unterbrochen.")?;
-        if read == 0 {
-            return Err("Ollama hat den Download ohne Abschluss beendet.".into());
-        }
-        if line.len() > 64 * 1024 {
-            return Err("Ungültige Antwort von Ollama.".into());
-        }
-        let Ok(update) = serde_json::from_str::<PullLine>(line.trim()) else {
-            continue;
-        };
-        if let Some(error) = &update.error {
-            return Err(format!(
-                "Ollama meldet: {}",
-                error.chars().take(300).collect::<String>()
-            ));
-        }
-        let success = update.status == "success";
-        progress(update);
-        if success {
-            return Ok(());
+        match reader.read_line(&mut line) {
+            Ok(0) => return,
+            Ok(_) if line.len() > 64 * 1024 => return fail("Ungültige Antwort von Ollama."),
+            Ok(_) => {
+                if let Ok(update) = serde_json::from_str::<PullLine>(line.trim()) {
+                    if events.send(PullEvent::Line(update)).is_err() {
+                        return;
+                    }
+                }
+            }
+            Err(_) => return fail("Die Verbindung zu Ollama wurde unterbrochen."),
         }
     }
 }
@@ -420,6 +455,45 @@ mod tests {
         let request = server.join().unwrap();
         assert!(request.starts_with("POST /api/pull HTTP/1.1"));
         assert!(request.contains("\"model\":\"gemma4:e4b\""));
+    }
+
+    #[test]
+    fn a_cancel_ends_a_download_whose_server_stalls() {
+        for headers_first in [false, true] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let url = format!("http://{}/api/pull", listener.local_addr().unwrap());
+            let (release, wait) = std::sync::mpsc::channel::<()>();
+            let server = std::thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut request = vec![0_u8; 4096];
+                let _ = stream.read(&mut request).unwrap();
+                if headers_first {
+                    // Synthetic stall between progress lines of a chunked stream.
+                    stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/x-ndjson\r\nTransfer-Encoding: chunked\r\n\r\n").unwrap();
+                    let line = "{\"status\":\"downloading\",\"completed\":1,\"total\":10}\n";
+                    write!(stream, "{:x}\r\n{line}\r\n", line.len()).unwrap();
+                    stream.flush().unwrap();
+                }
+                // Synthetic stall: no further bytes until the test ends.
+                let _ = wait.recv();
+            });
+            let cancel = Arc::new(AtomicBool::new(false));
+            let flag = Arc::clone(&cancel);
+            let canceller = std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(300));
+                flag.store(true, Ordering::Release);
+            });
+            let started = std::time::Instant::now();
+            let error = pull_from(&url, "gemma4:e4b", &cancel, &mut |_| {}).unwrap_err();
+            assert!(error.contains("abgebrochen"), "{error}");
+            assert!(
+                started.elapsed() < Duration::from_secs(5),
+                "cancel must not wait for the server"
+            );
+            canceller.join().unwrap();
+            release.send(()).unwrap();
+            server.join().unwrap();
+        }
     }
 
     #[test]

@@ -41,8 +41,8 @@
   },
   {
     "Path": "TEST_REPORT.md",
-    "SHA256": "7D8E8E53B311F50E8E378473596189E59C6128F483ECC723FB145BEA9D96C3EC",
-    "Bytes": 152506
+    "SHA256": "ADDDB7601E9B7A03795039DBA34382FE016C37B80A06F8BB15BA8282166C4973",
+    "Bytes": 154018
   },
   {
     "Path": "DAUERTEST.md",
@@ -14160,6 +14160,11 @@
     "Bytes": 6426
   },
   {
+    "Path": "crates/meeting-notes/examples/live_reference.rs",
+    "SHA256": "E01ABBBC8385C120ACCDDC4E0552FFF0621C3F65819C9E5B07B6BEC7E175A37F",
+    "Bytes": 5713
+  },
+  {
     "Path": "crates/meeting-notes/src/control.rs",
     "SHA256": "7039C24D8482F884285F810B8D62201AE8C339D2CBFA0B3AD108FF313C15D4E3",
     "Bytes": 1529
@@ -14301,8 +14306,8 @@
   },
   {
     "Path": "apps/desktop/src/views/NotesView.tsx",
-    "SHA256": "4D6F8469BA8E5D4CDE16E227BD9F6BDA2D3ADAB39C59C9BADDA6D1C41CD6A64F",
-    "Bytes": 26306
+    "SHA256": "CC3366A40223C4E385CFDFAE1D1BD64E6938A16800A6BEA01E8CA6B947D4455C",
+    "Bytes": 26480
   },
   {
     "Path": "apps/desktop/src/views/RecordingControls.tsx",
@@ -14366,13 +14371,13 @@
   },
   {
     "Path": "apps/desktop/src/views/LiveNotesPanel.tsx",
-    "SHA256": "8FE245E16A3F56C192346E26B2A175B5A967B9B60A6A51C5C82A292713EBFBC1",
-    "Bytes": 20053
+    "SHA256": "2305FE88965EFD069D429A0480AE8707901D1C36D111A34F8EA5640258CA5162",
+    "Bytes": 21586
   },
   {
     "Path": "apps/desktop/src/views/LocalModelSetup.tsx",
-    "SHA256": "1A42A6BD751243E3EF1B64457A521F57F594CB63094F18A05188AA370D133DD1",
-    "Bytes": 9686
+    "SHA256": "A743DF8664200DFB8116355DC340F21BDDF787FD6BF166C34A4A310978210F66",
+    "Bytes": 9799
   },
   {
     "Path": "apps/desktop/src/AccessControls.test.tsx",
@@ -14401,8 +14406,8 @@
   },
   {
     "Path": "apps/desktop/src/App.tsx",
-    "SHA256": "59EBE742DF66C09EF5773BA14D3BA17E3FB4A0743D3071D3EAB9012E3D67AF49",
-    "Bytes": 73221
+    "SHA256": "8E437E1B26C80E846CE136CF2E4AAB4DD68057CCBFAC33280F841BB784E8E5EB",
+    "Bytes": 73389
   },
   {
     "Path": "apps/desktop/src/ArchivePanel.test.tsx",
@@ -14531,8 +14536,8 @@
   },
   {
     "Path": "apps/desktop/src/LiveNotes.test.tsx",
-    "SHA256": "133EE4455065AFC2112E9E34AEBAC2365E251C415A43234E28F03470403805A7",
-    "Bytes": 10413
+    "SHA256": "A2847874AE9148B34AF6039A83A512CB42E0C86066FF03692C793BD3532E7A4D",
+    "Bytes": 16157
   },
   {
     "Path": "apps/desktop/src-tauri/capabilities/default.json",
@@ -14671,8 +14676,8 @@
   },
   {
     "Path": "apps/desktop/src-tauri/src/local_models.rs",
-    "SHA256": "414458B42685A3B4AD3B645B6D578D4F69878E66E09ABB1E28A131DC4243712B",
-    "Bytes": 15274
+    "SHA256": "9F210A8D213717F965102284ED78620043661D6ACFA56CFC7017C1A69601DACA",
+    "Bytes": 18778
   },
   {
     "Path": "apps/desktop/src-tauri/tests/agent_protocol.rs",
@@ -14891,13 +14896,13 @@
   },
   {
     "Path": "crates/meeting-notes/src/live/mod.rs",
-    "SHA256": "F6730AA2908ED056B5C146846338B5B2F51120C24A73A5AA9DAB77637599D885",
-    "Bytes": 15851
+    "SHA256": "882C4473E86010D485A842B1FFD040AE43EA42FF38480BFD0DE5EB5AC5231D10",
+    "Bytes": 16777
   },
   {
     "Path": "crates/meeting-notes/src/live/prompt.rs",
-    "SHA256": "98AB7A82FF97F9B1428EDEC75F99639A9A3DA2FBA11F15DC4F4303B4F2D88F1B",
-    "Bytes": 5071
+    "SHA256": "82EB934E87BAC37A98054D4394FE76527B40C32EA621CB1DFA74175966E32ED1",
+    "Bytes": 5171
   },
   {
     "Path": "crates/meeting-notes/src/live/sources.rs",
@@ -14906,13 +14911,13 @@
   },
   {
     "Path": "crates/meeting-notes/src/live/store.rs",
-    "SHA256": "7F6EF10EC26D221A9FD780D5AF4C66CB3B31AB3CE321EE0DED1E35B7D8251DD7",
-    "Bytes": 11743
+    "SHA256": "5C1365DE0A587B99AAA60B407A04E7EA6BE8FFF4C5CE59DDD7FB44A23CCE5E36",
+    "Bytes": 11623
   },
   {
     "Path": "crates/meeting-notes/src/live/tests.rs",
-    "SHA256": "E81A1C39771051E02E912D972623FE7957F03AF7F0AEC4E8CE234088D1ABB574",
-    "Bytes": 19654
+    "SHA256": "7952C3AEAD572935FA0D64556E22AC8D25D6B7F1A0986E8D27725F974CC1C2C5",
+    "Bytes": 22456
   },
   {
     "Path": "crates/meeting-notes/src/live/trigger.rs",
