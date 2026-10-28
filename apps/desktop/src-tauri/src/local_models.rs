@@ -2,19 +2,17 @@
 //! memory and an optional Ollama model download. Only fixed loopback addresses are contacted;
 //! no transcript, session or key is involved.
 use crate::AppResult;
+use meeting_notes::AnalysisControl;
 use serde::Serialize;
 use std::{
-    io::{BufRead, BufReader},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
-    },
+    sync::{Arc, Mutex},
     time::Duration,
 };
 
 pub(crate) const OLLAMA_ENDPOINT: &str = "http://127.0.0.1:11434/v1/";
 pub(crate) const LM_STUDIO_ENDPOINT: &str = "http://127.0.0.1:1234/v1/";
-const OLLAMA_PULL: &str = "http://127.0.0.1:11434/api/pull";
+/// Ollama's native API root; downloads go to `api/pull` below it.
+const OLLAMA_ROOT: &str = "http://127.0.0.1:11434/";
 pub(crate) const SMALL_MODEL: &str = "gemma4:e2b";
 pub(crate) const STANDARD_MODEL: &str = "gemma4:e4b";
 const GIB: u64 = 1024 * 1024 * 1024;
@@ -186,7 +184,7 @@ pub(crate) struct PullProgress {
 #[derive(Default)]
 pub(crate) struct Pulls {
     state: Mutex<Option<PullProgress>>,
-    cancel: Mutex<Arc<AtomicBool>>,
+    cancel: Mutex<AnalysisControl>,
 }
 
 impl Pulls {
@@ -200,10 +198,10 @@ impl Pulls {
             .lock()
             .is_ok_and(|s| s.as_ref().is_some_and(|p| p.status == "running"));
         if running {
-            if let Ok(flag) = self.cancel.lock() {
-                flag.store(true, Ordering::Release);
+            if let Ok(control) = self.cancel.lock() {
+                control.cancel();
             }
-            // Stays "running" until the connection has ended; then it reads "cancelled".
+            // Reads "cancelled" as soon as the download thread has closed the connection.
             if let Ok(mut state) = self.state.lock() {
                 if let Some(progress) = state.as_mut() {
                     progress.detail = "wird abgebrochen …".into();
@@ -222,8 +220,8 @@ impl Pulls {
         if state.as_ref().is_some_and(|p| p.status == "running") {
             return Err("Ein Modell-Download läuft bereits.".into());
         }
-        let flag = Arc::new(AtomicBool::new(false));
-        *self.cancel.lock().map_err(|_| "Download ist gesperrt.")? = Arc::clone(&flag);
+        let control = AnalysisControl::default();
+        *self.cancel.lock().map_err(|_| "Download ist gesperrt.")? = control.clone();
         let progress = PullProgress {
             model: model.clone(),
             status: "running".into(),
@@ -235,8 +233,8 @@ impl Pulls {
         std::thread::Builder::new()
             .name("ollama-pull".into())
             .spawn(move || {
-                let result = pull(&model, &flag, |update| pulls.update(update));
-                pulls.finish(result, flag.load(Ordering::Acquire));
+                let result = pull(&model, &control, |update| pulls.update(update));
+                pulls.finish(result, control.is_cancelled());
             })
             .map_err(|_| "Der Download konnte nicht gestartet werden.")?;
         Ok(progress)
@@ -283,115 +281,55 @@ struct PullLine {
 }
 
 /// Longest silence of a running Ollama stream (it reports progress continuously, also while
-/// verifying). Applied per read, not to the whole download, so large models are not cut off.
+/// verifying). It bounds a stalled server; a cancel ends the connection at once.
 const PULL_IDLE: Duration = Duration::from_secs(300);
 
-fn pull(model: &str, cancel: &AtomicBool, mut progress: impl FnMut(PullLine)) -> AppResult<()> {
-    pull_from(OLLAMA_PULL, model, cancel, PULL_IDLE, &mut progress)
-}
-
-/// One message from the reader thread that follows Ollama's stream.
-enum PullEvent {
-    Line(PullLine),
-    Failed(String),
-}
-
-/// Follows Ollama's streamed pull answer line by line. Same transport rules as local text
-/// models: loopback only, no proxy, no redirects. The blocking request runs on its own thread,
-/// so a cancel also ends a download whose server stalls before or between progress lines.
-fn pull_from(
-    url: &str,
+fn pull(
     model: &str,
-    cancel: &AtomicBool,
+    control: &AnalysisControl,
+    mut progress: impl FnMut(PullLine),
+) -> AppResult<()> {
+    pull_from(OLLAMA_ROOT, model, control, PULL_IDLE, &mut progress)
+}
+
+/// Follows Ollama's streamed pull answer line by line through the loopback-only text model
+/// transport. A cancel drops the connection immediately, also while the server is silent.
+fn pull_from(
+    endpoint: &str,
+    model: &str,
+    control: &AnalysisControl,
     idle: Duration,
     progress: &mut impl FnMut(PullLine),
 ) -> AppResult<()> {
-    let (sender, events) = std::sync::mpsc::channel();
-    let url = url.to_owned();
     let body = serde_json::json!({"model": model, "stream": true});
-    let reader = std::thread::Builder::new()
-        .name("ollama-pull-read".into())
-        .spawn(move || read_pull(&url, &body, idle, &sender))
-        .map_err(|_| "Der Download konnte nicht gestartet werden.")?;
-    let result = loop {
-        if cancel.load(Ordering::Acquire) {
-            break Err("Download abgebrochen.".into());
-        }
-        match events.recv_timeout(Duration::from_millis(100)) {
-            Ok(PullEvent::Line(update)) => {
-                if let Some(error) = &update.error {
-                    break Err(format!(
-                        "Ollama meldet: {}",
-                        error.chars().take(300).collect::<String>()
-                    ));
-                }
-                let success = update.status == "success";
-                progress(update);
-                if success {
-                    break Ok(());
-                }
+    let mut reported: Option<String> = None;
+    let mut finished = false;
+    let result =
+        meeting_notes::local_json_lines(endpoint, "api/pull", &body, control, idle, |line| {
+            let Ok(update) = serde_json::from_str::<PullLine>(line) else {
+                return Ok(true);
+            };
+            if let Some(error) = &update.error {
+                reported = Some(format!(
+                    "Ollama meldet: {}",
+                    error.chars().take(300).collect::<String>()
+                ));
+                return Ok(false);
             }
-            Ok(PullEvent::Failed(error)) => break Err(error),
-            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
-            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                break Err("Ollama hat den Download ohne Abschluss beendet.".into())
-            }
-        }
-    };
-    // The reader stops at its next line (nobody receives) or after `idle` of silence. Waiting
-    // here keeps the pull marked as running, so a retry never stacks stalled connections.
-    drop(events);
-    let _ = reader.join();
-    result
-}
-
-fn read_pull(
-    url: &str,
-    body: &serde_json::Value,
-    idle: Duration,
-    events: &std::sync::mpsc::Sender<PullEvent>,
-) {
-    let fail = |message: &str| {
-        let _ = events.send(PullEvent::Failed(message.to_owned()));
-    };
-    let Ok(client) = reqwest::blocking::Client::builder()
-        .no_proxy()
-        .redirect(reqwest::redirect::Policy::none())
-        .connect_timeout(Duration::from_secs(5))
-        // Blocking clients apply this to each read, so a stalled stream cannot pin the reader.
-        .timeout(idle)
-        .build()
-    else {
-        return fail("Lokale Verbindung konnte nicht vorbereitet werden.");
-    };
-    let response = match client.post(url).json(body).send() {
-        Ok(response) => response,
-        Err(_) => {
-            return fail("Ollama ist nicht erreichbar. Bitte Ollama installieren und starten.")
-        }
-    };
-    if !response.status().is_success() {
-        return fail(&format!(
-            "Ollama meldet HTTP {} für den Download.",
-            response.status().as_u16()
-        ));
+            finished = update.status == "success";
+            progress(update);
+            Ok(!finished)
+        });
+    if let Some(error) = reported {
+        return Err(error);
     }
-    let mut reader = BufReader::new(std::io::Read::take(response, 64 * 1024 * 1024));
-    let mut line = String::new();
-    loop {
-        line.clear();
-        match reader.read_line(&mut line) {
-            Ok(0) => return,
-            Ok(_) if line.len() > 64 * 1024 => return fail("Ungültige Antwort von Ollama."),
-            Ok(_) => {
-                if let Ok(update) = serde_json::from_str::<PullLine>(line.trim()) {
-                    if events.send(PullEvent::Line(update)).is_err() {
-                        return;
-                    }
-                }
-            }
-            Err(_) => return fail("Die Verbindung zu Ollama wurde unterbrochen."),
-        }
+    match result {
+        Ok(()) if finished => Ok(()),
+        Ok(()) => Err("Ollama hat den Download ohne Abschluss beendet.".into()),
+        Err(error) if meeting_notes::is_cancelled(&error) => Err("Download abgebrochen.".into()),
+        Err(error) => Err(format!(
+            "Ollama ist nicht erreichbar oder der Download wurde unterbrochen: {error}"
+        )),
     }
 }
 
@@ -445,7 +383,7 @@ mod tests {
     /// Synthetic Ollama: streams pull progress lines, then success.
     fn serve(lines: &'static str) -> (String, std::thread::JoinHandle<String>) {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let url = format!("http://{}/api/pull", listener.local_addr().unwrap());
+        let url = format!("http://{}/", listener.local_addr().unwrap());
         let handle = std::thread::spawn(move || {
             let (mut stream, _) = listener.accept().unwrap();
             let mut request = vec![0_u8; 4096];
@@ -470,7 +408,7 @@ mod tests {
         pull_from(
             &url,
             "gemma4:e4b",
-            &AtomicBool::new(false),
+            &AnalysisControl::default(),
             PULL_IDLE,
             &mut |l| seen.push((l.status, l.completed)),
         )
@@ -484,11 +422,11 @@ mod tests {
 
     #[test]
     fn a_cancel_ends_a_download_whose_server_stalls_and_closes_its_connection() {
-        // CodeRabbit review 5682803580: a cancelled pull left its reader blocked on a stalled
-        // stream (no read timeout), so each retry could keep another connection open.
+        // CodeRabbit reviews 5682803580 and 5686078293: a cancelled pull left its reader
+        // blocked on a stalled stream, first without a limit, then until the idle limit.
         for headers_first in [false, true] {
             let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-            let url = format!("http://{}/api/pull", listener.local_addr().unwrap());
+            let url = format!("http://{}/", listener.local_addr().unwrap());
             let server = std::thread::spawn(move || {
                 let (mut stream, _) = listener.accept().unwrap();
                 let mut request = vec![0_u8; 4096];
@@ -507,21 +445,15 @@ mod tests {
                 let mut rest = [0_u8; 64];
                 matches!(stream.read(&mut rest), Ok(0))
             });
-            let cancel = Arc::new(AtomicBool::new(false));
-            let flag = Arc::clone(&cancel);
+            let cancel = AnalysisControl::default();
+            let flag = cancel.clone();
             let canceller = std::thread::spawn(move || {
                 std::thread::sleep(Duration::from_millis(300));
-                flag.store(true, Ordering::Release);
+                flag.cancel();
             });
             let started = std::time::Instant::now();
-            let error = pull_from(
-                &url,
-                "gemma4:e4b",
-                &cancel,
-                Duration::from_secs(1),
-                &mut |_| {},
-            )
-            .unwrap_err();
+            // With the production idle limit: a cancel must not wait for it.
+            let error = pull_from(&url, "gemma4:e4b", &cancel, PULL_IDLE, &mut |_| {}).unwrap_err();
             assert!(error.contains("abgebrochen"), "{error}");
             assert!(
                 started.elapsed() < Duration::from_secs(5),
@@ -541,7 +473,7 @@ mod tests {
         let error = pull_from(
             &url,
             "gemma4:e9b",
-            &AtomicBool::new(false),
+            &AnalysisControl::default(),
             PULL_IDLE,
             &mut |_| {},
         )
@@ -552,7 +484,7 @@ mod tests {
         assert!(pull_from(
             &url,
             "gemma4:e4b",
-            &AtomicBool::new(false),
+            &AnalysisControl::default(),
             PULL_IDLE,
             &mut |_| {}
         )

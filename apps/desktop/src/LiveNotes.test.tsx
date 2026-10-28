@@ -768,3 +768,24 @@ it("reloads the model list after Use even when the address stays the same", asyn
   );
   expect((select as HTMLSelectElement).value).toBe("gemma-4-e4b");
 });
+
+it("reports a failed download-state lookup instead of leaving an unhandled rejection", async () => {
+  // CodeRabbit review on cc67da1: the reconnect lookup had no error path.
+  setup(
+    {
+      getLiveNotes: vi.fn().mockResolvedValue(status()),
+      startLiveNotes: vi.fn(),
+      localModelSetup: vi.fn().mockResolvedValue(ollamaReady),
+      getModelPullProgress: vi
+        .fn()
+        .mockRejectedValue("Synthetic: download state unavailable"),
+    },
+    { connection: { ...local, model: "" } },
+  );
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Lokales Modell einrichten" }),
+  );
+  expect(
+    await screen.findByText("Synthetic: download state unavailable"),
+  ).toBeTruthy();
+});

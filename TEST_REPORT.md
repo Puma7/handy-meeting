@@ -720,3 +720,9 @@ Ergebnis: 160 Vitest-Fälle bestanden, dazu `tsc` und `prettier`.
 - **Fragen:** Die Liste heißt jetzt „Aufgeworfene Fragen“ statt „Offene Fragen“. Eine spätere Antwort im Meeting wird nicht abgeglichen, deshalb darf die Liste nicht behaupten, die Fragen seien noch offen. Ein echter Abgleich bräuchte eine Prompt- und Schemaänderung, die erst mit dem ausstehenden echten Referenztest bewertet werden kann. Prompt, Schema und gespeicherte Fenster bleiben unverändert.
 
 Lokal bestanden: 163 Vitest-Fälle, `tsc` und `prettier`.
+
+**CodeRabbit-Review auf cc67da1 bearbeitet:**
+- **Abbruch eines Ollama-Downloads:** Der Abbruch schließt die Verbindung jetzt sofort, auch wenn Ollama gerade keine Daten mehr sendet. Bisher konnte er bis zum Ruhe-Limit von 5 Minuten warten. Der Download läuft dafür über den bestehenden loopback-gebundenen Text-Transport (`meeting_notes::local_json_lines`: kein DNS, kein Proxy, keine Weiterleitung), mit asynchronem Lesen, das alle 100 ms auf Abbruch prüft. Neue Abhängigkeiten oder Lock-Änderungen gibt es nicht. Der Regressionstest nutzt jetzt das echte Ruhe-Limit. Er verlangt, dass der Abbruch nach weniger als 5 Sekunden endet und der synthetische Server das Schließen der Verbindung sieht.
+- **Fehler beim Wiederverbinden:** Ein fehlgeschlagenes Abfragen eines laufenden Downloads beim Wiederöffnen der Modelleinrichtung erscheint als Fehlermeldung statt als unbehandelte Ablehnung.
+
+Lokal bestanden: 294 Rust-Tests (2 ignoriert), Clippy mit `-D warnings`, 164 Vitest-Fälle, `tsc` und `prettier`.

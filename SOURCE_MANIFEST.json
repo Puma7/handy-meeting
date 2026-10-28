@@ -41,8 +41,8 @@
   },
   {
     "Path": "TEST_REPORT.md",
-    "SHA256": "616C1EC6121BB88C0E0470F551EAA6CCDAED5785050473DA9F6C756921A0B2BA",
-    "Bytes": 162370
+    "SHA256": "F5543999DD2494530DD3193DA75DDE21250D43030DFEF7260FE694BFA5F0B9FA",
+    "Bytes": 163386
   },
   {
     "Path": "DAUERTEST.md",
@@ -14161,8 +14161,8 @@
   },
   {
     "Path": "crates/meeting-notes/src/lib.rs",
-    "SHA256": "E0CDC54CA8519E3C984AA8E1B7CB33CF2C245E37697D0A31DF28831439D66129",
-    "Bytes": 9470
+    "SHA256": "9ACACFF4AC79C4B7A61C385F5841B571C9F3361E8B3C6FA5BAE16D69BB008983",
+    "Bytes": 9488
   },
   {
     "Path": "crates/meeting-notes/src/listing.rs",
@@ -14196,8 +14196,8 @@
   },
   {
     "Path": "crates/meeting-notes/src/transport.rs",
-    "SHA256": "ADB1C54C16629F1CFF3A00D662B04C93AEC262AF6639BCBEAD0344554F247E97",
-    "Bytes": 18678
+    "SHA256": "60FF4C17562B19E52E9E744A63186DF8A0B3E4405B935282F5675A426302E064",
+    "Bytes": 22723
   },
   {
     "Path": "crates/meeting-notes/src/validation.rs",
@@ -14366,8 +14366,8 @@
   },
   {
     "Path": "apps/desktop/src/views/LocalModelSetup.tsx",
-    "SHA256": "77F3270DF83E2E735CEEBCDD42C5DA7DB00FE0295665987B22B72587B46DF361",
-    "Bytes": 10937
+    "SHA256": "69A790313171B0CF45DEB7379A1B17CC127C25DC1F2C389A77CF8811C3AC7F70",
+    "Bytes": 11042
   },
   {
     "Path": "apps/desktop/src/AccessControls.test.tsx",
@@ -14526,8 +14526,8 @@
   },
   {
     "Path": "apps/desktop/src/LiveNotes.test.tsx",
-    "SHA256": "ABECD99216DF111835800E9118381367AE817A9942AB7914965B1EB8B054B6DC",
-    "Bytes": 24419
+    "SHA256": "20DD82CC58105FF8C4C9E5E078DB1BE82DB9205F8036432AC646CA34E08098E9",
+    "Bytes": 25143
   },
   {
     "Path": "apps/desktop/src-tauri/capabilities/default.json",
@@ -14666,8 +14666,8 @@
   },
   {
     "Path": "apps/desktop/src-tauri/src/local_models.rs",
-    "SHA256": "BDA82E6876E4CBC7D7567A48C4F940021EBCF1FA75A142CD23A650EDB25D7AB5",
-    "Bytes": 20428
+    "SHA256": "07B08658818FCB1F5742EBC79283C43371F4856CED573B8E05C20DD2327BD658",
+    "Bytes": 17985
   },
   {
     "Path": "apps/desktop/src-tauri/tests/agent_protocol.rs",

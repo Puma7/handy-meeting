@@ -270,6 +270,103 @@ async fn await_cancellable<T>(
     }
 }
 
+/// Largest accepted stream and line of a local newline-delimited JSON answer.
+const STREAM_LIMIT: usize = 64 * 1024 * 1024;
+const LINE_LIMIT: usize = 64 * 1024;
+
+impl TextClient {
+    /// Follows a newline-delimited JSON stream from a local server (for example an Ollama
+    /// download), line by line until `on_line` returns `false` or the stream ends. Same
+    /// transport rules as local text models: loopback only, no DNS, proxy or redirects.
+    /// Cancelling `control` drops the response at once, so a stalled server cannot hold the
+    /// connection; `idle` bounds silence between bytes.
+    fn json_lines(
+        &self,
+        path: &str,
+        body: &serde_json::Value,
+        control: &AnalysisControl,
+        idle: Duration,
+        on_line: &mut dyn FnMut(&str) -> Result<bool>,
+    ) -> Result<()> {
+        ensure!(
+            self.local,
+            "Streams sind nur für lokale Dienste vorgesehen."
+        );
+        let url = self.target.join(path)?;
+        // A model download may take hours; silence is bounded by `idle` instead.
+        let request = self
+            .client
+            .post(url)
+            .json(body)
+            .timeout(Duration::from_secs(24 * 60 * 60));
+        self.runtime.block_on(async {
+            let mut response = await_cancellable(request.send(), control).await?;
+            ensure!(
+                response.status().is_success(),
+                "Der lokale Dienst meldet HTTP {}.",
+                response.status().as_u16()
+            );
+            let (mut pending, mut total, mut quiet) = (Vec::new(), 0usize, Duration::ZERO);
+            loop {
+                control.check()?;
+                match tokio::time::timeout(Duration::from_millis(100), response.chunk()).await {
+                    Ok(Ok(Some(bytes))) => {
+                        quiet = Duration::ZERO;
+                        total += bytes.len();
+                        ensure!(
+                            total <= STREAM_LIMIT,
+                            "Die Antwort des lokalen Dienstes ist zu groß."
+                        );
+                        pending.extend_from_slice(&bytes);
+                        while let Some(end) = pending.iter().position(|b| *b == b'\n') {
+                            let line: Vec<u8> = pending.drain(..=end).collect();
+                            if !on_line(String::from_utf8_lossy(&line).trim())? {
+                                return Ok(());
+                            }
+                        }
+                        ensure!(
+                            pending.len() <= LINE_LIMIT,
+                            "Ungültige Antwort des lokalen Dienstes."
+                        );
+                    }
+                    Ok(Ok(None)) => {
+                        let rest = String::from_utf8_lossy(&pending);
+                        if !rest.trim().is_empty() {
+                            on_line(rest.trim())?;
+                        }
+                        return Ok(());
+                    }
+                    Ok(Err(_)) => bail!("Die Verbindung zum lokalen Dienst wurde unterbrochen."),
+                    Err(_) => {
+                        quiet += Duration::from_millis(100);
+                        ensure!(quiet < idle, "Der lokale Dienst antwortet nicht mehr.");
+                    }
+                }
+            }
+        })
+    }
+}
+
+/// Follows a newline-delimited JSON stream from `path` below a loopback `endpoint`; see
+/// [`TextClient::json_lines`]. It receives neither a session nor audio or file access.
+pub fn local_json_lines(
+    endpoint: &str,
+    path: &str,
+    body: &serde_json::Value,
+    control: &AnalysisControl,
+    idle: Duration,
+    mut on_line: impl FnMut(&str) -> Result<bool>,
+) -> Result<()> {
+    let connection = Connection {
+        endpoint: endpoint.into(),
+        model: "local-stream".into(),
+        mode: "local".into(),
+        cloud_consent: false,
+        api_key: String::new(),
+    };
+    TextClient::new(&connection)?.json_lines(path, body, control, idle, &mut on_line)
+}
+
 /// Discovery only issues a bounded unauthenticated loopback GET. It receives
 /// neither a session nor audio/filesystem access.
 pub fn local_model_ids(endpoint: &str) -> Result<Vec<String>> {
