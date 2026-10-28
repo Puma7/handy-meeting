@@ -713,4 +713,4 @@ Ergebnis: 160 Vitest-Fälle bestanden, dazu `tsc` und `prettier`.
 - **Modellliste:** „Verwenden“ lädt die Modellliste auch dann neu, wenn die Serveradresse gleich bleibt.
 - **Modell-Download:** Wird die Modelleinrichtung erneut geöffnet, zeigt sie einen weiterlaufenden Download mit Fortschritt und „Abbrechen“ an, statt einen zweiten Download anzubieten.
 
-163 Vitest-Fälle, `tsc` und `prettier` bestanden.
+162 Vitest-Fälle, `tsc` und `prettier` bestanden.
