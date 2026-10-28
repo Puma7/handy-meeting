@@ -31,12 +31,13 @@ def job(text, name):
 
 
 def pr_paths(text):
-    """Read the repository's inline/block PR filters for real changed-path fixtures."""
+    """Read and validate every PR filter before a caller can short-circuit on a match."""
     section = re.search(r'^  pull_request:\n(.*?)(?=^  [\w-]+:|\Z)', text, re.M | re.S).group(1)
     inline = re.search(r'^    paths: (\[.*\])$', section, re.M)
-    if inline:
-        return ast.literal_eval(inline.group(1))
-    return re.findall(r"^      - '([^']+)'$", section, re.M)
+    patterns = ast.literal_eval(inline.group(1)) if inline else re.findall(r"^      - '([^']+)'$", section, re.M)
+    for pattern in patterns:
+        path_matches('', pattern)
+    return patterns
 
 
 def path_matches(path, pattern):
@@ -107,6 +108,17 @@ class WorkflowBoundaries(unittest.TestCase):
         for pattern in ('!platform/**', 'platform/?.swift', 'platform/[ab].swift', 'platform/{a,b}.swift'):
             with self.assertRaises(ValueError):
                 path_matches('platform/a.swift', pattern)
+
+    def test_unsupported_filter_after_positive_match_rejects_real_workflows(self):
+        for name in ('rust.yml', 'rust-portable.yml'):
+            text = workflow(name)
+            for unsupported in ('!platform/macos/**', 'platform/?.swift', 'platform/[ab].swift'):
+                separator = ', ' if '    paths: [' in text else '\n      - '
+                mutated = text.replace("'platform/**'", "'platform/**'" + separator + repr(unsupported))
+                self.assertNotEqual(mutated, text, name)
+                with self.subTest(workflow=name, pattern=unsupported), self.assertRaises(ValueError):
+                    patterns = pr_paths(mutated)
+                    any(path_matches('platform/macos/AudioCapture.swift', pattern) for pattern in patterns)
 
     def test_legacy_source_only_ready_changes_trigger_both_candidate_workflows(self):
         for changed in ('src/HandyMeeting/Models.cs', 'verify.ps1'):
