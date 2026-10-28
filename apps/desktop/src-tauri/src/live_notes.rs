@@ -145,7 +145,9 @@ fn live_root(service: &Service, meeting_id: &str) -> std::path::PathBuf {
         .join("live-notes")
 }
 
-/// Confirmed text of complete parts and whether the meeting can still produce more.
+/// Confirmed text of complete parts and whether the saved status alone says that no more text
+/// follows. Recognition can still run in the active slot after the status left "recording";
+/// [`Snapshot::finished`] also checks that.
 pub(crate) fn live_texts(data: &SessionData) -> (Vec<LiveText>, bool) {
     let texts = data
         .parts
@@ -167,26 +169,50 @@ pub(crate) fn live_texts(data: &SessionData) -> (Vec<LiveText>, bool) {
     (texts, !active)
 }
 
+/// One meeting state as seen by the live worker.
+pub(crate) struct Snapshot {
+    data: SessionData,
+    /// The meeting still owns the active slot, so capture or recognition may add text.
+    active: bool,
+}
+impl Snapshot {
+    /// No more confirmed text can follow: the status says so and no recognition still runs.
+    fn finished(&self) -> bool {
+        !self.active && live_texts(&self.data).1
+    }
+}
+
 impl Service {
     /// A snapshot of one meeting for the live worker. It prefers the stores the application
-    /// already holds and otherwise opens the session briefly without replacing the store the
-    /// user is viewing.
-    fn live_snapshot(&self, id: &str) -> AppResult<SessionData> {
+    /// already holds. A meeting that left both slots has finished; its last snapshot is reused
+    /// instead of reopening (and re-verifying) the session on every poll. Only without such a
+    /// snapshot is the session opened once, without replacing the store the user is viewing.
+    fn live_snapshot(&self, id: &str, finished: Option<&SessionData>) -> AppResult<Snapshot> {
         {
             let inner = self.lock()?;
-            for store in inner
-                .active
-                .as_ref()
-                .map(|a| &a.store)
-                .into_iter()
-                .chain(inner.view.iter())
-            {
-                if let Ok(data) = store.snapshot() {
+            if let Some(active) = inner.active.as_ref() {
+                if let Ok(data) = active.store.snapshot() {
                     if data.id == id {
-                        return Ok(data);
+                        return Ok(Snapshot { data, active: true });
                     }
                 }
             }
+            if let Some(store) = inner.view.as_ref() {
+                if let Ok(data) = store.snapshot() {
+                    if data.id == id {
+                        return Ok(Snapshot {
+                            data,
+                            active: false,
+                        });
+                    }
+                }
+            }
+        }
+        if let Some(data) = finished {
+            return Ok(Snapshot {
+                data: data.clone(),
+                active: false,
+            });
         }
         let folder = self.root.join("sessions").join(id);
         let store = meeting_core::SessionStore::open(&folder)
@@ -197,7 +223,10 @@ impl Service {
         if data.id != id {
             return Err("Sitzungskennung und Ordner stimmen nicht überein.".into());
         }
-        Ok(data)
+        Ok(Snapshot {
+            data,
+            active: false,
+        })
     }
 }
 
@@ -284,7 +313,7 @@ impl LiveNotes {
             let _ = handle.join();
         }
         // The meeting must exist and be readable before any model client is created.
-        let data = service.live_snapshot(&request.meeting_id)?;
+        let data = service.live_snapshot(&request.meeting_id, None)?.data;
         // Held by the worker until it ends, so archive moves or installation never run while
         // live notes write into the session folder.
         let lease = service.reserve_operation(crate::operations::Kind::LiveNotes)?;
@@ -380,6 +409,14 @@ impl Worker {
         }
     }
 
+    /// Publishes the stored state even after a stop, so a window saved just before the stop
+    /// is shown and not only after the next start.
+    fn publish(&self, runner: &LiveRunner) {
+        if let Ok(mut shared) = self.shared.lock() {
+            shared.view = Some(runner.view());
+        }
+    }
+
     fn wait(&self) {
         let until = Instant::now() + POLL;
         while Instant::now() < until && !self.control.is_cancelled() {
@@ -394,17 +431,25 @@ impl Worker {
         let mut failures: u32 = 0;
         let mut overview_failures: u32 = 0;
         let mut overview_attempt: Option<Instant> = None;
+        let mut finished_state: Option<SessionData> = None;
         self.set(|s| s.status = "waiting".into());
         while !self.control.is_cancelled() {
-            let data = match self.service.live_snapshot(&self.meeting_id) {
-                Ok(data) => data,
+            let snapshot = match self
+                .service
+                .live_snapshot(&self.meeting_id, finished_state.as_ref())
+            {
+                Ok(snapshot) => snapshot,
                 Err(error) => {
                     self.set(|s| s.error = Some(error));
                     self.wait();
                     continue;
                 }
             };
-            let (texts, finished) = live_texts(&data);
+            let finished = snapshot.finished();
+            if finished {
+                finished_state = Some(snapshot.data.clone());
+            }
+            let (texts, _) = live_texts(&snapshot.data);
             let pending = runner.pending(&texts);
             let pending_chars = live::pending_chars(&pending);
             let (since, retry_at) = self
@@ -436,6 +481,7 @@ impl Worker {
                 trigger = Some(Trigger::Manual);
             }
             if finished && trigger.is_none() && !overview_open {
+                self.publish(&runner);
                 self.set(|s| {
                     s.status = "finished".into();
                     s.pending_chars = 0;
@@ -450,6 +496,12 @@ impl Worker {
                     if self.control.is_cancelled() {
                         break;
                     }
+                    // Another window is due at once when a manual or initial update left text.
+                    if trigger == Trigger::Manual
+                        && result.as_ref().is_ok_and(|o| o.window.is_some())
+                    {
+                        self.manual.store(true, Ordering::Release);
+                    }
                     match result {
                         Ok(outcome) => {
                             failures = 0;
@@ -463,8 +515,11 @@ impl Worker {
                             self.set(|s| {
                                 s.status = "waiting".into();
                                 s.error = outcome.overview_error.clone();
-                                s.last_update = Instant::now();
-                                s.last_trigger = Some(trigger);
+                                // An overview-only retry does not postpone the next text update.
+                                if summarized {
+                                    s.last_update = Instant::now();
+                                    s.last_trigger = Some(trigger);
+                                }
                                 s.retry_at = None;
                                 s.view = Some(view);
                             });
@@ -486,6 +541,7 @@ impl Worker {
                             });
                             if finished && failures >= 3 {
                                 // The meeting is over; stop retrying but keep everything saved.
+                                self.publish(&runner);
                                 self.set(|s| s.status = "failed".into());
                                 return;
                             }
@@ -496,6 +552,7 @@ impl Worker {
             }
             self.wait();
         }
+        self.publish(&runner);
         self.set(|s| s.status = "stopped".into());
     }
 }
@@ -564,6 +621,50 @@ mod tests {
         assert!(live_texts(&done).1);
         done.status = "catching-up".into();
         assert!(!live_texts(&done).1, "catch-up still produces text");
+    }
+
+    #[test]
+    fn a_meeting_still_in_the_active_slot_is_not_finished_even_when_marked_recorded() {
+        let root = fixture_root("active-slot");
+        let service = Arc::new(Service::new(root.clone()).unwrap());
+        let store =
+            SessionStore::create(&root.join("sessions"), "Synthetic", "m", "s", None).unwrap();
+        let id = store.snapshot().unwrap().id;
+        // Synthetic: capture has stopped ("recorded") but a recognition worker still runs.
+        store.set_status("recorded").unwrap();
+        let (release, busy) = std::sync::mpsc::channel::<()>();
+        let worker = thread::spawn(move || {
+            let _ = busy.recv();
+        });
+        service.lock().unwrap().active = Some(crate::Active {
+            _operation: None,
+            owner: None,
+            store: store.clone(),
+            capture: None,
+            stop: Arc::new(AtomicBool::new(false)),
+            workers: vec![worker],
+        });
+        service
+            .live_notes
+            .start(&service, request(&id, "local", "http://127.0.0.1:9/v1/"))
+            .unwrap();
+        wait_for(&service, &id, "waiting");
+        thread::sleep(POLL + Duration::from_millis(300));
+        assert_eq!(
+            service.live_notes.status(&service, &id).unwrap().status,
+            "waiting",
+            "catch-up can still add text"
+        );
+        // Recognition finished: the application releases the slot on its next poll.
+        release.send(()).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while service.lock().unwrap().active.is_some() {
+            assert!(Instant::now() < deadline);
+            service.reap_finished().unwrap();
+            thread::sleep(Duration::from_millis(10));
+        }
+        wait_for(&service, &id, "finished");
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

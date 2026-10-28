@@ -292,10 +292,16 @@ pub fn list_runs(root: &Path) -> Result<(Vec<LoadedRun>, usize)> {
             Err(_) => damaged += 1,
         }
     }
-    runs.sort_by(|a, b| {
-        (b.run.created_at.as_str(), b.run.id.as_str())
-            .cmp(&(a.run.created_at.as_str(), a.run.id.as_str()))
-    });
+    // The run worked on last comes first, so a continued older run is not hidden behind a
+    // newer one that was only tried briefly.
+    let activity = |run: &LoadedRun| -> Option<chrono::DateTime<chrono::FixedOffset>> {
+        std::iter::once(run.run.created_at.as_str())
+            .chain(run.windows.iter().map(|w| w.created_at.as_str()))
+            .chain(run.overviews.iter().map(|o| o.created_at.as_str()))
+            .filter_map(|t| chrono::DateTime::parse_from_rfc3339(t).ok())
+            .max()
+    };
+    runs.sort_by(|a, b| (activity(b), b.run.id.as_str()).cmp(&(activity(a), a.run.id.as_str())));
     Ok((runs, damaged))
 }
 

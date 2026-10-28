@@ -439,3 +439,47 @@ fn the_post_meeting_analysis_request_is_unchanged() {
     let expected = serde_json::json!({"model":"synthetic","stream":false,"messages":[{"role":"system","content":system},{"role":"user","content":serde_json::to_string(&sources).unwrap()}],"response_format":{"type":"json_schema","json_schema":{"name":"meeting_notes","strict":true,"schema":schema}},"max_tokens":2048,"temperature":0});
     assert_eq!(body, expected);
 }
+
+#[test]
+fn the_run_worked_on_last_is_shown_even_when_another_was_created_later() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("live-notes");
+    let server = Server::start(vec![
+        window_answer(vec![], vec![], vec![], vec![]),
+        window_answer(vec![], vec![], vec![], vec![]),
+    ]);
+    let control = AnalysisControl::default();
+    let texts = vec![
+        part("system-0", "system", 0, BUDGET),
+        part("system-30", "system", 30, DECISION),
+    ];
+    let first = {
+        let mut runner =
+            LiveRunner::start(&root, "meeting-1", server.connection("x"), "de").unwrap();
+        let pending = runner.pending(&texts[..1]);
+        runner
+            .update(&pending, Trigger::Interval, &control)
+            .unwrap();
+        runner.run().id.clone()
+    };
+    std::thread::sleep(Duration::from_millis(20));
+    // A different model was tried briefly and created a newer, empty run.
+    let other = LiveRunner::start(&root, "meeting-1", server.connection("y"), "de").unwrap();
+    assert_ne!(other.run().id, first);
+    assert_eq!(
+        read_latest(&root).unwrap().unwrap().run_id.as_deref(),
+        Some(other.run().id.as_str())
+    );
+    std::thread::sleep(Duration::from_millis(20));
+    // Back to the first model: its run continues and is shown again.
+    let mut again = LiveRunner::start(&root, "meeting-1", server.connection("x"), "de").unwrap();
+    assert_eq!(again.run().id, first);
+    let pending = again.pending(&texts);
+    assert_eq!(pending.len(), 1);
+    again.update(&pending, Trigger::Interval, &control).unwrap();
+    assert_eq!(
+        read_latest(&root).unwrap().unwrap().run_id.as_deref(),
+        Some(first.as_str())
+    );
+    server.finish();
+}

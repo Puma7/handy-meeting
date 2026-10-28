@@ -15,21 +15,24 @@ pub(crate) async fn start_live_notes(
 }
 
 #[tauri::command]
-pub(crate) fn stop_live_notes(service: State<'_, Arc<Service>>) -> AppResult<bool> {
-    service.live_notes.stop()
+pub(crate) async fn stop_live_notes(service: State<'_, Arc<Service>>) -> AppResult<bool> {
+    let service = Arc::clone(&service);
+    blocking(move || service.live_notes.stop()).await
 }
 
 #[tauri::command]
-pub(crate) fn refresh_live_notes(service: State<'_, Arc<Service>>) -> AppResult<bool> {
-    service.live_notes.refresh()
+pub(crate) async fn refresh_live_notes(service: State<'_, Arc<Service>>) -> AppResult<bool> {
+    let service = Arc::clone(&service);
+    blocking(move || service.live_notes.refresh()).await
 }
 
 #[tauri::command]
-pub(crate) fn set_live_notes_interval(
+pub(crate) async fn set_live_notes_interval(
     service: State<'_, Arc<Service>>,
     interval_ms: u64,
 ) -> AppResult<bool> {
-    service.live_notes.set_interval(interval_ms)
+    let service = Arc::clone(&service);
+    blocking(move || service.live_notes.set_interval(interval_ms)).await
 }
 
 #[tauri::command]
