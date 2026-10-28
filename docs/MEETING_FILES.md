@@ -1,5 +1,7 @@
 # Lokale Dateien und lange Meetings
 
+Gespeicherte TXT- und Markdown-Exporte führen auch Abschnitte ohne Text, mit einer leeren Zeichenfolge oder nur Leerraum auf. Abschnittskennung, Spur, gespeicherter Zustand und nominaler Zeitbereich machen sie unterscheidbar. Die Kennung gilt innerhalb dieses Meetings; sie bezeichnet weder eine Person noch ein einzelnes Wort. Gekennzeichnete Exporthinweise beschreiben den gespeicherten Textzustand und sind keine Gesprächszitate. Fehlender oder leerer Text beweist keine Stille. JSON bewahrt die ursprünglichen Textwerte einschließlich `null`, leerem Text und Leerraum. Seine bestehenden Quellen- und Zeitfelder bleiben unverändert.
+
 Audio und Textjournale werden bereits während der Aufnahme lokal gesichert. Die Schaltfläche **Transkript als Text speichern** legt zusätzlich eine vollständige Text-Momentaufnahme der ausgewählten Sitzung an. Sie verwendet den im Backend gesicherten Stand beider Spuren, nicht nur die sichtbare Live-Vorschau. Bei noch laufender Erkennung steht im Export ausdrücklich, dass Abschnitte ausstehen. Eine abgeschlossene Erkennung schließt mögliche, separat gemeldete Audiolücken nicht aus.
 
 **Sitzungsordner öffnen** öffnet genau diese Sitzung im Dateimanager: Explorer unter Windows, Finder unter macOS oder der konfigurierte Dateimanager unter Linux. Dort liegen `session.json`, die getrennten Audiospuren, Audio-/Textjournale und gegebenenfalls der Ordner `analyses`. Textkopien liegen im Unterordner `exports`. Es werden keine Audiodateien umbenannt, zusammengeführt oder gelöscht.
