@@ -59,6 +59,13 @@ export default function LocalModelSetup({
   useEffect(() => {
     void check();
   }, [check]);
+  // A download keeps running in the app when this view closes; reopening reconnects to it.
+  useEffect(() => {
+    if (!api.getModelPullProgress || !connected) return;
+    void api.getModelPullProgress().then((current) => {
+      if (mounted.current && current) setPull(current);
+    });
+  }, [api, connected]);
   // Follow a running download; a finished one refreshes the model lists.
   useEffect(() => {
     if (pull?.status !== "running" || !api.getModelPullProgress) return;

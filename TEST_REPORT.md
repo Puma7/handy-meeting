@@ -707,3 +707,10 @@ Ergebnisse: 294 Rust-Tests bestanden (2 ignoriert), 160 Vitest-Fälle, Clippy, f
 - **Nicht übernommen:** eine Eigentumsprüfung für die Verknüpfung „Meeting for Handy“ beim Deinstallieren. Sie zeigt auf das Programm, das dabei entfernt wird; eigene Verknüpfungen mit anderem Namen bleiben unberührt.
 
 Ergebnis: 160 Vitest-Fälle bestanden, dazu `tsc` und `prettier`.
+
+**Codex-Review 5683390412 auf ba2590e bearbeitet:** Jede Korrektur hat einen Regressionstest, der vor der Korrektur fehlschlug.
+- **Quellenkennung:** Die Belege der Live-Zusammenfassung zeigen auf dem Bildschirm ihre Quellenkennung, wie schon der kopierte Text.
+- **Modellliste:** „Verwenden“ lädt die Modellliste auch dann neu, wenn die Serveradresse gleich bleibt.
+- **Modell-Download:** Wird die Modelleinrichtung erneut geöffnet, zeigt sie einen weiterlaufenden Download mit Fortschritt und „Abbrechen“ an, statt einen zweiten Download anzubieten.
+
+163 Vitest-Fälle, `tsc` und `prettier` bestanden.

@@ -23,7 +23,7 @@ import type { MessageKey } from "../i18n";
 import type { TemplateAction } from "./TemplateDialog";
 import CredentialPanel from "./CredentialPanel";
 import LocalModelSetup from "./LocalModelSetup";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { DesktopApi } from "../types";
 type Props = {
   t: Record<MessageKey, string>;
@@ -160,15 +160,15 @@ export default function NotesView({
   }, [noLocalModel]);
   // A server chosen from the detection is queried once its address has been applied;
   // changing the address clears the list, and typing alone never sends a request.
-  const refreshAfterUse = useRef(false);
+  // Counts "Use" clicks, so a choice at the current address refreshes as well.
+  const [usedServer, setUsedServer] = useState(0);
   useEffect(() => {
-    if (!refreshAfterUse.current) return;
-    refreshAfterUse.current = false;
-    // After this commit: the parent's list reset for the new address runs after child effects.
+    if (!usedServer) return;
+    // After this commit: the parent's list reset for a new address runs after child effects.
     const timer = setTimeout(refreshModels, 0);
     return () => clearTimeout(timer);
-    // Runs for the applied address only; the refresh callback reads the current settings.
-  }, [endpoint]);
+    // Runs once per "Use"; the refresh callback reads the current settings.
+  }, [usedServer]);
   const templateLocked =
     notesBusy || libraryInvalid || libraryPending || !connected;
   const builtIn = template.id === "speaker-name-candidates-v1";
@@ -378,7 +378,7 @@ export default function NotesView({
                       setUseSavedKey(false);
                       setEndpoint(nextEndpoint);
                       setTextModel(nextModel);
-                      refreshAfterUse.current = true;
+                      setUsedServer((count) => count + 1);
                     }}
                   />
                 )}

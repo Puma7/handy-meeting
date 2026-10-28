@@ -142,7 +142,7 @@ function Items({
             {item.evidence.map((e, i) => (
               <blockquote key={`${e.sourceId}-${i}`}>
                 <span className="muted">
-                  {clock(e.startMs)} · {trackLabel(e.track, de)}
+                  [{e.sourceId}] {clock(e.startMs)} · {trackLabel(e.track, de)}
                 </span>{" "}
                 {e.quote}
               </blockquote>

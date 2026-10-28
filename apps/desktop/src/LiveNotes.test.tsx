@@ -234,6 +234,10 @@ it("shows summary, decisions, tasks with owner and track, evidence and the disca
   expect(screen.getByText("Günstigerer Anbieter gewählt")).toBeTruthy();
   expect(screen.getByText("Anna · Freitag")).toBeTruthy();
   expect(screen.getByText(/01:00 · Mikrofon/)).toBeTruthy();
+  // Codex review 5683390412: the on-screen evidence names its source like the copy text.
+  expect(
+    screen.getAllByText(/\[C60\] 01:00 · Computerton/).length,
+  ).toBeGreaterThan(0);
   expect(screen.getByText("Keine offenen Fragen.")).toBeTruthy();
   expect(screen.getByText(/nächste Aktualisierung in ca. 2 Min./)).toBeTruthy();
   expect(
@@ -624,4 +628,113 @@ it("offers the start only for endpoints the backend transport accepts", () => {
   expect(endpointAllowed("cloud", "https://openrouter.ai/api/v1/?key=x")).toBe(
     false,
   );
+});
+
+it("reconnects to a model download that kept running while the setup was closed", async () => {
+  // Codex review 5683390412: reopening offered a second download instead of the progress.
+  const running = {
+    model: "gemma4:e4b",
+    status: "running",
+    detail: "pulling",
+    completed: 5,
+    total: 10,
+    error: null,
+  };
+  const pull = vi.fn();
+  setup(
+    {
+      getLiveNotes: vi.fn().mockResolvedValue(status()),
+      startLiveNotes: vi.fn(),
+      localModelSetup: vi.fn().mockResolvedValue({
+        ...ollamaReady,
+        providers: [
+          {
+            ...ollamaReady.providers[0],
+            models: [],
+            recommendedInstalled: false,
+          },
+        ],
+      }),
+      pullOllamaModel: pull,
+      getModelPullProgress: vi.fn().mockResolvedValue(running),
+      cancelModelPull: vi.fn(),
+    },
+    { connection: { ...local, model: "" } },
+  );
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Lokales Modell einrichten" }),
+  );
+  expect(await screen.findByText(/Lädt gemma4:e4b · 50 %/)).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Abbrechen" })).toBeTruthy();
+  expect(
+    screen.queryByRole("button", { name: "gemma4:e4b in Ollama laden" }),
+  ).toBeNull();
+  expect(pull).not.toHaveBeenCalled();
+});
+
+it("reloads the model list after Use even when the address stays the same", async () => {
+  // Codex review 5683390412: a model loaded later at the configured server stayed unavailable.
+  localStorage.clear();
+  const meeting: Meeting = {
+    id: "e".repeat(32),
+    title: "Synthetic analysis",
+    startedAt: "2026-10-28T10:00:00Z",
+    durationMs: 5000,
+    status: "complete",
+    modelId: "synthetic",
+    warnings: [],
+    parts: [],
+  };
+  let loaded: string[] = [];
+  const api = {
+    ...testServices(),
+    getAppState: vi.fn(async () => ({
+      version: "synthetic",
+      handy: null,
+      recording: false,
+      activeMeeting: null,
+    })),
+    listDevices: vi.fn().mockResolvedValue([]),
+    listMeetings: vi.fn().mockResolvedValue([]),
+    getMeeting: vi.fn().mockResolvedValue(meeting),
+    listAnalyses: vi.fn().mockResolvedValue({ analyses: [], skipped: [] }),
+    getNotesProgress: vi.fn().mockResolvedValue(null),
+    listTextModels: vi.fn(async () => loaded),
+    refreshHandy: vi.fn().mockResolvedValue({
+      executable: "native-choice",
+      version: "synthetic",
+      models: [],
+    }),
+    localModelSetup: vi.fn(async () => ({
+      ...ollamaReady,
+      providers: [
+        {
+          id: "lmstudio",
+          name: "LM Studio",
+          endpoint: "http://127.0.0.1:1234/v1/",
+          reachable: true,
+          models: loaded,
+          recommendedInstalled: false,
+        },
+      ],
+    })),
+  } as unknown as DesktopApi;
+  render(<App api={api} />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Nachbearbeitung" }),
+  );
+  // No model yet: the detection opens; the user then loads one in LM Studio.
+  await screen.findByText("LM Studio");
+  loaded = ["gemma-4-e4b"];
+  await userEvent.click(screen.getByRole("button", { name: "Erneut prüfen" }));
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Verwenden: gemma-4-e4b" }),
+  );
+  const select = screen.getByRole("combobox", { name: "Textmodell" });
+  await waitFor(() =>
+    expect(
+      within(select).getByRole("option", { name: "gemma-4-e4b" }),
+    ).toBeTruthy(),
+  );
+  expect((select as HTMLSelectElement).value).toBe("gemma-4-e4b");
 });
