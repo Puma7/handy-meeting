@@ -51,6 +51,7 @@ pub(crate) struct LiveNotesStatus {
     /// off | starting | waiting | updating | finished | stopped | failed
     status: String,
     running: bool,
+    waiting_for_transcript: bool,
     error: Option<String>,
     pending_chars: usize,
     interval_ms: u64,
@@ -61,6 +62,7 @@ pub(crate) struct LiveNotesStatus {
 
 struct Shared {
     status: String,
+    waiting_for_transcript: bool,
     error: Option<String>,
     pending_chars: usize,
     last_update: Instant,
@@ -105,6 +107,7 @@ impl Job {
             meeting_id: self.meeting_id.clone(),
             status: shared.status.clone(),
             running,
+            waiting_for_transcript: shared.waiting_for_transcript,
             error: shared.error.clone(),
             pending_chars: shared.pending_chars,
             interval_ms,
@@ -120,6 +123,7 @@ fn off(meeting_id: &str, view: Option<LiveView>, error: Option<String>) -> LiveN
         meeting_id: meeting_id.into(),
         status: "off".into(),
         running: false,
+        waiting_for_transcript: false,
         error,
         pending_chars: 0,
         interval_ms: DEFAULT_INTERVAL_MS,
@@ -176,6 +180,25 @@ pub(crate) struct Snapshot {
     active: bool,
 }
 impl Snapshot {
+    /// Recognition owns the compute budget while more than five seconds remain unprocessed.
+    /// A stopped/archived meeting is never delayed by this active-worker-only admission rule.
+    fn recognition_needs_priority(&self) -> bool {
+        if !self.active {
+            return false;
+        }
+        let mut tracks = [0_u64; 2];
+        for part in &self.data.parts {
+            let processed = if part.model_id.as_deref() == Some(self.data.model_id.as_str()) {
+                part.processed_samples
+            } else {
+                0
+            };
+            let pending = part.confirmed_sample_count.saturating_sub(processed);
+            let index = usize::from(part.source == "microphone");
+            tracks[index] = tracks[index].saturating_add(pending);
+        }
+        tracks.into_iter().max().unwrap_or(0) > u64::from(meeting_core::SAMPLE_RATE) * 5
+    }
     /// No more confirmed text can follow: the status says so and no recognition still runs.
     fn finished(&self) -> bool {
         !self.active && live_texts(&self.data).1
@@ -248,7 +271,7 @@ impl LiveNotes {
         if let Some(job) = self.lock()?.as_ref().filter(|j| j.meeting_id == meeting_id) {
             return Ok(job.status());
         }
-        match live::read_latest(&live_root(service, meeting_id)) {
+        match live::read_latest(&live_root(service, meeting_id), meeting_id) {
             Ok(view) => Ok(off(meeting_id, view, None)),
             Err(_) => Ok(off(
                 meeting_id,
@@ -350,6 +373,7 @@ impl LiveNotes {
         let (texts, _) = live_texts(&data);
         let shared = Arc::new(Mutex::new(Shared {
             status: "starting".into(),
+            waiting_for_transcript: false,
             error: None,
             pending_chars: live::pending_chars(&runner.pending(&texts)),
             last_update: Instant::now(),
@@ -444,9 +468,13 @@ impl Worker {
     }
 
     fn wait(&self) {
+        self.wait_with_manual(true);
+    }
+
+    fn wait_with_manual(&self, interrupt_for_manual: bool) {
         let until = Instant::now() + POLL;
         while Instant::now() < until && !self.control.is_cancelled() {
-            if self.manual.load(Ordering::Acquire) {
+            if interrupt_for_manual && self.manual.load(Ordering::Acquire) {
                 return;
             }
             thread::sleep(Duration::from_millis(100));
@@ -486,6 +514,14 @@ impl Worker {
                 .map(|s| (s.last_update.elapsed(), s.retry_at))
                 .unwrap_or((Duration::ZERO, None));
             self.set(|s| s.pending_chars = pending_chars);
+            let defer = snapshot.recognition_needs_priority();
+            self.set(|s| s.waiting_for_transcript = defer);
+            if defer {
+                // Keep manual requests queued, but never busy-spin on them while ASR
+                // catches up. No new model request competes with the recording worker.
+                self.wait_with_manual(false);
+                continue;
+            }
             let backing_off = retry_at.is_some_and(|at| Instant::now() < at);
             let manual = self.manual.swap(false, Ordering::AcqRel);
             let interval = self.interval_ms.load(Ordering::Acquire);
@@ -590,6 +626,43 @@ impl Worker {
 mod tests {
     use super::*;
     use meeting_core::SessionStore;
+
+    #[test]
+    fn live_generation_defers_for_real_unprocessed_audio_only() {
+        let mut data: SessionData = serde_json::from_value(serde_json::json!({
+            "schemaVersion":2,"id":"a".repeat(32),"title":"Synthetic backlog","startedAt":"2026-10-28T00:00:00Z",
+            "status":"streaming","modelId":"synthetic",
+            "parts":[{"file":"microphone-000000000000.wav","source":"microphone","startSample":0,"sampleCount":160000,"confirmedSampleCount":160000,"processedSamples":0,"modelId":"synthetic","status":"pending"}]
+        })).unwrap();
+        assert!(Snapshot {
+            data: data.clone(),
+            active: true
+        }
+        .recognition_needs_priority());
+        data.parts[0].processed_samples = 80_000;
+        assert!(!Snapshot {
+            data: data.clone(),
+            active: true
+        }
+        .recognition_needs_priority());
+        data.parts[0].processed_samples = 160_000;
+        assert!(!Snapshot {
+            data: data.clone(),
+            active: true
+        }
+        .recognition_needs_priority());
+        data.parts[0].model_id = Some("another-model".into());
+        assert!(Snapshot {
+            data: data.clone(),
+            active: true
+        }
+        .recognition_needs_priority());
+        assert!(!Snapshot {
+            data,
+            active: false
+        }
+        .recognition_needs_priority());
+    }
 
     fn fixture_root(label: &str) -> std::path::PathBuf {
         let nonce = std::time::SystemTime::now()

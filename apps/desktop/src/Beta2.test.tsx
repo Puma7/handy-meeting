@@ -133,6 +133,59 @@ function deferred<T>() {
   });
   return { promise, resolve, reject };
 }
+it("preserves separate local and cloud connections while clearing transient credentials on switching", async () => {
+  const { api } = apiFixture();
+  render(<App api={api} />);
+  await openNotes();
+  const local = screen.getByLabelText("Adresse des lokalen Textmodelldienstes");
+  await userEvent.clear(local);
+  await userEvent.type(local, "http://127.0.0.1:1235/v1/");
+  await userEvent.click(
+    screen.getByRole("button", { name: "Textmodelle aktualisieren" }),
+  );
+  await screen.findByRole("option", { name: "synthetic-local" });
+  await userEvent.selectOptions(
+    screen.getByLabelText("Textmodell"),
+    "synthetic-local",
+  );
+  await userEvent.selectOptions(screen.getByLabelText("Verarbeitung"), "cloud");
+  const cloud = screen.getByLabelText("API-Adresse");
+  await userEvent.clear(cloud);
+  await userEvent.type(cloud, "https://provider.example.test/v1/");
+  await userEvent.type(screen.getByLabelText("Textmodell"), "cloud-model");
+  await userEvent.type(
+    screen.getByLabelText("Schlüssel nur für diese App-Sitzung"),
+    "synthetic-secret",
+  );
+  await userEvent.selectOptions(screen.getByLabelText("Verarbeitung"), "local");
+  expect(
+    (
+      screen.getByLabelText(
+        "Adresse des lokalen Textmodelldienstes",
+      ) as HTMLInputElement
+    ).value,
+  ).toBe("http://127.0.0.1:1235/v1/");
+  await waitFor(() =>
+    expect(
+      (screen.getByLabelText("Textmodell") as HTMLSelectElement).value,
+    ).toBe("synthetic-local"),
+  );
+  await userEvent.selectOptions(screen.getByLabelText("Verarbeitung"), "cloud");
+  expect((screen.getByLabelText("API-Adresse") as HTMLInputElement).value).toBe(
+    "https://provider.example.test/v1/",
+  );
+  expect((screen.getByLabelText("Textmodell") as HTMLInputElement).value).toBe(
+    "cloud-model",
+  );
+  expect(
+    (
+      screen.getByLabelText(
+        "Schlüssel nur für diese App-Sitzung",
+      ) as HTMLInputElement
+    ).value,
+  ).toBe("");
+  expect(api.generateNotes).not.toHaveBeenCalled();
+});
 async function openNotes() {
   await screen.findByRole("button", { name: "Dieses Meeting auswerten" });
   await userEvent.click(
@@ -684,6 +737,38 @@ describe("beta.2 guided meeting analysis", () => {
   });
 });
 
+it("displays validated saved speaker names without opening the editing disclosure", async () => {
+  const { api } = apiFixture();
+  api.getSpeakerLabels = vi.fn().mockResolvedValue({
+    revision: 1,
+    enabled: true,
+    sources: { "system-a.wav": "synthetic-hash" },
+    assignments: [
+      {
+        sourceId: "system-a.wav",
+        textSha256: "synthetic-hash",
+        name: "Bestätigte Sprecherin",
+        evidence: first.parts[0].text!,
+      },
+    ],
+  });
+  api.saveSpeakerLabels = vi.fn();
+  render(<App api={api} />);
+  await screen.findByRole("button", { name: "Dieses Meeting auswerten" });
+  await userEvent.click(screen.getByRole("button", { name: "Historie" }));
+  await userEvent.click(
+    (await screen.findAllByRole("button", { name: "Öffnen" }))[1],
+  );
+  await screen.findByText("Bestätigte Sprecherin", {
+    selector: ".speaker-label",
+  });
+  expect(
+    (document.querySelector("details.speaker-tools") as HTMLDetailsElement)
+      .open,
+  ).toBe(false);
+  expect(api.saveSpeakerLabels).not.toHaveBeenCalled();
+});
+
 it("prepares local name candidates without carrying a cloud key or automatically starting analysis", async () => {
   const { api } = apiFixture();
   api.getSpeakerLabels = vi.fn().mockResolvedValue({
@@ -710,9 +795,7 @@ it("prepares local name candidates without carrying a cloud key or automatically
   await userEvent.click(
     (await screen.findAllByRole("button", { name: "\u00d6ffnen" }))[1],
   );
-  await userEvent.click(
-    screen.getByText("Sprecher nach dem Meeting zuordnen · optional"),
-  );
+  await userEvent.click(screen.getByText("Sprecher zuordnen · optional"));
   await userEvent.click(
     screen.getByRole("button", {
       name: "Lokale KI-Namensvorschläge vorbereiten",

@@ -26,8 +26,8 @@
   },
   {
     "Path": "CHANGELOG.md",
-    "SHA256": "E1D1614BC019F4EB64A07618E2D2E625E524B0189E1ACFC2FB36E5D00F1CCBD8",
-    "Bytes": 15707
+    "SHA256": "B20D30720272DEAABAFA1CF6FD476075135DA3DD544AE389B45FD1CF81D212BA",
+    "Bytes": 17493
   },
   {
     "Path": "BUILD_STATUS.md",
@@ -41,8 +41,8 @@
   },
   {
     "Path": "TEST_REPORT.md",
-    "SHA256": "2DA1B64C9E932CBE08DEB2AED4AF07E994DBFBDDE31A295F8164812302B1DC98",
-    "Bytes": 170094
+    "SHA256": "3FB5F7CD3DAEE1A2ADBDEBCA2B7605DAD248C59B03CE1460A999C7D97D1655A1",
+    "Bytes": 174691
   },
   {
     "Path": "DAUERTEST.md",
@@ -14131,8 +14131,8 @@
   },
   {
     "Path": "crates/meeting-core/src/windows_capture.rs",
-    "SHA256": "A636077383805BED31AA3DCCFC740634CAF6D8C2FCCED6DC9E4FF05667F818D6",
-    "Bytes": 37280
+    "SHA256": "561A6497A0621BDE68BD71F255D3B395447365233C95A568DD15E2B55CA74DA0",
+    "Bytes": 41482
   },
   {
     "Path": "crates/meeting-core/tests/durability.rs",
@@ -14145,14 +14145,44 @@
     "Bytes": 686
   },
   {
+    "Path": "crates/meeting-notes/examples/live_reference.rs",
+    "SHA256": "1925A1AA65116AE48F80852ED0808DE314869A86C54A7225F7F6B4D6F202DAD2",
+    "Bytes": 5750
+  },
+  {
     "Path": "crates/meeting-notes/examples/local_reference.rs",
     "SHA256": "B9CF97BB8D583C84207D0152285EB17CE981F94364812DD9F0EA61FF754350CF",
     "Bytes": 6426
   },
   {
-    "Path": "crates/meeting-notes/examples/live_reference.rs",
-    "SHA256": "E01ABBBC8385C120ACCDDC4E0552FFF0621C3F65819C9E5B07B6BEC7E175A37F",
-    "Bytes": 5713
+    "Path": "crates/meeting-notes/src/live/mod.rs",
+    "SHA256": "7F67502732AC5AD075BDBE7F157EC12DFCC75B93F2FAEF8B0970560B4E057E0C",
+    "Bytes": 17287
+  },
+  {
+    "Path": "crates/meeting-notes/src/live/prompt.rs",
+    "SHA256": "82EB934E87BAC37A98054D4394FE76527B40C32EA621CB1DFA74175966E32ED1",
+    "Bytes": 5171
+  },
+  {
+    "Path": "crates/meeting-notes/src/live/sources.rs",
+    "SHA256": "31982E19F0195E27B62E4E5084801EAF78534A4892ABC2941AD158E3132475B1",
+    "Bytes": 7423
+  },
+  {
+    "Path": "crates/meeting-notes/src/live/store.rs",
+    "SHA256": "5C1365DE0A587B99AAA60B407A04E7EA6BE8FFF4C5CE59DDD7FB44A23CCE5E36",
+    "Bytes": 11623
+  },
+  {
+    "Path": "crates/meeting-notes/src/live/tests.rs",
+    "SHA256": "25FB5EE86DA35DBB8A302757387D4831D67A37C9D28B647C1E11DF8CC91768F0",
+    "Bytes": 24789
+  },
+  {
+    "Path": "crates/meeting-notes/src/live/trigger.rs",
+    "SHA256": "6FF65979E253CC6F5D90D36EED2BCC69D678FF189118CE620DB5ACA05A1522BE",
+    "Bytes": 5741
   },
   {
     "Path": "crates/meeting-notes/src/control.rs",
@@ -14231,8 +14261,8 @@
   },
   {
     "Path": "apps/desktop/src/views/AudioCopiesPanel.tsx",
-    "SHA256": "A8092C8600123B4D3EC5E905B1583FF6A7D7E4C134D801BFBEC1AAA88E2D4B05",
-    "Bytes": 6006
+    "SHA256": "35F4D9C1EA428930032CC86BDF320BACED4CFA1DB9CDD9CCBF80586431C1D3ED",
+    "Bytes": 6148
   },
   {
     "Path": "apps/desktop/src/views/AudioLevelMeter.tsx",
@@ -14241,8 +14271,8 @@
   },
   {
     "Path": "apps/desktop/src/views/AudioSources.tsx",
-    "SHA256": "F8B95126DDED608E2B185FA21C4D9D59A3225987D96F967A8F30A21373108FE1",
-    "Bytes": 5189
+    "SHA256": "D5B0D7ED102D206CAE6E8ED98787967C0D92B174C935471814C5459A6BE4D5DA",
+    "Bytes": 5479
   },
   {
     "Path": "apps/desktop/src/views/CredentialPanel.tsx",
@@ -14265,6 +14295,16 @@
     "Bytes": 3795
   },
   {
+    "Path": "apps/desktop/src/views/LiveNotesPanel.tsx",
+    "SHA256": "6C0018A7AEE8B57CF989F6C1312EA0CFA2DFC779BBA7A6C64AC2F0329BD85C3A",
+    "Bytes": 26030
+  },
+  {
+    "Path": "apps/desktop/src/views/LocalModelSetup.tsx",
+    "SHA256": "DFA3D87AF63C76A9F005914A15E748850E3B70D9F21D39A9C336B55C62E14DB9",
+    "Bytes": 11222
+  },
+  {
     "Path": "apps/desktop/src/views/MaintenanceStatus.tsx",
     "SHA256": "71F7A4B0A45B2F57D87E4A6B4EB2A95B0B28EDD38071015D9E2B9403DA57BD6A",
     "Bytes": 4294
@@ -14276,18 +14316,18 @@
   },
   {
     "Path": "apps/desktop/src/views/MeetingFiles.tsx",
-    "SHA256": "599ED2CE7D504ECE7E7F601FBF91A6779EA55410765CE7A1F5EEA47FAD44ABD0",
-    "Bytes": 1831
+    "SHA256": "60A4E5ECC2FE6E6B26C4246BACBC1F367FB7221BABFDAA6B2ACC1749F838973A",
+    "Bytes": 1833
   },
   {
     "Path": "apps/desktop/src/views/MeetingLabels.tsx",
-    "SHA256": "E08AEFB752B51780E27353C9DCE93044FA5E3BD83D532971DEDE49BC9C4FF865",
-    "Bytes": 3797
+    "SHA256": "68E2C800F2C1A10F8085A1D85BE5BAEF0D03458CB405FFE9A91A5CB294A95CA5",
+    "Bytes": 3857
   },
   {
     "Path": "apps/desktop/src/views/MeetingView.tsx",
-    "SHA256": "90B5C9329ED8EE12008DF4F71EA2B39DA75E723EE13FCC8FBFF85D0ADB9A5341",
-    "Bytes": 11913
+    "SHA256": "8CD11B07CCC86CE0342F7574C32527E00305BD0EDDB03640F9A138308ABD8A10",
+    "Bytes": 13634
   },
   {
     "Path": "apps/desktop/src/views/NotesProgressPanel.tsx",
@@ -14296,8 +14336,8 @@
   },
   {
     "Path": "apps/desktop/src/views/NotesView.tsx",
-    "SHA256": "19DA6B34A8DBC1788BE0336BA03F55109D204631CDB5A36E7736E8D0BA425D69",
-    "Bytes": 27781
+    "SHA256": "35BCD3DE68BA786A3B9B46CE99EC38A99C37F0E17BE3FED816188A9C79D67C34",
+    "Bytes": 20244
   },
   {
     "Path": "apps/desktop/src/views/RecordingControls.tsx",
@@ -14321,8 +14361,8 @@
   },
   {
     "Path": "apps/desktop/src/views/SettingsView.tsx",
-    "SHA256": "2F3378E86261E67D42977077597F287D47463FFE06C433849067940298D0C240",
-    "Bytes": 6318
+    "SHA256": "C5AA91A164334FCFCAD8E6A9E8DC148E96C99ABBD344FB92459964FF6D119003",
+    "Bytes": 6625
   },
   {
     "Path": "apps/desktop/src/views/Sidebar.tsx",
@@ -14336,13 +14376,13 @@
   },
   {
     "Path": "apps/desktop/src/views/SpeakerExperiments.tsx",
-    "SHA256": "E8468EC439545F968003C7978304C11E957CBFDDCA29EE937D48CC728CB64E5B",
-    "Bytes": 11605
+    "SHA256": "B1E1C934E3CBD9C6DFAE12675C9E2AB3ADC834A87BFE4741B9460CAB6462FB73",
+    "Bytes": 13533
   },
   {
     "Path": "apps/desktop/src/views/SpeakerLabels.tsx",
-    "SHA256": "13BBB9E0C1491A8D58140A729B79F5E7EA074539DB24FD9B47CE79EEFFD43B6E",
-    "Bytes": 11334
+    "SHA256": "70A9C2328BBEA13894893E894F245C51EEBA9298D3C162BFA38912451798F725",
+    "Bytes": 11607
   },
   {
     "Path": "apps/desktop/src/views/TemplateDialog.tsx",
@@ -14350,24 +14390,19 @@
     "Bytes": 2810
   },
   {
+    "Path": "apps/desktop/src/views/TextModelSettings.tsx",
+    "SHA256": "9F9DDEDBCBCCDE802376F557AA89E75DE99CEF1DE955FED52606D7B562CE3746",
+    "Bytes": 7279
+  },
+  {
     "Path": "apps/desktop/src/views/TranscriptBody.tsx",
-    "SHA256": "26B5C7557F25AA2C5E540E0E8B3CCFAF4659FB61F17CAFC52BC7C9D635124AF2",
-    "Bytes": 4787
+    "SHA256": "C8AA49EA244F573C37106CB4CB9EF1F7AB5641B712834E8A2B3E9D0901F69B83",
+    "Bytes": 4922
   },
   {
     "Path": "apps/desktop/src/views/UpdatePanel.tsx",
     "SHA256": "2D3A45BFD32C0C4EFD013DE649F62C549D5660FA963A27D8A4D9FA1021085707",
     "Bytes": 11376
-  },
-  {
-    "Path": "apps/desktop/src/views/LiveNotesPanel.tsx",
-    "SHA256": "C23EC7224D3BEE31EAAC6EB5509BFADFCA14A496987F97285A2A33FEC3CD6C94",
-    "Bytes": 25676
-  },
-  {
-    "Path": "apps/desktop/src/views/LocalModelSetup.tsx",
-    "SHA256": "69A790313171B0CF45DEB7379A1B17CC127C25DC1F2C389A77CF8811C3AC7F70",
-    "Bytes": 11042
   },
   {
     "Path": "apps/desktop/src/AccessControls.test.tsx",
@@ -14381,23 +14416,23 @@
   },
   {
     "Path": "apps/desktop/src/AnalysisStatusBar.test.tsx",
-    "SHA256": "082043AEE65DAC98B55F75C40F8CE078BB17C4F16A395E9B520F05A8C1BA0D0A",
-    "Bytes": 7527
+    "SHA256": "BF42BEC4A5DBF8539C14C33DEFD759DACA47A80C48131262B216FA8EA43D439D",
+    "Bytes": 7771
   },
   {
     "Path": "apps/desktop/src/api.ts",
-    "SHA256": "9E6178D261A346FC78F88EF08E35A4A5F2D96186D4FBF7368D3C52929903BC4F",
-    "Bytes": 7657
+    "SHA256": "7E3C63F061BB5130D8528430480141D818D7AFF487C49AD753397D7B392AE8B6",
+    "Bytes": 7738
   },
   {
     "Path": "apps/desktop/src/App.test.tsx",
-    "SHA256": "3BBFFA2FBD1A27BF830985518DAB8FA01752D7E0D12B73A0A45F8C2C19802383",
-    "Bytes": 52041
+    "SHA256": "7207988CD0E143BFB33467CFA9F2A04816432C73C239B9065F3B4A83CD3A9946",
+    "Bytes": 52040
   },
   {
     "Path": "apps/desktop/src/App.tsx",
-    "SHA256": "9D08C5CF8FEF9AC5E904741D01E45899FDDF68D6CBE5D8F332642C6A21D9FDD9",
-    "Bytes": 73324
+    "SHA256": "88224344510CF2514B5873A902472FFFC2FC86BC862C88AFAF551E098B82C959",
+    "Bytes": 78926
   },
   {
     "Path": "apps/desktop/src/ArchivePanel.test.tsx",
@@ -14406,13 +14441,13 @@
   },
   {
     "Path": "apps/desktop/src/AudioLevels.test.tsx",
-    "SHA256": "548D70497C8445E6C43C20AA40E8E970AA14EDD783DD00CFC8653CE16A702025",
-    "Bytes": 20128
+    "SHA256": "39E358E23F50D77082283798B3AF06E9131F3A6C7D67B905BA6AA6F5C7505601",
+    "Bytes": 20048
   },
   {
     "Path": "apps/desktop/src/Beta2.test.tsx",
-    "SHA256": "566DC20AEAD7728E79172F246455D8C617958AA964BF21A47B04830A6534BAAA",
-    "Bytes": 24534
+    "SHA256": "D77CE8947FF6A72DAF84132CA6CC253363E2DD540C207273BF442D22D06E5966",
+    "Bytes": 27548
   },
   {
     "Path": "apps/desktop/src/domain.ts",
@@ -14425,14 +14460,19 @@
     "Bytes": 16688
   },
   {
+    "Path": "apps/desktop/src/FeedbackRegression.test.tsx",
+    "SHA256": "4061FF55591A9134FECBC13CEDCD97873DA7F1B598EC5F95CD2EBE874C20129B",
+    "Bytes": 8727
+  },
+  {
     "Path": "apps/desktop/src/handy-theme.css",
-    "SHA256": "D324894E4ADA8E587129B9CFE5619F78537B872FCD72E7738340EE4856B90605",
+    "SHA256": "549CD96A099692CEB16C25F2A6A2FC8B97FF22154B40D4BDB3353521C4F7D9AC",
     "Bytes": 9613
   },
   {
     "Path": "apps/desktop/src/i18n.ts",
-    "SHA256": "9D866CDA7E251C9D8E98E375E8851AB5835D2643A57EE90B759102FEA2907CBB",
-    "Bytes": 33574
+    "SHA256": "F335F8BB844665D635A9AB74A1715282A000F8D9935E362FFD7A755369D35A4B",
+    "Bytes": 33801
   },
   {
     "Path": "apps/desktop/src/jobPolling.ts",
@@ -14446,8 +14486,18 @@
   },
   {
     "Path": "apps/desktop/src/LibraryAndSpeakers.test.tsx",
-    "SHA256": "D37E109B26EB9031EEF22ACD7AF26BD9029C1314DD61BB0F1620782788814D46",
-    "Bytes": 8395
+    "SHA256": "1C68B01A306BAFD774BFD14199E6BB8F2828CCFC0FDE6CE33CD93F18BB369822",
+    "Bytes": 8536
+  },
+  {
+    "Path": "apps/desktop/src/live-transcript.ts",
+    "SHA256": "2DBAAFF6F41E2EB5CAC05BDF24BB13789C8DCE107B87A4DDC751DDAB39BE5A01",
+    "Bytes": 1723
+  },
+  {
+    "Path": "apps/desktop/src/LiveNotes.test.tsx",
+    "SHA256": "3804223E9EA37FAD8A30E9B27E3F8C3F676AF8EA830BCCDE4A92C53672E940D0",
+    "Bytes": 33465
   },
   {
     "Path": "apps/desktop/src/main.tsx",
@@ -14461,8 +14511,8 @@
   },
   {
     "Path": "apps/desktop/src/OptionalJobs.test.tsx",
-    "SHA256": "BCE1064FAA65425FBDDE03D04EFFA3468BE5C6D22B462BA9133F3208413D11A1",
-    "Bytes": 17292
+    "SHA256": "5485DA692A32D1C0FB11DE192915CED4ED411D1798E66DA223751568E02ECF13",
+    "Bytes": 19278
   },
   {
     "Path": "apps/desktop/src/RecordingControls.test.tsx",
@@ -14486,8 +14536,8 @@
   },
   {
     "Path": "apps/desktop/src/styles.css",
-    "SHA256": "7E06E2CC0553194E143F5007F626A83E8D7A6FA00BC3B9C808C495AC69BA8547",
-    "Bytes": 36311
+    "SHA256": "29D109642ACA3726625834CBDFC2B73C634FCD63B4286E964E0163066B5FFD1E",
+    "Bytes": 39006
   },
   {
     "Path": "apps/desktop/src/test-services.ts",
@@ -14501,8 +14551,8 @@
   },
   {
     "Path": "apps/desktop/src/types.ts",
-    "SHA256": "3231607925283A0ED2E8FB2D70469F180C7F85CAC41CD23B4AA3CCF45771D962",
-    "Bytes": 17981
+    "SHA256": "FC6AC0E983658B3477179B5212B6166A542AB5C03875CB5AE4934510A9559C7A",
+    "Bytes": 18132
   },
   {
     "Path": "apps/desktop/src/useAudioLevels.ts",
@@ -14523,11 +14573,6 @@
     "Path": "apps/desktop/src/useTemplateLibrary.ts",
     "SHA256": "0668D10452B45C95CF041C552072268F625900F167B2DB9D56225E2400E2E9F9",
     "Bytes": 5235
-  },
-  {
-    "Path": "apps/desktop/src/LiveNotes.test.tsx",
-    "SHA256": "3804223E9EA37FAD8A30E9B27E3F8C3F676AF8EA830BCCDE4A92C53672E940D0",
-    "Bytes": 33465
   },
   {
     "Path": "apps/desktop/src-tauri/capabilities/default.json",
@@ -14566,8 +14611,8 @@
   },
   {
     "Path": "apps/desktop/src-tauri/src/lib.rs",
-    "SHA256": "7108C2EDD682F14BD4C71CF94E2B0CA86B29097CC7035AEF77B6720F85601EC3",
-    "Bytes": 45114
+    "SHA256": "4859E8F65735FEAEAD105EA924AA73A14F7F2A42217A6E3C67394750EF6FC759",
+    "Bytes": 45152
   },
   {
     "Path": "apps/desktop/src-tauri/src/library_commands.rs",
@@ -14578,6 +14623,21 @@
     "Path": "apps/desktop/src-tauri/src/library_service.rs",
     "SHA256": "621F5E23D01B14AF7EE5D7A84D5EF8AD710B375CEC333233FF1BE2BD697D2749",
     "Bytes": 18992
+  },
+  {
+    "Path": "apps/desktop/src-tauri/src/live_commands.rs",
+    "SHA256": "D68F97D210FBAB1B3F6B36BB843A4AA0FAE28356AFF5EF58B99E6477212CEA4F",
+    "Bytes": 2153
+  },
+  {
+    "Path": "apps/desktop/src-tauri/src/live_notes.rs",
+    "SHA256": "EB62416018313E0EF25210F2E7A1F6F4E7E88195C549AC6CB02484C479AA7CB8",
+    "Bytes": 38689
+  },
+  {
+    "Path": "apps/desktop/src-tauri/src/local_models.rs",
+    "SHA256": "6C050589AE361C3FFAC40F36D964978BE9B64E5D1575ADD696A08238479D8906",
+    "Bytes": 22967
   },
   {
     "Path": "apps/desktop/src-tauri/src/main.rs",
@@ -14616,8 +14676,8 @@
   },
   {
     "Path": "apps/desktop/src-tauri/src/retention_commands.rs",
-    "SHA256": "BB12E61785137D262817EA48F5DCB6AB6D15511F9F530FCD904F4292F9AA40DC",
-    "Bytes": 24174
+    "SHA256": "6CDAAB954195315E2A3A7B3EA08F8621FE4D2B219A9ABD41D9F91783B2E470B4",
+    "Bytes": 24262
   },
   {
     "Path": "apps/desktop/src-tauri/src/service_tests.rs",
@@ -14626,18 +14686,18 @@
   },
   {
     "Path": "apps/desktop/src-tauri/src/session_service.rs",
-    "SHA256": "FA54B7C1982A7AE688032289FA6636A6465AF69D426ED8F4AD2490E6E67ED1C0",
-    "Bytes": 6360
+    "SHA256": "1DDB867154A4FC0ADACA93370B21A0B7538219544BCD2BC23FD6601D28C8BF9A",
+    "Bytes": 6500
   },
   {
     "Path": "apps/desktop/src-tauri/src/speaker_commands.rs",
-    "SHA256": "AB4E607D1838C153E96C20C2A89E3058C0805BE1CCA53A5E0DF33C5E04CF12DA",
-    "Bytes": 3409
+    "SHA256": "06BC3BE6F73F6F8CAF4116A4F045BCAFF1DC67C1F34E9FE383988CEADB4E7640",
+    "Bytes": 3675
   },
   {
     "Path": "apps/desktop/src-tauri/src/speaker_jobs.rs",
-    "SHA256": "FD288BB040CE4459D32612D760C141480B2E16E8061A82A06B57F36474C338A6",
-    "Bytes": 19937
+    "SHA256": "DDD72A5273905AB2A1835DE99F3034A5BF71A4D4D7246EA3E9C6D15D52B30136",
+    "Bytes": 21790
   },
   {
     "Path": "apps/desktop/src-tauri/src/template_commands.rs",
@@ -14653,21 +14713,6 @@
     "Path": "apps/desktop/src-tauri/src/updater.rs",
     "SHA256": "1AFCBACC487CE1361B8C84DFA42BD705F2F82346204A11F322E16D458E0E0B1F",
     "Bytes": 31115
-  },
-  {
-    "Path": "apps/desktop/src-tauri/src/live_commands.rs",
-    "SHA256": "D68F97D210FBAB1B3F6B36BB843A4AA0FAE28356AFF5EF58B99E6477212CEA4F",
-    "Bytes": 2153
-  },
-  {
-    "Path": "apps/desktop/src-tauri/src/live_notes.rs",
-    "SHA256": "30AEA236776A3DAB587F37CFE024951BF1B953FF2A6005496E1A22CC4285F57D",
-    "Bytes": 35649
-  },
-  {
-    "Path": "apps/desktop/src-tauri/src/local_models.rs",
-    "SHA256": "07B08658818FCB1F5742EBC79283C43371F4856CED573B8E05C20DD2327BD658",
-    "Bytes": 17985
   },
   {
     "Path": "apps/desktop/src-tauri/tests/agent_protocol.rs",
@@ -14758,6 +14803,11 @@
     "Path": "docs/1.0.2-windows-short-capture.json",
     "SHA256": "0606855F686196586D02F91F74BF180DA258AD4264CED90893D4E068E8533CA4",
     "Bytes": 581
+  },
+  {
+    "Path": "docs/1.0.6-LIVE-SUMMARY-PLAN.md",
+    "SHA256": "2B9F5A7F3715DE2F86AE80684672B85C9AB28FB7653F31434C1115A72A1386CF",
+    "Bytes": 8562
   },
   {
     "Path": "docs/AUDIT_FIXES_20261028.md",
@@ -14875,43 +14925,8 @@
     "Bytes": 1515
   },
   {
-    "Path": "docs/1.0.6-LIVE-SUMMARY-PLAN.md",
-    "SHA256": "2B9F5A7F3715DE2F86AE80684672B85C9AB28FB7653F31434C1115A72A1386CF",
-    "Bytes": 8562
-  },
-  {
     "Path": ".cargo/config.toml",
     "SHA256": "6499783BB6842B43A66CA334DFDA7A4E7663B9910B3911CE427ABBCDBD5F9A25",
     "Bytes": 75
-  },
-  {
-    "Path": "crates/meeting-notes/src/live/mod.rs",
-    "SHA256": "882C4473E86010D485A842B1FFD040AE43EA42FF38480BFD0DE5EB5AC5231D10",
-    "Bytes": 16777
-  },
-  {
-    "Path": "crates/meeting-notes/src/live/prompt.rs",
-    "SHA256": "82EB934E87BAC37A98054D4394FE76527B40C32EA621CB1DFA74175966E32ED1",
-    "Bytes": 5171
-  },
-  {
-    "Path": "crates/meeting-notes/src/live/sources.rs",
-    "SHA256": "31982E19F0195E27B62E4E5084801EAF78534A4892ABC2941AD158E3132475B1",
-    "Bytes": 7423
-  },
-  {
-    "Path": "crates/meeting-notes/src/live/store.rs",
-    "SHA256": "5C1365DE0A587B99AAA60B407A04E7EA6BE8FFF4C5CE59DDD7FB44A23CCE5E36",
-    "Bytes": 11623
-  },
-  {
-    "Path": "crates/meeting-notes/src/live/tests.rs",
-    "SHA256": "7952C3AEAD572935FA0D64556E22AC8D25D6B7F1A0986E8D27725F974CC1C2C5",
-    "Bytes": 22456
-  },
-  {
-    "Path": "crates/meeting-notes/src/live/trigger.rs",
-    "SHA256": "6FF65979E253CC6F5D90D36EED2BCC69D678FF189118CE620DB5ACA05A1522BE",
-    "Bytes": 5741
   }
 ]

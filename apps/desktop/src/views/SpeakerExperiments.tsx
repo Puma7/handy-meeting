@@ -18,6 +18,10 @@ export default function SpeakerExperiments({
   models = [],
   recording = false,
   footer = false,
+  embedded = false,
+  checkedModels = {},
+  onModelChecked,
+  onCheckingChange,
 }: {
   api: DesktopApi;
   locale: Locale;
@@ -25,6 +29,10 @@ export default function SpeakerExperiments({
   models?: HandyModel[];
   recording?: boolean;
   footer?: boolean;
+  embedded?: boolean;
+  checkedModels?: Record<string, boolean>;
+  onModelChecked?: (modelId: string, supported: boolean) => void;
+  onCheckingChange?: (checking: boolean) => void;
 }) {
   const de = locale === "de";
   const [model, setModel] = useState(""),
@@ -77,8 +85,30 @@ export default function SpeakerExperiments({
   if (!api.startSpeakerExperiment) return null;
   const running = job?.status === "running";
   const label = de ? "Sprecherexperiment" : "Speaker experiment";
+  const supported = checkedModels[model] === true;
+  async function checkModel() {
+    if (!model || !api.checkSpeakerModel || busy || recording) return;
+    setBusy(true);
+    onCheckingChange?.(true);
+    setError(null);
+    try {
+      const found = await api.checkSpeakerModel(model);
+      onModelChecked?.(model, found);
+      if (!found)
+        setError(
+          de
+            ? "Dieses Modell unterstützt keine lokale Sprechertrennung. Wähle ein Modell mit Diarisierungsfunktion. Manuelle Zuordnungen bleiben verfügbar."
+            : "This model does not support local speaker separation. Choose a model with diarization support. Manual labels remain available.",
+        );
+    } catch (error) {
+      setError(errorMessage(error));
+    } finally {
+      setBusy(false);
+      onCheckingChange?.(false);
+    }
+  }
   async function start(mode: "live" | "post-meeting") {
-    if (!meeting || !model || busy) return;
+    if (!meeting || !model || !supported || busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -185,22 +215,29 @@ export default function SpeakerExperiments({
     );
   }
   if (!meeting) return null;
+  const Container = embedded ? "section" : "details";
   return (
-    <details className="speaker-options">
-      <summary>
+    <Container className="speaker-options">
+      {embedded ? (
+        <h3>
+          {de ? "Stimmen im Audio unterscheiden" : "Separate voices in audio"}
+        </h3>
+      ) : (
+        <summary>
+          {de
+            ? "Zusätzliche lokale Sprecherfunktionen · Beta / experimentell"
+            : "Additional local speaker features · beta / experimental"}
+        </summary>
+      )}
+      <p className="muted">
         {de
-          ? "Zusätzliche lokale Sprecherfunktionen · Beta / experimentell"
-          : "Additional local speaker features · beta / experimental"}
-      </summary>
-      <p>
-        {de
-          ? "Diese beiden Optionen sind von manuellen Zuordnungen, Aufnahme und normaler Transkription getrennt. Ein passendes, bereits installiertes Handy-Modell ist nötig. Es werden keine Modellgewichte heruntergeladen oder Cloud-Dienste verwendet. Ungeeignete Modelle führen zu einer sichtbaren Fehlermeldung."
-          : "These two options are separate from manual labels, recording and normal transcription. A compatible model already installed in Handy is required. No model weights are downloaded and no cloud service is used. Unsupported models produce a visible error."}
+          ? "Ein Modell muss zuerst seine Sprecherunterstützung nachweisen. Die einmalige CPU-Prüfung erfolgt vor der Aufnahme; es wird kein Audio geöffnet oder Modell heruntergeladen."
+          : "A model must first pass its speaker capability check. This one-time CPU check runs before recording; no audio is opened and no model is downloaded."}
       </p>
       <label>
         {de
-          ? "Zusätzliches lokales Sprechermodell"
-          : "Additional local speaker model"}
+          ? "Installiertes Modell für die Sprecherprüfung"
+          : "Installed model for speaker capability check"}
         <select
           value={model}
           disabled={busy || running}
@@ -214,16 +251,36 @@ export default function SpeakerExperiments({
             .map((m) => (
               <option key={m.id} value={m.id}>
                 {m.name}
+                {checkedModels[m.id] === true
+                  ? " ✓"
+                  : checkedModels[m.id] === false
+                    ? de
+                      ? " · nicht unterstützt"
+                      : " · unsupported"
+                    : ""}
               </option>
             ))}
         </select>
       </label>
-      <div>
-        <h3>
+      <button
+        className="secondary"
+        disabled={
+          busy || running || recording || !model || !api.checkSpeakerModel
+        }
+        onClick={() => void checkModel()}
+      >
+        {busy ? <RefreshCw size={14} className="spinning" /> : null}
+        {de ? "Sprecherunterstützung prüfen" : "Check speaker support"}
+      </button>
+      {supported && (
+        <p role="status">
           {de
-            ? "Option 2: Audio nach dem Meeting · Beta"
-            : "Option 2: post-meeting audio · beta"}
-        </h3>
+            ? "Sprecherunterstützung geprüft. Die Auswertung bleibt ein optionaler Entwurf."
+            : "Speaker support checked. Analysis remains an optional draft."}
+        </p>
+      )}
+      <div>
+        <h3>{de ? "Nach dem Meeting · Beta" : "After the meeting · beta"}</h3>
         <p>
           {de
             ? "Prüft abgeschlossene Abschnitte auf unterschiedliche Stimmen. Originaltexte werden nicht ersetzt."
@@ -236,7 +293,7 @@ export default function SpeakerExperiments({
             running ||
             recording ||
             meeting.status !== "complete" ||
-            !model
+            !supported
           }
           onClick={() => void start("post-meeting")}
         >
@@ -248,8 +305,8 @@ export default function SpeakerExperiments({
       <div>
         <h3>
           {de
-            ? "Option 3: Während der Aufnahme · experimentell"
-            : "Option 3: during recording · experimental"}
+            ? "Während der Aufnahme · experimentell"
+            : "During recording · experimental"}
         </h3>
         <p>
           {de
@@ -258,7 +315,7 @@ export default function SpeakerExperiments({
         </p>
         <button
           className="secondary"
-          disabled={busy || running || !recording || !model}
+          disabled={busy || running || !recording || !supported}
           onClick={() => void start("live")}
         >
           {de ? "Live-Stimmenabschnitte prüfen" : "Check live voice sections"}
@@ -335,6 +392,6 @@ export default function SpeakerExperiments({
           ))}
         </div>
       )}
-    </details>
+    </Container>
   );
 }

@@ -20,6 +20,7 @@ export default function AudioCopiesPanel({
 }) {
   const de = locale === "de";
   const [copies, setCopies] = useState<AudioCopy[]>([]),
+    [more, setMore] = useState(false),
     [offset, setOffset] = useState(0),
     [selected, setSelected] = useState<AudioCopy | null>(null),
     [model, setModel] = useState(""),
@@ -33,7 +34,8 @@ export default function AudioCopiesPanel({
     try {
       const next = await api.listAudioCopies(offset);
       if (current !== generation.current) return;
-      setCopies(next);
+      setCopies(next.slice(0, 25));
+      setMore(next.length > 25);
       setSelected((old) =>
         old && next.some((copy) => copy.runId === old.runId) ? old : null,
       );
@@ -115,20 +117,22 @@ export default function AudioCopiesPanel({
             : "No completed audio copies on this page."}
         </p>
       )}
-      <div className="search-pages">
-        <button
-          disabled={!offset || busy || running}
-          onClick={() => setOffset((n) => Math.max(0, n - 25))}
-        >
-          {de ? "Zurück" : "Previous"}
-        </button>
-        <button
-          disabled={copies.length < 25 || busy || running}
-          onClick={() => setOffset((n) => n + 25)}
-        >
-          {de ? "Weiter" : "Next"}
-        </button>
-      </div>
+      {(offset > 0 || more) && (
+        <div className="search-pages">
+          <button
+            disabled={!offset || busy || running}
+            onClick={() => setOffset((n) => Math.max(0, n - 25))}
+          >
+            {de ? "Zurück" : "Previous"}
+          </button>
+          <button
+            disabled={!more || busy || running}
+            onClick={() => setOffset((n) => n + 25)}
+          >
+            {de ? "Weiter" : "Next"}
+          </button>
+        </div>
+      )}
       {selected && (
         <section className="retention-confirm">
           <h4>{selected.title}</h4>

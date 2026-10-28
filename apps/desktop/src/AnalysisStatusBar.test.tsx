@@ -84,6 +84,12 @@ it("keeps the new footer inert while fresh cloud consent is pending", async () =
     "synthetic-text",
   );
   await userEvent.selectOptions(screen.getByLabelText(de.processing), "cloud");
+  await userEvent.clear(screen.getByLabelText(de.endpoint));
+  await userEvent.type(
+    screen.getByLabelText(de.endpoint),
+    "https://example.invalid/v1",
+  );
+  await userEvent.type(screen.getByLabelText(de.textModel), "synthetic-cloud");
   const status = screen.getByRole("status", { name: de.notesTask });
   await userEvent.click(
     within(status).getByRole("button", { name: de.startAnalysis }),

@@ -1,6 +1,14 @@
 use crate::{blocking, AppResult, Service};
 use std::sync::Arc;
 use tauri::State;
+#[tauri::command]
+pub(crate) async fn check_speaker_model(
+    service: State<'_, Arc<Service>>,
+    model_id: String,
+) -> AppResult<bool> {
+    let service = Arc::clone(&service);
+    blocking(move || crate::speaker_jobs::check_model(&service, &model_id)).await
+}
 // Runs off the UI thread: it may wait on the recording transition lock or on disk.
 #[tauri::command(async)]
 pub(crate) fn start_speaker_experiment(

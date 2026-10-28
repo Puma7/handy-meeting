@@ -1,4 +1,5 @@
 import { expect, it, vi } from "vitest";
+import { useState } from "react";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import UpdatePanel from "./views/UpdatePanel";
@@ -12,6 +13,66 @@ import {
 } from "./jobPolling";
 import { nameCandidates, SPEAKER_NAME_TEMPLATE } from "./speaker-proposals";
 import type { DesktopApi, Meeting, AnalysisResult } from "./types";
+
+it.each([true, false])(
+  "requires an explicit successful speaker capability check (%s) before a job can start",
+  async (supported) => {
+    const start = vi.fn().mockResolvedValue("owned-job");
+    const check = vi.fn().mockResolvedValue(supported);
+    const api = {
+      startSpeakerExperiment: start,
+      checkSpeakerModel: check,
+    } as unknown as DesktopApi;
+    function Harness() {
+      const [checks, setChecks] = useState<Record<string, boolean>>({});
+      return (
+        <SpeakerExperiments
+          api={api}
+          locale="en"
+          meeting={meeting}
+          models={[
+            {
+              id: "installed",
+              name: "Installed",
+              isDownloaded: true,
+              supportsStreaming: false,
+            },
+          ]}
+          checkedModels={checks}
+          onModelChecked={(id, value) => setChecks({ [id]: value })}
+        />
+      );
+    }
+    render(<Harness />);
+    await userEvent.selectOptions(
+      screen.getByLabelText("Installed model for speaker capability check"),
+      "installed",
+    );
+    const run = screen.getByRole("button", {
+      name: "Run local speaker separation",
+    }) as HTMLButtonElement;
+    expect(run.disabled).toBe(true);
+    expect(check).not.toHaveBeenCalled();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Check speaker support" }),
+    );
+    await waitFor(() => expect(check).toHaveBeenCalledWith("installed"));
+    await waitFor(() => expect(run.disabled).toBe(!supported));
+    if (supported) {
+      await userEvent.click(run);
+      expect(start).toHaveBeenCalledWith(
+        meeting.id,
+        "installed",
+        "post-meeting",
+      );
+    } else {
+      expect((await screen.findByRole("alert")).textContent).toContain(
+        "does not support local speaker separation",
+      );
+      expect(start).not.toHaveBeenCalled();
+    }
+  },
+);
 const meeting: Meeting = {
   id: "0123456789abcdef0123456789abcdef",
   title: "Synthetic fixture",
@@ -95,6 +156,7 @@ it("keeps live and post-meeting speaker actions separate and never starts them a
       api={api}
       locale="en"
       meeting={meeting}
+      checkedModels={{ "optional-model": true }}
       models={[
         {
           id: "optional-model",
@@ -107,7 +169,7 @@ it("keeps live and post-meeting speaker actions separate and never starts them a
     />,
   );
   await userEvent.selectOptions(
-    screen.getByLabelText("Additional local speaker model"),
+    screen.getByLabelText("Installed model for speaker capability check"),
     "optional-model",
   );
   expect(start).not.toHaveBeenCalled();

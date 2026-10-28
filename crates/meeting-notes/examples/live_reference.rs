@@ -37,7 +37,8 @@ fn run(root: &Path, connection: Connection, parts: &[LiveText]) -> Result<(LiveV
             );
         }
     }
-    let stored = read_latest(root)?.context("The run must read back from disk.")?;
+    let stored = read_latest(root, "synthetic-live-reference")?
+        .context("The run must read back from disk.")?;
     Ok((stored, updates))
 }
 

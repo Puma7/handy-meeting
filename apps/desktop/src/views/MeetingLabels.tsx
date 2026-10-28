@@ -100,21 +100,23 @@ export default function MeetingLabels({
           {de ? "Meeting umbenennen" : "Rename meeting"}
         </button>
       )}
-      <button
-        className={meta.pinned ? "secondary pinned" : "text-button"}
-        aria-pressed={meta.pinned}
-        disabled={busy || Boolean(meeting.metadataError)}
-        onClick={() => void save(meta.title, !meta.pinned)}
-      >
-        <Pin size={15} />
-        {meta.pinned
-          ? de
-            ? "VIP · vor Aufräumen geschützt"
-            : "VIP · protected from cleanup"
-          : de
-            ? "Als VIP anheften"
-            : "Pin as VIP"}
-      </button>
+      {!editing && (
+        <button
+          className={meta.pinned ? "secondary pinned" : "text-button"}
+          aria-pressed={meta.pinned}
+          disabled={busy || Boolean(meeting.metadataError)}
+          onClick={() => void save(meta.title, !meta.pinned)}
+        >
+          <Pin size={15} />
+          {meta.pinned
+            ? de
+              ? "VIP · vor Aufräumen geschützt"
+              : "VIP · protected from cleanup"
+            : de
+              ? "Als VIP anheften"
+              : "Pin as VIP"}
+        </button>
+      )}
       {(error || meeting.metadataError) && (
         <p role="alert" className="inline-error">
           {error ?? meeting.metadataError}

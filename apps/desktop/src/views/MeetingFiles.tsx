@@ -60,7 +60,7 @@ export default function MeetingFiles({
           {t.exportSaved} {savedFile}
         </p>
       )}
-      <p className="muted file-save-help">{t.savedFilesHelp}</p>
+      <p className="sr-only file-save-help">{t.savedFilesHelp}</p>
     </>
   );
 }

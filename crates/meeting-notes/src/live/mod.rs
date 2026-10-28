@@ -208,12 +208,19 @@ impl LiveRunner {
         let mut screen = |facts: Vec<Fact>, kind: Kind| {
             let checked = screen_facts(facts, &sources, &kind, "", MAX_ITEMS_PER_ANSWER);
             add_rejections(&mut rejected, &checked.rejected);
-            // Identical statements within one list add nothing; they are dropped quietly.
+            // Only identical commitments add nothing: task wording alone does not identify
+            // an assignment. Different owners or deadlines must keep their own evidence.
             let mut seen = HashSet::new();
             checked
                 .items
                 .into_iter()
-                .filter(|f| seen.insert(normalized(&f.text)))
+                .filter(|f| {
+                    seen.insert((
+                        normalized(&f.text),
+                        (kind == Kind::Tasks).then(|| f.owner.clone()),
+                        (kind == Kind::Tasks).then(|| f.due.clone()),
+                    ))
+                })
                 .collect::<Vec<_>>()
         };
         let points = screen(answer.points, Kind::Summary);
@@ -313,8 +320,15 @@ impl LiveRunner {
 }
 
 /// The newest readable run of a meeting for display, without creating any model client.
-pub fn read_latest(root: &Path) -> Result<Option<LiveView>> {
-    let (runs, damaged) = list_runs(root)?;
+pub fn read_latest(root: &Path, meeting_id: &str) -> Result<Option<LiveView>> {
+    let (mut runs, mut damaged) = list_runs(root)?;
+    runs.retain(|run| {
+        let matches = run.run.meeting_id == meeting_id;
+        if !matches {
+            damaged += 1;
+        }
+        matches
+    });
     Ok(runs
         .first()
         .map(|run| LiveView::from_run(run, damaged))

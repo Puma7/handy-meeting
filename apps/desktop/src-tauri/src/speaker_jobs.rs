@@ -15,6 +15,45 @@ use std::{
     },
     time::{Duration, Instant},
 };
+
+/// Explicit capability check in an owned CPU child, without access to any recording folder.
+/// Exclusive admission avoids loading another model while capture or analysis is running.
+pub(crate) fn check_model(service: &Service, model_id: &str) -> AppResult<bool> {
+    let _lease = service.reserve_operation(crate::operations::Kind::Selection)?;
+    let (bridge, catalog, _) = service.refresh(None)?;
+    let model = catalog.model(model_id).map_err(|e| e.to_string())?;
+    let resolved = bridge
+        .resolve_downloaded_model(model)
+        .map_err(|e| e.to_string())?;
+    let identity = handy_bridge::capture_optional_model_identity(
+        model,
+        &resolved,
+        handy_bridge::native::runtime_identity(),
+    )
+    .map_err(|e| e.to_string())?;
+    let checks = service.root.join("speaker-model-checks");
+    std::fs::create_dir_all(&checks).map_err(|_| "Model check folder unavailable")?;
+    meeting_core::metadata::checked_directory(&checks).map_err(|_| "Unsafe model check folder")?;
+    let folder = checks.join(meeting_notes::new_job_id());
+    std::fs::create_dir(&folder).map_err(|_| "Could not reserve model check")?;
+    crate::create_json(&folder.join("model.json"), &identity)?;
+    let mut worker = Worker::start_speaker(
+        &resolved.path,
+        &crate::backend_directory()?,
+        &folder,
+        Arc::new(AtomicBool::new(false)),
+    )?;
+    let supported = match worker.call(Request::SpeakerIdentity { identity }) {
+        Ok(_) => true,
+        Err(error) if error.contains("does not support local speaker separation") => false,
+        Err(error) => return Err(error),
+    };
+    crate::create_json(
+        &folder.join("result.json"),
+        &serde_json::json!({"modelId":model_id,"supported":supported,"checkedAt":chrono::Utc::now().to_rfc3339(),"audioAccess":false}),
+    )?;
+    Ok(supported)
+}
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct Section {

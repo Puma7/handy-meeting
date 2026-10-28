@@ -44,6 +44,7 @@ export interface AudioPart {
   tentativeText?: string;
   file?: string;
   processedSamples?: number;
+  transcriptSequence?: number;
 }
 export interface Meeting {
   id: string;
@@ -55,6 +56,7 @@ export interface Meeting {
   parts: AudioPart[];
   warnings: string[];
   livePreviewLimited?: boolean;
+  snapshotSequence?: number;
   readOnly?: boolean;
   pendingAudioMs?: number;
   savedAudioMs?: { system: number; microphone: number };
@@ -292,6 +294,7 @@ export interface LiveView {
   damagedRuns: number;
 }
 export interface LiveNotesStatus {
+  waitingForTranscript?: boolean;
   meetingId: string;
   status:
     | "off"
@@ -461,6 +464,7 @@ export interface DesktopApi {
   getNotesProgress(): Promise<NotesProgress | null>;
   cancelNotes(jobId: string): Promise<boolean>;
   startLiveNotes?(request: LiveNotesRequest): Promise<LiveNotesStatus>;
+  checkSpeakerModel?(modelId: string): Promise<boolean>;
   stopLiveNotes?(): Promise<boolean>;
   refreshLiveNotes?(): Promise<boolean>;
   setLiveNotesInterval?(intervalMs: number): Promise<boolean>;

@@ -373,7 +373,8 @@ pub(crate) async fn list_audio_copies(
         }
         names.sort();
         let mut output = Vec::new();
-        for path in names.iter().skip(offset).take(25) {
+        // One lookahead item lets the renderer hide pagination on the final full page.
+        for path in names.iter().skip(offset).take(26) {
             let value: AudioCopy = read_record(path)
                 .map_err(|_| "Audio-copy catalog is unreadable; retained files preserved")?;
             crate::validate_id(&value.run_id)?;

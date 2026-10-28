@@ -61,6 +61,8 @@ it("renames an active meeting without changing its time or transcript and keeps 
     true,
   );
   expect(changed).not.toHaveBeenCalled();
+  expect(screen.queryByRole("button", { name: /VIP/ })).toBeNull();
+  await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
   expect(
     screen.getByRole("button", { name: /VIP/ }).getAttribute("aria-pressed"),
   ).toBe("true");

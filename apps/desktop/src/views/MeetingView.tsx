@@ -51,6 +51,8 @@ type Props = {
   copied: boolean;
   backlog: number | null;
   recentParts: AudioPart[];
+  transcriptLoading?: boolean;
+  loadFullTranscript?: () => Promise<void>;
   locale: "de" | "en";
   setTitle: (v: string) => void;
   setModelId: (v: string) => void;
@@ -67,6 +69,7 @@ type Props = {
   liveNotes?: ReactNode;
   /** Only the live summary is shown; the transcript stays available behind a toggle. */
   liveFocus?: boolean;
+  onLiveFocus?: (focus: boolean) => void;
 };
 /**
  * Shows live section/capture progress and delegates mutations to parent callbacks. Native
@@ -100,6 +103,8 @@ export default function MeetingView({
   copied,
   backlog,
   recentParts,
+  transcriptLoading,
+  loadFullTranscript,
   locale,
   setTitle,
   setModelId,
@@ -114,6 +119,7 @@ export default function MeetingView({
   copyFullTranscript,
   liveNotes,
   liveFocus = false,
+  onLiveFocus,
 }: Props) {
   const [setupOpen, setSetupOpen] = useState(!meeting && !recording);
   const agentOwnsCapture = Boolean(
@@ -140,7 +146,10 @@ export default function MeetingView({
             {t.noMicrophoneHelp}
           </div>
         )}
-      <section className="setup-panel" aria-label={t.meeting}>
+      <section
+        className={`setup-panel${recording && !setupOpen ? " recording-compact" : ""}`}
+        aria-label={t.meeting}
+      >
         <details
           className="setup-details"
           open={setupOpen}
@@ -195,6 +204,7 @@ export default function MeetingView({
           </div>
         </details>
         <AudioSources
+          compact={recording && !setupOpen}
           t={t}
           locale={locale}
           devices={devices}
@@ -290,7 +300,11 @@ export default function MeetingView({
         )}
       </section>
       {meeting && (
-        <div className="session-progress">
+        <div
+          className={
+            recording ? "session-progress compact" : "session-progress"
+          }
+        >
           <div>
             <span>{t.duration}</span>
             <strong>{clock(meeting.durationMs)}</strong>
@@ -334,6 +348,28 @@ export default function MeetingView({
           </div>
         )}
       <div className="meeting-workspace-frame">
+        {liveNotes && onLiveFocus && (
+          <div
+            className="meeting-view-choice"
+            role="group"
+            aria-label={locale === "de" ? "Meetingansicht" : "Meeting view"}
+          >
+            <button
+              className="secondary"
+              aria-pressed={!liveFocus}
+              onClick={() => onLiveFocus(false)}
+            >
+              {locale === "de" ? "Transkript" : "Transcript"}
+            </button>
+            <button
+              className="secondary"
+              aria-pressed={liveFocus}
+              onClick={() => onLiveFocus(true)}
+            >
+              {locale === "de" ? "Zusammenfassung" : "Summary"}
+            </button>
+          </div>
+        )}
         <div
           className={`meeting-workspace${liveNotes ? " with-live" : ""}${
             liveNotes && liveFocus ? " live-focus" : ""
@@ -379,6 +415,21 @@ export default function MeetingView({
                   savedFile={savedFile}
                 />
               </div>
+            )}
+            {meeting?.livePreviewLimited && loadFullTranscript && (
+              <button
+                className="text-button"
+                disabled={transcriptLoading}
+                onClick={() => void loadFullTranscript()}
+              >
+                {transcriptLoading
+                  ? locale === "de"
+                    ? "Frühere Abschnitte werden geladen …"
+                    : "Loading earlier sections …"
+                  : locale === "de"
+                    ? "Gesamtes Transkript laden"
+                    : "Load complete transcript"}
+              </button>
             )}
             <TranscriptBody parts={recentParts} locale={locale} t={t} />
           </section>

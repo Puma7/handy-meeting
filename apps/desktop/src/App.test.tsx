@@ -938,7 +938,7 @@ describe("migration frontend boundaries (synthetic IPC)", () => {
     ).toBe(true);
     expect(api.startMeeting).not.toHaveBeenCalled();
   });
-  it("copies all transcript sections beyond the bounded live display", async () => {
+  it("displays and copies all transcript sections beyond the bounded poll preview", async () => {
     const long: Meeting = {
       ...meeting,
       status: "recording",
@@ -965,7 +965,7 @@ describe("migration frontend boundaries (synthetic IPC)", () => {
     });
     render(<App api={api} />);
     await screen.findByRole("button", { name: "Meeting beenden" });
-    expect(screen.queryByText("Synthetic section 0")).toBeNull();
+    await screen.findByText("Synthetic section 0");
     await userEvent.click(
       screen.getByRole("button", { name: "Transkript kopieren" }),
     );

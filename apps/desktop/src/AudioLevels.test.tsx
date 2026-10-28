@@ -530,11 +530,8 @@ it("keeps exactly one meter beneath each source selector when recording setup is
   for (const meter of meters) {
     expect(meter.closest("details")).toBeNull();
     const source = meter.closest(".audio-source")!;
-    const select = source.querySelector("select")!;
-    expect(
-      select.compareDocumentPosition(meter) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(select.disabled).toBe(true);
+    expect(source.querySelector("select")).toBeNull();
+    expect(source.querySelector("label")?.textContent).toBeTruthy();
     expect(source.querySelectorAll("[role=meter]").length).toBe(1);
   }
   // Viewing an agent-owned signal grants no ability to use the existing controls.
