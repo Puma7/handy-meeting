@@ -13,6 +13,13 @@ A release of the independent Rust/Tauri meeting companion for Handy. The release
 
 - Finds Ollama and LM Studio on this computer and lists their models. Suggests `gemma4:e2b` (8 GB memory) or `gemma4:e4b` (16 GB or more) and can download the suggestion through a running Ollama. Nothing is downloaded without a click.
 
+### Simpler Windows installation
+
+- Installs into one folder, `%LOCALAPPDATA%\Programs\Meeting for Handy`, and adds **Meeting for Handy** to the Start menu so Windows search finds it. A desktop shortcut and starting the app are offered at the end; the installer asks for English or German.
+- Running the same or a newer setup again repairs or updates that folder after the app is closed. It never ends a running app or recording.
+- Version folders of 1.0.5 and earlier are removed through their own uninstallers after the new version is in place. Recordings, transcripts and settings in `%LOCALAPPDATA%\HandyMeeting` stay untouched.
+- Windows does not allow installers to pin apps to the taskbar; right-click the running app and choose *Pin to taskbar*.
+
 ### Reliability and desktop clarity
 
 - Separate live system-audio and microphone meters stay visible below their controls. Green/yellow/red segments, digital peak values and clear silence, clipping, pause/mute and unavailable states help check incoming audio independently of the transcript. Meters do not start devices while idle or replace saved-audio progress checks.

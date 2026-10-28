@@ -628,3 +628,41 @@ Gerenderte Komponenten wurden mit synthetischen Daten in Chromium bei 1440×900 
 **Codex-Review auf 6ef6423 bearbeitet:** Kopierte Zusammenfassungen enthalten je Aussage Quellenkennung, Zeit, Spur und wörtliches Zitat; ein bei anderer Route eingegebener Schlüssel wird beim Übernehmen eines lokalen Presets verworfen; die Anzeige zeigt während eines Laufs dessen tatsächliches Modell samt Cloud-/Lokal-Kennzeichen und weist auf geänderte Einstellungen für den nächsten Start hin; Panel und Modelleinrichtung bleiben unter StrictMode funktionsfähig; ein hängender Ollama-Download lässt sich abbrechen (synthetischer Server, der vor und zwischen Fortschrittszeilen stehen bleibt); die Kurzfassung verarbeitet einen großen Aussagenrückstand fensterweise in Paketen von höchstens 80 Aussagen und zählt nur tatsächlich übergebene Fenster als abgedeckt. Jede Korrektur hat einen Regressionstest, der vor der Korrektur fehlschlug.
 
 Für den noch ausstehenden echten Referenztest gibt es `cargo run -p meeting-notes --example live_reference -- <neuer Ausgabeordner> [Endpunkt] [Modell]` (Standard: Ollama `http://127.0.0.1:11434/v1/`, `gemma4:e4b`). Er spielt eine synthetische Besprechung in zwei Hälften ein und verlangt genau einen ausdrücklichen Beschluss, genau eine Aufgabe für Anna bis Freitag und eine belegte Kurzfassung; unverbindliche deutsch-englische Aussagen dürfen keine Beschlüsse oder Aufgaben ergeben. Er wurde hier nur gebaut und ohne Modell gestartet (erwartete Fehlermeldung „KI-Dienst nicht erreichbar“), nicht mit einem echten Modell ausgeführt.
+
+**Windows-Installer nach Nutzertest mit 1.0.5 korrigiert:** Der Maintainer installierte 1.0.5 unter Windows und meldete:
+- Die Setup-Datei zeigte kein Icon.
+- Der Installer begrüßte nur auf Deutsch.
+- Die Lizenzseite nannte „HandyMeeting“.
+- Das Programm lag in einem versionierten Ordner `HandyMeeting\1.0.5`.
+- Weder Startmenü noch Suche fanden die App.
+- Ein zweiter Aufruf brach mit „bereits installiert“ ab.
+
+Ursachen:
+- **Fehlender Startmenü-Eintrag:** Das Startmenü-Hilfsskript lief über `powershell.exe -File`, das unter der Windows-Client-Standardrichtlinie `Restricted` blockiert wird. Die bisherige CI prüfte das nur auf einem Runner mit freizügigerer Richtlinie.
+- **Icon:** Die ICO enthielt nur ein einzelnes 256-px-PNG.
+- **Sprache:** Die Sprache folgte ohne Auswahl der Windows-Anzeigesprache.
+
+Korrektur auf ausdrückliche Entscheidung des Maintainers (AGENTS.md entsprechend angepasst):
+- Ein fester Ordner `%LOCALAPPDATA%\Programs\Meeting for Handy`.
+- Startmenü-Verknüpfung direkt per NSIS, kein PowerShell-Hilfsskript mehr im Paket.
+- Optionale Desktop-Verknüpfung und Sprachauswahl Englisch/Deutsch.
+- Reparatur und Update am Ort nach Beenden der App: Wartezeit 15 s, die App wird nie beendet, die installierte Deinstallation entfernt mit `/UPGRADE` nur ihre aufgelisteten Dateien.
+- Entfernen früherer Versionsordner über deren eigene Deinstallationsprogramme.
+- ICO mit 16–256 px.
+- Copyright „Meeting for Handy contributors“.
+- Der Updater akzeptiert zusätzlich einen künftigen Setup-Namen `MeetingForHandy-…`, mit Regressionstest. Der Dateiname `HandyMeeting-…-setup.exe` bleibt in 1.0.6, weil die Updater bis 1.0.5 nur ihn finden.
+
+Lokal geprüft:
+- `makensis 3.09 -WX` kompiliert ohne Warnung.
+- `pefile` zeigt 9 Icon-Größen in der Setup-EXE statt 1.
+- **Wine 9 (Ersatzumgebung, kein echtes Windows), synthetische Nutzlast:**
+  - Ein fremder Ordner wird abgelehnt.
+  - Eine Neuinstallation mit fehlenden Oberordnern legt Startmenü-Eintrag und Registrierung an.
+  - Ein synthetischer Altordner `HandyMeeting\0.0.1` wird samt Registrierung und altem Startmenü-Link entfernt, seine Nutzerdatei bleibt.
+  - Ein erneuter Aufruf stellt eine gelöschte Datei wieder her und ersetzt eine veraltete, eine Nutzerdatei bleibt.
+  - Bei gesperrter Programmdatei endet das Setup nach etwa 15 s mit Code 3 ohne Änderung.
+  - Ein Ordnerwechsel entfernt die vorherige Installation, ihre Nutzerdatei bleibt.
+  - Die Deinstallation entfernt Verknüpfung und Registrierung.
+- Sprachdialog und Abschlussseite waren nur im Silent-Modus nicht prüfbar.
+
+Dieselben Abläufe prüft `package-rust-installer.ps1 -RunChecks` jetzt auf echtem Windows in der PR-CI. Die Release-Prüfung verlangt die neuen Nachweise `reinstallRepaired`, `startMenuShortcutChecked`, `legacyVersionsMigrated` und `runningProgramPreserved`.

@@ -28,7 +28,7 @@ An independent **Rust + Tauri companion for [Handy](https://github.com/cjpais/Ha
 | Mac · Apple Silicon / M-series | Apple Silicon DMG | macOS 15+; recording permissions |
 | Mac · Intel | Intel DMG | macOS 15+; recording permissions |
 
-**Release status (28 October 2026):** the current public release is **[1.0.4](https://github.com/Puma7/meeting-for-handy/releases/tag/v1.0.4)**, with all 17 assets: five packages and twelve checksum/source proofs, including `RELEASE_MANIFEST.json`. Keep the versioned program folders separate; recordings and older installations are preserved.
+**Release status (28 October 2026):** the current public release is **[1.0.4](https://github.com/Puma7/meeting-for-handy/releases/tag/v1.0.4)**, with all 17 assets: five packages and twelve checksum/source proofs, including `RELEASE_MANIFEST.json`. Recordings are always preserved; from 1.0.6 Windows uses one program folder (see below).
 
 **Future releases:** a matching version tag automatically starts the full Windows/Linux/Mac build matrix. Successful checks produce all five packages and their proofs in a release draft. Publish the populated draft to make the downloads public; publishing verifies the populated draft without starting another build. Draft PRs and ordinary main updates run source checks; full candidates run for ready PRs, explicit manual requests and release tags. [Release procedure](docs/RELEASING.md).
 
@@ -100,7 +100,7 @@ MIT licensed. Thanks to Handy, transcribe.cpp, Tauri and the maintained librarie
 
 Recording pause/resume and independent app microphone mute keep the meeting timeline with explicit silence and retained control events. Full transcript snapshots can be saved as TXT, safe Markdown or structured JSON with source IDs and section times. Explicit program/import choices now require a native picker and confirmation for the current app start. Physical interruption, endurance, Mac/Linux-device and signing gates remain separate from automated tests.
 
-The visible name is **Meeting for Handy**. Existing data/key/bundle identifiers, executable filenames and the `HandyMeeting-<version>-...` download prefix stay compatible with earlier installations and updater clients. Earlier installed programs and their shortcuts are preserved. The new Windows Start menu entry is **Meeting for Handy**; an execution policy that blocks scripts is respected and the installer reports the retained executable location.
+The visible name is **Meeting for Handy**. Existing data/key/bundle identifiers, executable filenames and the `HandyMeeting-<version>-...` download prefix stay compatible with earlier installations and updater clients. From 1.0.6 the Windows setup installs into one folder, `%LOCALAPPDATA%\Programs\Meeting for Handy`, and adds **Meeting for Handy** to the Start menu, so Windows search finds it. You can also add a desktop shortcut and choose English or German in the installer. Running a newer or the same setup again updates or repairs that folder once the app is closed. Version folders from 1.0.5 and earlier (`Programs\HandyMeeting\<version>`) are removed through their own uninstallers. Recordings and settings are kept; they live separately in `%LOCALAPPDATA%\HandyMeeting`. Windows does not let installers pin apps to the taskbar: right-click the running app and choose *Pin to taskbar*.
 
 ## Development toward 1.0.6 (unreleased)
 

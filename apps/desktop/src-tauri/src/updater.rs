@@ -15,6 +15,8 @@ type Result<T> = std::result::Result<T, String>;
 const LATEST: &str = "https://api.github.com/repos/Puma7/meeting-for-handy/releases/latest";
 const MAX_INSTALLER: u64 = 1024 * 1024 * 1024;
 const RELEASES: &str = "https://github.com/Puma7/meeting-for-handy/releases";
+/// Release asset prefixes, preferred first: the branded name, then the name used up to 1.0.6.
+const ASSET_PREFIXES: [&str; 2] = ["MeetingForHandy-", "HandyMeeting-"];
 /// Unfinished downloads never carry an executable extension.
 const PARTIAL_SUFFIX: &str = "-setup.partial";
 #[derive(Clone, Serialize, Default)]
@@ -133,7 +135,12 @@ fn candidate(release: Release, current: &str, platform: Platform) -> Result<Opti
             installer: None,
         }));
     };
-    let name = format!("HandyMeeting-{tag}-{suffix}");
+    // The branded asset name is preferred; releases up to 1.0.6 use the former prefix.
+    let name = ASSET_PREFIXES
+        .iter()
+        .map(|prefix| format!("{prefix}{tag}-{suffix}"))
+        .find(|name| release.assets.iter().any(|a| &a.name == name))
+        .unwrap_or_else(|| format!("{}{tag}-{suffix}", ASSET_PREFIXES[0]));
     let expected_url = format!("{RELEASES}/download/{}/{}", release.tag_name, name);
     let mut matches = release.assets.into_iter().filter(|a| a.name == name);
     let first = matches.next();
@@ -575,6 +582,38 @@ mod tests {
             downloads: false,
         };
         assert!(candidate(release(), "1.0.1", unknown).unwrap().is_some());
+    }
+    #[test]
+    fn branded_setup_name_is_found_and_preferred_over_the_former_name() {
+        // A rename of the release asset must not cut installed apps off from updates.
+        let branded = |r: &mut Release| {
+            r.assets[0].name = "MeetingForHandy-1.0.2-windows-x64-setup.exe".into();
+            r.assets[0].browser_download_url =
+                format!("{RELEASES}/download/v1.0.2/MeetingForHandy-1.0.2-windows-x64-setup.exe");
+        };
+        let mut r = release();
+        branded(&mut r);
+        let found = candidate(r, "1.0.1", WINDOWS).unwrap().unwrap();
+        assert_eq!(
+            found.installer.unwrap().url,
+            format!("{RELEASES}/download/v1.0.2/MeetingForHandy-1.0.2-windows-x64-setup.exe")
+        );
+        let mut r = release();
+        let former = release().assets.remove(0);
+        branded(&mut r);
+        r.assets.push(former);
+        let found = candidate(r, "1.0.1", WINDOWS).unwrap().unwrap();
+        assert_eq!(
+            found.asset_name.as_deref(),
+            Some("MeetingForHandy-1.0.2-windows-x64-setup.exe")
+        );
+        // A branded name with a foreign origin is still rejected, not replaced by the other name.
+        let mut r = release();
+        let former = release().assets.remove(0);
+        branded(&mut r);
+        r.assets[0].browser_download_url = "https://example.com/program.exe".into();
+        r.assets.push(former);
+        assert!(candidate(r, "1.0.1", WINDOWS).is_err());
     }
     fn folder() -> PathBuf {
         let root = std::env::temp_dir().join(meeting_notes::new_job_id());
