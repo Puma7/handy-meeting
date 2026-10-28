@@ -260,16 +260,23 @@ Function RemoveFormerInstallations
     Goto legacy_loop
   legacy_done:
   RMDir "$LOCALAPPDATA\Programs\HandyMeeting"
-  ; The former Start menu folder link pointed into a version folder; a link there that starts
-  ; another program stays.
+  ; The former Start menu folder link (up to 1.0.5) is deleted only when the former helper
+  ; recorded it as its own and it still starts the recorded program; its record goes with it.
+  ; Any other link there stays, and so does the record of a link that is kept.
+  IfFileExists "$SMPROGRAMS\${PRODUCT}\${PRODUCT}.lnk" 0 former_link_gone
+  ReadRegStr $R5 HKCU "Software\HandyMeeting\BrandedStartMenuLink" "Link"
+  ReadRegStr $R6 HKCU "Software\HandyMeeting\BrandedStartMenuLink" "Target"
+  StrCmp $R5 "$SMPROGRAMS\${PRODUCT}\${PRODUCT}.lnk" 0 former_link_done
+  StrCmp $R6 "" former_link_done
   Push "$SMPROGRAMS\${PRODUCT}\${PRODUCT}.lnk"
   Call LinkTarget
   Pop $R4
-  StrCpy $R4 $R4 "" -17
-  StrCmp $R4 "\HandyMeeting.exe" 0 +2
+  StrCmp $R4 $R6 0 former_link_done
   Delete "$SMPROGRAMS\${PRODUCT}\${PRODUCT}.lnk"
-  RMDir "$SMPROGRAMS\${PRODUCT}"
+  former_link_gone:
   DeleteRegKey HKCU "Software\HandyMeeting\BrandedStartMenuLink"
+  former_link_done:
+  RMDir "$SMPROGRAMS\${PRODUCT}"
 FunctionEnd
 Function LaunchProgram
   Exec '"$INSTDIR\HandyMeeting.exe"'

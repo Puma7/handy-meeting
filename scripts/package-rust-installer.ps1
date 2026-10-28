@@ -68,11 +68,16 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Synthetic former uninstaller compilation failed.' }
         New-Item -Path $legacyRegistration -Force | Out-Null
         New-ItemProperty -LiteralPath $legacyRegistration -Name InstallLocation -Value $legacy -PropertyType String -Force | Out-Null
-        $legacyLink = Join-Path $programs 'Meeting for Handy/Meeting for Handy.lnk'
+        # The former folder link with the ownership record the 1.0.5 helper wrote for it.
+        $legacyLink = [IO.Path]::GetFullPath((Join-Path $programs 'Meeting for Handy/Meeting for Handy.lnk'))
         New-Item -ItemType Directory -Path (Split-Path $legacyLink -Parent) -Force | Out-Null
         $link = $shell.CreateShortcut($legacyLink)
-        $link.TargetPath = $legacyProgram
+        $link.TargetPath = [IO.Path]::GetFullPath($legacyProgram)
         $link.Save()
+        $legacyOwner = 'HKCU:\Software\HandyMeeting\BrandedStartMenuLink'
+        New-Item -Path $legacyOwner -Force | Out-Null
+        New-ItemProperty -LiteralPath $legacyOwner -Name Link -Value $legacyLink -PropertyType String -Force | Out-Null
+        New-ItemProperty -LiteralPath $legacyOwner -Name Target -Value ([IO.Path]::GetFullPath($legacyProgram)) -PropertyType String -Force | Out-Null
         # A desktop link of the same name that the setup did not create is never replaced.
         if (Test-Path -LiteralPath $desktopLink) { throw 'The disposable CI account already has a Meeting for Handy desktop link.' }
         Set-ForeignDesktopLink
@@ -89,7 +94,7 @@ try {
             if (Test-Path -LiteralPath (Join-Path $install 'ManageStartMenu.ps1')) { throw 'The installer still ships the PowerShell Start menu helper.' }
             if ((Test-Path -LiteralPath $legacyProgram) -or (Test-Path -LiteralPath (Join-Path $legacy 'Uninstall.exe')) -or (Test-Path -LiteralPath $legacyRegistration)) { throw 'The former version folder was not migrated.' }
             if ([IO.File]::ReadAllText($legacyUserFile) -ne 'Synthetic user data must survive the migration.') { throw 'Migration removed a user file.' }
-            if (Test-Path -LiteralPath $legacyLink) { throw 'The former Start menu link into a version folder remained.' }
+            if ((Test-Path -LiteralPath $legacyLink) -or (Test-Path -LiteralPath $legacyOwner)) { throw 'The former Start menu link into a version folder or its record remained.' }
             if ((Link-Target $desktopLink) -ne [IO.Path]::GetFullPath($foreignTarget) -or $null -ne $registered.DesktopShortcut) { throw 'Setup replaced or claimed a foreign desktop link.' }
         } finally {
             Remove-Item -LiteralPath $legacyRegistration -ErrorAction SilentlyContinue

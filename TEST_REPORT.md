@@ -752,3 +752,10 @@ Lokal bestanden: 166 Vitest-Fälle, `tsc` und `prettier`.
 
 Lokal bestanden: `makensis -WX` ohne Warnung und 72 Release-Skripttests.
 - **Weitere Dokumentationshinweise aus demselben Review:** `docs/RELEASING.md` beschreibt die CI-Prüfung jetzt korrekt als synthetisch gesperrte Programmdatei (ohne Freigabe geöffnet). Es wird weder ein echter Prozess noch eine Aufnahme gestartet. Beide READMEs nennen für jede Aussage der Live-Zusammenfassung Quellenkennung, wörtliches Zitat, Zeit und Audiospur.
+
+**CodeRabbit-Review 5687473668 auf c5b23a0 bearbeitet (Runde 2):** Die beiden Korrekturen an der App haben je einen Regressionstest, der vor der Korrektur fehlschlug.
+- **Cloud-Modell als lokale Wahl (Major):** Beim Wechsel von Cloud zu lokal wird der Modellname geleert. So wird ein Cloud-Modell nicht mehr als lokales Modell für den automatischen Start gespeichert.
+- **Kurz sichtbarer fremder Stand (Minor):** Das Panel zeigt und verwendet nur noch einen Stand, dessen `meetingId` zum angezeigten Meeting gehört. Das Zurücksetzen beim Meetingwechsel läuft vor dem Zeichnen (`useLayoutEffect`).
+- **Frühere Ordnerverknüpfung (Minor):** Die Verknüpfung `Meeting for Handy\Meeting for Handy.lnk` aus dem Versionsordner-Layout wird nur noch gelöscht, wenn der Eigentumseintrag des 1.0.5-Helfers (`HKCU\Software\HandyMeeting\BrandedStartMenuLink`, Werte `Link` und `Target`) sie nennt und ihr Ziel noch dem vermerkten Programm entspricht. Der Eintrag wird mit ihr entfernt. Eine Endung auf `HandyMeeting.exe` allein genügt nicht mehr. `-RunChecks` legt die synthetische frühere Verknüpfung jetzt mit diesem Eintrag an und prüft, dass beide verschwinden. Mit Wine 9 ist zusätzlich nachgestellt: eine nicht vermerkte und eine fremde Verknüpfung bleiben erhalten.
+
+Lokal bestanden: 168 Vitest-Fälle, `tsc`, `prettier`, 72 Release-Skripttests, `makensis -WX`.

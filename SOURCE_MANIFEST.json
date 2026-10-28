@@ -41,8 +41,8 @@
   },
   {
     "Path": "TEST_REPORT.md",
-    "SHA256": "6B5A0D823A7A36C92AF5986BA7B27A476AC93AFEC494DC0253DD48419924D84A",
-    "Bytes": 168724
+    "SHA256": "2DA1B64C9E932CBE08DEB2AED4AF07E994DBFBDDE31A295F8164812302B1DC98",
+    "Bytes": 170094
   },
   {
     "Path": "DAUERTEST.md",
@@ -481,8 +481,8 @@
   },
   {
     "Path": "scripts/package-rust-installer.ps1",
-    "SHA256": "7237DB20EB0D6ADF683C832E83D82C6596811FF4938060AB65CE41E739ACCC74",
-    "Bytes": 13946
+    "SHA256": "309D9662398700DCC771BB709DB39DE239CAFC9590F2AB399396143E1E814481",
+    "Bytes": 14543
   },
   {
     "Path": "scripts/package-rust-portable.sh",
@@ -581,8 +581,8 @@
   },
   {
     "Path": "scripts/windows-installer.nsi",
-    "SHA256": "15B7C3AD04CB98AC75CCED45F18B16B09100BB8CD4C0A8FE705AA27EB9B28BC9",
-    "Bytes": 17239
+    "SHA256": "010EEF7A93418A52C6B43E370D2A40A21F736E02CE9F6192DDF158D487BB987D",
+    "Bytes": 17725
   },
   {
     "Path": "platform/macos/HandyMeetingCapture.swift",
@@ -14296,8 +14296,8 @@
   },
   {
     "Path": "apps/desktop/src/views/NotesView.tsx",
-    "SHA256": "394E8209A35692252E01F2DDBA8DC7A3048DC36262DB9C41395DE6578A9FF434",
-    "Bytes": 27613
+    "SHA256": "19DA6B34A8DBC1788BE0336BA03F55109D204631CDB5A36E7736E8D0BA425D69",
+    "Bytes": 27781
   },
   {
     "Path": "apps/desktop/src/views/RecordingControls.tsx",
@@ -14361,8 +14361,8 @@
   },
   {
     "Path": "apps/desktop/src/views/LiveNotesPanel.tsx",
-    "SHA256": "BDCBCE60F825C73C0225D2401DC87CC1154BCD530261900E6FC033C34DBA160D",
-    "Bytes": 25411
+    "SHA256": "C23EC7224D3BEE31EAAC6EB5509BFADFCA14A496987F97285A2A33FEC3CD6C94",
+    "Bytes": 25676
   },
   {
     "Path": "apps/desktop/src/views/LocalModelSetup.tsx",
@@ -14526,8 +14526,8 @@
   },
   {
     "Path": "apps/desktop/src/LiveNotes.test.tsx",
-    "SHA256": "D48EBACA3568FD4E7B0048BECE3B301E796BA807737E33959E7A5A51EE430CCC",
-    "Bytes": 30734
+    "SHA256": "3804223E9EA37FAD8A30E9B27E3F8C3F676AF8EA830BCCDE4A92C53672E940D0",
+    "Bytes": 33465
   },
   {
     "Path": "apps/desktop/src-tauri/capabilities/default.json",
@@ -14796,8 +14796,8 @@
   },
   {
     "Path": "docs/RELEASING.md",
-    "SHA256": "AD2986BA1EF9533040A596FF28268A815AA6E2FB399CE21C7F8EA251ABDCA99B",
-    "Bytes": 12536
+    "SHA256": "9FFBA567481878023A3A0CE2F4A3CE575FC9326A4CBA14C3074FDED95566C12E",
+    "Bytes": 12792
   },
   {
     "Path": "docs/RUST_AGENT_PROTOCOL.md",

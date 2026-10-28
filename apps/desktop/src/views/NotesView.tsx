@@ -257,6 +257,8 @@ export default function NotesView({
                         : "https://openrouter.ai/api/v1/",
                     );
                     setApiKey("");
+                    // A cloud model name is never kept as the local (and remembered) choice.
+                    if (event.target.value === "local") setTextModel("");
                   }}
                 >
                   <option value="local">{t.local}</option>

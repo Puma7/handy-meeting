@@ -8,7 +8,13 @@ import {
   Settings2,
   Square,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { errorMessage } from "../api";
 import { clock } from "../domain";
 import type {
@@ -186,7 +192,7 @@ export default function LiveNotesPanel({
   headless = false,
 }: Props) {
   const de = locale === "de";
-  const [status, setStatus] = useState<LiveNotesStatus | null>(null),
+  const [loaded, setStatus] = useState<LiveNotesStatus | null>(null),
     [error, setError] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
     [cloudConsent, setCloudConsent] = useState(false),
@@ -200,6 +206,8 @@ export default function LiveNotesPanel({
     autoStarted = useRef<string | null>(null),
     autoAttempts = useRef(new Map<string, number>());
   const [autoRetry, setAutoRetry] = useState(0);
+  // Only the state of the meeting shown now is displayed or acted on.
+  const status = loaded?.meetingId === meetingId ? loaded : null;
   const available = Boolean(api.getLiveNotes && api.startLiveNotes);
   const endpointValid = endpointAllowed(connection.mode, connection.endpoint);
   const modelReady = Boolean(connection.model.trim()) && endpointValid;
@@ -211,7 +219,8 @@ export default function LiveNotesPanel({
       mounted.current = false;
     };
   }, []);
-  useEffect(() => {
+  // Runs before the browser paints, so no answer for the previous meeting can show up first.
+  useLayoutEffect(() => {
     generation.current += 1;
     setCloudConsent(false);
     setStatus(null);

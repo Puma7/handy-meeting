@@ -955,3 +955,81 @@ it("auto-starts the live summary for a recording that begins while another page 
   ).toBeNull();
   localStorage.clear();
 });
+
+it("never shows another meeting's live summary, even for a moment", async () => {
+  // CodeRabbit review 5687473668: between the meeting change and the reset effect, an
+  // answer for the previous meeting could be displayed under the new one. Synthetic IPC
+  // that always answers for meeting A while meeting B is shown.
+  const a = "a".repeat(32),
+    b = "b".repeat(32);
+  setup(
+    {
+      getLiveNotes: vi
+        .fn()
+        .mockResolvedValue(
+          status({ meetingId: a, status: "waiting", running: true, view }),
+        ),
+      startLiveNotes: vi.fn(),
+    },
+    { meetingId: b, meetingTitle: "Meeting B" },
+  );
+  await screen.findByRole("button", { name: "Live-Zusammenfassung starten" });
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  });
+  expect(screen.queryByText("Erster Punkt")).toBeNull();
+  expect(screen.queryByText(/Läuft/)).toBeNull();
+});
+
+it("does not remember a cloud model as the local live summary model after switching back", async () => {
+  // CodeRabbit review 5687473668 (Major): switching from cloud to local kept the cloud model
+  // name, which was then saved as the local choice for automatic live summaries.
+  localStorage.clear();
+  const api = {
+    ...testServices(),
+    getAppState: vi.fn().mockResolvedValue({
+      version: "synthetic",
+      handy: null,
+      recording: false,
+      activeMeeting: null,
+      captureControl: {
+        paused: false,
+        microphoneMuted: false,
+        hasMicrophone: true,
+      },
+    } satisfies AppState),
+    listDevices: vi.fn().mockResolvedValue([]),
+    listMeetings: vi.fn().mockResolvedValue([]),
+    listAnalyses: vi.fn().mockResolvedValue({ analyses: [], skipped: [] }),
+    getNotesProgress: vi.fn().mockResolvedValue(null),
+    listTextModels: vi.fn().mockResolvedValue([]),
+    refreshHandy: vi.fn().mockResolvedValue({
+      executable: "native-choice",
+      version: "synthetic",
+      models: [],
+    }),
+    localModelSetup: vi.fn().mockResolvedValue(ollamaReady),
+  } as unknown as DesktopApi;
+  render(<App api={api} />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Nachbearbeitung" }),
+  );
+  await userEvent.selectOptions(
+    await screen.findByLabelText("Verarbeitung"),
+    "cloud",
+  );
+  await userEvent.type(
+    screen.getByLabelText("Textmodell"),
+    "synthetic/cloud-model",
+  );
+  await userEvent.selectOptions(screen.getByLabelText("Verarbeitung"), "local");
+  await waitFor(() =>
+    expect(localStorage.getItem("handymeeting.rust.live-notes.v1")).not.toBe(
+      null,
+    ),
+  );
+  expect(localStorage.getItem("handymeeting.rust.live-notes.v1")).not.toContain(
+    "synthetic/cloud-model",
+  );
+  localStorage.clear();
+});
