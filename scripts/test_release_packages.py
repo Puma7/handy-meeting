@@ -41,7 +41,7 @@ class ReleaseGuards(unittest.TestCase):
             file = self.put(f'{scope}/{name}', b'not-executable-synthetic-' + suffix.encode())
             self.package_files.append(file)
             self.put(f'{scope}/{name}.sha256', (packages.sha(file) + '  ' + name + '\n').encode())
-            proof = {'success': True, 'version': VERSION, 'applicationVersion': VERSION, 'sourceFingerprintSHA256': FINGERPRINT, 'sourceSHA256': FINGERPRINT, 'package': name, 'sha256': packages.sha(file), 'bytes': file.stat().st_size, 'userRecordingsIncluded': False, 'rid': rid, 'releaseChecks': {'success': True}, 'relocatedReleaseChecks': {'success': True}, 'actualInstallUninstallChecked': True, 'freshMissingParentsChecked': True, 'existingDestinationRejected': True, 'duplicateVersionRejected': True, 'unknownUserFilePreserved': True, 'recursiveDeletion': False}
+            proof = {'success': True, 'version': VERSION, 'applicationVersion': VERSION, 'sourceFingerprintSHA256': FINGERPRINT, 'sourceSHA256': FINGERPRINT, 'package': name, 'sha256': packages.sha(file), 'bytes': file.stat().st_size, 'userRecordingsIncluded': False, 'rid': rid, 'releaseChecks': {'success': True}, 'relocatedReleaseChecks': {'success': True}, 'actualInstallUninstallChecked': True, 'freshMissingParentsChecked': True, 'existingDestinationRejected': True, 'reinstallRepaired': True, 'startMenuShortcutChecked': True, 'legacyVersionsMigrated': True, 'runningProgramPreserved': True, 'desktopShortcutOwnershipChecked': True, 'unknownUserFilePreserved': True, 'recursiveDeletion': False}
             self.put(f'{scope}/{name}.' + ('verification' if scope == 'windows' else 'manifest') + '.json', proof)
 
     def put(self, name, value):
@@ -143,11 +143,18 @@ class ReleaseGuards(unittest.TestCase):
             self.assemble()
         self.assertEqual(sentinel.read_text(), 'original')
 
-    def test_installer_requires_actual_duplicate_version_rejection(self):
+    def test_installer_requires_actual_repair_shortcut_migration_and_running_app_checks(self):
+        # 1.0.5 setups refused a second run and left no Start menu link under the default policy.
         file = next((self.input / 'windows').glob('*setup.exe.verification.json'))
-        self.change(file, 'duplicateVersionRejected', False)
-        with self.assertRaisesRegex(ValueError, 'Actual installer'):
-            self.assemble()
+        for key in ['reinstallRepaired', 'startMenuShortcutChecked', 'legacyVersionsMigrated', 'runningProgramPreserved', 'desktopShortcutOwnershipChecked']:
+            for value in [False, None]:
+                with self.subTest(key=key, value=value):
+                    original = packages.read(file)
+                    self.change(file, key, value)
+                    with self.assertRaisesRegex(ValueError, 'Actual installer'):
+                        self.assemble()
+                    self.assertFalse(self.output.exists())
+                    file.write_text(json.dumps(original))
 
     def test_installer_requires_actual_existing_destination_preservation(self):
         file = next((self.input / 'windows').glob('*setup.exe.verification.json'))

@@ -22,6 +22,7 @@ import type {
 import type { MessageKey } from "../i18n";
 import type { TemplateAction } from "./TemplateDialog";
 import CredentialPanel from "./CredentialPanel";
+import LocalModelSetup from "./LocalModelSetup";
 import { useEffect, useState } from "react";
 import type { DesktopApi } from "../types";
 type Props = {
@@ -144,9 +145,30 @@ export default function NotesView({
   locale,
 }: Props) {
   const [setupOpen, setSetupOpen] = useState(!result);
+  const [localSetupOpen, setLocalSetupOpen] = useState(false);
   useEffect(() => {
     if (notesBusy || result) setSetupOpen(false);
   }, [notesBusy, result?.id]);
+  // No model at the configured local endpoint: show the Ollama/LM Studio detection at once
+  // instead of expecting the user to know ports. Nothing is changed until "Use" is clicked.
+  const noLocalModel =
+    mode === "local" &&
+    !manualModel &&
+    (Boolean(modelsError) || (modelsLoaded && !localModels.length));
+  useEffect(() => {
+    if (noLocalModel) setLocalSetupOpen(true);
+  }, [noLocalModel]);
+  // A server chosen from the detection is queried once its address has been applied;
+  // changing the address clears the list, and typing alone never sends a request.
+  // Counts "Use" clicks, so a choice at the current address refreshes as well.
+  const [usedServer, setUsedServer] = useState(0);
+  useEffect(() => {
+    if (!usedServer) return;
+    // After this commit: the parent's list reset for a new address runs after child effects.
+    const timer = setTimeout(refreshModels, 0);
+    return () => clearTimeout(timer);
+    // Runs once per "Use"; the refresh callback reads the current settings.
+  }, [usedServer]);
   const templateLocked =
     notesBusy || libraryInvalid || libraryPending || !connected;
   const builtIn = template.id === "speaker-name-candidates-v1";
@@ -235,6 +257,8 @@ export default function NotesView({
                         : "https://openrouter.ai/api/v1/",
                     );
                     setApiKey("");
+                    // A cloud model name is never kept as the local (and remembered) choice.
+                    if (event.target.value === "local") setTextModel("");
                   }}
                 >
                   <option value="local">{t.local}</option>
@@ -330,6 +354,37 @@ export default function NotesView({
                     <p className="inline-error">{t.textModelUnavailable}</p>
                   )}
               </>
+            )}
+            {mode === "local" && (
+              <details
+                className="connection-settings"
+                open={localSetupOpen}
+                onToggle={(event) =>
+                  setLocalSetupOpen(event.currentTarget.open)
+                }
+              >
+                <summary>
+                  {locale === "de"
+                    ? "Lokales Modell einrichten (Ollama oder LM Studio)"
+                    : "Set up a local model (Ollama or LM Studio)"}
+                </summary>
+                {/* Probes loopback and reads memory only while opened. */}
+                {localSetupOpen && (
+                  <LocalModelSetup
+                    api={api}
+                    locale={locale}
+                    connected={connected}
+                    onUse={(nextEndpoint, nextModel) => {
+                      // A key entered for another route must never reach the local server.
+                      setApiKey("");
+                      setUseSavedKey(false);
+                      setEndpoint(nextEndpoint);
+                      setTextModel(nextModel);
+                      setUsedServer((count) => count + 1);
+                    }}
+                  />
+                )}
+              </details>
             )}
             <details
               className="connection-settings"

@@ -34,10 +34,35 @@ def pr_paths(text):
     """Read and validate every PR filter before a caller can short-circuit on a match."""
     section = re.search(r'^  pull_request:\n(.*?)(?=^  [\w-]+:|\Z)', text, re.M | re.S).group(1)
     inline = re.search(r'^    paths: (\[.*\])$', section, re.M)
-    patterns = ast.literal_eval(inline.group(1)) if inline else re.findall(r"^      - '([^']+)'$", section, re.M)
+    if inline:
+        patterns = ast.literal_eval(inline.group(1))
+    else:
+        # The whole block up to the next key at the same or a lower level: blank and comment
+        # lines are skipped, entries are read, and anything else fails closed.
+        # The block ends at the next key; a wrongly indented list entry stays in it and is rejected.
+        block = re.search(r'^    paths:\n(.*?)(?=^ {0,3}\S|^    [A-Za-z_][\w-]*:|\Z)', section, re.M | re.S)
+        if not block:
+            raise ValueError('No readable pull_request paths filter')
+        patterns = []
+        for line in block.group(1).splitlines():
+            if not line.strip() or line.strip().startswith('#'):
+                continue
+            if not line.startswith('      - '):
+                raise ValueError('Unreadable pull_request paths line: ' + line)
+            patterns.append(block_entry(line[len('      - '):]))
+        if not patterns:
+            raise ValueError('Empty pull_request paths filter')
     for pattern in patterns:
         path_matches('', pattern)
     return patterns
+
+
+def block_entry(entry):
+    """Read one block-list entry in either quote style; anything else fails closed."""
+    match = re.fullmatch(r"'([^']+)'|\"([^\"\\]+)\"", entry.strip())
+    if not match:
+        raise ValueError('Unreadable pull_request path entry: ' + entry)
+    return match.group(1) if match.group(1) is not None else match.group(2)
 
 
 def path_matches(path, pattern):
@@ -119,6 +144,35 @@ class WorkflowBoundaries(unittest.TestCase):
                 with self.subTest(workflow=name, pattern=unsupported), self.assertRaises(ValueError):
                     patterns = pr_paths(mutated)
                     any(path_matches('platform/macos/AudioCapture.swift', pattern) for pattern in patterns)
+
+    def test_block_list_entries_in_both_quote_styles_are_read_and_validated(self):
+        head, pr_section = workflow('rust.yml').split('\n  pull_request:', 1)
+        self.assertNotIn('    paths: [', pr_section.split('permissions:', 1)[0])
+
+        def with_entry(entry):
+            """Insert one entry into the pull_request block list only, after 'platform/**'."""
+            mutated = pr_section.replace("      - 'platform/**'\n", "      - 'platform/**'\n" + entry, 1)
+            self.assertNotEqual(mutated, pr_section)
+            return head + '\n  pull_request:' + mutated
+
+        text = workflow('rust.yml')
+        quoted = with_entry('      - "docs/**"\n')
+        self.assertEqual(len(pr_paths(quoted)), len(pr_paths(text)) + 1)
+        self.assertIn('docs/**', pr_paths(quoted))
+        # A double-quoted exclusion must not be skipped silently.
+        with self.assertRaises(ValueError):
+            pr_paths(with_entry('      - "!platform/macos/**"\n'))
+        # A blank or comment line must not hide a later entry from validation.
+        with self.assertRaises(ValueError):
+            pr_paths(with_entry("\n      # later entries\n      - '!platform/macos/**'\n"))
+        # A four-space entry must not end the block early and escape validation.
+        with self.assertRaises(ValueError):
+            pr_paths(with_entry("    - '!platform/macos/**'\n"))
+        separated = with_entry("\n      - 'docs/**'\n")
+        self.assertIn('docs/**', pr_paths(separated))
+        for unreadable in ('platform/macos/**', "'platform/**' # note", '"platform/**'):
+            with self.subTest(entry=unreadable), self.assertRaises(ValueError):
+                pr_paths(with_entry('      - ' + unreadable + '\n'))
 
     def test_legacy_source_only_ready_changes_trigger_both_candidate_workflows(self):
         for changed in ('src/HandyMeeting/Models.cs', 'verify.ps1'):

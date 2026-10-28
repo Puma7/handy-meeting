@@ -27,114 +27,124 @@ try {
     & $compiler.compiler @arguments
     if ($LASTEXITCODE -ne 0) { throw 'Installer compiler failed.' }
     $tested = $false
-    $restrictedPolicyChecked = $false
     if ($RunChecks) {
+        $uninstallRoot = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall'
+        $registration = Join-Path $uninstallRoot 'MeetingForHandy'
+        $programs = [Environment]::GetFolderPath('Programs')
+        $startLink = Join-Path $programs 'Meeting for Handy.lnk'
+        $desktopLink = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Meeting for Handy.lnk'
+        $foreignTarget = Join-Path $env:WINDIR 'notepad.exe'
+        $shell = New-Object -ComObject WScript.Shell
+        function Invoke-Setup([string[]]$Arguments) { (Start-Process -FilePath $package -ArgumentList $Arguments -WindowStyle Hidden -Wait -PassThru).ExitCode }
+        function Assert-Payload([string]$Directory, [string]$Message) {
+            foreach ($file in $receipt.programFiles) { if ((Get-FileHash -LiteralPath (Join-Path $Directory $file.path)).Hash.ToLowerInvariant() -ne $file.sha256) { throw $Message } }
+        }
+        function Literal([string]$Value) { $Value.Replace('$','$$').Replace('"','$\"') }
+        function Link-Target([string]$Path) { if (Test-Path -LiteralPath $Path) { [IO.Path]::GetFullPath($shell.CreateShortcut($Path).TargetPath) } else { $null } }
+        function Set-ForeignDesktopLink { $link = $shell.CreateShortcut($desktopLink); $link.TargetPath = $foreignTarget; $link.Save() }
+        # A folder with foreign files is never used and nothing is registered for it.
         $occupied = Join-Path $work 'preexisting'
         New-Item -ItemType Directory -Path $occupied | Out-Null
         $existingFile = Join-Path $occupied 'HandyMeeting.exe'
         [IO.File]::WriteAllText($existingFile,'Synthetic user-owned original, not an executable.')
-        $rejected = Start-Process -FilePath $package -ArgumentList @('/S',('/D=' + $occupied)) -WindowStyle Hidden -Wait -PassThru
-        if ($rejected.ExitCode -eq 0 -or [IO.File]::ReadAllText($existingFile) -ne 'Synthetic user-owned original, not an executable.') { throw 'Installer replaced an existing destination.' }
-        # The default Programs/HandyMeeting/version layout starts with missing parents.
-        # An existing direct parent hid the 1.0.0 GetFullPathName failure.
-        $install = Join-Path $work ('Fresh programs ä/HandyMeeting/' + $version)
-        $child = Start-Process -FilePath $package -ArgumentList @('/S',('/D=' + $install)) -WindowStyle Hidden -Wait -PassThru
-        if ($child.ExitCode -ne 0) { throw 'Silent installer check failed.' }
-        foreach ($file in $receipt.programFiles) { if ((Get-FileHash -LiteralPath (Join-Path $install $file.path)).Hash.ToLowerInvariant() -ne $file.sha256) { throw 'Installed program differs from checked payload.' } }
-        $registration = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-' + $version
-        if ((Get-ItemProperty -LiteralPath $registration).InstallLocation -ne $install) { throw 'Installer registration differs from its own directory.' }
-        $stableShortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'Meeting for Handy/Meeting for Handy.lnk'
-        if (-not (Test-Path -LiteralPath $stableShortcut)) { throw 'Stable Meeting for Handy Start menu link is missing.' }
-        $shortcutShell = New-Object -ComObject WScript.Shell
-        if ($shortcutShell.CreateShortcut($stableShortcut).TargetPath -ne (Join-Path $install 'HandyMeeting.exe')) { throw 'Stable shortcut points to another installation.' }
-        # An older uninstaller may not remove the newer installation's shortcut.
-        & (Join-Path $install 'ManageStartMenu.ps1') -Mode uninstall -InstallDirectory (Join-Path $work 'other-older-installation')
-        if (-not (Test-Path -LiteralPath $stableShortcut)) { throw 'A foreign-version uninstall removed the current shortcut.' }
-        # Side by side: a synthetic older registration must not take the link, and removing the
-        # linked version moves the owned link to the newest remaining registered installation.
-        $installedProgram = [IO.Path]::GetFullPath((Join-Path $install 'HandyMeeting.exe'))
-        $olderInstall = Join-Path $work 'older-side-by-side'
-        $olderProgram = [IO.Path]::GetFullPath((Join-Path $olderInstall 'HandyMeeting.exe'))
-        $olderRegistration = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-0.0.1'
-        New-Item -ItemType Directory -Path $olderInstall | Out-Null
-        [IO.File]::WriteAllText($olderProgram,'Synthetic older installation, not an executable.')
+        if ((Invoke-Setup @('/S',('/D=' + $occupied))) -eq 0 -or [IO.File]::ReadAllText($existingFile) -ne 'Synthetic user-owned original, not an executable.') { throw 'Installer replaced an existing destination.' }
+        if (Test-Path -LiteralPath $registration) { throw 'A rejected destination was registered.' }
+        # Synthetic installation of the former one-folder-per-version layout (up to 1.0.5): its own
+        # uninstaller removes its program file and registration; a user file must survive.
+        $legacy = Join-Path $work 'legacy programs/HandyMeeting/0.0.1'
+        New-Item -ItemType Directory -Path (Join-Path $legacy 'Sessions') | Out-Null
+        $legacyProgram = Join-Path $legacy 'HandyMeeting.exe'
+        [IO.File]::WriteAllText($legacyProgram,'Synthetic former version, not an executable.')
+        $legacyUserFile = Join-Path $legacy 'Sessions/legacy-user-file.txt'
+        [IO.File]::WriteAllText($legacyUserFile,'Synthetic user data must survive the migration.')
+        $legacyRegistration = Join-Path $uninstallRoot 'HandyMeeting-0.0.1'
+        $legacySource = Join-Path $work 'legacy-uninstaller.nsi'
+        $legacyLines = @('Unicode true', 'SilentInstall silent', 'RequestExecutionLevel user',
+            ('OutFile "' + (Literal (Join-Path $legacy 'Uninstall.exe')) + '"'), 'Section',
+            ('Delete "' + (Literal $legacyProgram) + '"'),
+            'DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-0.0.1"', 'SectionEnd')
+        [IO.File]::WriteAllLines($legacySource, $legacyLines, [Text.UTF8Encoding]::new($true))
+        & $compiler.compiler /V2 /WX $legacySource
+        if ($LASTEXITCODE -ne 0) { throw 'Synthetic former uninstaller compilation failed.' }
+        New-Item -Path $legacyRegistration -Force | Out-Null
+        New-ItemProperty -LiteralPath $legacyRegistration -Name InstallLocation -Value $legacy -PropertyType String -Force | Out-Null
+        # The former folder link with the ownership record the 1.0.5 helper wrote for it.
+        $legacyLink = [IO.Path]::GetFullPath((Join-Path $programs 'Meeting for Handy/Meeting for Handy.lnk'))
+        New-Item -ItemType Directory -Path (Split-Path $legacyLink -Parent) -Force | Out-Null
+        $link = $shell.CreateShortcut($legacyLink)
+        $link.TargetPath = [IO.Path]::GetFullPath($legacyProgram)
+        $link.Save()
+        $legacyOwner = 'HKCU:\Software\HandyMeeting\BrandedStartMenuLink'
+        New-Item -Path $legacyOwner -Force | Out-Null
+        New-ItemProperty -LiteralPath $legacyOwner -Name Link -Value $legacyLink -PropertyType String -Force | Out-Null
+        New-ItemProperty -LiteralPath $legacyOwner -Name Target -Value ([IO.Path]::GetFullPath($legacyProgram)) -PropertyType String -Force | Out-Null
+        # A desktop link of the same name that the setup did not create is never replaced.
+        if (Test-Path -LiteralPath $desktopLink) { throw 'The disposable CI account already has a Meeting for Handy desktop link.' }
+        Set-ForeignDesktopLink
         try {
-            New-Item -Path $olderRegistration -Force | Out-Null
-            New-ItemProperty -LiteralPath $olderRegistration -Name InstallLocation -Value $olderInstall -PropertyType String -Force | Out-Null
-            & (Join-Path $install 'ManageStartMenu.ps1') -Mode install -InstallDirectory $olderInstall -Version '0.0.1'
-            if ($LASTEXITCODE -ne 4 -or [IO.Path]::GetFullPath($shortcutShell.CreateShortcut($stableShortcut).TargetPath) -ne $installedProgram) { throw 'Installing an older version moved the Start menu link away from the newer version.' }
-            & (Join-Path $install 'ManageStartMenu.ps1') -Mode uninstall -InstallDirectory $install
-            if ($LASTEXITCODE -ne 0 -or [IO.Path]::GetFullPath($shortcutShell.CreateShortcut($stableShortcut).TargetPath) -ne $olderProgram -or (Get-ItemProperty -LiteralPath 'HKCU:\Software\HandyMeeting\BrandedStartMenuLink').Target -ne $olderProgram) { throw 'Removing the linked version left the remaining installation without its Start menu link.' }
-            & (Join-Path $install 'ManageStartMenu.ps1') -Mode install -InstallDirectory $install -Version $version
-            if ($LASTEXITCODE -ne 0 -or [IO.Path]::GetFullPath($shortcutShell.CreateShortcut($stableShortcut).TargetPath) -ne $installedProgram) { throw 'Installing a newer version did not take over the owned Start menu link.' }
+            # Fresh install with missing parents; the Start menu link needs no PowerShell, so a
+            # Restricted execution policy (the Windows client default) cannot block it.
+            $install = Join-Path $work 'Fresh programs ä/Meeting for Handy'
+            if ((Invoke-Setup @('/S','/DESKTOPSHORTCUT',('/D=' + $install))) -ne 0) { throw 'Silent installer check failed.' }
+            Assert-Payload $install 'Installed program differs from checked payload.'
+            $registered = Get-ItemProperty -LiteralPath $registration
+            if ($registered.InstallLocation -ne $install -or $registered.DisplayName -ne 'Meeting for Handy' -or $registered.DisplayVersion -ne $version) { throw 'Installer registration differs from its own directory or name.' }
+            $program = Join-Path $install 'HandyMeeting.exe'
+            if (-not (Test-Path -LiteralPath $startLink) -or [IO.Path]::GetFullPath($shell.CreateShortcut($startLink).TargetPath) -ne [IO.Path]::GetFullPath($program)) { throw 'Meeting for Handy Start menu link is missing or points elsewhere.' }
+            if (Test-Path -LiteralPath (Join-Path $install 'ManageStartMenu.ps1')) { throw 'The installer still ships the PowerShell Start menu helper.' }
+            if ((Test-Path -LiteralPath $legacyProgram) -or (Test-Path -LiteralPath (Join-Path $legacy 'Uninstall.exe')) -or (Test-Path -LiteralPath $legacyRegistration)) { throw 'The former version folder was not migrated.' }
+            if ([IO.File]::ReadAllText($legacyUserFile) -ne 'Synthetic user data must survive the migration.') { throw 'Migration removed a user file.' }
+            if ((Test-Path -LiteralPath $legacyLink) -or (Test-Path -LiteralPath $legacyOwner)) { throw 'The former Start menu link into a version folder or its record remained.' }
+            if ((Link-Target $desktopLink) -ne [IO.Path]::GetFullPath($foreignTarget) -or $null -ne $registered.DesktopShortcut) { throw 'Setup replaced or claimed a foreign desktop link.' }
         } finally {
-            Remove-Item -LiteralPath $olderRegistration -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $legacyRegistration -ErrorAction SilentlyContinue
         }
-        $secondInstall = Join-Path $work 'second-install'
-        $duplicate = Start-Process -FilePath $package -ArgumentList @('/S',('/D=' + $secondInstall)) -WindowStyle Hidden -Wait -PassThru
-        if ($duplicate.ExitCode -eq 0 -or (Test-Path -LiteralPath (Join-Path $secondInstall 'HandyMeeting.exe')) -or (Get-ItemProperty -LiteralPath $registration).InstallLocation -ne $install) { throw 'Duplicate version replaced an existing installation registration.' }
-        & (Join-Path $install 'HandyMeeting.exe') --release-checks (Join-Path $work 'installed-checks') | Out-Host
-        if ($LASTEXITCODE -ne 0) { throw 'Installed executable checks failed.' }
+        # Running setup again repairs the registered installation in place and keeps user files.
         $sentinel = Join-Path $install 'Sessions/user-owned-sentinel.txt'
         New-Item -ItemType Directory -Path (Split-Path $sentinel -Parent) | Out-Null
-        [IO.File]::WriteAllText($sentinel,'Synthetic user data must survive uninstall.')
-        # A user-modified link must also survive removal of owned program files.
-        [IO.File]::WriteAllText($stableShortcut,'Synthetic user-owned shortcut edit; preserve these bytes.')
-        $uninstall = Join-Path $install 'Uninstall.exe'
-        $child = Start-Process -FilePath $uninstall -ArgumentList @('/S',('_?=' + $install)) -WindowStyle Hidden -Wait -PassThru
+        [IO.File]::WriteAllText($sentinel,'Synthetic user data must survive repair and uninstall.')
+        Remove-Item -LiteralPath (Join-Path $install 'LICENSE')
+        # Without the foreign link the repair creates and records its own desktop link.
+        Remove-Item -LiteralPath $desktopLink
+        if ((Invoke-Setup @('/S','/DESKTOPSHORTCUT')) -ne 0) { throw 'Running setup again did not repair the installation.' }
+        if ((Link-Target $desktopLink) -ne [IO.Path]::GetFullPath($program) -or (Get-ItemProperty -LiteralPath $registration).DesktopShortcut -ne $desktopLink) { throw 'The requested desktop link is missing, points elsewhere or is not recorded.' }
+        Assert-Payload $install 'Repair did not restore the checked payload.'
+        if ([IO.File]::ReadAllText($sentinel) -ne 'Synthetic user data must survive repair and uninstall.' -or (Get-ItemProperty -LiteralPath $registration).InstallLocation -ne $install) { throw 'Repair changed user data or the registration.' }
+        # A running app is never ended or replaced: setup waits, then stops without changes.
+        $lock = [IO.File]::Open($program, 'Open', 'Read', 'None')
+        try {
+            if ((Invoke-Setup @('/S')) -eq 0) { throw 'Setup replaced a running program.' }
+        } finally { $lock.Dispose() }
+        Assert-Payload $install 'Setup changed program files while the app was running.'
+        & $program --release-checks (Join-Path $work 'installed-checks') | Out-Host
+        if ($LASTEXITCODE -ne 0) { throw 'Installed executable checks failed.' }
+        # Someone replaced the recorded desktop link with their own: uninstall keeps it.
+        Remove-Item -LiteralPath $desktopLink
+        Set-ForeignDesktopLink
+        $child = Start-Process -FilePath (Join-Path $install 'Uninstall.exe') -ArgumentList @('/S',('_?=' + $install)) -WindowStyle Hidden -Wait -PassThru
         if ($child.ExitCode -ne 0) { throw 'Silent uninstall check failed.' }
+        if ((Link-Target $desktopLink) -ne [IO.Path]::GetFullPath($foreignTarget)) { throw 'Uninstall deleted a desktop link it did not create.' }
+        Remove-Item -LiteralPath $desktopLink
         foreach ($file in $receipt.programFiles) { if (Test-Path -LiteralPath (Join-Path $install $file.path)) { throw 'Uninstall left an owned program payload file.' } }
-        if ((Test-Path -LiteralPath (Join-Path $install 'HandyMeeting.exe')) -or [IO.File]::ReadAllText($sentinel) -ne 'Synthetic user data must survive uninstall.') { throw 'Uninstall did not remove only the owned program files.' }
-        if ([IO.File]::ReadAllText($stableShortcut) -ne 'Synthetic user-owned shortcut edit; preserve these bytes.') { throw 'Uninstall removed a user-modified shortcut.' }
-        # Owned, unchanged link: a fresh install creates it and its own uninstaller removes it,
-        # with the Windows PowerShell user policy set to Restricted as on a default client.
-        Remove-Item -LiteralPath $stableShortcut
-        Remove-Item -LiteralPath 'HKCU:\Software\HandyMeeting\BrandedStartMenuLink' -ErrorAction SilentlyContinue
-        $windowsPowerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-        # Use the account's current policy; never change CurrentUser/Machine policy.
-        $effectivePolicy = (& $windowsPowerShell -NoProfile -Command 'Get-ExecutionPolicy' | Out-String).Trim()
-        $ownedInstall = Join-Path $work 'owned-shortcut-install'
-        $child = Start-Process -FilePath $package -ArgumentList @('/S',('/D=' + $ownedInstall)) -WindowStyle Hidden -Wait -PassThru
-        if ($child.ExitCode -ne 0) { throw 'Reinstall for the owned-shortcut check failed.' }
-        if (-not (Test-Path -LiteralPath $stableShortcut) -or $shortcutShell.CreateShortcut($stableShortcut).TargetPath -ne (Join-Path $ownedInstall 'HandyMeeting.exe')) { throw ('Stable shortcut was not created under execution policy ' + $effectivePolicy + '.') }
-        # 1.0.2 candidates wrote Link and Target but no hash here: Get-FileHash could not load
-        # under Restricted, so the real uninstaller treated its own link as user-owned.
-        $ownership = Get-ItemProperty -LiteralPath 'HKCU:\Software\HandyMeeting\BrandedStartMenuLink' -ErrorAction SilentlyContinue
-        if (-not $ownership -or -not $ownership.SHA256 -or $ownership.SHA256 -ne (Get-FileHash -LiteralPath $stableShortcut -Algorithm SHA256).Hash -or $ownership.Target -ne [IO.Path]::GetFullPath((Join-Path $ownedInstall 'HandyMeeting.exe'))) { throw ('Installer left an incomplete Start menu ownership record under execution policy ' + $effectivePolicy + '.') }
-        $child = Start-Process -FilePath (Join-Path $ownedInstall 'Uninstall.exe') -ArgumentList @('/S',('_?=' + $ownedInstall)) -WindowStyle Hidden -Wait -PassThru
-        if ($child.ExitCode -ne 0) { throw 'Uninstall for the owned-shortcut check failed.' }
-        if (Test-Path -LiteralPath $stableShortcut) {
-            # Diagnose whether the ownership logic or the uninstaller's invocation failed.
-            $record = Get-ItemProperty -LiteralPath 'HKCU:\Software\HandyMeeting\BrandedStartMenuLink' -ErrorAction SilentlyContinue
-            $diagnostic = [ordered]@{
-                effectivePolicy = $effectivePolicy
-                recordLink = $record.Link
-                recordTarget = $record.Target
-                recordSHA256 = $record.SHA256
-                linkSHA256 = (Get-FileHash -LiteralPath $stableShortcut -Algorithm SHA256).Hash
-                expectedTarget = [IO.Path]::GetFullPath((Join-Path $ownedInstall 'HandyMeeting.exe'))
-                installDirectoryRemains = Test-Path -LiteralPath $ownedInstall
-            }
-            & $windowsPowerShell -NoProfile -NonInteractive -File (Join-Path $root 'scripts/manage-start-menu.ps1') -Mode uninstall -InstallDirectory $ownedInstall
-            $diagnostic.directManagerExit = $LASTEXITCODE
-            $diagnostic.removedByDirectManager = -not (Test-Path -LiteralPath $stableShortcut)
-            throw ('Uninstall left its own unchanged shortcut: ' + ($diagnostic | ConvertTo-Json -Compress))
-        }
-        if (Test-Path -LiteralPath 'HKCU:\Software\HandyMeeting\BrandedStartMenuLink') { throw 'Uninstall left the shortcut ownership record.' }
-        # A stricter child-process policy must stay effective. This test does not
-        # lower any policy and does not mutate the CI account's policy registry.
-        $policyBefore = (& $windowsPowerShell -NoProfile -Command 'Get-ExecutionPolicy -List | ConvertTo-Json -Compress' | Out-String).Trim()
-        & $windowsPowerShell -NoProfile -NonInteractive -ExecutionPolicy Restricted -File (Join-Path $root 'scripts/manage-start-menu.ps1') -Mode install -InstallDirectory $ownedInstall 2>$null
-        if ($LASTEXITCODE -eq 0) { throw 'Restricted child policy did not block the helper; protection must not be bypassed.' }
-        if (Test-Path -LiteralPath $stableShortcut) { throw 'A blocked helper published a shortcut.' }
-        if (Test-Path -LiteralPath 'HKCU:\Software\HandyMeeting\BrandedStartMenuLink') { throw 'A blocked helper wrote ownership state.' }
-        $policyAfter = (& $windowsPowerShell -NoProfile -Command 'Get-ExecutionPolicy -List | ConvertTo-Json -Compress' | Out-String).Trim()
-        if ($policyAfter -ne $policyBefore) { throw 'Installer checks changed execution policy.' }
-        $restrictedPolicyChecked = $true
+        if ([IO.File]::ReadAllText($sentinel) -ne 'Synthetic user data must survive repair and uninstall.') { throw 'Uninstall removed user data.' }
+        if ((Test-Path -LiteralPath $startLink) -or (Test-Path -LiteralPath $registration)) { throw 'Uninstall left its Start menu link or registration.' }
+        # The setup's own desktop link goes with its uninstall. A Start menu link of the same
+        # name that starts another program is neither replaced nor deleted.
+        $foreignStart = $shell.CreateShortcut($startLink)
+        $foreignStart.TargetPath = $foreignTarget
+        $foreignStart.Save()
+        $second = Join-Path $work 'Second programs/Meeting for Handy'
+        if ((Invoke-Setup @('/S','/DESKTOPSHORTCUT',('/D=' + $second))) -ne 0) { throw 'Second silent installer check failed.' }
+        if ((Link-Target $desktopLink) -ne [IO.Path]::GetFullPath((Join-Path $second 'HandyMeeting.exe'))) { throw 'The second installation has no own desktop link.' }
+        if ((Link-Target $startLink) -ne [IO.Path]::GetFullPath($foreignTarget)) { throw 'Setup replaced a foreign Start menu link.' }
+        $child = Start-Process -FilePath (Join-Path $second 'Uninstall.exe') -ArgumentList @('/S',('_?=' + $second)) -WindowStyle Hidden -Wait -PassThru
+        if ($child.ExitCode -ne 0 -or (Test-Path -LiteralPath $desktopLink) -or (Test-Path -LiteralPath $registration)) { throw 'Uninstall left its own desktop link or registration.' }
+        if ((Link-Target $startLink) -ne [IO.Path]::GetFullPath($foreignTarget)) { throw 'Uninstall deleted a Start menu link it did not create.' }
+        Remove-Item -LiteralPath $startLink
         $tested = $true
     }
     $hash = (Get-FileHash -LiteralPath $package -Algorithm SHA256).Hash.ToLowerInvariant()
-    $proof = [ordered]@{success=$true;version=$version;rid='windows-x64';package=[IO.Path]::GetFileName($package);sha256=$hash;bytes=(Get-Item -LiteralPath $package).Length;sourceFingerprintSHA256=$receipt.sourceFingerprintSHA256;executableSHA256=$receipt.executableSHA256;compilerVersion=$compiler.version;compilerArchiveSHA256=$compiler.archiveSHA256;actualInstallUninstallChecked=$tested;existingDestinationRejected=$tested;freshMissingParentsChecked=$tested;duplicateVersionRejected=$tested;unknownUserFilePreserved=$tested;stableStartMenuNameChecked=$tested;foreignVersionShortcutPreserved=$tested;sideBySideShortcutChecked=$tested;userEditedShortcutPreserved=$tested;ownedShortcutRemovedByUninstall=$tested;restrictedPolicyShortcutChecked=$restrictedPolicyChecked;executionPolicyChanged=$false;executionPolicyOverride=$false;recursiveDeletion=$false;userRecordingsIncluded=$false;signing='unsigned'}
+    $proof = [ordered]@{success=$true;version=$version;rid='windows-x64';package=[IO.Path]::GetFileName($package);sha256=$hash;bytes=(Get-Item -LiteralPath $package).Length;sourceFingerprintSHA256=$receipt.sourceFingerprintSHA256;executableSHA256=$receipt.executableSHA256;compilerVersion=$compiler.version;compilerArchiveSHA256=$compiler.archiveSHA256;actualInstallUninstallChecked=$tested;existingDestinationRejected=$tested;freshMissingParentsChecked=$tested;reinstallRepaired=$tested;startMenuShortcutChecked=$tested;startMenuWithoutPowerShell=$true;legacyVersionsMigrated=$tested;runningProgramPreserved=$tested;desktopShortcutOwnershipChecked=$tested;unknownUserFilePreserved=$tested;recursiveDeletion=$false;userRecordingsIncluded=$false;signing='unsigned'}
     [IO.File]::WriteAllText(($package+'.sha256'),($hash+'  '+[IO.Path]::GetFileName($package)+"`n"),[Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText(($package+'.verification.json'),(($proof|ConvertTo-Json)+"`n"),[Text.UTF8Encoding]::new($false))
     $proof | ConvertTo-Json

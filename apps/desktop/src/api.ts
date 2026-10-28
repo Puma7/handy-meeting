@@ -109,6 +109,16 @@ export const desktopApi: DesktopApi = {
     desktopInvoke("list_text_models", { endpoint, mode: "local" }),
   getNotesProgress: () => desktopInvoke("get_notes_progress"),
   cancelNotes: (jobId) => desktopInvoke("cancel_notes", { jobId }),
+  startLiveNotes: (request) => jobInvoke("start_live_notes", { request }),
+  stopLiveNotes: () => desktopInvoke("stop_live_notes"),
+  refreshLiveNotes: () => jobInvoke("refresh_live_notes"),
+  setLiveNotesInterval: (intervalMs) =>
+    desktopInvoke("set_live_notes_interval", { intervalMs }),
+  getLiveNotes: (meetingId) => desktopInvoke("get_live_notes", { meetingId }),
+  localModelSetup: () => desktopInvoke("local_model_setup"),
+  pullOllamaModel: (model) => jobInvoke("pull_ollama_model", { model }),
+  getModelPullProgress: () => desktopInvoke("get_model_pull_progress"),
+  cancelModelPull: () => desktopInvoke("cancel_model_pull"),
   notesMarkdown: (meetingId, analysisId) =>
     desktopInvoke("notes_markdown", { meetingId, analysisId }),
   copyText: (text) => desktopInvoke("copy_text", { text }),

@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.0.6 — live summary and easy local text models (in development)
+
+- **Live summary while recording:** a side panel summarizes the running meeting – summary so far, decisions, tasks, questions raised and important points – so the meeting can be recapped at any moment. Updates run every 1–15 minutes once at least 200 new characters are confirmed, earlier when a long contribution of one audio track (90 seconds or more) is followed by a reply on the other track, or after a lot of new speech, on request and once more after catch-up; less new text waits for the next trigger or "Update now".
+- Compact summaries: newly confirmed text is summarized in append-only windows, and a rolling overview of at most eight points is rebuilt from the verified statements in batches, so requests stay small for local models. Every verified statement stays in the detailed lists; the overview is a summary and can leave points out.
+- Every live statement passes the same literal source check as post-meeting analysis; the audio track ("microphone" or "computer audio") is derived from its evidence, never invented. Live files are created once, re-verified when read and never overwritten or deleted.
+- Local models first; a cloud or company endpoint needs a text release for every start and never starts automatically. Optional automatic start with every recording (local only).
+- **Windows installer:** one folder `Meeting for Handy` without a version number; running setup again repairs or updates it once the app is closed (1.0.5 refused a second run). Start menu entry created natively, so Windows search finds the app even under the default Restricted PowerShell policy (1.0.5 left no entry there). Optional desktop shortcut (silent: `/DESKTOPSHORTCUT`) and "Start Meeting for Handy" on the finish page; uninstall removes only the links this setup created that still start its program, English/German language choice, a multi-size setup and app icon (1.0.5 had a single 256 px image) and "Meeting for Handy" as copyright holder. Former version folders are removed through their own uninstallers; recordings and settings stay. The updater also accepts a future `MeetingForHandy-` setup name.
+- **Calmer desktop after the 1.0.5 walkthrough:**
+  - Pages use the full window width, and the transcript scrolls with the page instead of in a second scrollbar.
+  - New search field inside the transcript.
+  - Markdown is the default export.
+  - Pause/mute and FFmpeg explanations, plus new retention-rule explanations, are hover tooltips; the "selected tracks are recorded" line is gone.
+  - The section-time hint is a tooltip on each time.
+  - Audio-driver notices are collapsed and translated again (the 1.0.5 wording was shown twice in English).
+  - Level meters fall smoothly instead of flashing to zero on a breath.
+  - A finished search-index update no longer stays in the footer.
+  - Settings buttons have spacing, and an empty archive says why it is empty.
+  - When no model answers at the configured local endpoint, the analysis page opens the Ollama/LM Studio detection by itself, including a hint to start the LM Studio server.
+- **Local model setup:** detects Ollama and LM Studio on this computer, suggests `gemma4:e2b` or `gemma4:e4b` from installed memory and can ask a running Ollama to download the suggested model. The last local endpoint and model are remembered.
+
 ## 1.0.5 — input meters, audit fixes and efficient CI (release candidate)
 
 - Independent live system-audio/microphone meters with clear silence, clipping, stale and control states.

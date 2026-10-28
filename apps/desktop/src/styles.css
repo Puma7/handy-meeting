@@ -215,7 +215,6 @@ label {
 }
 main {
   margin-left: 204px;
-  max-width: 1220px;
   width: calc(100% - 204px);
   padding: 35px 42px 48px;
 }
@@ -568,6 +567,10 @@ main {
   margin-top: 6px;
   font-size: 11px;
 }
+.session-warnings > summary {
+  font-size: 12px;
+  color: var(--color-text);
+}
 .session-warnings summary,
 .progress-explanation summary {
   cursor: pointer;
@@ -798,14 +801,36 @@ main {
   color: var(--color-ink-2);
   margin-top: 5px;
 }
+/* The transcript flows with the page: one scrollbar per view. */
 .transcript-content {
-  margin-top: 17px;
+  margin-top: 12px;
   border-top: 1px solid var(--color-line);
-  max-height: clamp(200px, 52vh, 680px);
-  overflow-y: auto;
-  overflow-x: hidden;
-  scrollbar-gutter: stable;
-  padding-right: 10px;
+  overflow-wrap: anywhere;
+}
+.transcript-search {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+  font-size: 12px;
+}
+.transcript-search label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 240px;
+  max-width: 420px;
+}
+.transcript-search input {
+  flex: 1;
+  min-width: 0;
+}
+.transcript-part mark {
+  background: var(--color-moss-wash);
+  color: inherit;
+  border-radius: 2px;
 }
 .transcript-part {
   padding: 20px 0;
@@ -1384,6 +1409,16 @@ mark {
 .legacy-panel {
   max-width: 780px;
 }
+/* Separate stacked settings panels and adjacent action buttons. */
+.legacy-panel + .legacy-panel,
+.update-panel + .legacy-panel {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--color-line);
+}
+.legacy-panel > button + button {
+  margin-left: 10px;
+}
 .legacy-panel > p {
   margin: 10px 0 17px;
 }
@@ -1687,8 +1722,18 @@ mark {
 .capture-control-panel p {
   margin: 10px 0 0;
 }
-.capture-control-help {
-  font-size: 0.86rem;
+.capture-control-help,
+.field-help {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--color-ink-2);
+}
+.capture-control-help summary,
+.field-help summary {
+  cursor: pointer;
+}
+.field-help p {
+  margin-top: 4px;
 }
 .transcript-format {
   display: grid;
@@ -1699,4 +1744,193 @@ mark {
   .retention-rule {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+/* Live summary beside the transcript; stacked (summary first) when the window is narrow. */
+.meeting-workspace-frame {
+  container-type: inline-size;
+}
+.meeting-workspace {
+  display: flex;
+  flex-direction: column;
+}
+.meeting-workspace.with-live > .live-notes-panel {
+  order: -1;
+}
+.meeting-workspace.live-focus > .transcript-panel {
+  display: none;
+}
+@container (min-width: 860px) {
+  .meeting-workspace.with-live:not(.live-focus) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 400px);
+    gap: 24px;
+    align-items: start;
+  }
+  .meeting-workspace.with-live:not(.live-focus) > .live-notes-panel {
+    order: 0;
+    position: sticky;
+    top: 12px;
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
+  }
+}
+.live-notes-panel {
+  margin-top: 27px;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  padding: 14px 16px 16px;
+  background: var(--color-wash);
+  min-width: 0;
+}
+.live-notes-panel h3 {
+  font-size: 13px;
+  margin: 14px 0 6px;
+}
+.live-state {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.live-model-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+.live-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 12px;
+}
+.live-controls label,
+.live-consent {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.live-consent {
+  margin-top: 10px;
+  align-items: flex-start;
+}
+.live-empty {
+  margin-top: 14px;
+}
+.live-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.live-items li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 10px;
+  border-left: 2px solid var(--color-line-strong);
+}
+.live-item-text {
+  overflow-wrap: anywhere;
+}
+.live-item-meta {
+  font-size: 11px;
+  color: var(--color-ink-2);
+}
+.live-evidence summary,
+.live-points > summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--color-ink-2);
+}
+.live-points > summary {
+  font-size: 13px;
+  font-weight: 600;
+  color: inherit;
+  margin: 14px 0 6px;
+}
+.live-evidence blockquote {
+  margin: 4px 0 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.live-draft-note {
+  margin-top: 14px;
+  font-size: 11px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--color-line-strong);
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 11px;
+  line-height: 18px;
+}
+.chip.ok {
+  border-color: color-mix(in srgb, var(--color-moss) 50%, transparent);
+  background: var(--color-moss-wash);
+}
+.chip.warn {
+  border-color: color-mix(in srgb, var(--color-warning) 50%, transparent);
+  background: var(--color-warning-wash);
+}
+.link-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.local-model-setup {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--color-background);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+.local-model-heading,
+.local-provider-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.local-provider {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-line);
+}
+.local-provider-models,
+.local-provider-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.local-provider code {
+  overflow-wrap: anywhere;
+}
+.live-notes-panel .section-heading {
+  align-items: flex-start;
+}
+.live-notes-panel .detail-actions {
+  flex-wrap: nowrap;
 }

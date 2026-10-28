@@ -20,7 +20,7 @@ export default function MeetingFiles({
   onExport: (format: TranscriptFormat) => void;
   savedFile: string | null;
 }) {
-  const [format, setFormat] = useState<TranscriptFormat>("txt");
+  const [format, setFormat] = useState<TranscriptFormat>("md");
   return (
     <>
       <label className="transcript-format">
@@ -32,8 +32,8 @@ export default function MeetingFiles({
             setFormat(event.target.value as TranscriptFormat)
           }
         >
-          <option value="txt">Text (.txt)</option>
           <option value="md">Markdown (.md)</option>
+          <option value="txt">Text (.txt)</option>
           <option value="json">JSON (.json)</option>
         </select>
       </label>

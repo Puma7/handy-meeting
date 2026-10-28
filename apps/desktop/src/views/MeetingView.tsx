@@ -18,7 +18,7 @@ import type {
 import type { MessageKey, extraDe } from "../i18n";
 import { clock } from "../domain";
 import TranscriptBody from "./TranscriptBody";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import SessionWarnings from "./SessionWarnings";
 import MeetingFiles from "./MeetingFiles";
 import RecordingControls from "./RecordingControls";
@@ -63,6 +63,10 @@ type Props = {
   savedByTrack: (track: "system" | "microphone") => number;
   resume: () => void;
   copyFullTranscript: () => Promise<void>;
+  /** Live summary shown beside the transcript. */
+  liveNotes?: ReactNode;
+  /** Only the live summary is shown; the transcript stays available behind a toggle. */
+  liveFocus?: boolean;
 };
 /**
  * Shows live section/capture progress and delegates mutations to parent callbacks. Native
@@ -108,6 +112,8 @@ export default function MeetingView({
   savedByTrack,
   resume,
   copyFullTranscript,
+  liveNotes,
+  liveFocus = false,
 }: Props) {
   const [setupOpen, setSetupOpen] = useState(!meeting && !recording);
   const agentOwnsCapture = Boolean(
@@ -327,49 +333,58 @@ export default function MeetingView({
             </button>
           </div>
         )}
-      <section className="transcript-panel">
-        <div className="section-heading">
-          <div>
-            <h2>{meeting?.title ?? t.live}</h2>
-            <p>{t.sourceTimes}</p>
-          </div>
-          <div className="detail-actions">
-            <button
-              className="secondary"
-              disabled={
-                busy || !meeting?.parts.some((item) => (item.text ?? "").trim())
-              }
-              title={t.copyTooltip}
-              onClick={() => void copyFullTranscript()}
-            >
-              {copied ? <Check size={16} /> : <Copy size={16} />}
-              <span>{copied ? t.copied : t.copy}</span>
-            </button>
-            {meeting?.status === "complete" && (
-              <button
-                className="primary"
-                disabled={busy || !recentParts.length}
-                onClick={onAnalyse}
-              >
-                <Sparkles size={16} />
-                {t.analyzeMeeting}
-              </button>
+      <div className="meeting-workspace-frame">
+        <div
+          className={`meeting-workspace${liveNotes ? " with-live" : ""}${
+            liveNotes && liveFocus ? " live-focus" : ""
+          }`}
+        >
+          <section className="transcript-panel">
+            <div className="section-heading">
+              <div>
+                <h2>{meeting?.title ?? t.live}</h2>
+              </div>
+              <div className="detail-actions">
+                <button
+                  className="secondary"
+                  disabled={
+                    busy ||
+                    !meeting?.parts.some((item) => (item.text ?? "").trim())
+                  }
+                  title={t.copyTooltip}
+                  onClick={() => void copyFullTranscript()}
+                >
+                  {copied ? <Check size={16} /> : <Copy size={16} />}
+                  <span>{copied ? t.copied : t.copy}</span>
+                </button>
+                {meeting?.status === "complete" && (
+                  <button
+                    className="primary"
+                    disabled={busy || !recentParts.length}
+                    onClick={onAnalyse}
+                  >
+                    <Sparkles size={16} />
+                    {t.analyzeMeeting}
+                  </button>
+                )}
+              </div>
+            </div>
+            {meeting && (
+              <div className="meeting-files">
+                <MeetingFiles
+                  t={t}
+                  disabled={busy || !connected}
+                  onOpenFolder={onOpenFolder}
+                  onExport={onExport}
+                  savedFile={savedFile}
+                />
+              </div>
             )}
-          </div>
+            <TranscriptBody parts={recentParts} locale={locale} t={t} />
+          </section>
+          {liveNotes}
         </div>
-        {meeting && (
-          <div className="meeting-files">
-            <MeetingFiles
-              t={t}
-              disabled={busy || !connected}
-              onOpenFolder={onOpenFolder}
-              onExport={onExport}
-              savedFile={savedFile}
-            />
-          </div>
-        )}
-        <TranscriptBody parts={recentParts} locale={locale} t={t} />
-      </section>
+      </div>
     </>
   );
 }

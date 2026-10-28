@@ -21,7 +21,7 @@ pub fn source_hash(sources: &[Source]) -> Result<String> {
     ))
 }
 /// Syncs a new JSON work state and atomically commits it without replacing an existing version.
-fn create_json(path: &Path, data: &impl Serialize) -> Result<()> {
+pub(crate) fn create_json(path: &Path, data: &impl Serialize) -> Result<()> {
     let mut file =
         tempfile::NamedTempFile::new_in(path.parent().context("Auswertungsordner fehlt.")?)?;
     file.write_all(&serde_json::to_vec_pretty(data)?)?;

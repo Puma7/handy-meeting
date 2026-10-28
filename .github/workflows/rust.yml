@@ -120,13 +120,6 @@ jobs:
       - name: Verify native reservation of missing destination parents and preservation failures
         shell: pwsh
         run: ./scripts/check-installer-reservation.ps1
-      - name: Verify Start menu version ordering in both PowerShell editions
-        shell: pwsh
-        run: |
-          ./scripts/check-start-menu-versions.ps1
-          # The installer runs the Start menu script with Windows PowerShell 5.1.
-          powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ./scripts/check-start-menu-versions.ps1
-          if ($LASTEXITCODE -ne 0) { throw 'Start menu version ordering failed in Windows PowerShell.' }
       - name: Bind separate checks to this source tree
         shell: pwsh
         run: node scripts/rust-artifacts.mjs begin-check

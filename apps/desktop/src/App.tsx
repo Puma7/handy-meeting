@@ -12,6 +12,10 @@ import NotesView from "./views/NotesView";
 import ResumeAnalysisDialog from "./views/ResumeAnalysisDialog";
 import Sidebar, { type Page } from "./views/Sidebar";
 import MeetingView from "./views/MeetingView";
+import LiveNotesPanel, {
+  INTERVAL_CHOICES,
+  type LivePreferences,
+} from "./views/LiveNotesPanel";
 import MeetingDetail from "./views/MeetingDetail";
 import NotesProgressPanel from "./views/NotesProgressPanel";
 import TemplateDialog, { type TemplateAction } from "./views/TemplateDialog";
@@ -80,12 +84,51 @@ function loadPreferences(): {
     return { locale: "de", theme: "system", persistable: false };
   }
 }
+const LIVE_PREFS_KEY = "handymeeting.rust.live-notes.v1";
+/**
+ * Live summary preferences and the last local text model choice. Cloud settings and keys are
+ * never stored here. Unreadable data falls back to defaults.
+ */
+function loadLivePreferences(): LivePreferences & {
+  endpoint: string | null;
+  model: string | null;
+} {
+  const fallback = {
+    auto: false,
+    intervalMinutes: 3,
+    endpoint: null,
+    model: null,
+  };
+  try {
+    const value = JSON.parse(localStorage.getItem(LIVE_PREFS_KEY) ?? "{}");
+    if (!value || typeof value !== "object" || Array.isArray(value))
+      return fallback;
+    const text = (v: unknown, max: number) =>
+      typeof v === "string" && v.trim() && v.length <= max ? v : null;
+    return {
+      auto: value.auto === true,
+      intervalMinutes: INTERVAL_CHOICES.includes(value.intervalMinutes)
+        ? value.intervalMinutes
+        : 3,
+      endpoint: text(value.endpoint, 4096),
+      model: text(value.model, 300),
+    };
+  } catch {
+    return fallback;
+  }
+}
 /**
  * Coordinates live and selected meetings, native IPC, explicit analysis consent and job
  * feedback. Child actions are bound to meeting IDs rather than display titles.
  */
 export default function App({ api = desktopApi }: { api?: DesktopApi }) {
   const [preferences] = useState(loadPreferences);
+  const [savedLive] = useState(loadLivePreferences);
+  const [livePreferences, setLivePreferences] = useState<LivePreferences>({
+    auto: savedLive.auto,
+    intervalMinutes: savedLive.intervalMinutes,
+  });
+  const [liveFocus, setLiveFocus] = useState(false);
   const [locale, setLocale] = useState<Locale>(preferences.locale),
     [theme, setTheme] = useState<Theme>(preferences.theme);
   const t = locale === "de" ? de : en,
@@ -152,8 +195,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     [templateActionError, setTemplateActionError] = useState<string | null>(
       null,
     );
-  const [endpoint, setEndpoint] = useState("http://127.0.0.1:1234/v1/"),
-    [textModel, setTextModel] = useState(""),
+  const [endpoint, setEndpoint] = useState(
+      savedLive.endpoint ?? "http://127.0.0.1:1234/v1/",
+    ),
+    [textModel, setTextModel] = useState(savedLive.model ?? ""),
     [manualTextModel, setManualTextModel] = useState(false),
     [apiKey, setApiKey] = useState(""),
     [savedKeyScope, setSavedKeyScope] = useState<string | null>(null),
@@ -303,6 +348,26 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       setError(t.preferencesError);
     }
   }, [locale, theme]);
+  useEffect(() => {
+    try {
+      const previous = JSON.parse(localStorage.getItem(LIVE_PREFS_KEY) ?? "{}");
+      const base =
+        previous && typeof previous === "object" && !Array.isArray(previous)
+          ? previous
+          : {};
+      // Only a local route is remembered; cloud endpoints and keys never are.
+      const local =
+        mode === "local" && textModel.trim()
+          ? { endpoint: endpoint.trim(), model: textModel.trim() }
+          : {};
+      localStorage.setItem(
+        LIVE_PREFS_KEY,
+        JSON.stringify({ ...base, ...livePreferences, ...local }),
+      );
+    } catch {
+      // Preferences are a convenience; the live summary works without them.
+    }
+  }, [livePreferences, mode, endpoint, textModel]);
   useEffect(
     () => () => {
       if (copyTimer.current) clearTimeout(copyTimer.current);
@@ -1217,6 +1282,44 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
           ),
         ));
 
+  // The live summary of the recording; without UI on other pages, so an automatic start
+  // also covers recordings started from History or Settings (e.g. an agent approval).
+  const livePanel = (headless: boolean) =>
+    liveMeeting && !liveMeeting.readOnly ? (
+      <LiveNotesPanel
+        api={api}
+        locale={locale}
+        connected={connected}
+        meetingId={liveMeeting.id}
+        meetingTitle={liveMeeting.title}
+        meetingActive={
+          app?.activeMeeting?.id === liveMeeting.id && (recording || catchingUp)
+        }
+        connection={{
+          endpoint,
+          model: textModel,
+          mode,
+          apiKey,
+          useSavedKey,
+        }}
+        preferences={livePreferences}
+        setPreferences={setLivePreferences}
+        onUseLocalModel={(nextEndpoint, nextModel) => {
+          // A key entered for another route must never reach the local server.
+          setApiKey("");
+          setUseSavedKey(false);
+          setMode("local");
+          setEndpoint(nextEndpoint);
+          setTextModel(nextModel);
+          setManualTextModel(false);
+        }}
+        onOpenTextModelSettings={() => void openNotesFor(liveMeeting.id)}
+        focus={liveFocus}
+        setFocus={setLiveFocus}
+        headless={headless}
+      />
+    ) : undefined;
+
   return (
     <div className="app-shell">
       <Sidebar
@@ -1503,6 +1606,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             stop={stop}
             savedByTrack={savedByTrack}
             copyFullTranscript={() => copyFullTranscript(liveMeeting)}
+            liveFocus={liveFocus}
+            liveNotes={livePanel(false)}
             refreshHandy={() => void action(() => refreshModels(false))}
             resume={() =>
               void action(async () => {
@@ -1516,6 +1621,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             }
           />
         )}
+        {page !== "meeting" && livePreferences.auto && livePanel(true)}
         {page === "detail" && meeting && (
           <MeetingDetail
             meeting={meeting}

@@ -115,8 +115,10 @@ it("waits for native pause acknowledgement, binds it to the current session and 
   await screen.findByRole("button", { name: "Aufnahme fortsetzen" });
   expect(screen.getByText(/Gesprächston wird nicht gespeichert/)).toBeTruthy();
   expect(
-    screen.getByText(/Je nach Plattform können Geräte geöffnet bleiben/),
-  ).toBeTruthy();
+    screen
+      .getByRole("button", { name: "Aufnahme fortsetzen" })
+      .getAttribute("title"),
+  ).toMatch(/Je nach Plattform können Geräte geöffnet bleiben/);
   expect(screen.getByText("Unmodified original.")).toBeTruthy();
 });
 
@@ -184,12 +186,17 @@ it("does not offer app mute without a microphone track and explains that meeting
     />,
   );
   expect(screen.queryByRole("button", { name: /microphone/i })).toBeNull();
-  expect(screen.getByText(/This does not mute Teams, Zoom/)).toBeTruthy();
-  expect(
-    screen
-      .getByRole("button", { name: "Resume recording" })
-      .getAttribute("aria-pressed"),
-  ).toBe("true");
+  const resume = screen.getByRole("button", { name: "Resume recording" });
+  // The explanation is a hover tooltip and a collapsed disclosure, not a permanent paragraph.
+  expect(resume.getAttribute("title")).toMatch(
+    /This does not mute Teams, Zoom/,
+  );
+  const help = screen
+    .getByText("What do pause and mute do?")
+    .closest("details");
+  expect(help?.open).toBe(false);
+  expect(help?.textContent).toMatch(/This does not mute Teams, Zoom/);
+  expect(resume.getAttribute("aria-pressed")).toBe("true");
 });
 
 it("uses native file choice, preserves cancellation and never turns an edited displayed path into permission", async () => {

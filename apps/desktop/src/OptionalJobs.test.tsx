@@ -507,3 +507,31 @@ it("explains a missing platform package and still offers the release page", asyn
     "Browser unavailable",
   );
 });
+it("hides a finished search-index update but keeps running and failed ones visible", async () => {
+  // 1.0.5 kept "Local search index · updated 0 of 0" in the footer permanently.
+  const progress = (status: string, error: string | null = null) => ({
+    jobId: "synthetic-index-" + status,
+    kind: "search-index",
+    status,
+    confirmedTasks: 0,
+    totalTasks: 0,
+    elapsedMs: 10,
+    skipped: 0,
+    error,
+    cancelRequested: false,
+  });
+  const library = vi.fn(async () => progress("complete"));
+  const api = { getLibraryProgress: library } as unknown as DesktopApi;
+  const view = render(<LibraryStatus api={api} connected locale="en" />);
+  await waitFor(() => expect(library).toHaveBeenCalled());
+  await act(async () => {});
+  expect(
+    screen.queryByRole("status", { name: "Local search index" }),
+  ).toBeNull();
+  library.mockResolvedValue(progress("failed", "Synthetic index failure"));
+  view.unmount();
+  render(<LibraryStatus api={api} connected locale="en" />);
+  expect(
+    await screen.findByRole("status", { name: "Local search index" }),
+  ).toBeTruthy();
+});

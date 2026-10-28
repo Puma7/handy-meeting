@@ -39,9 +39,27 @@ pub fn validate_answer(
 ) -> Result<CheckedAnswer> {
     let answer: Answer =
         serde_json::from_str(json).context("Ungültige oder doppelte Felder in der KI-Antwort.")?;
+    Ok(screen_facts(
+        answer.items,
+        sources,
+        kind,
+        template_id,
+        MAX_ITEMS_PER_ANSWER,
+    ))
+}
+
+/// Applies the literal source check to already parsed statements and keeps at most `limit`
+/// valid ones in their original order. Discarded statements are only counted.
+pub(crate) fn screen_facts(
+    facts: Vec<Fact>,
+    sources: &[Source],
+    kind: &Kind,
+    template_id: &str,
+    limit: usize,
+) -> CheckedAnswer {
     let allowed = allowed_sources(sources);
     let mut checked = CheckedAnswer::default();
-    for fact in answer.items {
+    for fact in facts {
         let reason = check_fact(&fact, &allowed, kind).or_else(|| {
             crate::name_candidates::check_item(template_id, &fact)
                 .err()
@@ -49,7 +67,7 @@ pub fn validate_answer(
         });
         match reason {
             Some(reason) => *checked.rejected.entry(reason).or_default() += 1,
-            None if checked.items.len() >= MAX_ITEMS_PER_ANSWER => {
+            None if checked.items.len() >= limit => {
                 *checked
                     .rejected
                     .entry(RejectionReason::ItemLimit)
@@ -58,7 +76,7 @@ pub fn validate_answer(
             None => checked.items.push(fact),
         }
     }
-    Ok(checked)
+    checked
 }
 
 /// Reads a saved per-batch checkpoint strictly: saved items are never filtered or repaired,

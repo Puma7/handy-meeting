@@ -1,6 +1,7 @@
 //! Source-linked text analysis, separated into data, validation, transport and orchestration.
 mod control;
 mod listing;
+pub mod live;
 mod markdown;
 mod models;
 pub mod name_candidates;
@@ -23,7 +24,7 @@ pub use service::{
     source_hash, UnsupportedFormat,
 };
 pub use templates::{validate_library, TemplateLibrary, TemplateStore};
-pub use transport::{credential_account, local_model_ids, TextClient};
+pub use transport::{credential_account, local_json_lines, local_model_ids, TextClient};
 pub use validation::{validate_answer, validate_template, MAX_ITEMS_PER_ANSWER};
 pub const PROMPT_VERSION: &str = "handymeeting-rust-notes-2";
 

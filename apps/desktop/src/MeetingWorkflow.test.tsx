@@ -72,9 +72,17 @@ it("explains known capture interruptions, retains literal technical/unknown warn
   expect(screen.getAllByText(/Computerton: Der Audiotreiber/)).toHaveLength(1);
   expect(screen.getByText(unknown)).toBeTruthy();
   expect(container.querySelector("img")).toBeNull();
-  expect(container.querySelector("details")?.open).toBe(false);
+  // The notice is collapsed by default and its technical messages are nested inside.
+  const notice = container.querySelector<HTMLDetailsElement>(
+    "details.session-warnings",
+  );
+  expect(notice?.open).toBe(false);
+  const technical = container.querySelector<HTMLDetailsElement>(
+    ".session-warnings details",
+  );
+  expect(technical?.open).toBe(false);
   await userEvent.click(screen.getByText(de.technicalDetails));
-  expect(container.querySelector("details")?.open).toBe(true);
+  expect(technical?.open).toBe(true);
   expect(screen.getByText(warning)).toBeTruthy();
   expect(original).toEqual([warning, warning, unknown]);
   const copied = renderTranscript(meeting, "de");
@@ -83,6 +91,16 @@ it("explains known capture interruptions, retains literal technical/unknown warn
   expect(renderTranscript(meeting, "en")).toContain(
     "System audio: The audio driver",
   );
+});
+
+it("translates the 1.0.5 driver discontinuity wording instead of showing it twice in English", () => {
+  // 1.0.5 changed the native message; the old pattern no longer matched it.
+  const current =
+    "microphone: audio driver reported a discontinuity. Missing audio remains missing; trustworthy microphone clock gaps are represented by explicit silence, not recovered speech. Check the affected range.";
+  render(<SessionWarnings warnings={[current]} locale="de" t={de} />);
+  expect(screen.getByText(/Mikrofon: Der Audiotreiber/)).toBeTruthy();
+  expect(screen.getByText(current)).toBeTruthy();
+  expect(screen.getAllByText(/discontinuity/)).toHaveLength(1);
 });
 
 it("retains the first and last original sections of a two-hour transcript in a keyboard-scrollable region", () => {
@@ -94,6 +112,31 @@ it("retains the first and last original sections of a two-hour transcript in a k
   expect(screen.getByText(meeting.parts[0].text!)).toBeTruthy();
   expect(screen.getByText(meeting.parts[479].text!)).toBeTruthy();
   expect(container.querySelector("img")).toBeNull();
+});
+
+it("searches the transcript without changing it and renders matches literally", async () => {
+  const parts = [
+    {
+      ...meeting.parts[0],
+      file: "a.wav",
+      text: "Budget <b>Freitag</b> klären",
+    },
+    { ...meeting.parts[1], file: "b.wav", text: "Anderes Thema" },
+  ];
+  const { container } = render(
+    <TranscriptBody parts={parts} locale="de" t={de} />,
+  );
+  await userEvent.type(
+    screen.getByLabelText("Im Transkript suchen"),
+    "freitag",
+  );
+  expect(screen.getByText("1 von 2 Abschnitten")).toBeTruthy();
+  expect(container.querySelectorAll(".transcript-part")).toHaveLength(1);
+  expect(container.querySelector("mark")?.textContent).toBe("Freitag");
+  expect(container.querySelector("b")).toBeNull();
+  expect(parts[0].text).toBe("Budget <b>Freitag</b> klären");
+  await userEvent.clear(screen.getByLabelText("Im Transkript suchen"));
+  expect(container.querySelectorAll(".transcript-part")).toHaveLength(2);
 });
 
 it("opens and exports the exact selected historical meeting, never a same-named live session", async () => {
@@ -115,7 +158,8 @@ it("opens and exports the exact selected historical meeting, never a same-named 
     screen.getByRole("button", { name: de.exportTranscript }),
   );
   await screen.findByText(/exports\/transcript-synthetic.txt/);
-  expect(api.exportTranscript).toHaveBeenCalledWith(other.id, "de");
+  // Markdown is the default export format.
+  expect(api.exportTranscript).toHaveBeenCalledWith(other.id, "de", "md");
   expect(api.exportTranscript).not.toHaveBeenCalledWith(
     meeting.id,
     expect.anything(),
@@ -146,6 +190,7 @@ it("exports Markdown and JSON for the selected historical session without shorte
   await userEvent.click(screen.getAllByRole("button", { name: de.open })[1]);
   await screen.findByRole("heading", { name: de.meetingDetail });
   const format = screen.getByRole("combobox", { name: de.exportFormat });
+  expect((format as HTMLSelectElement).value).toBe("md");
   for (const selected of ["md", "json"] as const) {
     await userEvent.selectOptions(format, selected);
     await userEvent.click(
@@ -159,6 +204,13 @@ it("exports Markdown and JSON for the selected historical session without shorte
       ),
     );
   }
+  await userEvent.selectOptions(format, "txt");
+  await userEvent.click(
+    screen.getByRole("button", { name: de.exportTranscript }),
+  );
+  await waitFor(() =>
+    expect(api.exportTranscript).toHaveBeenLastCalledWith(other.id, "de"),
+  );
   expect(screen.getByText(other.parts[0].text!)).toBeTruthy();
   expect(screen.getByText(other.parts[479].text!)).toBeTruthy();
   expect(document.querySelector(".transcript-part img")).toBeNull();

@@ -26,7 +26,7 @@ HandyMeeting ist eine eigenständige Companion App im Handy-Ökosystem. Zuverlä
 - Für Änderungen an Textmodell-Anbindung und Prompts zusätzlich einen echten lokalen Referenztest mit positiven und unverbindlichen Gesprächsaussagen ausführen. Cloud-Prüfungen ohne echte Anbieterzugangsdaten ausdrücklich als Simulation ausweisen.
 - Messungen mit Version, Rechenweg, Hardware, Zeitumfang und Prüfgrenzen dokumentieren. Working Set, Private Bytes und Grafikspeicher getrennt berichten. Prüfgrenzen nicht nachträglich an Messergebnisse anpassen.
 - Laufende Dauertests und deren Programmdateien nicht durch neue Builds verändern. Parallel auftretende Lasten dokumentieren.
-- Neue Versionen in einem eigenen Programmordner bereitstellen. Fremde Handy-Prozesse und laufende Nutzeraufnahmen nicht für Updates beenden.
+- Windows-Setup installiert in einen festen Programmordner „Meeting for Handy“ ohne Versionsnummer (Entscheidung des Maintainers, 28. Oktober 2026). Update und Reparatur ersetzen nur die eigenen, aufgelisteten Programmdateien, nachdem die App beendet wurde; Nutzerdaten liegen getrennt und bleiben unberührt. Fremde Handy-Prozesse und laufende Nutzeraufnahmen nicht für Updates beenden.
 - Einen vorbereiteten GitHub-Workflow nicht als erfolgreich ausgeführten CI-Lauf darstellen. Vor öffentlicher Veröffentlichung Lizenznachweise, Abhängigkeiten, Aktualisierung und Fehlermeldungen prüfen.
 
 ## Wartbarkeit

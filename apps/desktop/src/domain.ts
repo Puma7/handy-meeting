@@ -41,7 +41,7 @@ export const trackName = (track: Track, locale: Locale) =>
       : "Microphone";
 export function describeWarning(value: string, locale: Locale): string {
   const match =
-    /^(system|microphone): audio driver reported a discontinuity; affected recording ranges can be incomplete\.$/.exec(
+    /^(system|microphone): audio driver reported a discontinuity(?:; affected recording ranges can be incomplete\.|\. Missing audio remains missing; trustworthy microphone clock gaps are represented by explicit silence, not recovered speech\. Check the affected range\.)$/.exec(
       value,
     );
   if (!match) return value;

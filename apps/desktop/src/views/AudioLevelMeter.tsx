@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useEffect, useId, useRef } from "react";
 import type { AudioLevel, Locale } from "../types";
 
 type Props = {
@@ -8,6 +8,8 @@ type Props = {
   locale: Locale;
   descriptionId?: string;
 };
+/** Falling speed of the displayed bar; rises are shown at once. */
+const FALL_DB_PER_SECOND = 24;
 const segments = Array.from({ length: 24 }, (_, index) => {
   const dbfs = -60 + (index + 1) * 2.5;
   return { dbfs, zone: dbfs > -6 ? "red" : dbfs > -18 ? "yellow" : "green" };
@@ -32,7 +34,26 @@ export default function AudioLevelMeter({
   const peak = active ? level.peakDbfs! : null;
   const rms = active ? level.rmsDbfs : null;
   const clipping = active && level.clipped;
-  const silent = peak !== null && peak <= -96;
+  // The bar and its wording follow a decaying peak so short pauses (a breath) do not
+  // flash the meter to zero; the numeric value and the meter value stay the measured peak.
+  // The held value is only read here; it is stored after commit, so a render that React
+  // discards cannot leave a peak that was never shown.
+  const held = useRef<{ db: number; at: number } | null>(null);
+  const now = Date.now();
+  const previous = held.current;
+  const shown =
+    peak === null
+      ? null
+      : Math.max(
+          peak,
+          previous
+            ? previous.db - (FALL_DB_PER_SECOND * (now - previous.at)) / 1000
+            : -Infinity,
+        );
+  useEffect(() => {
+    held.current = shown === null ? null : { db: shown, at: now };
+  });
+  const silent = shown !== null && shown <= -96;
   const statusText = {
     idle: de
       ? "Bei Aufnahmebeginn verfügbar"
@@ -51,7 +72,7 @@ export default function AudioLevelMeter({
         ? de
           ? "Stille"
           : "Silence"
-        : peak !== null && peak < -60
+        : shown !== null && shown < -60
           ? de
             ? "Sehr leises Signal"
             : "Very quiet signal"
@@ -103,7 +124,7 @@ export default function AudioLevelMeter({
             aria-hidden="true"
             className={`audio-level-segment ${zone}`}
             data-lit={
-              (peak !== null && !silent && (peak >= dbfs || index === 0)) ||
+              (shown !== null && !silent && (shown >= dbfs || index === 0)) ||
               undefined
             }
           />

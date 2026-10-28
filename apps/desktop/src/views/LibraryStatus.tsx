@@ -43,7 +43,8 @@ export default function LibraryStatus({
       stop();
     };
   }, [api, connected]);
-  if (!job || job.jobId === hidden) return null;
+  // A finished update needs no permanent bar; running, failed and cancelled jobs stay visible.
+  if (!job || job.jobId === hidden || job.status === "complete") return null;
   const running = job.status === "running";
   const label = de ? "Lokaler Suchindex" : "Local search index";
   return (
@@ -62,17 +63,13 @@ export default function LibraryStatus({
               ? de
                 ? "wird aktualisiert"
                 : "updating"
-              : job.status === "complete"
+              : job.status === "cancelled"
                 ? de
-                  ? "aktualisiert"
-                  : "updated"
-                : job.status === "cancelled"
-                  ? de
-                    ? "abgebrochen"
-                    : "cancelled"
-                  : de
-                    ? "fehlgeschlagen"
-                    : "failed"}
+                  ? "abgebrochen"
+                  : "cancelled"
+                : de
+                  ? "fehlgeschlagen"
+                  : "failed"}
           </strong>
         </div>
         <strong>{clock(job.elapsedMs)}</strong>

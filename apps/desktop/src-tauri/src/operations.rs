@@ -13,6 +13,8 @@ pub(crate) enum Kind {
     Maintenance,
     Installation,
     Selection,
+    /// Live notes write into one session folder; archive and installation must wait for them.
+    LiveNotes,
 }
 impl Kind {
     /// Identify kinds requiring every other admitted operation to have finished.
@@ -82,6 +84,7 @@ mod tests {
             Kind::Maintenance,
             Kind::Installation,
             Kind::Selection,
+            Kind::LiveNotes,
         ] {
             let gate = Gate::default();
             let lease = gate.try_acquire(kind).unwrap();

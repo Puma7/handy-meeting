@@ -611,3 +611,151 @@ Review 5681840822 identified a valid test gap: a positive path match could hide 
 All 52 synthetic release, routing, export, installer and publisher tests passed. All workflow actionlint checks passed. Required ./verify.ps1 passed 47 PCM/filesystem/export, 35 Notes, 28 Templates and 8 Agent checks plus Monitor in a new program folder. Publisher fixtures remain simulations; no new real-device, model, endurance, GPU or signature evidence is claimed.
 
 Counts and command flags in the older English verification paragraphs are now separated for readability. Every numeric run in both report files was compared before and after the text-only corrections and remains identical. Application, dependency, version 1.0.5 and license bytes remain unchanged. Fresh current-head reviews and platform CI are required after upload; no merge or tag is claimed by these local checks. Earlier user data, programs, candidate exports and proof logs remain retained.
+
+
+## 1.0.6 Live-Zusammenfassung und lokale Modelleinrichtung — 28. Oktober 2026
+
+Entwicklungsstand 1.0.6 auf Basis des Release-Kandidaten 1.0.5 (Branch `claude/gracious-goldberg-fs7h0y`). Umgebung: Linux-x86_64-Container, Rust 1.91.1, Node 22, Chromium/Playwright. Kein Tag, kein Release und kein CI-Lauf ist damit verbunden; ausgeführte GitHub-Prüfungen stehen erst im PR.
+
+Lokal bestanden: `npm ci`, Produktions-Build, `tsc --noEmit`, `prettier --check`, Vitest 150 Tests (davon 8 neue für das Live-Panel und die Modelleinrichtung), `cargo fmt --check`, Clippy für den ganzen Workspace mit `-D warnings` und die no-default-features-Variante, `cargo test --workspace --all-targets --locked` mit 290 bestandenen und 2 bewusst ignorierten Tests, `test_rust_portable.py` (19), `test_release*.py` (48, 3 übersprungen ohne PowerShell), `rust-artifacts.mjs self-test` und `cargo audit` (582 Pakete, keine Schwachstelle, 10 erlaubte Warnungen wie zuvor).
+
+**Synthetisch** (so in den Tests gekennzeichnet): ein geskripteter lokaler OpenAI-kompatibler Server liefert Fenster- und Kurzfassungsantworten; geprüft werden erfundene Zitate, Quellen aus früheren Fenstern, erfundene Zuständige, Doppelungen, leere oder unbelegte Kurzfassungen, strukturell ungültige Antworten, beschädigte und lückenhafte Speicherstände, Fortsetzung nach Neustart, getrennte Läufe je Modell, die Reihenfolge der Läufe nach letzter Aktivität und die byte-gleiche Anfrage der bisherigen Auswertung. Der Worker wurde mit synthetischen Sitzungen geprüft: neben einer laufenden Aufnahme, mit noch laufender Erkennung im aktiven Slot, Stopp ohne Einfluss auf die Aufnahme, Vorgangsreservierung gegenüber Archiv und Installation, begrenzte Wiederholung der Kurzfassung. Ein synthetischer Ollama-Server prüft Download-Fortschritt, Fehlermeldung und unvollständigen Abschluss.
+
+Gerenderte Komponenten wurden mit synthetischen Daten in Chromium bei 1440×900 (nebeneinander) und 900×900 (halber Bildschirm, Zusammenfassung oben) angesehen.
+
+**Nicht ausgeführt:** ein echter lokaler Referenztest mit Gemma 4 E2B/E4B über Ollama oder LM Studio, den AGENTS.md für Prompt- und Textmodelländerungen verlangt — Modell-Downloads sind im Container gesperrt; das bleibt Freigabebedingung. Ebenso keine echte Cloud-Anbindung (nur Simulation), keine Windows-Speichererkennung über PowerShell, keine macOS-`sysctl`-Abfrage, keine Messung von Latenz oder Speicherbedarf eines lokalen Modells parallel zu Aufnahme und Erkennung und keine Langzeitprüfung.
+
+**Codex-Review auf 6ef6423 bearbeitet:** Kopierte Zusammenfassungen enthalten je Aussage Quellenkennung, Zeit, Spur und wörtliches Zitat; ein bei anderer Route eingegebener Schlüssel wird beim Übernehmen eines lokalen Presets verworfen; die Anzeige zeigt während eines Laufs dessen tatsächliches Modell samt Cloud-/Lokal-Kennzeichen und weist auf geänderte Einstellungen für den nächsten Start hin; Panel und Modelleinrichtung bleiben unter StrictMode funktionsfähig; ein hängender Ollama-Download lässt sich abbrechen (synthetischer Server, der vor und zwischen Fortschrittszeilen stehen bleibt); die Kurzfassung verarbeitet einen großen Aussagenrückstand fensterweise in Paketen von höchstens 80 Aussagen und zählt nur tatsächlich übergebene Fenster als abgedeckt. Jede Korrektur hat einen Regressionstest, der vor der Korrektur fehlschlug.
+
+Für den noch ausstehenden echten Referenztest gibt es `cargo run -p meeting-notes --example live_reference -- <neuer Ausgabeordner> [Endpunkt] [Modell]` (Standard: Ollama `http://127.0.0.1:11434/v1/`, `gemma4:e4b`). Er spielt eine synthetische Besprechung in zwei Hälften ein und verlangt genau einen ausdrücklichen Beschluss, genau eine Aufgabe für Anna bis Freitag und eine belegte Kurzfassung; unverbindliche deutsch-englische Aussagen dürfen keine Beschlüsse oder Aufgaben ergeben. Er wurde hier nur gebaut und ohne Modell gestartet (erwartete Fehlermeldung „KI-Dienst nicht erreichbar“), nicht mit einem echten Modell ausgeführt.
+
+**Windows-Installer nach Nutzertest mit 1.0.5 korrigiert:** Der Maintainer installierte 1.0.5 unter Windows und meldete:
+- Die Setup-Datei zeigte kein Icon.
+- Der Installer begrüßte nur auf Deutsch.
+- Die Lizenzseite nannte „HandyMeeting“.
+- Das Programm lag in einem versionierten Ordner `HandyMeeting\1.0.5`.
+- Weder Startmenü noch Suche fanden die App.
+- Ein zweiter Aufruf brach mit „bereits installiert“ ab.
+
+Ursachen:
+- **Fehlender Startmenü-Eintrag:** Das Startmenü-Hilfsskript lief über `powershell.exe -File`, das unter der Windows-Client-Standardrichtlinie `Restricted` blockiert wird. Die bisherige CI prüfte das nur auf einem Runner mit freizügigerer Richtlinie.
+- **Icon:** Die ICO enthielt nur ein einzelnes 256-px-PNG.
+- **Sprache:** Die Sprache folgte ohne Auswahl der Windows-Anzeigesprache.
+
+Korrektur auf ausdrückliche Entscheidung des Maintainers (AGENTS.md entsprechend angepasst):
+- Ein fester Ordner `%LOCALAPPDATA%\Programs\Meeting for Handy`.
+- Startmenü-Verknüpfung direkt per NSIS, kein PowerShell-Hilfsskript mehr im Paket.
+- Optionale Desktop-Verknüpfung und Sprachauswahl Englisch/Deutsch.
+- Reparatur und Update am Ort nach Beenden der App: Wartezeit 15 s, die App wird nie beendet, die installierte Deinstallation entfernt mit `/UPGRADE` nur ihre aufgelisteten Dateien.
+- Entfernen früherer Versionsordner über deren eigene Deinstallationsprogramme.
+- ICO mit 16–256 px.
+- Copyright „Meeting for Handy contributors“.
+- Der Updater akzeptiert zusätzlich einen künftigen Setup-Namen `MeetingForHandy-…`, mit Regressionstest. Der Dateiname `HandyMeeting-…-setup.exe` bleibt in 1.0.6, weil die Updater bis 1.0.5 nur ihn finden.
+
+Lokal geprüft:
+- `makensis 3.09 -WX` kompiliert ohne Warnung.
+- `pefile` zeigt 9 Icon-Größen in der Setup-EXE statt 1.
+- **Wine 9 (Ersatzumgebung, kein echtes Windows), synthetische Nutzlast:**
+  - Ein fremder Ordner wird abgelehnt.
+  - Eine Neuinstallation mit fehlenden Oberordnern legt Startmenü-Eintrag und Registrierung an.
+  - Ein synthetischer Altordner `HandyMeeting\0.0.1` wird samt Registrierung und altem Startmenü-Link entfernt, seine Nutzerdatei bleibt.
+  - Ein erneuter Aufruf stellt eine gelöschte Datei wieder her und ersetzt eine veraltete, eine Nutzerdatei bleibt.
+  - Bei gesperrter Programmdatei endet das Setup nach etwa 15 s mit Code 3 ohne Änderung.
+  - Ein Ordnerwechsel entfernt die vorherige Installation, ihre Nutzerdatei bleibt.
+  - Die Deinstallation entfernt Verknüpfung und Registrierung.
+- Sprachdialog und Abschlussseite waren nur im Silent-Modus nicht prüfbar.
+
+Dieselben Abläufe prüft `package-rust-installer.ps1 -RunChecks` jetzt auf echtem Windows in der PR-CI. Die Release-Prüfung verlangt die neuen Nachweise `reinstallRepaired`, `startMenuShortcutChecked`, `legacyVersionsMigrated` und `runningProgramPreserved`.
+
+**Oberfläche nach dem 1.0.5-Durchgang des Maintainers:** Umgesetzt sind volle Fensterbreite, Transkript ohne eigenen Scrollbereich, Suche im Transkript, Markdown als Standardexport, Tooltips statt Dauertexten bei Pause/Stummschaltung, FFmpeg und Aufbewahrungsregeln, Abschnittszeit-Hinweis als Tooltip, eingeklappte Audiohinweise, langsam abfallende Pegelanzeige, kein dauerhafter Suchindex-Balken, Abstände in den Einstellungen, ein leerer Archivzustand und eine automatisch geöffnete Ollama-/LM-Studio-Erkennung in der Nachbearbeitung.
+
+Dabei gefunden und behoben: Die seit 1.0.5 geänderte Treibermeldung wurde nicht mehr übersetzt und erschien doppelt auf Englisch. Der Regressionstest schlug vor der Korrektur fehl.
+
+Neue Vitest-Fälle:
+- Treibermeldung
+- Transkriptsuche (wörtliche Darstellung, keine Änderung am Transkript)
+- Pegelabfall
+- ausgeblendeter fertiger Suchindex
+- Markdown-Standard
+- Tooltips
+- Erkennung auf der Nachbearbeitungsseite
+
+Alle 159 Vitest-Fälle, `tsc`, `prettier` und der Produktions-Build bestanden. Das Layout wurde mit synthetischen Daten in Chromium bei 1600×900 angesehen: ein Scrollbalken, die Live-Zusammenfassung bleibt beim Scrollen sichtbar, die Suche markiert Treffer.
+
+Nicht geprüft: echte Geräte, echte Ollama-/LM-Studio-Server. Offene Fragen aus dem Durchgang, etwa ob FFmpeg mitgeliefert werden soll, sind nicht entschieden.
+
+**CodeRabbit-Reviews 5682803580 und 5682945190 bearbeitet:**
+
+Korrekturen, jeweils mit einem Regressionstest, der vor der Korrektur fehlschlug:
+- **Ollama-Download:** Ein abgebrochener Download ließ seinen Lesethread auf einem stillstehenden Stream ohne Lese-Zeitlimit hängen. Jetzt gilt ein Ruhe-Limit von 5 Minuten je Lesevorgang, nicht für den ganzen Download. Der Abbruch wartet auf das Ende der Verbindung, bevor ein neuer Download möglich ist. Der Test verlangt, dass der synthetische Server das Schließen der Verbindung sieht.
+- **Live-Zusammenfassung, Wiederholung:** Ein fehlgeschlagenes Update behält seinen Auslöser und wird nach der Wartezeit wiederholt, auch unterhalb der normalen Schwellen.
+- **Live-Panel, Endpunkt:** Gestartet werden kann nur mit Endpunkten, die der Transport akzeptiert: lokal nur Loopback mit HTTP oder HTTPS, Cloud nur HTTPS, jeweils ohne Zugangsdaten oder Zusatzparameter.
+- **CI-Filterleser:** Ein vierfach eingerückter Filtereintrag beendet den Block nicht mehr vorzeitig.
+
+Ohne eigenen Regressionstest:
+- **Deinstallation:** Eine nicht registrierte Kopie entfernt keine fremden Verknüpfungen mehr. Unter Wine geprüft.
+- **README:** Die Formulierung zur Altordner-Bereinigung bei laufender alter App ist präzisiert.
+
+Nicht übernommen: Die Kurzfassung erzwingt keine Übernahme früherer Punkte. Sie ist auf 8 Punkte begrenzt und darf zusammenfassen. Jede belegte Aussage bleibt in den Detaillisten und in den unveränderlichen Fenster- und Kurzfassungsdateien erhalten.
+
+Ergebnisse: 294 Rust-Tests bestanden (2 ignoriert), 160 Vitest-Fälle, Clippy, fmt, tsc, prettier und die Release-Skripttests bestanden. `makensis -WX` kompiliert ohne Warnung.
+
+**CodeRabbit-Review 5683206688 bearbeitet:**
+- **Lokales Modell übernehmen:** Nach „Verwenden“ eines erkannten lokalen Servers lädt die Nachbearbeitung dessen Modelle sofort. Vorher blieb die Liste bis zu einem manuellen Neuladen leer. Der Regressionstest schlug vor der Korrektur fehl.
+- **Pegelanzeige:** Der gehaltene Spitzenwert wird erst nach dem Rendern gespeichert, sodass verworfene Renders ihn nicht verändern.
+- **Hinweise ohne Maus:** Die Hinweise zu Pause und Stummschaltung sowie zur FFmpeg-Auswahl sind zusätzlich als eingeklappter Abschnitt per Tastatur und Touch erreichbar, nicht nur als Tooltip.
+- **Nicht übernommen:** eine Eigentumsprüfung für die Verknüpfung „Meeting for Handy“ beim Deinstallieren. Sie zeigt auf das Programm, das dabei entfernt wird; eigene Verknüpfungen mit anderem Namen bleiben unberührt.
+
+Ergebnis: 160 Vitest-Fälle bestanden, dazu `tsc` und `prettier`.
+
+**Codex-Review 5683390412 auf ba2590e bearbeitet:** Jede Korrektur hat einen Regressionstest, der vor der Korrektur fehlschlug.
+- **Quellenkennung:** Die Belege der Live-Zusammenfassung zeigen auf dem Bildschirm ihre Quellenkennung, wie schon der kopierte Text.
+- **Modellliste:** „Verwenden“ lädt die Modellliste auch dann neu, wenn die Serveradresse gleich bleibt.
+- **Modell-Download:** Wird die Modelleinrichtung erneut geöffnet, zeigt sie einen weiterlaufenden Download mit Fortschritt und „Abbrechen“ an, statt einen zweiten Download anzubieten.
+
+162 Vitest-Fälle, `tsc` und `prettier` bestanden.
+
+**Codex-Review 5686078293 auf cc67da1 bearbeitet:**
+- **Automatischer Start:** Ein fehlgeschlagener automatischer Start der Live-Zusammenfassung, etwa weil die Zusammenfassung des vorigen Meetings noch ihren Rückstand abarbeitet, wird alle 15 Sekunden erneut versucht. Nach höchstens 10 Minuten gibt er auf. Der vorige Lauf wird dafür nicht beendet. Ein Regressionstest schlug vor der Korrektur fehl.
+- **Fragen:** Die Liste heißt jetzt „Aufgeworfene Fragen“ statt „Offene Fragen“. Eine spätere Antwort im Meeting wird nicht abgeglichen, deshalb darf die Liste nicht behaupten, die Fragen seien noch offen. Ein echter Abgleich bräuchte eine Prompt- und Schemaänderung, die erst mit dem ausstehenden echten Referenztest bewertet werden kann. Prompt, Schema und gespeicherte Fenster bleiben unverändert.
+
+Lokal bestanden: 163 Vitest-Fälle, `tsc` und `prettier`.
+
+**CodeRabbit-Review auf cc67da1 bearbeitet:**
+- **Abbruch eines Ollama-Downloads:** Der Abbruch schließt die Verbindung jetzt sofort, auch wenn Ollama gerade keine Daten mehr sendet. Bisher konnte er bis zum Ruhe-Limit von 5 Minuten warten. Der Download läuft dafür über den bestehenden loopback-gebundenen Text-Transport (`meeting_notes::local_json_lines`: kein DNS, kein Proxy, keine Weiterleitung), mit asynchronem Lesen, das alle 100 ms auf Abbruch prüft. Neue Abhängigkeiten oder Lock-Änderungen gibt es nicht. Der Regressionstest nutzt jetzt das echte Ruhe-Limit. Er verlangt, dass der Abbruch nach weniger als 5 Sekunden endet und der synthetische Server das Schließen der Verbindung sieht.
+- **Fehler beim Wiederverbinden:** Ein fehlgeschlagenes Abfragen eines laufenden Downloads beim Wiederöffnen der Modelleinrichtung erscheint als Fehlermeldung statt als unbehandelte Ablehnung.
+
+Lokal bestanden: 294 Rust-Tests (2 ignoriert), Clippy mit `-D warnings`, 164 Vitest-Fälle, `tsc` und `prettier`.
+
+**Review 6474935681 (Maintainer, P2) auf d30c196 bearbeitet:** Jede Korrektur hat einen Regressionstest, der vor der Korrektur fehlschlug.
+- **Live-Zusammenfassung beim Meetingwechsel:** Startantwort, Fehler und Wartezustand eines Aufrufs gehören jetzt zu dem Meeting und der Verbindung, für die er gestartet wurde. Wechselt beides vorher, wird die verspätete Antwort ignoriert. Bisher zeigte eine späte Antwort für Meeting A ihren Stand unter Meeting B, und „Kopieren“ setzte den Titel von B darüber. Das gilt auch für Abfragen, Stopp, Aktualisieren, Intervall und Kopieren. Kopieren verlangt zusätzlich, dass der angezeigte Stand zum aktuellen Meeting gehört. Synthetischer Vitest-Fall mit zurückgehaltener Startantwort und Meetingwechsel.
+- **Rückstand nach jedem Fenster:** Nach jedem gespeicherten Fenster wird der Rest des bereits erfassten Texts sofort im nächsten Durchlauf zusammengefasst, nicht nur nach einem manuellen Fenster. Bisher blieben bei 6.550 bestätigten Zeichen nach dem Fenster mit 6.400 Zeichen 150 Zeichen liegen, bis neue Sprache oder das Intervall eine Aktualisierung auslöste. Nach Meetingende konnte das nie geschehen. Später erfasster Text folgt weiter den normalen Regeln. Abbruch und Fehlerpause gelten unverändert: Während der Pause wird nichts genommen. Synthetischer Rust-Test mit den echten Auswahl- und Auslöseregeln.
+- **Desktop-Verknüpfung:** Das Setup legt die Verknüpfung nur an, wenn keine gleichnamige existiert, oder wenn die vorhandene seine eigene ist und noch auf diesen Programmordner zeigt. Es vermerkt sie in seiner Registrierung (`DesktopShortcut`). Die Deinstallation löscht die Desktop-Verknüpfung nur mit diesem Vermerk und nur, wenn ihr Ziel (gelesen über IShellLink) das Programm dieses Ordners ist. Die Startmenü-Verknüpfung entfernt sie ebenfalls nur bei diesem Ziel. Bisher wurde „Meeting for Handy.lnk“ auf dem Desktop allein am Namen erkannt und gelöscht. Neue stille Option `/DESKTOPSHORTCUT`, entsprechend dem Kontrollkästchen auf der Abschlussseite. `package-rust-installer.ps1 -RunChecks` prüft auf echtem Windows in der CI:
+  - eine fremde gleichnamige Verknüpfung bleibt bei der Installation erhalten und wird nicht vermerkt;
+  - die Reparatur legt die eigene an und vermerkt sie;
+  - eine danach ersetzte fremde Verknüpfung übersteht die Deinstallation;
+  - eine eigene wird mit der Deinstallation entfernt.
+
+  Neuer Nachweis: `desktopShortcutOwnershipChecked`, von der Release-Prüfung verlangt. Lokal sind diese Abläufe mit Wine 9 nachgestellt (synthetisch, Pfade ohne Leerzeichen), mit identischem Ergebnis.
+
+Lokal bestanden: 291 Rust-Tests (2 ignoriert), Clippy mit `-D warnings`, fmt, 165 Vitest-Fälle, `tsc`, `prettier`, 72 Release-Skripttests und `makensis -WX` ohne Warnung. Kein vollständiger `verify.ps1`-Lauf (kein Windows hier). Der echte lokale Referenztest mit Gemma bleibt offen.
+
+**Codex-Review 5687252688 auf a12ffb9 bearbeitet:** Jede Korrektur hat einen Regressionstest, der vor der Korrektur fehlschlug.
+- **Kopieren ohne Kurzfassung:** Der kopierte Text enthält jetzt auch die wichtigen Punkte mit Quellenkennung und Zitat. Bisher bestand er nur aus Überschrift und Hinweis, wenn die Kurzfassung fehlschlug und keine Entscheidungen, Aufgaben oder Fragen vorlagen.
+- **Automatischer Start auf anderen Seiten:** Der automatische Start der Live-Zusammenfassung läuft jetzt unabhängig von der geöffneten Seite. Außerhalb der Aufnahmeseite ist die Zusammenfassung ohne eigene Anzeige eingebunden. Bisher startete eine Aufnahme, die etwa über eine Agentenfreigabe begann, während Verlauf oder Einstellungen offen waren, ihre Zusammenfassung erst nach dem Öffnen der Aufnahmeseite.
+
+Lokal bestanden: 166 Vitest-Fälle, `tsc` und `prettier`.
+
+**CodeRabbit-Review auf a12ffb9 bearbeitet (beide „Minor“):**
+- **Startmenü-Verknüpfung:** Das Setup ersetzt „Meeting for Handy.lnk“ im Startmenü nur noch, wenn sie dieses oder das bisher registrierte Programm startet. Eine gleichnamige Verknüpfung auf ein anderes Programm bleibt erhalten und wird im Setup-Protokoll genannt. Die frühere Ordnerverknüpfung aus dem Versionsordner-Layout wird nur gelöscht, wenn sie `HandyMeeting.exe` startet. `-RunChecks` prüft auf echtem Windows, dass eine fremde Startmenü-Verknüpfung Installation und Deinstallation übersteht. Lokal ist das mit Wine 9 nachgestellt (synthetisch), auch die eigene und die fremde frühere Ordnerverknüpfung.
+- **Dokumentation:** `docs/RELEASING.md` beschreibt, was mit einer früheren Installation geschieht, deren App nach 15 Sekunden noch läuft. Sie bleibt erhalten und wird im Setup-Protokoll genannt. Ein früherer Versionsordner bleibt unter Windows-Einstellungen > Apps gelistet. Ein bisher registrierter Ordner verliert seinen Eintrag an die neue Registrierung und wird später über seine eigene `Uninstall.exe` entfernt.
+
+Lokal bestanden: `makensis -WX` ohne Warnung und 72 Release-Skripttests.
+- **Weitere Dokumentationshinweise aus demselben Review:** `docs/RELEASING.md` beschreibt die CI-Prüfung jetzt korrekt als synthetisch gesperrte Programmdatei (ohne Freigabe geöffnet). Es wird weder ein echter Prozess noch eine Aufnahme gestartet. Beide READMEs nennen für jede Aussage der Live-Zusammenfassung Quellenkennung, wörtliches Zitat, Zeit und Audiospur.
+
+**CodeRabbit-Review 5687473668 auf c5b23a0 bearbeitet (Runde 2):** Die beiden Korrekturen an der App haben je einen Regressionstest, der vor der Korrektur fehlschlug.
+- **Cloud-Modell als lokale Wahl (Major):** Beim Wechsel von Cloud zu lokal wird der Modellname geleert. So wird ein Cloud-Modell nicht mehr als lokales Modell für den automatischen Start gespeichert.
+- **Kurz sichtbarer fremder Stand (Minor):** Das Panel zeigt und verwendet nur noch einen Stand, dessen `meetingId` zum angezeigten Meeting gehört. Das Zurücksetzen beim Meetingwechsel läuft vor dem Zeichnen (`useLayoutEffect`).
+- **Frühere Ordnerverknüpfung (Minor):** Die Verknüpfung `Meeting for Handy\Meeting for Handy.lnk` aus dem Versionsordner-Layout wird nur noch gelöscht, wenn der Eigentumseintrag des 1.0.5-Helfers (`HKCU\Software\HandyMeeting\BrandedStartMenuLink`, Werte `Link` und `Target`) sie nennt und ihr Ziel noch dem vermerkten Programm entspricht. Der Eintrag wird mit ihr entfernt. Eine Endung auf `HandyMeeting.exe` allein genügt nicht mehr. `-RunChecks` legt die synthetische frühere Verknüpfung jetzt mit diesem Eintrag an und prüft, dass beide verschwinden. Mit Wine 9 ist zusätzlich nachgestellt: eine nicht vermerkte und eine fremde Verknüpfung bleiben erhalten.
+
+Lokal bestanden: 168 Vitest-Fälle, `tsc`, `prettier`, 72 Release-Skripttests, `makensis -WX`.
