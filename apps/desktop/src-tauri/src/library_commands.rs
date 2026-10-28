@@ -2,6 +2,7 @@ use crate::{blocking, library_service, AppResult, Service};
 use std::sync::Arc;
 use tauri::State;
 
+/// Save title/VIP changes off the UI thread through revision-checked backend metadata policy.
 #[tauri::command]
 pub(crate) async fn edit_meeting_metadata(
     service: State<'_, Arc<Service>>,
@@ -13,6 +14,8 @@ pub(crate) async fn edit_meeting_metadata(
     let service = Arc::clone(&service);
     blocking(move || edit_metadata(&service, &meeting_id, expected_revision, title, pinned)).await
 }
+/// Hold mutation admission while reading the session and saving separate versioned labels;
+/// refresh derived index data without editing capture manifests.
 pub(crate) fn edit_metadata(
     service: &Service,
     meeting_id: &str,
@@ -47,6 +50,7 @@ pub(crate) async fn search_meetings(
     blocking(move || library_service::search(&service.root, &query, offset, limit)).await
 }
 // Runs off the UI thread: it may wait on the recording transition lock or on disk.
+/// Reserve indexing admission before starting an explicitly requested local index rebuild.
 #[tauri::command(async)]
 pub(crate) fn rebuild_search_index(service: State<'_, Arc<Service>>) -> AppResult<String> {
     let lease = service.reserve_operation(crate::operations::Kind::Index)?;

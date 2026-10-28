@@ -33,6 +33,10 @@ const meeting: Meeting = {
     text: `Original section ${i} <img src=x onerror=alert(1)>`,
   })),
 };
+/**
+ * Creates two same-titled synthetic meetings with distinct IDs and a long literal
+ * transcript so navigation/export tests can detect wrong-session binding or truncation.
+ */
 function fixture() {
   const other = {
     ...meeting,

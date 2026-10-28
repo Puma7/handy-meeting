@@ -166,6 +166,9 @@ async function putSame(file, bytes) {
   if (await exists(file)) { insist(await sha(file) === crypto.createHash('sha256').update(bytes).digest('hex'), 'An existing version contains different bytes. Preserve it and increment the version.'); return; }
   const handle = await fs.open(file, 'wx'); try { await handle.writeFile(bytes); await handle.sync(); } finally { await handle.close(); }
 }
+/** Stage the checked Windows executable, libraries and notices in a new program folder.
+ * Exact source and receipt checks precede copying; no executable or model is run here.
+ */
 async function stage() {
   const checked = await checkedSource();
   insist(checked.legacyChecksExecuted, 'Distributable candidates require the legacy checks too.');

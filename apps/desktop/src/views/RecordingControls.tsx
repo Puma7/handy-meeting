@@ -1,7 +1,10 @@
 import { Mic, MicOff, Pause, Play } from "lucide-react";
 import type { CaptureControl, Locale } from "../types";
 
-/** The acknowledged native state is authoritative; never display a successful mute optimistically. */
+/**
+ * Renders pause/mute from acknowledged native state and emits requested changes without
+ * optimistic success. Microphone controls apply only to this app's track.
+ */
 export default function RecordingControls({
   control,
   locale,

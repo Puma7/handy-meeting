@@ -3,7 +3,10 @@ import { clock } from "../domain";
 import type { Locale, MeetingSummary } from "../types";
 import type { MessageKey } from "../i18n";
 
-/** Fallback history for a core without full-text search; imported source IDs stay intact. */
+/**
+ * Shows fallback history for a core without full-text search. Opening a row passes its
+ * original meeting ID, including read-only imports, rather than looking up a title.
+ */
 export default function HistoryList({
   history,
   locale,

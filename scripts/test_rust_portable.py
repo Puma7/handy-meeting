@@ -215,6 +215,7 @@ class PortableArtifactGuards(unittest.TestCase):
         return work
 
     def test_deb_metadata_links_the_command_to_the_staged_executable(self):
+        """Bind generated Debian command and desktop metadata to the exact staged program."""
         work = self.deb_fixture()
         executable = self.put(str(work.relative_to(self.root) / "deb/opt/handymeeting/1.0.3/HandyMeeting"), b"synthetic, never executed")
         with contextlib.redirect_stdout(io.StringIO()):
@@ -255,6 +256,7 @@ class GuiSmokeWindowGuards(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        """Load the actual embedded X11 probe without starting the shell script or a desktop."""
         script = pathlib.Path(__file__).with_name("check-gui-smoke.sh").read_text(encoding="utf-8")
         cls.code = script.split("<<'PY_X11_WINDOWS'", 1)[1].split("\n", 1)[1].split("\nPY_X11_WINDOWS", 1)[0]
         cls.namespace = {"__name__": "synthetic_x11_probe"}
@@ -263,6 +265,7 @@ class GuiSmokeWindowGuards(unittest.TestCase):
         cls.title = cls.namespace["configured_title"](config)
 
     def window(self, **changes):
+        """Build synthetic X11 output for one configurable window; no real window is opened."""
         value = {"id": "0x200004", "pid": 1234, "title": self.title,
                  "class": "HandyMeeting", "mapped": "IsViewable", "width": 1180,
                  "height": 820, "properties_status": 0, "attributes_status": 0}
@@ -270,10 +273,12 @@ class GuiSmokeWindowGuards(unittest.TestCase):
         return value
 
     def count(self, windows, tree_status=0):
+        """Replay synthetic window queries through the real probe and retain queried arguments."""
         by_id = {window["id"]: window for window in windows}
         observed = []
 
         def probe(arguments, **options):
+            """Emulate X11 replies while asserting the probe's deadline and locale contract."""
             observed.append(arguments)
             self.assertGreater(options["timeout"], 0)
             self.assertLessEqual(options["timeout"], 3)
@@ -299,6 +304,7 @@ class GuiSmokeWindowGuards(unittest.TestCase):
         return result, observed
 
     def test_only_current_title_visible_window_of_the_exact_child_counts(self):
+        """Accept only current owned windows, deduplicating IDs and supporting legacy titles."""
         valid = self.window()
         unrelated = self.window(id="0x600001", pid=9999)
         self.assertEqual(self.count([valid, unrelated])[0], 1)
@@ -308,6 +314,7 @@ class GuiSmokeWindowGuards(unittest.TestCase):
         self.assertEqual(self.count([legacy_name])[0], 1)
 
     def test_old_title_class_only_foreign_missing_owner_and_unmapped_windows_do_not_pass(self):
+        """Reject stale, foreign, ownerless, hidden and zero-size synthetic window evidence."""
         for case, changes in [
             ("foreign same-title window", {"pid": 9999}),
             ("old title owned by child", {"title": "HandyMeeting"}),
@@ -326,6 +333,7 @@ class GuiSmokeWindowGuards(unittest.TestCase):
                 self.assertEqual(self.count([self.window(**changes)])[0], 0)
 
     def test_modern_title_mismatch_or_malformed_identity_never_uses_a_legacy_fallback(self):
+        """Require unambiguous ownership and honor a present modern title before any fallback."""
         title = json.dumps(self.title)
         for properties in [
             f'_NET_WM_PID(CARDINAL) = 1234\n_NET_WM_NAME(UTF8_STRING) = "HandyMeeting"\nWM_NAME(STRING) = {title}',
@@ -340,6 +348,7 @@ class GuiSmokeWindowGuards(unittest.TestCase):
                 self.assertFalse(any(arguments[-1] == "-stats" for arguments in observed))
 
     def test_failed_enumeration_or_timed_out_probe_cannot_report_success(self):
+        """Keep missing tools, failed enumeration and timeouts from becoming launch success."""
         with self.assertRaisesRegex(RuntimeError, "enumeration failed"):
             self.count([self.window()], tree_status=1)
         for failure in [FileNotFoundError("synthetic missing xprop"), subprocess.TimeoutExpired("xwininfo", 3)]:
@@ -347,6 +356,7 @@ class GuiSmokeWindowGuards(unittest.TestCase):
                 self.namespace["count_owned_windows"](1234, self.title)
 
     def test_cli_probe_failure_exits_unsuccessfully_without_a_positive_count(self):
+        """Check that the embedded probe's CLI reports failure without a false positive count."""
         output, errors = io.StringIO(), io.StringIO()
         with mock.patch("sys.argv", ["synthetic-probe", "1234", "synthetic-config"]), mock.patch.object(pathlib.Path, "read_text", return_value=json.dumps({"app": {"windows": [{"title": self.title}]}})), mock.patch.object(subprocess, "run", side_effect=FileNotFoundError("synthetic missing tool")), contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors), self.assertRaises(SystemExit) as stopped:
             exec(compile(self.code, "check-gui-smoke.sh:PY_X11_WINDOWS", "exec"), {"__name__": "__main__"})

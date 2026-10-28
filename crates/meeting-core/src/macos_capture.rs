@@ -20,6 +20,7 @@ const DEFAULT_ID: &str = "default";
 const MISSING_HELPER: &str =
     "The macOS audio helper is missing. Install the complete matching application bundle.";
 
+/// Provides default system and microphone choices independently of optional device enumeration.
 fn default_devices() -> Vec<AudioDevice> {
     vec![
         AudioDevice {
@@ -37,6 +38,7 @@ fn default_devices() -> Vec<AudioDevice> {
     ]
 }
 
+/// Locates the matching bundled capture helper beside the running executable.
 fn helper() -> Result<PathBuf> {
     let helper = std::env::current_exe()?
         .parent()
@@ -48,6 +50,7 @@ fn helper() -> Result<PathBuf> {
     Ok(helper)
 }
 
+/// Adds validated listed microphones when available while retaining the default choices on query failure.
 pub(super) fn list_devices() -> Result<Vec<AudioDevice>> {
     let mut devices = default_devices();
     // Listing is optional: when the helper cannot list devices, the default
@@ -73,6 +76,7 @@ struct ListedMicrophone {
     name: String,
 }
 
+/// Accepts a bounded explicit microphone identifier distinct from the default-device sentinel.
 fn valid_device_id(id: &str) -> bool {
     !id.is_empty() && id != DEFAULT_ID && id.len() <= 4096 && !id.chars().any(char::is_control)
 }
@@ -129,6 +133,7 @@ fn track_arguments(source: &str, device_id: Option<&str>) -> Result<Vec<String>>
     Ok(arguments)
 }
 
+/// Starts the bundled track helper with readiness signaling and portable privacy-aware PCM handling.
 pub(super) fn record(
     store: SessionStore,
     source: &str,
@@ -159,6 +164,7 @@ mod tests {
     use super::*;
 
     #[test]
+    /// Checks synthetic microphone listings reject unsafe IDs and retain separate default choices.
     fn listed_microphones_are_validated_deduplicated_and_never_replace_defaults() {
         let output = r#"[{"id":"BuiltInMicrophoneDevice","name":"MacBook Pro Microphone","isDefault":true},
             {"id":"AppleUSBAudioEngine:Vendor:Mic:1","name":"USB\u0007 Mic","isDefault":false},
@@ -184,6 +190,7 @@ mod tests {
     }
 
     #[test]
+    /// Checks synthetic arguments forward explicit microphone IDs and reject nondefault system outputs.
     fn only_a_chosen_microphone_is_passed_to_the_helper() {
         assert_eq!(
             track_arguments("microphone", None).unwrap(),

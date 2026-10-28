@@ -33,6 +33,10 @@ const original: Meeting = {
     },
   ],
 };
+/**
+ * Provides acknowledged synthetic capture state and mocked controls. State replacement
+ * simulates native replies without opening devices, file dialogs or application storage.
+ */
 function fixture(recording = true) {
   let state: AppState = {
     version: "synthetic",

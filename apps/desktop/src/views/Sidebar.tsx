@@ -20,6 +20,10 @@ type Props = {
   setTheme: (theme: Theme) => void;
   setLocale: (locale: Locale) => void;
 };
+/**
+ * Renders page navigation and locale/theme controls; the parent retains ownership of
+ * meeting selection and navigation side effects.
+ */
 export default function Sidebar({
   app,
   page,

@@ -22,6 +22,7 @@ pub(super) struct HelperSpec {
 }
 struct OwnedChild(Child);
 impl Drop for OwnedChild {
+    /// Kills and reaps only the child process represented by this owned helper handle.
     fn drop(&mut self) {
         let _ = self.0.kill();
         let _ = self.0.wait();
@@ -82,6 +83,7 @@ pub(super) fn query_command(command: &mut Command, missing: &'static str) -> Res
 }
 
 #[cfg(test)]
+/// Runs the portable recorder with journal-free gates for synthetic helper fixtures.
 pub(super) fn record(
     store: SessionStore,
     source: &str,
@@ -99,6 +101,7 @@ pub(super) fn record(
     )
 }
 
+/// Persists bounded helper PCM by privacy epoch, restarting owned helpers after pause/mute transitions.
 pub(super) fn record_controlled(
     store: SessionStore,
     source: &str,
@@ -336,6 +339,7 @@ pub(super) fn record_controlled(
     result
 }
 
+/// Forwards bounded stdout chunks and EOF/error markers through the bounded PCM channel.
 fn read_packets(mut input: impl Read, sender: SyncSender<Packet>) {
     let mut buffer = [0_u8; PACKET];
     loop {
@@ -356,6 +360,7 @@ fn read_packets(mut input: impl Read, sender: SyncSender<Packet>) {
         }
     }
 }
+/// Pads approximate receipt-time gaps in bounded sections and refuses gaps exceeding one day.
 fn pad_estimated(writer: &mut PcmWriter, target: u64) -> Result<()> {
     if target.saturating_sub(writer.written_samples()) > u64::from(SAMPLE_RATE) * 86400 {
         return Err("Audio receipt clock gap exceeds one day; check the recording timeline".into());
@@ -371,6 +376,7 @@ mod tests {
     use super::*;
 
     #[test]
+    /// Checks synthetic helper restarts discard muted speech while keeping explicit silent timeline sections.
     fn synthetic_helper_mute_restarts_the_pipe_and_preserves_silent_timeline_sections() {
         let root = tempfile::tempdir().unwrap();
         let store = SessionStore::create(
@@ -484,10 +490,12 @@ mod tests {
     }
     struct StopOnExit(Arc<AtomicBool>);
     impl Drop for StopOnExit {
+        /// Signals the synthetic fixture's stop flag even if its test exits early.
         fn drop(&mut self) {
             self.0.store(true, Ordering::Release);
         }
     }
+    /// Selects the host Python command used only by synthetic helper-process tests.
     fn python() -> Command {
         Command::new(if cfg!(windows) { "python" } else { "python3" })
     }
@@ -495,6 +503,7 @@ mod tests {
     // have closed. Parallel Unix child launches can briefly retain a CLOEXEC
     // flock descriptor until exec. Always acquire the real exclusive lease;
     // never unlock, delete its file, or ignore any other recovery error.
+    /// Retries only transient fixture lease contention; real leases and all other recovery errors remain enforced.
     fn reopen_released_fixture(
         folder: &std::path::Path,
         timeout: Duration,
@@ -514,6 +523,7 @@ mod tests {
         }
     }
     #[test]
+    /// Checks synthetic metadata helpers reject excessive output and nonzero process exits.
     fn metadata_query_rejects_unbounded_output_and_preserves_nonzero_exit() {
         assert!(
             text_command(python().args(["-c", "import sys;sys.stdout.write('x'*1048577)"]))
@@ -522,6 +532,7 @@ mod tests {
         assert!(text_command(python().args(["-c", "raise SystemExit(9)"])).is_err());
     }
     #[test]
+    /// Checks synthetic PCM pipes retain separate tracks and finalize their confirmed bytes on stop.
     fn synthetic_pipe_tracks_are_separate_and_stop_without_hardware() {
         let root = tempfile::tempdir().unwrap();
         let store = SessionStore::create(
@@ -651,6 +662,7 @@ mod tests {
             .all(|p| p.audio_closed && p.confirmed_sample_count >= 16000));
     }
     #[test]
+    /// Checks a live synthetic helper cannot become ready without emitting its actual readiness marker.
     fn alive_helper_cannot_acknowledge_a_marker_before_executing_it() {
         let root = tempfile::tempdir().unwrap();
         let store = SessionStore::create(
@@ -703,6 +715,7 @@ mod tests {
         worker.join().unwrap().unwrap();
     }
     #[test]
+    /// Checks a synthetic helper crash retains confirmed PCM that can be reopened through the normal lease.
     fn helper_crash_finalizes_received_pcm_and_survives_reopen() {
         let root = tempfile::tempdir().unwrap();
         let store = SessionStore::create(
@@ -750,6 +763,7 @@ mod tests {
         assert_eq!(reopened.snapshot().unwrap().parts[0].confirmed_sha256, hash);
     }
     #[test]
+    /// Checks fixture recovery times out rather than bypassing an active session writer lease.
     fn bounded_fixture_reopen_never_bypasses_an_active_writer_lease() {
         let root = tempfile::tempdir().unwrap();
         let store = SessionStore::create(
@@ -779,6 +793,7 @@ mod tests {
         assert!(reopen_released_fixture(&folder, Duration::from_secs(2)).is_ok());
     }
     #[test]
+    /// Checks fixture lease retries never hide a damaged original session manifest.
     fn bounded_fixture_reopen_propagates_original_manifest_errors() {
         let root = tempfile::tempdir().unwrap();
         let store = SessionStore::create(

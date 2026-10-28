@@ -27,6 +27,7 @@ pub use restore::{move_source_into_archive, restore_new};
 const MAX_FILES: usize = 100000;
 const MAX_TOTAL: u64 = 64 * 1024 * 1024 * 1024;
 const MAX_MANIFEST: u64 = 64 * 1024 * 1024;
+/// Serializes archive moves, restoration, compaction and deletion within this storage root.
 fn operation_lock(root: &Path) -> Result<File> {
     metadata::checked_directory(root)?;
     let file = metadata::open_lock_file(&root.join("archive-maintenance.lock"))?;
@@ -60,6 +61,7 @@ pub struct Sidecar {
     pub bytes: Vec<u8>,
     pub sha256: String,
 }
+/// Accepts only the current annotation file or a bounded revision filename for this meeting.
 fn sidecar_name(name: &str, id: &str) -> bool {
     let parts: Vec<_> = name.split('/').collect();
     if !matches!(
@@ -81,6 +83,7 @@ fn sidecar_name(name: &str, id: &str) -> bool {
         && file.as_bytes()[21..53].iter().all(u8::is_ascii_hexdigit)
         && &file[53..] == ".json"
 }
+/// Collects bounded, ordinary annotation revisions and their hashes without rewriting them.
 fn sidecars(root: &Path, id: &str) -> Result<Vec<Sidecar>> {
     let mut paths = Vec::new();
     for parent in ["user-metadata", "speaker-labels"] {
@@ -177,6 +180,7 @@ const TRANSCRIPT_FILES: &[&str] = &[
     "audio-journal.jsonl",
     "transcript-journal.jsonl",
 ];
+/// Compares recovered session data while ignoring transient warnings, read-only state and part order.
 fn same_original_text(a: &SessionData, b: &SessionData) -> Result<bool> {
     let encode = |value: &SessionData| -> Result<Vec<u8>> {
         let mut data = value.clone();
@@ -187,6 +191,7 @@ fn same_original_text(a: &SessionData, b: &SessionData) -> Result<bool> {
     };
     Ok(encode(a)? == encode(b)?)
 }
+/// Rejects linked or non-file archive inputs before reading their metadata.
 fn regular(path: &Path) -> Result<fs::Metadata> {
     reject_link(path)?;
     let meta = fs::metadata(path)?;
@@ -195,6 +200,7 @@ fn regular(path: &Path) -> Result<fs::Metadata> {
     }
     Ok(meta)
 }
+/// Checks a session-relative archive name against traversal and cross-platform filename hazards.
 fn safe_name(name: &str) -> bool {
     !name.is_empty()
         && !name.contains(['\\', ':', '\0', '<', '>', '"', '|', '?', '*'])
@@ -214,9 +220,11 @@ fn safe_name(name: &str) -> bool {
         })
         && name.starts_with("session/")
 }
+/// Hashes an ordinary archive input with the shared decoded-size limit.
 fn digest(path: &Path) -> Result<(u64, String)> {
     digest_cancellable(path, None)
 }
+/// Hashes an ordinary input in bounded blocks and stops at cancellation without changing it.
 fn digest_cancellable(path: &Path, cancel: Option<&AtomicBool>) -> Result<(u64, String)> {
     regular(path)?;
     let mut input = File::open(path)?;
@@ -239,6 +247,7 @@ fn digest_cancellable(path: &Path, cancel: Option<&AtomicBool>) -> Result<(u64, 
     }
     Ok((bytes, format!("{:x}", hash.finalize())))
 }
+/// Lists ordinary session files and empty directories; the live lease is excluded from payloads.
 fn inventory(
     folder: &Path,
     base: &Path,
@@ -289,6 +298,7 @@ fn inventory(
     }
     Ok(())
 }
+/// Creates only normal relative directories and rejects linked parents along the restore path.
 fn safe_directories(base: &Path, relative: &Path) -> Result<()> {
     let mut current = metadata::checked_directory(base)?;
     for component in relative.components() {
@@ -305,6 +315,7 @@ fn safe_directories(base: &Path, relative: &Path) -> Result<()> {
     }
     Ok(())
 }
+/// Writes and verifies a lossless archive under source and metadata leases; originals remain in place.
 pub fn create(
     root: &Path,
     id: &str,
@@ -502,6 +513,7 @@ pub fn create(
     )?;
     Ok(receipt)
 }
+/// Checks archive identities, safe paths, bounded sizes and every manifest hash without extracting files.
 pub fn verify(
     path: &Path,
     cancel: Option<&AtomicBool>,
@@ -633,6 +645,7 @@ pub enum Unreadable {
     /// The meeting's saved labels could not be read.
     Labels,
 }
+/// Reads one bounded ordinary receipt and checks that its IDs match the requested archive.
 fn receipt_at(folder: &Path, id: &str) -> Result<Receipt> {
     if !metadata::valid_id(id) || id.starts_with("legacy-") {
         return Err("Invalid archive identity".into());
@@ -654,6 +667,7 @@ fn receipt_at(folder: &Path, id: &str) -> Result<Receipt> {
     }
     Ok(value)
 }
+/// Pages through archive receipts, retaining unreadable entries as explicit protected results.
 pub fn list(root: &Path, offset: usize, limit: usize) -> Result<ArchivePage> {
     if !(1..=50).contains(&limit) || offset > 1000000 {
         return Err("Invalid archive page".into());
@@ -716,6 +730,7 @@ pub fn list(root: &Path, offset: usize, limit: usize) -> Result<ArchivePage> {
     }
     Ok(ArchivePage { items, more })
 }
+/// Checks a receipt's ZIP size and hash before selecting whole-session or audio-only restoration.
 pub fn restore(root: &Path, archive_id: &str, cancel: &AtomicBool) -> Result<PathBuf> {
     let folder = metadata::checked_directory(&root.join("archives"))?;
     let receipt = receipt_at(&folder, archive_id)?;

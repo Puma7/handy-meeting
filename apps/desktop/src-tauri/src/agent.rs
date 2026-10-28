@@ -95,6 +95,7 @@ fn unix_ms() -> u64 {
         .unwrap_or(u64::MAX)
 }
 impl Default for Controller {
+    /// Create a disconnected controller with no approval, deadline or owned session.
     fn default() -> Self {
         Self(Mutex::new(Policy {
             view: View {
@@ -122,9 +123,12 @@ impl Controller {
         p.view.connected = true;
         Ok(())
     }
+    /// Return connection and consent metadata without asserting an active capture owner.
     pub fn view(&self) -> AppResult<Option<View>> {
         self.view_for_capture(None)
     }
+    /// Project actual application ownership into the agent view, independently of consent expiry.
+    /// The caller supplies the current Active owner; a lease alone is not capture evidence.
     pub fn view_for_capture(&self, active_owner: Option<&str>) -> AppResult<Option<View>> {
         let p = self.0.lock().map_err(|_| "Agent state unavailable")?;
         Ok(
@@ -407,10 +411,13 @@ trait Host {
     fn text_page(&self, id: &str, after: u64, limit: usize) -> AppResult<Value>;
     fn text_slice(&self, input: Slice) -> AppResult<Value>;
     fn request_stop(&self, owner: &str, id: &str) -> AppResult<()>;
+    /// Default to no active owner for hosts that expose no recording state.
     fn active_capture_owner(&self) -> AppResult<Option<String>> {
         Ok(None)
     }
 }
+/// Dispatch only the bounded agent protocol methods and enforce session authorization.
+/// Transcript reads are authorized again after retrieval; no arbitrary path or shell method is exposed.
 fn dispatch(controller: &Controller, host: &impl Host, request: Request) -> AppResult<Value> {
     match request.method.as_str() {
         "capabilities" => {
@@ -529,6 +536,8 @@ fn serve(
     result
 }
 impl Host for Service {
+    /// Read the owner of the actual Active slot, including capture-less catch-up.
+    /// Expired or revoked consent does not erase ownership before that slot is collected.
     fn active_capture_owner(&self) -> AppResult<Option<String>> {
         Ok(self
             .lock()?
@@ -689,6 +698,8 @@ pub(super) fn start_stdio(service: Arc<Service>) -> AppResult<()> {
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    /// Check serialized app ownership with synthetic Active slots and no capture controller.
+    /// Consent alone stays false; expired or revoked consent cannot hide a still-owned Active slot.
     #[test]
     fn serialized_app_state_uses_active_owner_instead_of_a_consent_lease() {
         let root = std::env::temp_dir().join(format!(
@@ -1017,6 +1028,7 @@ mod tests {
         assert!(serve(&controller, &host, std::io::Cursor::new(input), output).is_err());
         assert!(controller.view().unwrap().unwrap().revoked);
     }
+    /// Verify synthetic agent stop requests cannot remove an unrelated manual Active slot.
     #[test]
     fn own_session_stop_cannot_stop_a_foreign_manual_active_session() {
         let nonce = SystemTime::now()
@@ -1048,6 +1060,7 @@ mod tests {
         assert!(service.stop_for(Some("agent-other"), Some(&id)).is_err());
         assert!(service.lock().unwrap().active.is_some());
     }
+    /// Verify revocation settles only the matching synthetic owned session and retains its saved data.
     #[test]
     fn revocation_finishes_only_the_exact_owned_synthetic_session_and_retains_it() {
         let nonce = SystemTime::now()

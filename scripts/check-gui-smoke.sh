@@ -37,6 +37,7 @@ import time
 
 
 def configured_title(path):
+    """Read the current Tauri window title and reject empty or control-character text."""
     title = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))["app"]["windows"][0]["title"]
     if not isinstance(title, str) or not title or any(ord(char) < 32 for char in title):
         raise ValueError("Invalid configured window title")
@@ -44,6 +45,7 @@ def configured_title(path):
 
 
 def text_property(properties, name):
+    """Decode one exact X11 string property; ambiguous or malformed values stay unknown."""
     lines = [line for line in properties.splitlines() if line.startswith(name + "(")]
     if len(lines) != 1:
         return None
@@ -57,11 +59,17 @@ def text_property(properties, name):
 
 
 def count_owned_windows(pid, title):
+    """Count visible, positive-size windows matching both the spawned PID and title.
+
+    Enumeration and property reads share a three-second deadline. Class names,
+    foreign windows and malformed identities cannot establish a successful launch.
+    """
     if pid <= 0:
         raise ValueError("Invalid child process identity")
     deadline = time.monotonic() + 3
 
     def probe(arguments):
+        """Run one X11 query within the remaining deadline using a stable output locale."""
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             raise TimeoutError("X11 window probe timed out")

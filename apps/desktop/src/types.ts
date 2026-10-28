@@ -99,11 +99,13 @@ export interface AppState {
   notesRunning?: boolean;
   agent?: AgentState | null;
 }
+/** Acknowledged native track controls; these describe this app's capture only. */
 export interface CaptureControl {
   paused: boolean;
   microphoneMuted: boolean;
   hasMicrophone: boolean;
 }
+/** Complete original-transcript export formats accepted by the native saver. */
 export type TranscriptFormat = "txt" | "md" | "json";
 export interface AgentState {
   connected: boolean;
@@ -119,6 +121,7 @@ export interface AgentState {
   } | null;
   ownedSessionId: string | null;
   expiresAtUnixMs: number | null;
+  /** Actual native session ownership, independent of pending or expired consent. */
   activeCapture?: boolean;
   lastOutcome?: string | null;
 }
@@ -251,6 +254,10 @@ export interface NotesProgress {
   error: string | null;
   cancelRequested: boolean;
 }
+/**
+ * Typed renderer/native boundary. Optional methods describe available capabilities;
+ * native commands still validate IDs, file grants and explicit confirmations.
+ */
 export interface DesktopApi {
   listAudioCopies?(offset: number): Promise<AudioCopy[]>;
   transcribeAudioCopy?(
@@ -318,11 +325,17 @@ export interface DesktopApi {
   getLibraryProgress?(): Promise<LibraryProgress | null>;
   cancelLibraryJob?(jobId: string): Promise<boolean>;
   getAppState(): Promise<AppState>;
+  /** Binds a pause request to the current meeting; resolves with native acknowledgement. */
   setCapturePaused?(meetingId: string, paused: boolean): Promise<AppState>;
+  /** Mutes only this app's microphone track for the bound meeting, retaining system audio. */
   setMicrophoneMuted?(meetingId: string, muted: boolean): Promise<AppState>;
+  /** Opens native selection/confirmation; cancellation returns null and grants no new path. */
   chooseHandyExecutable?(): Promise<string | null>;
+  /** Returns an approved canonical FFmpeg path; its native grant lasts for this app session. */
   chooseFfmpegExecutable?(): Promise<string | null>;
+  /** Selects an original session manifest through the native dialog for read-only import. */
   chooseLegacyManifest?(): Promise<string | null>;
+  /** Null delegates cached-origin resolution to the backend; an explicit path needs native approval. */
   refreshHandy(executable: string | null): Promise<HandyStatus>;
   listDevices(): Promise<AudioDevice[]>;
   startMeeting(request: StartRequest): Promise<Meeting>;
@@ -340,6 +353,10 @@ export interface DesktopApi {
   notesMarkdown(meetingId: string, analysisId: string): Promise<string>;
   copyText(text: string): Promise<void>;
   openMeetingFolder(id: string): Promise<void>;
+  /**
+   * Saves every original section for the bound meeting and returns the saved path.
+   * Omitting the format preserves the native TXT default.
+   */
   exportTranscript(
     id: string,
     locale: Locale,

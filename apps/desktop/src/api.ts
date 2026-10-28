@@ -1,6 +1,10 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import type { DesktopApi } from "./types";
 import { requestJobStatusRefresh } from "./jobPolling";
+/**
+ * Invokes a typed native command only inside Tauri; browser previews reject instead of
+ * pretending a desktop operation succeeded.
+ */
 function desktopInvoke<T>(
   command: string,
   args?: Record<string, unknown>,
@@ -11,7 +15,10 @@ function desktopInvoke<T>(
     );
   return invoke<T>(command, args);
 }
-// Background jobs: status bars check right away instead of waiting for their idle interval.
+/**
+ * Submits a native job request and wakes status pollers immediately and on settlement. The
+ * returned promise still carries the command's original success or failure.
+ */
 function jobInvoke<T>(
   command: string,
   args?: Record<string, unknown>,
@@ -120,6 +127,10 @@ export const desktopApi: DesktopApi = {
     desktopInvoke("agent_decide_recording", { requestId, approve, request }),
   agentRevoke: () => desktopInvoke("agent_revoke"),
 };
+/**
+ * Preserves a supplied Error message or string for the UI and uses a desktop-connection
+ * instruction for unknown error shapes.
+ */
 export function errorMessage(error: unknown): string {
   return error instanceof Error
     ? error.message

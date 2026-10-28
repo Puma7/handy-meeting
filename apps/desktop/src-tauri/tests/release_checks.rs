@@ -2,6 +2,8 @@
 //! All meeting/audio contents here are generated fixtures; no devices or models are used.
 use std::{fs, path::Path, process::Command};
 
+/// Run the actual model-free CLI in a private child cwd with relative output; check native
+/// ABI/synthetic import evidence and preserve files when rerunning is refused.
 #[test]
 fn release_cli_accepts_relative_output_from_an_isolated_working_directory() {
     let checkout = Path::new(env!("CARGO_MANIFEST_DIR"))

@@ -26,6 +26,8 @@ pub(crate) fn get_update_progress(
 pub(crate) fn cancel_update(service: State<'_, Arc<Service>>) {
     service.updater.cancel();
 }
+/// On Windows, hold installation admission and recheck the installer before launch. Exit only
+/// after spawning it; launch failure clears the transition and reports an error.
 #[tauri::command]
 pub(crate) async fn install_update(
     service: State<'_, Arc<Service>>,
@@ -59,9 +61,12 @@ pub(crate) async fn open_release_page(service: State<'_, Arc<Service>>) -> AppRe
     })
     .await
 }
+/// Build the current OS browser launcher without spawning it; unsupported hosts return an error.
 fn browser_command(page: &str) -> AppResult<std::process::Command> {
     browser_command_for(std::env::consts::OS, page)
 }
+/// Pass the official page as one literal OS-launcher argument; unsupported platforms receive a
+/// manual-open error instead of a guessed command.
 fn browser_command_for(platform: &str, page: &str) -> AppResult<std::process::Command> {
     let mut command = match platform {
         "windows" => {
@@ -87,6 +92,8 @@ fn browser_command_for(platform: &str, page: &str) -> AppResult<std::process::Co
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// Verify supported launcher arguments stay literal through command inspection only, without
+    /// opening a browser.
     #[test]
     fn supported_browser_launchers_keep_one_literal_url_without_starting_any_process() {
         let page = "https://github.com/Puma7/meeting-for-handy/releases/tag/v1.0.4";
@@ -108,6 +115,8 @@ mod tests {
             );
         }
     }
+    /// Verify unsupported hosts return an actionable official-page error without starting a
+    /// process.
     #[test]
     fn unsupported_browser_platforms_return_the_manual_release_action() {
         let page = "https://github.com/Puma7/meeting-for-handy/releases/tag/v1.0.4";

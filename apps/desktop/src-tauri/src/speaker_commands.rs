@@ -46,6 +46,7 @@ pub(crate) async fn get_speaker_labels(
     let service = Arc::clone(&service);
     blocking(move||{let data=service.data(&meeting_id)?;let document=meeting_core::speakers::read(&service.root,&meeting_id).map_err(|_|"Speaker annotations could not be read; prior revisions are preserved. / Sprecherzuordnungen konnten nicht gelesen werden; bisherige Fassungen bleiben erhalten.")?;Ok(SpeakerView{document,sources:data.parts.iter().filter_map(|p|p.text.as_ref().map(|t|(p.file.clone(),meeting_core::speakers::text_hash(t)))).collect()})}).await
 }
+/// Save revisioned speaker annotations off the UI thread through source-text validation.
 #[tauri::command]
 pub(crate) async fn save_speaker_labels(
     service: State<'_, Arc<Service>>,
@@ -66,6 +67,8 @@ pub(crate) async fn save_speaker_labels(
     })
     .await
 }
+/// Hold mutation admission while validating assignments against current source text and saving
+/// separate annotations without rewriting capture transcripts.
 pub(crate) fn save_labels(
     service: &Service,
     meeting_id: &str,

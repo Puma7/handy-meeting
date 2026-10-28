@@ -5,6 +5,10 @@ import type { MessageKey } from "../i18n";
 import TranscriptBody from "./TranscriptBody";
 import SessionWarnings from "./SessionWarnings";
 import MeetingFiles from "./MeetingFiles";
+/**
+ * Renders one historical meeting's literal source sections. Callers bind copy/export
+ * actions to that meeting's ID; displayed section times are not word timestamps.
+ */
 export default function MeetingDetail({
   meeting,
   locale,

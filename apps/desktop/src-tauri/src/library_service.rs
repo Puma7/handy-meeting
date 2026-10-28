@@ -338,6 +338,8 @@ mod clock_tests {
             std::thread::sleep(std::time::Duration::from_millis(5));
         }
     }
+    /// Verify an unreadable synthetic index is preserved until an explicit rebuild moves it
+    /// aside.
     #[test]
     fn only_a_user_rebuild_replaces_an_unreadable_index_and_keeps_its_bytes() {
         // Synthetic damage to the derived index; no session folder is touched.

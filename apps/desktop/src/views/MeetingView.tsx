@@ -63,6 +63,10 @@ type Props = {
   resume: () => void;
   copyFullTranscript: () => Promise<void>;
 };
+/**
+ * Shows live section/capture progress and delegates mutations to parent callbacks. Native
+ * acknowledgement and ownership determine the pause/mute controls.
+ */
 export default function MeetingView({
   t,
   x,

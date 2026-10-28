@@ -19,6 +19,8 @@ pub(crate) enum Purpose {
     Legacy,
 }
 impl Purpose {
+    /// Return purpose-specific native confirmation text without treating a supplied path as
+    /// approval.
     fn description(self) -> &'static str {
         match self {
             Self::Handy => "Use this Handy program for local model discovery? / Dieses Handy-Programm für die lokale Modellabfrage verwenden?",
@@ -41,6 +43,8 @@ pub(crate) struct Selections {
     discovered_handy: Mutex<Option<PathBuf>>,
 }
 
+/// Validate an absolute ordinary local file and bind canonical path, size and SHA-256 to a
+/// purpose. Linked final files are rejected; inspection grants no renderer authority by itself.
 fn inspect(purpose: Purpose, path: &Path) -> AppResult<Grant> {
     if !path.is_absolute() || path.to_string_lossy().chars().any(char::is_control) {
         return Err("Choose a local file through the native picker. / Bitte eine lokale Datei im Systemdialog wählen.".into());
@@ -117,6 +121,8 @@ fn inspect(purpose: Purpose, path: &Path) -> AppResult<Grant> {
     })
 }
 impl Selections {
+    /// Require an existing native grant before reading an unrelated renderer path; reinspection
+    /// rejects purpose reuse, changed bytes and different canonical files.
     pub(crate) fn verify(&self, purpose: Purpose, path: &Path) -> AppResult<()> {
         let approved = self.native.lock().map_err(|_| "Native file selections are unavailable")?.get(&purpose).cloned().ok_or("Choose and confirm this file in the native system dialog first. / Bitte diese Datei zuerst im Systemdialog auswählen und bestätigen.")?;
         // Refuse an unrelated renderer path before opening or hashing its contents.
@@ -129,6 +135,8 @@ impl Selections {
         }
         Ok(())
     }
+    /// Retain a verified purpose-bound grant for this Service lifetime and return its canonical
+    /// display path.
     fn remember(&self, purpose: Purpose, selected: Grant) -> AppResult<String> {
         let path = selected.path.to_string_lossy().into_owned();
         self.native
@@ -137,6 +145,8 @@ impl Selections {
             .insert(purpose, selected);
         Ok(path)
     }
+    /// Leave denial unapproved and rehash accepted bytes after human confirmation; remember only
+    /// an unchanged purpose-bound file.
     fn finish_native_choice(
         &self,
         purpose: Purpose,
@@ -151,6 +161,8 @@ impl Selections {
         }
         self.remember(purpose, grant).map(Some)
     }
+    /// Record an inspected OS-discovered origin without granting permission for explicit renderer
+    /// paths.
     pub(crate) fn remember_discovered_handy(&self, path: &Path) -> AppResult<()> {
         let verified = inspect(Purpose::Handy, path)?;
         *self
@@ -159,6 +171,8 @@ impl Selections {
             .map_err(|_| "Handy discovery state is unavailable")? = Some(verified.path);
         Ok(())
     }
+    /// Rediscover OS installations but strictly revalidate native choices. Invalid explicit
+    /// requests clear discovery fallback instead of reusing earlier authority.
     pub(crate) fn handy_discovery_path(
         &self,
         explicit: Option<&Path>,
@@ -199,6 +213,8 @@ impl Selections {
     }
 }
 
+/// Hold exclusive selection admission through the native picker and confirmation, then recheck
+/// bytes before remembering a purpose-bound grant.
 async fn choose(
     service: Arc<Service>,
     app: tauri::AppHandle,
@@ -217,6 +233,7 @@ async fn choose(
     }).await
 }
 
+/// Offer native confirmation of a Handy executable; cancellation returns no selected path.
 #[tauri::command]
 pub(crate) async fn choose_handy_executable(
     service: State<'_, Arc<Service>>,
@@ -224,6 +241,7 @@ pub(crate) async fn choose_handy_executable(
 ) -> AppResult<Option<String>> {
     choose(Arc::clone(&service), app, Purpose::Handy).await
 }
+/// Offer native confirmation of separately installed FFmpeg for optional local audio conversion.
 #[tauri::command]
 pub(crate) async fn choose_ffmpeg_executable(
     service: State<'_, Arc<Service>>,
@@ -231,6 +249,7 @@ pub(crate) async fn choose_ffmpeg_executable(
 ) -> AppResult<Option<String>> {
     choose(Arc::clone(&service), app, Purpose::Ffmpeg).await
 }
+/// Offer native confirmation of an original session manifest for read-only import.
 #[tauri::command]
 pub(crate) async fn choose_legacy_manifest(
     service: State<'_, Arc<Service>>,
@@ -242,6 +261,8 @@ pub(crate) async fn choose_legacy_manifest(
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// Verify relative program and manifest paths fail inspection and cannot supply native
+    /// authority.
     #[test]
     fn relative_paths_never_become_native_file_grants() {
         for (purpose, path) in [
@@ -255,6 +276,8 @@ mod tests {
                 .is_err());
         }
     }
+    /// Verify synthetic discovered updates trigger rediscovery while explicit replacements
+    /// require new approval.
     #[test]
     fn discovered_handy_updates_rediscover_without_becoming_native_path_grants() {
         let root = std::env::temp_dir().join(format!(
@@ -308,6 +331,8 @@ mod tests {
             "A native-confirmed file replacement still needs new consent"
         );
     }
+    /// Verify a removed discovered binary does not block rediscovery or authorize an explicit new
+    /// path.
     #[test]
     fn removed_discovered_handy_path_can_be_rediscovered_at_a_new_installation() {
         let root = std::env::temp_dir().join(format!(
@@ -339,6 +364,8 @@ mod tests {
             "Discovery must not confer renderer path authority"
         );
     }
+    /// Verify denial and replacement during simulated confirmation leave execution authority
+    /// absent.
     #[test]
     fn native_denial_or_change_while_confirming_never_creates_a_grant() {
         let root = std::env::temp_dir().join(format!(
@@ -362,6 +389,8 @@ mod tests {
             .is_err());
         assert!(selections.verify(Purpose::Ffmpeg, &path).is_err());
     }
+    /// Verify synthetic grants reject missing approval, purpose reuse and replaced bytes without
+    /// executing programs.
     #[test]
     fn absent_or_wrong_purpose_and_replaced_bytes_never_authorize_execution() {
         let root = std::env::temp_dir().join(format!(
@@ -386,6 +415,8 @@ mod tests {
             b"synthetic replaced program; never executed"
         );
     }
+    /// Verify synthetic manifest approval is limited to its canonical file and current selection
+    /// store.
     #[test]
     fn an_unconfirmed_legacy_path_is_not_read_and_a_grant_is_not_transferable() {
         let root = std::env::temp_dir().join(format!(

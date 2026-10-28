@@ -4,7 +4,10 @@ import type { MessageKey } from "../i18n";
 import RetentionPanel from "./RetentionPanel";
 import UpdatePanel from "./UpdatePanel";
 
-/** Settings presentation and native file choices are separate from meeting/analysis orchestration. */
+/**
+ * Presents read-only program paths and delegates native selection/import to the parent.
+ * Displayed path text does not grant execution permission or start capture.
+ */
 export default function SettingsView({
   api,
   app,

@@ -1,6 +1,8 @@
 //! Synthetic service-state regressions; ordinary tests never open audio devices.
 use super::*;
 
+/// Verify exclusive reservations block label, policy and import writes before worker startup;
+/// synthetic files stay unchanged until admission is released.
 #[test]
 fn exclusive_reservation_blocks_annotation_policy_and_import_writes_before_worker_start() {
     for exclusive in [
@@ -87,6 +89,8 @@ fn exclusive_reservation_blocks_annotation_policy_and_import_writes_before_worke
     }
 }
 
+/// Verify separate synthetic user labels can change during recording admission without changing
+/// the capture manifest.
 #[test]
 fn metadata_rename_remains_available_while_the_recording_operation_is_owned() {
     let root = fixture_root("live-mutation");
@@ -136,6 +140,7 @@ fn metadata_rename_remains_available_while_the_recording_operation_is_owned() {
     finish.send(()).unwrap();
 }
 
+/// Verify rejected recording admission does not leave the service in a transitional state.
 #[test]
 fn a_busy_operation_cannot_leave_recording_transition_stuck() {
     let root = fixture_root("operation-admission");
@@ -158,6 +163,8 @@ fn a_busy_operation_cannot_leave_recording_transition_stuck() {
         .is_ok());
 }
 
+/// Verify stale control, ownership and unapproved import requests fail using synthetic state
+/// without device access.
 #[test]
 fn active_or_stale_control_and_unapproved_import_requests_never_touch_devices() {
     let root = fixture_root("capture-control-identity");
@@ -203,6 +210,7 @@ fn active_or_stale_control_and_unapproved_import_requests_never_touch_devices() 
     assert!(error.contains("Agenten"));
 }
 
+/// Create a uniquely named synthetic service root without capture or model loading.
 fn fixture_root(label: &str) -> PathBuf {
     let nonce = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -214,6 +222,8 @@ fn fixture_root(label: &str) -> PathBuf {
     ))
 }
 
+/// Verify explicit executable-name screening rejects unrelated programs and accepts supported
+/// Handy names.
 #[test]
 fn only_handy_named_programs_are_accepted_as_explicit_executables() {
     for ok in [
@@ -233,6 +243,8 @@ fn only_handy_named_programs_are_accepted_as_explicit_executables() {
         assert!(!plausible_handy_path(Path::new(bad)), "{bad}");
     }
 }
+/// Verify a failed explicit installation retains its origin instead of restoring an older cached
+/// executable.
 #[test]
 fn invalid_explicit_installation_never_reverts_to_an_earlier_executable() {
     let root = fixture_root("installation-choice");
@@ -261,6 +273,8 @@ fn invalid_explicit_installation_never_reverts_to_an_earlier_executable() {
         .is_empty());
 }
 
+/// Verify a synthetic manifest with a different folder identity is refused and preserved
+/// byte-for-byte.
 #[test]
 fn mismatching_session_folder_identity_is_rejected_without_rewriting_it() {
     let root = fixture_root("session-identity");
@@ -285,6 +299,8 @@ fn mismatching_session_folder_identity_is_rejected_without_rewriting_it() {
     assert_eq!(fs::read(&manifest).unwrap(), bytes);
 }
 
+/// Verify stop returns before a parked synthetic recognizer and later polling collects its
+/// completion.
 #[test]
 fn stop_returns_while_recognition_catches_up_and_a_poll_collects_it_later() {
     let root = fixture_root("stop-catch-up");
@@ -341,6 +357,7 @@ fn stop_returns_while_recognition_catches_up_and_a_poll_collects_it_later() {
         .any(|w| w.contains("resume to process them")));
 }
 
+/// Verify a synthetic catch-up worker failure preserves saved session data for later recovery.
 #[test]
 fn a_failed_catch_up_worker_leaves_a_resumable_session() {
     let root = fixture_root("catch-up-panic");
@@ -380,6 +397,8 @@ fn a_failed_catch_up_worker_leaves_a_resumable_session() {
     assert_eq!(data.parts[0].confirmed_sample_count, 4);
 }
 
+/// Verify failed catch-up persistence remains retryable and derived-index failure is reported
+/// separately.
 #[test]
 fn a_failed_catch_up_status_write_is_retried_and_an_index_failure_is_reported() {
     let root = fixture_root("catch-up-retry");
@@ -437,6 +456,8 @@ fn a_failed_catch_up_status_write_is_retried_and_an_index_failure_is_reported() 
     assert!(data.warnings.iter().any(|w| w.contains("Suchindex")));
 }
 
+/// Verify restart recovery settles already-confirmed final text from synthetic journals without
+/// loading a model.
 #[test]
 fn resume_finalizes_durable_final_text_after_host_exit_without_loading_a_model() {
     for global_status in ["recorded", "catching-up"] {
@@ -504,6 +525,7 @@ fn resume_finalizes_durable_final_text_after_host_exit_without_loading_a_model()
     }
 }
 
+/// Verify synthetic failed or open audio sections cannot be falsely marked complete on resume.
 #[test]
 fn resume_does_not_finalize_failed_or_open_audio_parts() {
     for (part_status, open) in [("error", false), ("complete", true)] {

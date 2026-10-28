@@ -52,6 +52,7 @@ fn receipt_age(
     Ok((newest, true))
 }
 
+/// Binds deletion to every retained file and, for undated receipts, conservative age provenance.
 fn inventory_hash(inventory: &DeleteInventory) -> Result<String> {
     let bytes = if inventory.legacy_age_evidence {
         // Date fallback is part of the preview authority. Touching/replacing an
@@ -63,6 +64,7 @@ fn inventory_hash(inventory: &DeleteInventory) -> Result<String> {
     };
     Ok(format!("{:x}", Sha256::digest(bytes)))
 }
+/// Builds a complete deletion group or refuses ambiguous archives, changed sources and active sessions.
 pub(super) fn deletion_inventory(
     root: &Path,
     id: &str,
@@ -279,6 +281,7 @@ pub(super) fn deletion_inventory(
         legacy_age_evidence,
     })
 }
+/// Reads the bounded meeting identity from an unfinished archive record.
 pub(super) fn pending_meeting(path: &Path) -> Result<String> {
     regular(path)?;
     let mut bytes = Vec::new();
@@ -295,6 +298,7 @@ pub(super) fn pending_meeting(path: &Path) -> Result<String> {
     }
     Ok(id.to_owned())
 }
+/// Adds one ordinary owned file with its size and hash to the bounded deletion inventory.
 pub(super) fn push_delete_file(
     root: &Path,
     path: &Path,
@@ -343,6 +347,7 @@ pub(super) fn annotation_locks(root: &Path, id: &str) -> Result<Vec<File>> {
     }
     Ok(locks)
 }
+/// Deletes only an unchanged verified group after exact confirmation, retaining a resumable progress log.
 pub fn delete_archived_meeting(
     root: &Path,
     id: &str,
@@ -428,6 +433,7 @@ pub struct UnfinishedDeletion {
     pub total_files: u64,
     pub confirmed_at: String,
 }
+/// Reads a bounded ordinary deletion log selected by a validated delete-log identifier.
 pub(super) fn deletion_log(root: &Path, log_id: &str) -> Result<(PathBuf, serde_json::Value)> {
     if !log_id
         .strip_prefix("delete-")

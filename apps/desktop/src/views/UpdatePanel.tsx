@@ -4,6 +4,11 @@ import { errorMessage } from "../api";
 import { clock } from "../domain";
 import { requestJobStatusRefresh, startAdaptivePoll } from "../jobPolling";
 import type { DesktopApi, Locale, UpdateProgress } from "../types";
+/**
+ * Displays explicit update checks/downloads and native job progress. The backend
+ * authorizes installation; platforms without in-app downloads use the official
+ * release-page action.
+ */
 export default function UpdatePanel({
   api,
   locale,
@@ -68,6 +73,10 @@ export default function UpdatePanel({
   const canDownload = job?.canDownload ?? windows;
   const releasePage =
     job?.releaseUrl ?? "https://github.com/Puma7/meeting-for-handy/releases";
+  /**
+   * Tracks one requested update operation and wakes progress pollers while retaining
+   * command failures in the panel.
+   */
   async function action(run: () => Promise<unknown>) {
     requesting.current = true;
     setRequest(true);
@@ -84,6 +93,10 @@ export default function UpdatePanel({
       setRequest(false);
     }
   }
+  /**
+   * Requests the backend's fixed official release page, or opens the displayed release URL
+   * in a browser-only preview without granting WebView opener permissions.
+   */
   async function openReleasePage() {
     setError(null);
     try {

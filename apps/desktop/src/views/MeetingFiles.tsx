@@ -3,6 +3,10 @@ import type { MessageKey } from "../i18n";
 import { useState } from "react";
 import type { TranscriptFormat } from "../types";
 
+/**
+ * Offers explicit TXT/Markdown/JSON selection and displays the caller's save receipt. The
+ * caller binds folder/export callbacks to the selected meeting.
+ */
 export default function MeetingFiles({
   t,
   disabled,

@@ -55,6 +55,7 @@ pub struct CaptureController {
 }
 
 impl CaptureController {
+    /// Starts independent system/microphone writers; a microphone startup failure leaves system capture running.
     pub fn start(store: SessionStore, options: CaptureOptions) -> Result<Self> {
         #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
         {
@@ -90,6 +91,7 @@ impl CaptureController {
     }
 
     #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    /// Starts one owned capture thread and waits for its bounded readiness acknowledgment.
     fn start_track(&mut self, source: &'static str, device_id: Option<String>) -> Result<()> {
         let stop = Arc::clone(&self.stop);
         let store = self.store.clone();
@@ -109,6 +111,7 @@ impl CaptureController {
         }
     }
 
+    /// Returns capture liveness and a bounded session preview without cloning the full transcript.
     pub fn snapshot(&self) -> Result<CaptureSnapshot> {
         Ok(CaptureSnapshot {
             running: self.is_running(),
@@ -116,11 +119,13 @@ impl CaptureController {
         })
     }
 
+    /// Reports whether an owned track is still alive before an explicit stop request.
     pub fn is_running(&self) -> bool {
         !self.stop.load(Ordering::Acquire)
             && self.tracks.iter().any(|(_, track)| !track.is_finished())
     }
 
+    /// Returns pause/mute state and derives microphone availability from its live capture thread.
     pub fn controls(&self) -> CaptureControlSnapshot {
         let mut snapshot = self.controls.snapshot();
         snapshot.has_microphone = !self.stop.load(Ordering::Acquire)
@@ -131,6 +136,7 @@ impl CaptureController {
         snapshot
     }
 
+    /// Changes both track gates only while capture runs; successful return excludes old-epoch speech writes.
     pub fn set_paused(&self, paused: bool) -> Result<()> {
         if !self.is_running() {
             return Err("No capture is running".into());
@@ -138,6 +144,7 @@ impl CaptureController {
         self.controls.set_paused(paused)
     }
 
+    /// Changes only the live microphone gate; system capture continues independently.
     pub fn set_microphone_muted(&self, muted: bool) -> Result<()> {
         if !self.is_running() || self.stopped_tracks().contains(&"microphone") {
             return Err("No microphone capture is running".into());
@@ -158,6 +165,7 @@ impl CaptureController {
             .collect()
     }
 
+    /// Requests owned tracks to stop, joins their writers and marks the retained session recorded.
     pub fn stop(&mut self) -> Result<()> {
         self.stop.store(true, Ordering::Release);
         for (_, track) in self.tracks.drain(..) {
@@ -172,11 +180,13 @@ impl CaptureController {
 }
 
 impl Drop for CaptureController {
+    /// Stops only this controller's owned capture threads when the controller is released.
     fn drop(&mut self) {
         let _ = self.stop();
     }
 }
 
+/// Enumerates supported platform devices on a separate thread without starting a recording.
 pub fn list_devices() -> Result<Vec<AudioDevice>> {
     #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
     {
@@ -194,6 +204,7 @@ pub fn list_devices() -> Result<Vec<AudioDevice>> {
 mod tests {
     use super::*;
     #[test]
+    /// Checks synthetic thread liveness reports one failed track while the other remains active.
     fn a_track_that_ends_early_is_reported_while_the_other_keeps_recording() {
         let root = tempfile::tempdir().unwrap();
         let store = SessionStore::create(root.path(), "Synthetic", "m", "s", None).unwrap();

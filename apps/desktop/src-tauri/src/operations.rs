@@ -15,12 +15,14 @@ pub(crate) enum Kind {
     Selection,
 }
 impl Kind {
+    /// Identify kinds requiring every other admitted operation to have finished.
     pub(crate) fn exclusive(self) -> bool {
         matches!(
             self,
             Self::Maintenance | Self::Installation | Self::Selection
         )
     }
+    /// Reject duplicate kinds and any pairing containing an exclusive operation.
     fn conflicts(self, other: Self) -> bool {
         self == other || self.exclusive() || other.exclusive()
     }
@@ -35,6 +37,8 @@ pub(crate) struct Lease {
     kind: Kind,
 }
 impl Gate {
+    /// Reserve admission without waiting for mutex contention or conflicting work. The returned
+    /// lease must span actual work, cancellation and cleanup.
     pub(crate) fn try_acquire(&self, kind: Kind) -> Result<Lease, String> {
         let mut active = self.0.try_lock().map_err(|error| match error {
             TryLockError::WouldBlock => BUSY.to_owned(),
@@ -51,6 +55,7 @@ impl Gate {
     }
 }
 impl Drop for Lease {
+    /// Release only this lease kind while keeping other admitted operations reserved.
     fn drop(&mut self) {
         if let Ok(mut active) = self.gate.lock() {
             if let Some(index) = active.iter().position(|kind| *kind == self.kind) {
@@ -64,6 +69,7 @@ impl Drop for Lease {
 mod tests {
     use super::*;
 
+    /// Verify synthetic leases exclude all exclusive work until the held operation is dropped.
     #[test]
     fn destructive_work_refuses_every_active_kind_and_releases_on_exit() {
         for kind in [
@@ -90,6 +96,8 @@ mod tests {
         }
     }
 
+    /// Verify distinct nonexclusive work coexists while duplicate kinds and mutex contention
+    /// return busy.
     #[test]
     fn independent_non_destructive_work_can_coexist_and_contention_returns_busy() {
         let gate = Gate::default();
@@ -109,6 +117,8 @@ mod tests {
         assert!(gate.try_acquire(Kind::Installation).is_ok());
     }
 
+    /// Verify unwinding releases synthetic analysis admission without releasing concurrent
+    /// recording admission.
     #[test]
     fn unwinding_releases_only_the_owned_operation() {
         let gate = Gate::default();

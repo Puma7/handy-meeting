@@ -48,6 +48,7 @@ pub struct PendingListing {
     pub skipped: Vec<SkippedAnalysis>,
 }
 
+/// Separates unsupported saved schemas from damaged results without changing either file.
 pub fn skip_reason(error: &anyhow::Error) -> SkipReason {
     if error.downcast_ref::<UnsupportedFormat>().is_some() {
         SkipReason::NewerFormat
@@ -56,6 +57,7 @@ pub fn skip_reason(error: &anyhow::Error) -> SkipReason {
     }
 }
 
+/// Accepts only fixed-length hexadecimal IDs before considering a result-directory entry.
 pub fn is_run_id(id: &str) -> bool {
     id.len() == 32 && id.bytes().all(|c| c.is_ascii_hexdigit())
 }
@@ -65,6 +67,7 @@ pub fn is_run_id(id: &str) -> bool {
 pub fn list_analyses(root: &Path, meeting_id: &str) -> Result<AnalysisListing> {
     list_with_result_metadata(root, meeting_id, |path| fs::symlink_metadata(path))
 }
+/// Discovers finished runs with injectable metadata reads and reports individually unreadable entries.
 fn list_with_result_metadata(
     root: &Path,
     meeting_id: &str,
@@ -128,6 +131,7 @@ mod tests {
     use super::*;
     use crate::{source_hash, Kind, Section, Source, Step, Template, RESULT_SCHEMA};
 
+    /// Writes a structurally valid synthetic finished result and returns its exact original bytes.
     fn finished(root: &Path, id: &str) -> Vec<u8> {
         let sources = vec![Source {
             id: "S00001".into(),
@@ -173,6 +177,7 @@ mod tests {
     }
 
     #[test]
+    /// Checks synthetic future schemas are identified before payload decoding and all stored bytes stay intact.
     fn incompatible_newer_result_shapes_are_reported_as_newer_and_left_untouched() {
         let root = tempfile::tempdir().unwrap();
         let valid = "11111111111111111111111111111111";
@@ -222,6 +227,7 @@ mod tests {
     }
 
     #[test]
+    /// Checks injected metadata failures and non-file results remain reported alongside valid synthetic runs.
     fn result_metadata_errors_and_non_regular_entries_are_reported_without_hiding_valid_runs() {
         let root = tempfile::tempdir().unwrap();
         let valid = "11111111111111111111111111111111";
@@ -276,6 +282,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    /// Checks synthetic linked results are rejected while unrelated valid results and link targets stay unchanged.
     fn linked_results_are_not_followed_and_other_saved_runs_stay_visible() {
         let root = tempfile::tempdir().unwrap();
         let outside = tempfile::tempdir().unwrap();

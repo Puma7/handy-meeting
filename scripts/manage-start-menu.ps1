@@ -74,6 +74,13 @@ function Get-HandyInstallations {
 }
 # Publishes a link to $Target and records ownership; existing bytes are backed up first.
 function Publish-HandyLink([string]$Target) {
+    <#
+    .SYNOPSIS
+    Publish the branded shortcut only when its previous ownership bytes still match.
+    .DESCRIPTION
+    Preserve foreign or edited links. Back up an owned link before replacement and
+    bind the resulting ownership record to its target and hash under the caller's mutex.
+    #>
     if (Test-Path -LiteralPath $shortcutDirectory) {
         $directory=Get-Item -LiteralPath $shortcutDirectory -Force
         if (-not $directory.PSIsContainer -or ($directory.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {exit 3}

@@ -27,13 +27,17 @@ struct PacketInfo {
     silent: bool,
 }
 trait PacketReader {
+    /// Reports the next packet's converted frame count, or zero when no packet is queued.
     fn next_frames(&self) -> Result<u32>;
+    /// Consumes one packet into the byte queue and returns its device timing and flag evidence.
     fn read_packet(&self, queue: &mut VecDeque<u8>) -> Result<PacketInfo>;
 }
 impl PacketReader for AudioCaptureClient {
+    /// Adapts an empty WASAPI packet-size response to zero without consuming audio.
     fn next_frames(&self) -> Result<u32> {
         Ok(self.get_next_packet_size()?.unwrap_or(0))
     }
+    /// Copies the next WASAPI packet and translates its timing, discontinuity and silence flags.
     fn read_packet(&self, queue: &mut VecDeque<u8>) -> Result<PacketInfo> {
         let info = self.read_from_device_to_deque(queue)?;
         Ok(PacketInfo {
@@ -64,6 +68,7 @@ struct CaptureDiagnostics {
     gap_silence_samples: u64,
 }
 impl CaptureDiagnostics {
+    /// Initializes bounded diagnostic counters for one independently captured track.
     fn new(source: &str) -> Self {
         Self {
             schema_version: 1,
@@ -81,6 +86,7 @@ impl CaptureDiagnostics {
             gap_silence_samples: 0,
         }
     }
+    /// Counts every packet while retaining only the first bounded set of discontinuity/timestamp events.
     fn observe(&mut self, info: PacketInfo, count: usize, elapsed_ms: u128, start_sample: u64) {
         self.first_packet.get_or_insert(info);
         self.last_packet = Some(info);
@@ -104,6 +110,7 @@ struct PacketTimeline {
     base_sample: u64,
 }
 impl PacketTimeline {
+    /// Inserts explicit microphone gap silence from valid device timestamps within the monotonic capture bound.
     fn align_microphone(
         &mut self,
         info: PacketInfo,
@@ -194,6 +201,7 @@ fn drain_packets(
 }
 
 #[cfg(test)]
+/// Exercises packet persistence without privacy controls in synthetic WASAPI fixtures.
 fn drain_track(
     capture: &impl PacketReader,
     queue: &mut VecDeque<u8>,
@@ -207,6 +215,7 @@ fn drain_track(
 }
 
 #[allow(clippy::too_many_arguments)]
+/// Drains packet PCM through optional privacy gates and records bounded timing/discontinuity evidence.
 fn drain_track_controlled(
     capture: &impl PacketReader,
     queue: &mut VecDeque<u8>,
@@ -277,17 +286,20 @@ fn pad_stopped_track(
 
 struct Com;
 impl Com {
+    /// Initializes the calling thread's multithreaded COM apartment and propagates initialization failure.
     fn initialize() -> Result<Self> {
         initialize_mta().ok()?;
         Ok(Self)
     }
 }
 impl Drop for Com {
+    /// Balances this thread's owned COM initialization when its guard is dropped.
     fn drop(&mut self) {
         deinitialize();
     }
 }
 
+/// Enumerates render/capture endpoints and reported defaults inside a scoped COM apartment.
 pub(super) fn list_devices() -> Result<Vec<AudioDevice>> {
     let _com = Com::initialize()?;
     let enumerator = DeviceEnumerator::new()?;
@@ -315,6 +327,7 @@ pub(super) fn list_devices() -> Result<Vec<AudioDevice>> {
     Ok(devices)
 }
 
+/// Owns one WASAPI track, flushing invalidated device epochs and retaining confirmed PCM on stop or error.
 pub(super) fn record(
     store: SessionStore,
     source: &str,
@@ -486,6 +499,7 @@ mod tests {
     use std::cell::RefCell;
 
     #[test]
+    /// Checks synthetic device-clock gaps insert silence without moving confirmed microphone samples.
     fn microphone_discontinuity_inserts_device_clock_gap_without_moving_original_samples() {
         let root = tempfile::tempdir().unwrap();
         let store = SessionStore::create(
@@ -550,6 +564,7 @@ mod tests {
     }
 
     #[test]
+    /// Checks a flagged synthetic timestamp error resets alignment instead of inventing a long gap.
     fn an_uncertain_device_timestamp_never_invents_a_long_silence_gap() {
         let root = tempfile::tempdir().unwrap();
         let store =
@@ -584,6 +599,7 @@ mod tests {
     }
 
     #[test]
+    /// Checks an unflagged synthetic future clock jump is rejected before existing PCM or headers change.
     fn unflagged_future_device_clock_is_rejected_before_audio_or_padding_changes() {
         let root = tempfile::tempdir().unwrap();
         let store = SessionStore::create(
@@ -618,6 +634,7 @@ mod tests {
     }
 
     struct Packets(RefCell<VecDeque<(Vec<i16>, PacketInfo)>>);
+    /// Constructs synthetic packet metadata with an explicit silence flag for drain regressions.
     fn info(silent: bool) -> PacketInfo {
         PacketInfo {
             device_position: 0,
@@ -628,9 +645,11 @@ mod tests {
         }
     }
     impl PacketReader for Packets {
+        /// Reports the next synthetic packet length without removing it from the fixture queue.
         fn next_frames(&self) -> Result<u32> {
             Ok(self.0.borrow().front().map_or(0, |p| p.0.len() as u32))
         }
+        /// Serializes one synthetic sample packet into little-endian PCM and returns its fixture flags.
         fn read_packet(&self, queue: &mut VecDeque<u8>) -> Result<PacketInfo> {
             let (samples, packet) = self.0.borrow_mut().pop_front().ok_or("No packet")?;
             queue.extend(samples.into_iter().flat_map(i16::to_le_bytes));
@@ -638,6 +657,7 @@ mod tests {
         }
     }
     #[test]
+    /// Checks one synthetic capture wake drains all packets and converts silence-flagged bytes to silence.
     fn one_event_drains_every_packet_and_silent_flags_never_become_false_speech() {
         let packets = Packets(RefCell::new(VecDeque::from([
             (vec![1, -2, 3], info(false)),
@@ -682,6 +702,7 @@ mod tests {
     }
 
     #[test]
+    /// Checks synthetic stop draining persists the queued tail without waiting for another device event.
     fn buffered_tail_can_be_saved_without_any_further_capture_event() {
         let packets = Packets(RefCell::new(VecDeque::from([(
             vec![21, 22, 23],
@@ -699,6 +720,7 @@ mod tests {
     }
 
     #[test]
+    /// Checks an oversized synthetic packet is refused before consumption or checkpoint acknowledgment.
     fn oversized_device_packet_is_rejected_before_reading_or_acknowledging_it() {
         let packets = Packets(RefCell::new(VecDeque::from([(
             vec![1; SAMPLE_RATE as usize * 5 + 1],
@@ -717,6 +739,7 @@ mod tests {
     }
 
     #[test]
+    /// Checks synthetic diagnostics cap retained event details while preserving total event counters.
     fn discontinuity_evidence_is_bounded_and_keeps_total_event_counts() {
         let mut diagnostic = CaptureDiagnostics::new("microphone");
         for index in 0..100 {
@@ -732,6 +755,7 @@ mod tests {
     }
 
     #[test]
+    /// Checks synthetic delayed shutdown work cannot extend system audio beyond the captured stop time.
     fn slow_tail_persistence_does_not_extend_stopped_system_audio_with_extra_silence() {
         let root = tempfile::tempdir().unwrap();
         let store = SessionStore::create(
@@ -762,12 +786,15 @@ mod tests {
     }
 
     #[test]
+    /// Checks a synthetic invalid device fails before padding, while an empty packet queue remains normal.
     fn device_query_failure_propagates_before_padding_but_empty_timeout_is_normal() {
         struct InvalidatedDevice;
         impl PacketReader for InvalidatedDevice {
+            /// Injects a deterministic device-query failure without consulting a real audio endpoint.
             fn next_frames(&self) -> Result<u32> {
                 Err("Synthetic device invalidated".into())
             }
+            /// Fails the fixture if code tries to read audio after its synthetic device-query error.
             fn read_packet(&self, _: &mut VecDeque<u8>) -> Result<PacketInfo> {
                 panic!("Invalidated packets must never be read")
             }

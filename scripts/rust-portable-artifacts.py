@@ -123,6 +123,11 @@ def copy_tree(source_folder, destination):
 
 
 def stage(rid, source_path, checks_path, helper=None, icon=None):
+    """Copy a checked target into a new private package directory with its provenance.
+
+    Source, executable, pinned native libraries and license receipts must still
+    match. macOS also requires a capture helper and icon; no program is launched.
+    """
     receipt = read(ROOT / f".build/rust-portable-{rid}-pending.json")
     current = source(source_path)
     sdk_folder, native = sdk(rid)

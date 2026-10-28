@@ -25,8 +25,10 @@ type Rule =
   | "convertAfterDays"
   | "maxVisibleMeetings"
   | "deleteArchivesAfterDays";
-// Native grants last for this app session. Retain preview invalidations through
-// settings navigation without persisting program paths or confirmation text.
+/**
+ * Session-only preview consent shared across settings views. Retaining these IDs
+ * through navigation does not persist program paths or confirmation text.
+ */
 interface PreviewValidity {
   invalidated: Set<string>;
   observed: Set<string>;
@@ -36,6 +38,10 @@ interface PreviewValidity {
   listeners: Set<() => void>;
 }
 const previewValidityByApi = new WeakMap<DesktopApi, PreviewValidity>();
+/**
+ * Returns the API-session preview-consent state shared across settings remounts; no paths
+ * or confirmation text are persisted.
+ */
 function previewValidity(api: DesktopApi): PreviewValidity {
   let validity = previewValidityByApi.get(api);
   if (!validity) {
@@ -51,12 +57,20 @@ function previewValidity(api: DesktopApi): PreviewValidity {
   }
   return validity;
 }
+/**
+ * Checks session-local consent for a preview ID. Backend plan, file and fingerprint
+ * validation is still required before maintenance can change data.
+ */
 function previewIsValid(validity: PreviewValidity, id: string): boolean {
   return (
     !validity.invalidated.has(id) &&
     (!validity.requireExplicitPreview || validity.allowedPreviewId === id)
   );
 }
+/**
+ * Edits revisioned local policy while keeping saving, preview and single-action consent
+ * separate. Native grant changes revoke old previews across mounted consumers.
+ */
 export default function RetentionPanel({
   api,
   locale,
@@ -69,6 +83,10 @@ export default function RetentionPanel({
   const de = locale === "de";
   const latestJob = useRef<string | null>(null);
   const previewSession = useMemo(() => previewValidity(api), [api]);
+  /**
+   * Registers this view for shared preview invalidations and returns the unmount cleanup
+   * used by the external-store hook.
+   */
   const subscribe = useCallback(
     (listener: () => void) => {
       previewSession.listeners.add(listener);
@@ -122,6 +140,10 @@ export default function RetentionPanel({
   useEffect(() => {
     policyRevision.current = policy?.revision ?? null;
   }, [policy]);
+  /**
+   * Loads only current, unrevoked preview receipts with the saved policy revision and a
+   * valid 24-hour age. Stale successes or failures cannot restore previous consent.
+   */
   const progress = useCallback(
     (value: LibraryProgress) => {
       setJob(value);
@@ -188,6 +210,10 @@ export default function RetentionPanel({
         "delete-archived-meeting":
           "Permanently delete archive · extra confirmation required",
       };
+  /**
+   * Saves the draft against the current policy revision without starting a preview or
+   * applying any candidate action.
+   */
   async function save() {
     if (!policy || !draft || !api.saveRetentionPolicy) return;
     setBusy(true);
@@ -206,6 +232,10 @@ export default function RetentionPanel({
       setBusy(false);
     }
   }
+  /**
+   * Requests a new read-only plan and, after native grant changes, accepts only a new job
+   * ID started in the current invalidation generation.
+   */
   async function preview() {
     if (!api.previewRetention) return;
     setBusy(true);
@@ -238,6 +268,10 @@ export default function RetentionPanel({
       setBusy(false);
     }
   }
+  /**
+   * Requests a native-approved FFmpeg selection. Cancellation leaves the draft/consent
+   * unchanged; every approval, including the same path, revokes old previews.
+   */
   async function chooseFfmpeg() {
     if (!api.chooseFfmpegExecutable || !draft || busy || running) return;
     setBusy(true);
@@ -256,12 +290,21 @@ export default function RetentionPanel({
       setBusy(false);
     }
   }
+  /**
+   * Clears only the draft program selection and preview consent. The program and
+   * recordings remain intact, and saving policy is a separate action.
+   */
   function clearFfmpeg() {
     if (!draft || busy || running) return;
     setDraft({ ...draft, ffmpegExecutable: null });
     setError(null);
     invalidatePreview();
   }
+  /**
+   * Revokes all previous preview consent for this API session, requires a newly requested
+   * plan and notifies every mounted consumer, including after an originating picker view
+   * unmounts.
+   */
   function invalidatePreview() {
     // Keep rejected job IDs blocked when an old completion is reported again;
     // only a new preview job may establish a new plan and confirmation.
@@ -281,6 +324,10 @@ export default function RetentionPanel({
     setAccepted(false);
     setConfirmation("");
   }
+  /**
+   * Submits the selected still-valid plan row with its separate confirmation. The native
+   * service revalidates the immutable receipt before applying a change.
+   */
   async function apply() {
     if (!plan || selected === null || !candidate || !api.applyRetention) return;
     // An already queued click may run before the invalidation render commits.
@@ -307,6 +354,10 @@ export default function RetentionPanel({
       setBusy(false);
     }
   }
+  /**
+   * Renders a nullable opt-in rule with its numeric input bounds, editing only the policy
+   * draft.
+   */
   function rule(key: Rule, label: string, initial: number) {
     if (!draft) return null;
     const number = draft[key];

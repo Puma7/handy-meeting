@@ -2,6 +2,8 @@
 use super::*;
 use tauri::State;
 
+/// Collect finished catch-up work when the transition gate is free, then return bounded app state.
+/// A collection error is left for a later poll rather than blocking the state snapshot.
 #[tauri::command]
 pub(crate) async fn get_app_state(service: State<'_, Arc<Service>>) -> AppResult<AppView> {
     let service = Arc::clone(&service);
@@ -13,6 +15,8 @@ pub(crate) async fn get_app_state(service: State<'_, Arc<Service>>) -> AppResult
     })
     .await
 }
+/// Refresh installation metadata on a worker and return the backend status, including query errors.
+/// Explicit paths remain subject to the Service native-choice checks.
 #[tauri::command]
 pub(crate) async fn refresh_handy(
     service: State<'_, Arc<Service>>,
@@ -29,6 +33,7 @@ pub(crate) async fn refresh_handy(
     })
     .await
 }
+/// Enumerate available audio devices off the UI thread without starting a recording.
 #[tauri::command]
 pub(crate) async fn list_devices() -> AppResult<Vec<AudioDevice>> {
     blocking(|| {
@@ -37,6 +42,7 @@ pub(crate) async fn list_devices() -> AppResult<Vec<AudioDevice>> {
     })
     .await
 }
+/// Delegate a manual recording request to Service admission, model and device validation.
 #[tauri::command]
 pub(crate) async fn start_meeting(
     service: State<'_, Arc<Service>>,
@@ -45,11 +51,13 @@ pub(crate) async fn start_meeting(
     let service = Arc::clone(&service);
     blocking(move || service.start(request)).await
 }
+/// Close recording through the manual Service action; unfinished recognition may catch up afterward.
 #[tauri::command]
 pub(crate) async fn stop_meeting(service: State<'_, Arc<Service>>) -> AppResult<MeetingView> {
     let service = Arc::clone(&service);
     blocking(move || service.stop()).await
 }
+/// Change pause state only for the named active manual recording and return its updated app view.
 #[tauri::command]
 pub(crate) async fn set_capture_paused(
     service: State<'_, Arc<Service>>,
@@ -59,6 +67,7 @@ pub(crate) async fn set_capture_paused(
     let service = Arc::clone(&service);
     blocking(move || service.set_capture_control(&meeting_id, Some(paused), None)).await
 }
+/// Change microphone gating only for the named active manual recording; missing mic tracks fail.
 #[tauri::command]
 pub(crate) async fn set_microphone_muted(
     service: State<'_, Arc<Service>>,
@@ -68,6 +77,7 @@ pub(crate) async fn set_microphone_muted(
     let service = Arc::clone(&service);
     blocking(move || service.set_capture_control(&meeting_id, None, Some(muted))).await
 }
+/// Apply a visible approval or denial to the matching pending agent request on a worker.
 #[tauri::command]
 pub(crate) async fn agent_decide_recording(
     service: State<'_, Arc<Service>>,
@@ -78,16 +88,19 @@ pub(crate) async fn agent_decide_recording(
     let service = Arc::clone(&service);
     blocking(move || service.decide_agent(&request_id, approve, request)).await
 }
+/// Revoke the agent connection approval and request shutdown through its ownership controller.
 #[tauri::command]
 pub(crate) fn agent_revoke(service: State<'_, Arc<Service>>) -> AppResult<()> {
     service.agent.revoke();
     Ok(())
 }
+/// Return derived history summaries without loading full transcripts into the renderer list.
 #[tauri::command]
 pub(crate) async fn list_meetings(service: State<'_, Arc<Service>>) -> AppResult<Vec<MeetingView>> {
     let service = Arc::clone(&service);
     blocking(move || service.history()).await
 }
+/// Resolve a known meeting identity and return its full transcript view with separate user labels.
 #[tauri::command]
 pub(crate) async fn get_meeting(
     service: State<'_, Arc<Service>>,
@@ -96,6 +109,7 @@ pub(crate) async fn get_meeting(
     let service = Arc::clone(&service);
     blocking(move || service.data(&id).map(|d| service.meeting_view(d, false))).await
 }
+/// Resume a saved session through the original-model and operation-admission checks.
 #[tauri::command]
 pub(crate) async fn resume_meeting(
     service: State<'_, Arc<Service>>,
@@ -104,6 +118,7 @@ pub(crate) async fn resume_meeting(
     let service = Arc::clone(&service);
     blocking(move || service.resume(id)).await
 }
+/// Open a natively confirmed legacy manifest read-only and retain a local import reference.
 #[tauri::command]
 pub(crate) async fn import_legacy(
     service: State<'_, Arc<Service>>,
@@ -112,6 +127,7 @@ pub(crate) async fn import_legacy(
     let service = Arc::clone(&service);
     blocking(move || service.import(manifest)).await
 }
+/// Copy at most 32 MiB of supplied text on a worker; report unavailable clipboard access.
 #[tauri::command]
 pub(crate) async fn copy_text(text: String) -> AppResult<()> {
     blocking(move || {
@@ -129,6 +145,7 @@ pub(crate) async fn copy_text(text: String) -> AppResult<()> {
     })
     .await
 }
+/// Open the folder resolved from a verified meeting identity, never a renderer-supplied path.
 #[tauri::command]
 pub(crate) async fn open_meeting_folder(
     service: State<'_, Arc<Service>>,
@@ -156,6 +173,8 @@ pub(crate) async fn open_meeting_folder(
     })
     .await
 }
+/// Hold an export lease while saving a new full transcript file in the requested format.
+/// Legacy originals remain read-only; omitted format keeps the existing TXT behavior.
 #[tauri::command]
 pub(crate) async fn export_transcript(
     service: State<'_, Arc<Service>>,
@@ -178,6 +197,7 @@ pub(crate) async fn export_transcript(
         }
     }).await
 }
+/// Run analysis through the Service source-snapshot, credential and per-run consent boundary.
 #[tauri::command]
 pub(crate) async fn generate_notes(
     service: State<'_, Arc<Service>>,
@@ -186,6 +206,8 @@ pub(crate) async fn generate_notes(
     let service = Arc::clone(&service);
     blocking(move || service.analyze(request)).await
 }
+/// List individually checked saved analyses and report damaged runs separately.
+/// Legacy imports expose no analysis files through this command.
 #[tauri::command]
 pub(crate) async fn list_analyses(
     service: State<'_, Arc<Service>>,

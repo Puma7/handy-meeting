@@ -176,6 +176,8 @@ impl Service {
         }
         view
     }
+    /// Create local session/import-reference directories and idle controllers; load bounded import
+    /// reference records without capture or executable approval.
     fn new(root: PathBuf) -> AppResult<Self> {
         fs::create_dir_all(root.join("sessions"))
             .map_err(|_| "Der lokale Sitzungsordner konnte nicht angelegt werden.")?;
@@ -222,12 +224,15 @@ impl Service {
             "Der Anwendungszustand ist gesperrt. Gesicherte Sitzungen bleiben erhalten.".into()
         })
     }
+    /// Try the recording transition mutex without waiting; contention returns a busy error.
     fn try_transition(&self) -> AppResult<MutexGuard<'_, ()>> {
         self.transition.try_lock().map_err(|error| match error {
             std::sync::TryLockError::WouldBlock => "A recording transition is running. Try again shortly. / Die Aufnahmesteuerung arbeitet noch. Bitte kurz warten.".into(),
             std::sync::TryLockError::Poisoned(_) => "Recording control is unavailable. Saved data is preserved. / Aufnahmesteuerung ist gesperrt; gesicherte Daten bleiben erhalten.".into(),
         })
     }
+    /// Collect finished work under the transition gate, then acquire admission. Exclusive kinds
+    /// also reject retained Active slots without leases.
     fn reserve_operation(&self, kind: operations::Kind) -> AppResult<operations::Lease> {
         let _transition = self.try_transition()?;
         self.reap_finished()?;
@@ -238,6 +243,8 @@ impl Service {
         }
         self.operations.try_acquire(kind)
     }
+    /// Return a bounded meeting preview with global saved/pending audio totals, capture warnings
+    /// and ownership derived from the actual Active slot.
     fn state(&self) -> AppResult<AppView> {
         let inner = self.lock()?;
         let store = inner
@@ -308,6 +315,8 @@ impl Service {
             )?,
         })
     }
+    /// Serialize model discovery while distinguishing OS discovery from native grants. Failed
+    /// explicit choices retain their origin instead of reverting to an earlier program.
     fn refresh(
         &self,
         explicit: Option<String>,
@@ -391,6 +400,8 @@ impl Service {
     fn start(&self, request: StartRequest) -> AppResult<MeetingView> {
         self.start_for(request, None)
     }
+    /// Validate the active meeting and reject agent-owned or capture-less sessions before
+    /// applying pause/mute under the transition guard.
     fn set_capture_control(
         &self,
         meeting_id: &str,
@@ -428,6 +439,8 @@ impl Service {
         }
         self.state()
     }
+    /// Serialize recording start, check supplied agent approval and transfer admission to Active.
+    /// Ordinary errors clear the transition and reach the UI.
     fn start_for(&self, request: StartRequest, owner: Option<String>) -> AppResult<MeetingView> {
         let _gate = self.try_transition()?;
         self.reap_finished()?;
@@ -453,6 +466,8 @@ impl Service {
         }
         result
     }
+    /// Resolve model/devices and persist provenance before durable capture; start isolated ASR
+    /// afterward and retain the recording lease in Active.
     fn start_inner(
         &self,
         request: StartRequest,
@@ -536,6 +551,8 @@ impl Service {
     fn stop(&self) -> AppResult<MeetingView> {
         self.stop_for(None, None)
     }
+    /// Check optional owner/session constraints before closing audio; retain unfinished
+    /// recognition as capture-less catch-up instead of waiting for every worker.
     fn stop_for(&self, owner: Option<&str>, session: Option<&str>) -> AppResult<MeetingView> {
         let _gate = self.try_transition()?;
         let mut active = {
@@ -706,6 +723,8 @@ impl Service {
         }
         Ok(true)
     }
+    /// Resume writable Rust sessions using their original model identity and weights;
+    /// already-confirmed final text can settle without loading a model.
     fn resume(&self, id: String) -> AppResult<MeetingView> {
         let _gate = self.try_transition()?;
         self.reap_finished()?;
@@ -910,6 +929,8 @@ async fn blocking<T: Send + 'static>(
         })?
 }
 
+/// Initialize the desktop service, native-choice plugin and narrow IPC handlers. Startup workers
+/// remain separate from capture and window-close guards.
 pub fn run() {
     let root = std::env::var_os("HANDYMEETING_DATA_DIR")
         .map(PathBuf::from)
@@ -927,6 +948,8 @@ pub fn run() {
     .on_window_event(|window,event|{if let tauri::WindowEvent::CloseRequested{api,..}=event{let service=window.state::<Arc<Service>>();let blocked=service.lock().is_ok_and(|inner|inner.transitioning||inner.active.as_ref().is_some_and(|a|a.capture.is_some()));if blocked{api.prevent_close();if let Ok(mut inner)=service.lock(){inner.error=Some(if inner.transitioning { "Ein Vorgang läuft noch. Bitte warten, bis Audioabschluss und Verarbeitung beendet sind.".into() } else { "Bitte zuerst „Meeting beenden“ wählen. Audio wird gesichert und offene Abschnitte werden verarbeitet.".into() });}let _=window.emit("recording-close-blocked",());}}})
     .run(tauri::generate_context!()).expect("HandyMeeting konnte nicht gestartet werden.");
 }
+/// Expose explicit diagnostic modes without creating a GUI when the dispatcher handles the
+/// supplied arguments.
 pub fn run_cli(args: &[String]) -> Option<AppResult<()>> {
     cli::run_cli(args)
 }

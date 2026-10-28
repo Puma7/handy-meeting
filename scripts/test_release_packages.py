@@ -240,6 +240,7 @@ class ReleaseGuards(unittest.TestCase):
 class SourceExportContract(unittest.TestCase):
     @unittest.skipUnless(shutil.which('pwsh'), 'PowerShell required for the real source exporter')
     def test_nested_private_build_and_browser_proofs_never_enter_the_source_bundle(self):
+        """Run the real exporter: retain legitimate sources and exclude private nested proofs."""
         with tempfile.TemporaryDirectory(prefix='meeting-source-fixture-') as temp:
             # An isolated checkout may itself live below a parent's .build directory.
             root = (pathlib.Path(temp) / '.build' / 'isolated-source').resolve()
@@ -288,6 +289,7 @@ class SourceExportContract(unittest.TestCase):
 class WindowsZipContract(unittest.TestCase):
     @unittest.skipUnless(shutil.which('pwsh'), 'PowerShell required for the Windows-only ZIP packager')
     def test_branded_launcher_is_packaged_and_instructions_name_the_existing_file(self):
+        """Inspect a synthetic ZIP and verify launcher naming plus no-overwrite behavior."""
         # Synthetic file-only receipt, isolated from real build proofs. Never executes a payload.
         with tempfile.TemporaryDirectory(prefix='meeting-zip-fixture-') as temp:
             root = pathlib.Path(temp).resolve()
@@ -306,6 +308,7 @@ class WindowsZipContract(unittest.TestCase):
             launcher = root / ('Meeting for Handy ' + version + ' starten.cmd')
             launcher.write_bytes(b'synthetic launcher fixture; never execute')
             def invoke(*args):
+                """Run only the copied filesystem packager; fixture program bytes are never executed."""
                 return subprocess.run([shutil.which('pwsh'), '-NoProfile', '-NonInteractive', '-File', str(packager), *args], cwd=root, capture_output=True, text=True, timeout=60)
             fingerprint = invoke('-SourceFingerprintOnly')
             self.assertEqual(fingerprint.returncode, 0, fingerprint.stderr)

@@ -1,6 +1,7 @@
 //! Audio-only archival and exact original restoration.
 use super::*;
 
+/// Reads a validated audio-archive marker's text snapshot without reopening missing PCM files.
 pub fn read_archived_transcript(folder: &Path) -> Result<Option<SessionData>> {
     metadata::checked_directory(folder)?;
     let path = folder.join("audio-archive.json");
@@ -58,6 +59,7 @@ fn validate_audio_marker(marker: &AudioArchive, folder: &Path) -> Result<()> {
     }
     Ok(())
 }
+/// Reads a bounded ordinary marker; only genuine absence means that no audio archive is present.
 pub(super) fn read_audio_marker(path: &Path) -> Result<Option<AudioArchive>> {
     // exists() hides dangling links; they are still retained entries, not permission
     // to write a new archive or replace an unknown marker.
@@ -197,6 +199,7 @@ pub fn archive_audio(
     }
     Ok(receipt)
 }
+/// Restores verified archived PCM without replacing existing different bytes or discarding archive evidence.
 pub fn restore_audio(root: &Path, id: &str, cancel: &AtomicBool) -> Result<SessionData> {
     let _operation = operation_lock(root)?;
     if !metadata::valid_id(id) || id.starts_with("legacy-") {

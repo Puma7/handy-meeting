@@ -1,6 +1,8 @@
 //! Explicit command-line diagnostics, isolated from renderer commands.
 use super::*;
 
+/// Dispatch explicit diagnostics or worker modes before GUI startup; return None for
+/// desktop-handled arguments.
 pub(crate) fn run_cli(args: &[String]) -> Option<AppResult<()>> {
     match args.first().map(String::as_str) {
         Some("--agent-protocol-check-stdio") => Some(if args.len() == 1 {
@@ -82,6 +84,7 @@ pub(crate) fn run_cli(args: &[String]) -> Option<AppResult<()>> {
         _ => None,
     }
 }
+/// Run isolated application checks plus read-only installed-model and audio-device queries.
 fn integration_checks(output: Option<&str>) -> AppResult<()> {
     application_checks(output, true)
 }

@@ -125,6 +125,7 @@ pub(super) struct CaptureControls {
 }
 
 impl CaptureControls {
+    /// Creates a new control journal and syncs its initial event before returning the gates.
     pub fn new(store: &SessionStore) -> Result<Self> {
         let file = OpenOptions::new()
             .create_new(true)
@@ -136,10 +137,12 @@ impl CaptureControls {
     }
 
     #[cfg(test)]
+    /// Constructs journal-free gates for synthetic capture fixtures only.
     pub fn uncontrolled() -> Self {
         Self::with_journal(None)
     }
 
+    /// Initializes independent track gates, epochs and a shared monotonic timing origin.
     fn with_journal(journal: Option<File>) -> Self {
         Self {
             paused: AtomicBool::new(false),
@@ -155,9 +158,11 @@ impl CaptureControls {
         }
     }
 
+    /// Updates whether a microphone track was successfully made available.
     pub fn set_has_microphone(&self, value: bool) {
         self.has_microphone.store(value, Ordering::Release);
     }
+    /// Reads the current pause, microphone-mute and availability flags without modifying them.
     pub fn snapshot(&self) -> CaptureControlSnapshot {
         CaptureControlSnapshot {
             paused: self.paused.load(Ordering::Acquire),
@@ -165,19 +170,24 @@ impl CaptureControls {
             has_microphone: self.has_microphone.load(Ordering::Acquire),
         }
     }
+    /// Maps the internal microphone/system source labels to their separate gate slots.
     fn index(source: &str) -> usize {
         usize::from(source == "microphone")
     }
+    /// Returns the current privacy generation for the selected track.
     pub fn epoch(&self, source: &str) -> u64 {
         self.epochs[Self::index(source)].load(Ordering::Acquire)
     }
+    /// Reports whether pause or microphone-only mute currently blocks this track's speech.
     pub fn suppressed(&self, source: &str) -> bool {
         self.paused.load(Ordering::Acquire)
             || (source == "microphone" && self.microphone_muted.load(Ordering::Acquire))
     }
+    /// Detects packets belonging to a track generation invalidated by a control transition.
     pub fn changed(&self, source: &str, epoch: u64) -> bool {
         self.epoch(source) != epoch
     }
+    /// Converts monotonic elapsed capture time to a saturating sample position.
     pub fn elapsed_samples(&self) -> u64 {
         (self
             .start
@@ -187,15 +197,18 @@ impl CaptureControls {
             / 1_000_000_000)
             .min(u128::from(u64::MAX)) as u64
     }
+    /// Serializes a pause/resume request across both tracks and journals the requested state.
     pub fn set_paused(&self, value: bool) -> Result<()> {
         self.change(false, value)
     }
+    /// Rejects an unavailable microphone before requesting its independent mute transition.
     pub fn set_microphone_muted(&self, value: bool) -> Result<()> {
         if !self.has_microphone.load(Ordering::Acquire) {
             return Err("No microphone track is active".into());
         }
         self.change(true, value)
     }
+    /// Invalidates affected packet epochs and waits for in-flight writes; journal failure keeps reopening blocked.
     fn change(&self, microphone_only: bool, value: bool) -> Result<()> {
         let _transition = self
             .transitions
@@ -256,10 +269,12 @@ impl CaptureControls {
         }
         Ok(())
     }
+    /// Appends a state-transition event without optional device-gap metadata.
     fn record(&self, kind: &str, paused: bool, microphone_muted: bool) -> Result<()> {
         self.record_event(kind, paused, microphone_muted, None, None, None)
     }
     #[cfg(windows)]
+    /// Records explicit missing microphone samples separately from intentional pause/mute silence.
     pub fn record_microphone_gap(&self, start_sample: u64, missing_samples: u64) -> Result<()> {
         let snapshot = self.snapshot();
         self.record_event(
@@ -271,6 +286,7 @@ impl CaptureControls {
             Some(start_sample),
         )
     }
+    /// Writes and syncs a sequenced control event, retaining a sticky failure state after journal errors.
     fn record_event(
         &self,
         kind: &str,
@@ -317,6 +333,7 @@ impl CaptureControls {
         result
     }
 
+    /// Persists samples under the track gate, substituting silence for suppressed or stale-epoch packets.
     pub fn write(
         &self,
         source: &str,
@@ -342,6 +359,7 @@ impl CaptureControls {
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// Collects synthetic persisted PCM for one track's privacy assertions.
     fn read(store: &SessionStore, source: &str) -> Vec<i16> {
         let mut result = vec![];
         for part in store
@@ -361,6 +379,7 @@ mod tests {
         result
     }
     #[test]
+    /// Checks synthetic PCM from old privacy epochs stays silent after mute/pause and reopening.
     fn synthetic_pause_and_mute_never_release_buffered_old_epoch_speech() {
         let root = tempfile::tempdir().unwrap();
         let store = SessionStore::create(
@@ -422,6 +441,7 @@ mod tests {
     }
 
     #[test]
+    /// Checks truncated synthetic logs retain the confirmed prefix and reject unsupported complete events.
     fn interrupted_control_log_preserves_prefix_and_refuses_unknown_complete_events() {
         let root = tempfile::tempdir().unwrap();
         assert!(read_capture_control_events(root.path()).unwrap().is_none());
@@ -452,6 +472,7 @@ mod tests {
     }
 
     #[test]
+    /// Checks synthetic journal write failure leaves speech blocked and preserves the failed evidence file.
     fn a_control_receipt_write_failure_keeps_private_audio_blocked_and_refuses_resume() {
         let root = tempfile::tempdir().unwrap();
         let store = SessionStore::create(

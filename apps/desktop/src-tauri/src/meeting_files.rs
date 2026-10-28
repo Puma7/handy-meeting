@@ -140,6 +140,7 @@ fn transcript(data: &SessionData, locale: &str) -> AppResult<String> {
     Ok(text)
 }
 
+/// Save compatible TXT output through the same create-new export path used by other formats.
 pub(super) fn save_transcript(
     folder: &Path,
     data: &SessionData,
@@ -150,6 +151,8 @@ pub(super) fn save_transcript(
 
 // Quote every line as code: transcript text cannot introduce Markdown links,
 // images, HTML, headings or a closing fence. The original characters are retained.
+/// Return code-indented Markdown with presentation line endings normalized so transcript links,
+/// HTML and fence text remain passive; JSON retains raw text.
 fn markdown_literal(value: &str) -> String {
     // CommonMark accepts CR, LF and CRLF. Normalize this presentation copy
     // so a lone CR cannot escape the code indentation; JSON keeps raw text.
@@ -161,6 +164,8 @@ fn markdown_literal(value: &str) -> String {
         .collect()
 }
 
+/// Render bounded TXT, passive Markdown or JSON from the full snapshot. JSON preserves section
+/// provenance and identifies section timing rather than word times.
 fn render_export(
     data: &SessionData,
     locale: &str,
@@ -225,6 +230,8 @@ fn render_export(
     }
 }
 
+/// Validate the session folder and create a new transcript export with control-event evidence;
+/// retain originals, earlier exports and pending bytes on publication failure.
 pub(super) fn save_transcript_format(
     folder: &Path,
     data: &SessionData,
@@ -456,6 +463,8 @@ mod tests {
             "keep"
         );
     }
+    /// Verify synthetic hostile transcript markup stays passive and all original sections survive
+    /// both formats.
     #[test]
     fn json_and_markdown_exports_preserve_original_sections_and_never_activate_transcript_markup() {
         let (_, store) = fixture();

@@ -36,6 +36,10 @@ const meeting: Meeting = {
     },
   ],
 };
+/**
+ * Builds a synthetic ready catalogue snapshot for UI tests; it contains no installed model
+ * or device evidence.
+ */
 function state(active: Meeting | null = null): AppState {
   return {
     version: "1.0.0-beta.1",
@@ -55,6 +59,10 @@ function state(active: Meeting | null = null): AppState {
     },
   };
 }
+/**
+ * Creates mocked desktop services with capture rejected by default. Tests override only
+ * the IPC behavior under examination; no device, model or native dialog is opened.
+ */
 function fakeApi(active: Meeting | null = null): DesktopApi {
   return {
     ...testServices(),
@@ -86,6 +94,10 @@ function fakeApi(active: Meeting | null = null): DesktopApi {
     copyText: vi.fn().mockResolvedValue(undefined),
   };
 }
+/**
+ * Waits for the rendered start control to become enabled, allowing startup
+ * device/catalogue reconciliation to finish.
+ */
 async function ready() {
   await waitFor(() =>
     expect(

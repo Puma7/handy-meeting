@@ -3,6 +3,7 @@ use crate::{PcmWriter, TranscriptCheckpoint};
 #[cfg(windows)]
 use fs2::FileExt;
 #[test]
+/// Uses synthetic archives to check changed-file and VIP protection plus interrupted compaction recovery.
 fn compact_archive_protects_changes_and_vip_and_resumes_after_cancellation() {
     let root = tempfile::tempdir().unwrap();
     let id = fixture(root.path());
@@ -44,6 +45,7 @@ fn compact_archive_protects_changes_and_vip_and_resumes_after_cancellation() {
         Some("Original retained text")
     );
 }
+/// Creates a completed synthetic session with confirmed PCM and transcript evidence.
 fn fixture(root: &Path) -> String {
     fs::create_dir_all(root.join("sessions")).unwrap();
     let store = SessionStore::create(
@@ -80,6 +82,7 @@ fn fixture(root: &Path) -> String {
     id
 }
 #[test]
+/// Checks a synthetic archive round trip preserves original text, audio and additional user files.
 fn lossless_archive_roundtrip_retains_original_text_audio_and_unknown_files() {
     let root = tempfile::tempdir().unwrap();
     let id = fixture(root.path());
@@ -115,6 +118,7 @@ fn lossless_archive_roundtrip_retains_original_text_audio_and_unknown_files() {
     assert!(original.join("audio").is_dir());
 }
 #[test]
+/// Checks synthetic pin, live-lease and cancellation failures leave source files untouched.
 fn pin_active_lease_and_cancellation_protect_originals() {
     let root = tempfile::tempdir().unwrap();
     let id = fixture(root.path());
@@ -157,6 +161,7 @@ fn pin_active_lease_and_cancellation_protect_originals() {
         .is_file());
 }
 #[test]
+/// Checks synthetic audio-only archiving keeps readable text and restores the original PCM bytes.
 fn audio_only_archive_keeps_readable_text_and_restores_exact_original_pcm() {
     let root = tempfile::tempdir().unwrap();
     let id = fixture(root.path());
@@ -184,6 +189,7 @@ fn audio_only_archive_keeps_readable_text_and_restores_exact_original_pcm() {
     assert!(read_archived_transcript(&folder).unwrap().is_none());
 }
 #[test]
+/// Checks a cancelled synthetic extraction retains its partial stage without preventing a fresh restore.
 fn interrupted_whole_meeting_restore_never_blocks_a_verified_retry() {
     let root = tempfile::tempdir().unwrap();
     let id = fixture(root.path());
@@ -236,6 +242,7 @@ fn interrupted_whole_meeting_restore_never_blocks_a_verified_retry() {
     assert!(restore_new(root.path(), &receipt.archive_id, &cancel).is_err());
 }
 #[test]
+/// Checks repeated synthetic audio archive/restore cycles retain provenance and avoid redundant ZIPs.
 fn restored_audio_can_be_archived_again_without_duplicate_zips_or_lost_provenance() {
     let root = tempfile::tempdir().unwrap();
     let id = fixture(root.path());
@@ -272,6 +279,7 @@ fn restored_audio_can_be_archived_again_without_duplicate_zips_or_lost_provenanc
     assert!(folder.join("audio").join(&restored.parts[0].file).is_file());
 }
 #[test]
+/// Checks hostile synthetic marker identities cannot move provenance outside the session or start an archive.
 fn invalid_restored_audio_marker_cannot_rename_provenance_outside_the_session_or_create_a_zip() {
     // Synthetic supplied/archive-restored markers, never real user sessions.
     for invalid in [
@@ -371,6 +379,7 @@ fn invalid_restored_audio_marker_cannot_rename_provenance_outside_the_session_or
     }
 }
 #[test]
+/// Checks synthetic archive discovery/restoration and the unchanged-group typed-confirmation deletion gate.
 fn archive_browser_restores_verified_sources_and_purge_requires_unchanged_group_and_exact_confirmation(
 ) {
     let root = tempfile::tempdir().unwrap();
@@ -431,9 +440,11 @@ fn archive_browser_restores_verified_sources_and_purge_requires_unchanged_group_
     assert!(deletion_fingerprint(root.path(), &id, &cancel).is_err());
 }
 
+/// Creates a synthetic archive receipt without a creation date for backward-compatibility checks.
 fn legacy_receipt_fixture(root: &Path) -> (String, Receipt, PathBuf) {
     legacy_receipt_fixture_with_dates(root, "2000-01-01T00:00:00Z", "2000-01-01T00:00:01Z")
 }
+/// Creates an undated synthetic receipt with explicit meeting dates for conservative-age regressions.
 fn legacy_receipt_fixture_with_dates(
     root: &Path,
     started: &str,
@@ -461,6 +472,7 @@ fn legacy_receipt_fixture_with_dates(
 }
 
 #[test]
+/// Checks a synthetic clock rollback cannot age an archive past its newer known meeting start.
 fn legacy_archive_with_newer_start_date_never_ages_from_an_earlier_meeting_end() {
     let root = tempfile::tempdir().unwrap();
     let now = chrono::Utc::now();
@@ -507,6 +519,7 @@ fn legacy_archive_with_newer_start_date_never_ages_from_an_earlier_meeting_end()
 }
 
 #[test]
+/// Checks undated synthetic receipts remain inventoried and age-protected before explicit deletion.
 fn legacy_receipts_keep_all_files_and_conservative_archive_age_before_explicit_deletion() {
     let root = tempfile::tempdir().unwrap();
     let before_creation = chrono::Utc::now() - chrono::Duration::seconds(2);
@@ -603,6 +616,7 @@ fn legacy_receipts_keep_all_files_and_conservative_archive_age_before_explicit_d
 }
 
 #[test]
+/// Checks malformed synthetic receipt dates block deletion without changing original evidence.
 fn malformed_nonempty_archive_dates_remain_protected_without_deleting_any_original() {
     let root = tempfile::tempdir().unwrap();
     let (id, receipt, path) = legacy_receipt_fixture(root.path());
@@ -656,6 +670,7 @@ fn malformed_nonempty_archive_dates_remain_protected_without_deleting_any_origin
 }
 
 #[test]
+/// Checks changed filesystem age evidence invalidates an old preview even when file bytes are unchanged.
 fn changed_legacy_archive_age_provenance_invalidates_a_byte_identical_old_preview() {
     let root = tempfile::tempdir().unwrap();
     let (id, receipt, path) = legacy_receipt_fixture(root.path());
@@ -695,6 +710,7 @@ fn changed_legacy_archive_age_provenance_invalidates_a_byte_identical_old_previe
     assert!(!root.path().join("maintenance-log").exists());
 }
 #[test]
+/// Checks confirmed synthetic deletion includes all owned copies and annotations while preserving other meetings.
 fn permanent_deletion_removes_all_verified_archive_copies_and_annotations_but_preserves_other_meetings(
 ) {
     let root = tempfile::tempdir().unwrap();
@@ -771,6 +787,7 @@ fn permanent_deletion_removes_all_verified_archive_copies_and_annotations_but_pr
     assert_eq!(record["deletedFiles"], record["totalFiles"]);
 }
 #[test]
+/// Checks synthetic deletion includes interrupted copies but refuses an archive it cannot identify.
 fn permanent_deletion_includes_interrupted_copies_and_blocks_on_unidentified_zips() {
     let root = tempfile::tempdir().unwrap();
     let id = fixture(root.path());
@@ -821,6 +838,7 @@ fn permanent_deletion_includes_interrupted_copies_and_blocks_on_unidentified_zip
     assert!(left.is_empty(), "{left:?}");
 }
 #[test]
+/// Checks cancelled synthetic deletion resumes only from its retained verified progress log.
 fn stopped_permanent_deletion_can_be_continued_from_its_log() {
     let root = tempfile::tempdir().unwrap();
     let id = fixture(root.path());
@@ -903,6 +921,7 @@ fn stopped_permanent_deletion_can_be_continued_from_its_log() {
     .is_err());
 }
 #[test]
+/// Checks synthetic traversal names are rejected before restoration creates a session destination.
 fn hostile_archive_paths_are_rejected_before_any_restore_destination_is_created() {
     let root = tempfile::tempdir().unwrap();
     let id = fixture(root.path());
@@ -941,6 +960,7 @@ fn hostile_archive_paths_are_rejected_before_any_restore_destination_is_created(
     assert!(!root.path().join("outside.txt").exists());
 }
 #[test]
+/// Checks altered synthetic archive text cannot pass as the journal-derived original transcript.
 fn changed_archived_text_cannot_be_presented_as_its_original_journal_evidence() {
     let root = tempfile::tempdir().unwrap();
     let id = fixture(root.path());
@@ -965,6 +985,7 @@ fn changed_archived_text_cannot_be_presented_as_its_original_journal_evidence() 
     .is_ok());
 }
 #[test]
+/// Checks synthetic restoration retains empty folders and annotation history without replacing newer pins.
 fn full_archive_preserves_empty_folders_and_annotation_versions_without_resetting_newer_pins() {
     let root = tempfile::tempdir().unwrap();
     let id = fixture(root.path());
@@ -1050,6 +1071,7 @@ fn full_archive_preserves_empty_folders_and_annotation_versions_without_resettin
     assert_eq!(current.title.as_deref(), Some("Newer VIP title"));
 }
 #[test]
+/// Checks synthetic source placement refuses a stale inventory or a newly pinned meeting.
 fn verified_source_moves_to_archive_but_a_new_file_or_pin_blocks_a_stale_move() {
     let root = tempfile::tempdir().unwrap();
     let id = fixture(root.path());
@@ -1100,6 +1122,7 @@ fn verified_source_moves_to_archive_but_a_new_file_or_pin_blocks_a_stale_move() 
     assert!(restore_new(root.path(), &current.archive_id, &AtomicBool::new(false)).is_ok());
 }
 #[test]
+/// Checks unreadable synthetic archive entries remain visible and protected instead of disappearing.
 fn archive_list_shows_unreadable_receipts_and_labels_as_preserved_entries() {
     let root = tempfile::tempdir().unwrap();
     let cancel = AtomicBool::new(false);
@@ -1155,6 +1178,7 @@ fn archive_list_shows_unreadable_receipts_and_labels_as_preserved_entries() {
     assert_eq!(fs::read(&newer_path).unwrap(), newer_bytes);
 }
 #[test]
+/// Checks a synthetic pre-rename interruption retains its prepared record when a later move retries.
 fn source_move_interrupted_after_prepared_record_can_be_repeated_and_keeps_that_record() {
     let root = tempfile::tempdir().unwrap();
     let cancel = AtomicBool::new(false);
@@ -1212,6 +1236,7 @@ fn source_move_interrupted_after_prepared_record_can_be_repeated_and_keeps_that_
 }
 #[cfg(unix)]
 #[test]
+/// Checks a synthetic dangling marker link is rejected without creating or following its target.
 fn a_dangling_audio_archive_receipt_link_is_refused_not_read_as_missing() {
     let root = tempfile::tempdir().unwrap();
     let outside = tempfile::tempdir().unwrap();
@@ -1267,6 +1292,7 @@ fn interrupted_source_placement(root: &Path) -> Receipt {
     receipt
 }
 
+/// Reads a synthetic source's exact files, directories and lease bytes for no-mutation assertions.
 fn source_inventory_bytes(folder: &Path) -> (Vec<(String, Vec<u8>)>, Vec<String>) {
     let mut files = Vec::new();
     let mut directories = Vec::new();
@@ -1286,6 +1312,7 @@ fn source_inventory_bytes(folder: &Path) -> (Vec<(String, Vec<u8>)>, Vec<String>
 }
 
 #[test]
+/// Checks a synthetic post-rename write failure recovers without rewriting source or ZIP bytes.
 fn source_move_recovers_when_final_placement_write_failed_after_rename() {
     let root = tempfile::tempdir().unwrap();
     let receipt = interrupted_source_placement(root.path());
@@ -1320,6 +1347,7 @@ fn source_move_recovers_when_final_placement_write_failed_after_rename() {
 }
 
 #[test]
+/// Checks mismatched, changed, pinned, ambiguous or cancelled synthetic placements refuse promotion.
 fn source_placement_recovery_preserves_mismatches_unknown_files_and_cancelled_work() {
     for case in [
         "archiveId",
@@ -1420,6 +1448,7 @@ fn source_placement_recovery_preserves_mismatches_unknown_files_and_cancelled_wo
 }
 
 #[test]
+/// Checks synthetic recovery respects archive, metadata and retained-session exclusive leases.
 fn source_placement_recovery_obeys_operation_and_retained_session_leases() {
     let root = tempfile::tempdir().unwrap();
     let receipt = interrupted_source_placement(root.path());
@@ -1456,6 +1485,7 @@ fn source_placement_recovery_obeys_operation_and_retained_session_leases() {
 
 #[cfg(unix)]
 #[test]
+/// Checks synthetic link substitutions cannot redirect recovery or replace a dangling target.
 fn source_placement_recovery_rejects_links_without_following_or_replacing_them() {
     for linked in ["placement", "source", "source-file", "old-source"] {
         let root = tempfile::tempdir().unwrap();
@@ -1518,6 +1548,7 @@ fn source_placement_recovery_rejects_links_without_following_or_replacing_them()
 }
 #[cfg(unix)]
 #[test]
+/// Checks synthetic dangling lock links never become newly created external lock files.
 fn dangling_archive_lock_links_are_rejected_without_creating_their_targets() {
     let root = tempfile::tempdir().unwrap();
     let outside = tempfile::tempdir().unwrap();
@@ -1550,6 +1581,7 @@ fn dangling_archive_lock_links_are_rejected_without_creating_their_targets() {
     create(root.path(), &id, 0, "whole-meeting", &cancel, |_, _| {}).unwrap();
 }
 #[test]
+/// Checks the synthetic external relocation lease still excludes new writers during a move.
 fn relocation_guard_keeps_other_new_writers_out_after_releasing_windows_internal_handle() {
     let root = tempfile::tempdir().unwrap();
     let id = fixture(root.path());
@@ -1564,6 +1596,7 @@ fn relocation_guard_keeps_other_new_writers_out_after_releasing_windows_internal
 }
 #[cfg(windows)]
 #[test]
+/// Checks a synthetic legacy internal lease blocks relocation before the source can be renamed.
 fn legacy_windows_writer_lease_blocks_a_move_during_the_transition() {
     let root = tempfile::tempdir().unwrap();
     let id = fixture(root.path());

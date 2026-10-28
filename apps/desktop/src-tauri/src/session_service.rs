@@ -6,6 +6,8 @@ use std::{
 };
 
 impl Service {
+    /// Resolve known legacy references or validated Rust identities into snapshots; reuse owned
+    /// stores and verified archive markers, rejecting folder/manifest identity mismatches.
     pub(crate) fn data(&self, id: &str) -> AppResult<SessionData> {
         if self
             .maintenance_jobs
@@ -58,6 +60,8 @@ impl Service {
         self.lock()?.view = Some(store);
         Ok(data)
     }
+    /// Hold mutation admission while verifying native manifest approval and reading a legacy
+    /// original. Persist only its reference and derived identity; the capture stays read-only.
     pub(crate) fn import(&self, manifest: String) -> AppResult<MeetingView> {
         let _lease = self.reserve_operation(operations::Kind::Mutation)?;
         let path = PathBuf::from(manifest);
@@ -78,6 +82,8 @@ impl Service {
         data.id = id;
         Ok(self.meeting_view(data, false))
     }
+    /// Build summaries from a completed index or session folders, merging current and known
+    /// legacy sessions; omit full transcript parts from the returned list.
     pub(crate) fn history(&self) -> AppResult<Vec<MeetingView>> {
         // Only an index this process has fully scanned is complete; while a scan runs, failed
         // or was cancelled, the session folders themselves are the history.

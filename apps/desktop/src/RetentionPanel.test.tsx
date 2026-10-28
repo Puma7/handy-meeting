@@ -21,6 +21,10 @@ const disabled: RetentionPolicy = {
   codec: "flac",
   ffmpegExecutable: null,
 };
+/**
+ * Creates a deferred synthetic native choice plus immutable preview IDs for
+ * remount/consent races. All maintenance and program operations remain mocked.
+ */
 function pendingChoiceFixture(initialPreview: boolean) {
   // Synthetic IPC: deferred native selection and immutable preview IDs only.
   const originalId = "6".repeat(32),
@@ -31,6 +35,10 @@ function pendingChoiceFixture(initialPreview: boolean) {
   });
   const saved = { ...disabled, ffmpegExecutable: "/saved/ffmpeg" };
   let currentJob = originalId;
+  /**
+   * Returns the current synthetic completed-preview status; it describes an IPC fixture
+   * rather than a running encoder or file operation.
+   */
   const progress = () => ({
     jobId: currentJob,
     kind: "cleanup-preview",
@@ -210,6 +218,10 @@ it.each(["en", "de"] as const)(
           : "Convert an additional audio copy after days",
       }),
     );
+    /**
+     * Finds the localized policy-save action so tests distinguish explicit saving from
+     * preview or maintenance execution.
+     */
     const saveButton = () =>
       screen.getByRole("button", {
         name: de ? "Regeln speichern" : "Save rules",
@@ -361,12 +373,20 @@ it.each(["/native-choice/ffmpeg", "/saved/ffmpeg", null])(
     await userEvent.click(
       screen.getByRole("button", { name: "Review action" }),
     );
+    /**
+     * Finds the separate single-action consent checkbox used to verify that invalidation
+     * revokes prior acceptance.
+     */
     const accept = () =>
       screen.getByRole("checkbox", {
         name: "Perform this single described action",
       }) as HTMLInputElement;
     await userEvent.click(accept());
     expect(accept().checked).toBe(true);
+    /**
+     * Finds the native-picker action in the synthetic view; clicking it does not itself
+     * save policy or apply a preview.
+     */
     const chooseButton = () =>
       screen.getByRole("button", {
         name: "Choose FFmpeg in file dialog …",
@@ -571,7 +591,7 @@ it("requires reviewing one immutable preview row and a separate exact permanent-
   const plan: RetentionPlan = {
     id: planId,
     policyRevision: 0,
-    createdAt: "2026-10-27T00:00:00Z",
+    createdAt: new Date().toISOString(),
     scanned: 1,
     protected: 0,
     unreadable: 0,

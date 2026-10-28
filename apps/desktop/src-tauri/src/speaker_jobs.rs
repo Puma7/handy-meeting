@@ -80,6 +80,8 @@ impl Jobs {
             }
         }
     }
+    /// Validate live/post-meeting experiment state and retain speaker admission in its worker;
+    /// optional-worker failure does not own normal capture shutdown.
     pub fn start(
         self: &Arc<Self>,
         service: Arc<Service>,

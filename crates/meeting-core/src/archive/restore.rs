@@ -1,6 +1,7 @@
 //! Verified restoration and interrupted source placement.
 use super::*;
 
+/// Extracts verified bytes into a fresh staging folder and refuses to replace an existing session.
 pub fn restore_new(root: &Path, archive_id: &str, cancel: &AtomicBool) -> Result<PathBuf> {
     let _operation = operation_lock(root)?;
     if !metadata::valid_id(archive_id) || archive_id.starts_with("legacy-") {
@@ -175,6 +176,7 @@ pub fn move_source_into_archive(
         atomic_json(path, record)
     })
 }
+/// Moves or recovers a verified source placement; the injected writer exposes persistence failures to tests.
 pub(super) fn move_source_with_placement_writer(
     root: &Path,
     receipt: &Receipt,
@@ -299,6 +301,7 @@ fn verified_source_copy(
 }
 /// Retained records of earlier move attempts that stopped after `prepared`.
 pub(super) const MAX_PLACEMENT_ATTEMPTS: usize = 100;
+/// Returns a numbered retained-placement path; callers must check absence before moving.
 pub(super) fn placement_attempt(archives: &Path, archive_id: &str, number: usize) -> PathBuf {
     archives.join(format!("{archive_id}.placement.attempt-{number}.json"))
 }
@@ -340,6 +343,7 @@ pub(super) fn retire_interrupted_placement(
     Err("Too many interrupted archive moves are retained; inspect them before moving again".into())
 }
 
+/// Accepts only a bounded ordinary prepared record matching this receipt and retained-source contract.
 fn prepared_placement(placement: &Path, receipt: &Receipt) -> Result<serde_json::Value> {
     let blocked = || "Existing archive placement preserved; inspect its previous operation";
     regular(placement)?;

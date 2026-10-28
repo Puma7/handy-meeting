@@ -9,10 +9,12 @@ use std::{
     sync::{atomic::AtomicBool, mpsc::SyncSender, Arc},
 };
 
+/// Runs a bounded read-only pactl query through the owned portable helper transport.
 fn query(arguments: &[&str]) -> Result<String> {
     portable::text_command(Command::new("pactl").args(arguments))
 }
 
+/// Lists actual sink monitors and microphone sources with the server's reported defaults.
 pub(super) fn list_devices() -> Result<Vec<AudioDevice>> {
     let sinks: Value = serde_json::from_str(&query(&["--format=json", "list", "sinks"])?)?;
     let sources: Value = serde_json::from_str(&query(&["--format=json", "list", "sources"])?)?;
@@ -21,6 +23,7 @@ pub(super) fn list_devices() -> Result<Vec<AudioDevice>> {
     parse_devices(&sinks, &sources, default_sink.trim(), default_source.trim())
 }
 
+/// Requires a nonempty bounded PulseAudio identifier without control characters.
 fn identifier(value: &Value, field: &str) -> Result<String> {
     let text = value
         .get(field)
@@ -32,6 +35,7 @@ fn identifier(value: &Value, field: &str) -> Result<String> {
     Ok(text.into())
 }
 
+/// Uses server-reported monitor names and excludes loopback monitors from microphone choices.
 fn parse_devices(
     sinks: &Value,
     sources: &Value,
@@ -92,6 +96,7 @@ fn parse_devices(
     Ok(result)
 }
 
+/// Builds a raw PCM parec command for the chosen track and delegates privacy-aware persistence.
 pub(super) fn record(
     store: SessionStore,
     source: &str,
@@ -139,6 +144,7 @@ pub(super) fn record(
 mod tests {
     use super::*;
     #[test]
+    /// Checks synthetic PulseAudio listings preserve monitor identities and never expose loopback as a microphone.
     fn actual_monitor_names_and_defaults_are_retained_without_reclassifying_loopback_as_mic() {
         // Shape of `pactl --format=json list sinks` from PulseAudio 16.1.
         let sinks = serde_json::json!([{"index":0,"state":"RUNNING","name":"headphones","description":"Headphones","driver":"module-null-sink.c","monitor_source":"custom.remote.capture"}]);

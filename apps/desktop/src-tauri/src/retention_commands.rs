@@ -22,6 +22,8 @@ pub(crate) async fn get_retention_policy(
     let service = Arc::clone(&service);
     blocking(move||meeting_core::retention::read_policy(&service.root).map_err(|_|"Aufräumregeln konnten nicht gelesen werden; vorhandene Einstellungen werden nicht überschrieben. / Retention settings could not be read; existing settings are preserved.".into())).await
 }
+/// Save retention settings off the UI thread through revision and native FFmpeg-choice
+/// validation.
 #[tauri::command]
 pub(crate) async fn save_retention_policy(
     service: State<'_, Arc<Service>>,
@@ -31,6 +33,8 @@ pub(crate) async fn save_retention_policy(
     let service = Arc::clone(&service);
     blocking(move || save_policy(&service, expected_revision, policy)).await
 }
+/// Hold mutation admission across optional FFmpeg grant verification and revisioned policy
+/// saving.
 pub(crate) fn save_policy(
     service: &Service,
     expected_revision: u64,
@@ -45,6 +49,8 @@ pub(crate) fn save_policy(
     meeting_core::retention::save_policy(&service.root,expected_revision,policy).map_err(|_|"Aufräumregeln nicht gespeichert. Unangetasteten Zeitraum, Altersgrenzen und geänderte Einstellungen prüfen. / Retention settings were not saved; check untouched period, age limits and concurrent changes.".into())
 }
 
+/// Create a cancellable inventory plan under indexing admission without applying archive,
+/// conversion or deletion actions.
 #[tauri::command]
 pub(crate) fn preview_retention(service: State<'_, Arc<Service>>) -> AppResult<String> {
     let owned = Arc::clone(&service);
@@ -119,12 +125,16 @@ struct MaintenanceGuard {
     _lease: crate::operations::Lease,
 }
 impl Drop for MaintenanceGuard {
+    /// Clear the maintenance transition when its guard leaves scope; the guard also retains
+    /// operation admission.
     fn drop(&mut self) {
         if let Ok(mut inner) = self.service.lock() {
             inner.transitioning = false;
         }
     }
 }
+/// Acquire exclusive maintenance admission, release the cached session view and mark its
+/// transition.
 fn reserve(service: &Arc<Service>) -> AppResult<MaintenanceGuard> {
     let lease = service.reserve_operation(crate::operations::Kind::Maintenance)?;
     let mut inner = service.lock()?;
@@ -231,6 +241,8 @@ pub(crate) fn compact_archive(
         })
 }
 // Runs off the UI thread: it may wait on the recording transition lock or on disk.
+/// Apply one confirmed row of an unexpired unchanged plan under maintenance admission; recheck
+/// policy, VIP labels and source evidence before the action.
 #[tauri::command(async)]
 pub(crate) fn apply_retention(
     service: State<'_, Arc<Service>>,
@@ -385,6 +397,8 @@ struct Conversion {
     parts: Vec<meeting_core::audio_codec::ConversionProof>,
 }
 // Runs off the UI thread: it may wait on the recording transition lock or on disk.
+/// Require confirmation and a current FFmpeg grant, decode verified copies into a separate
+/// session with provenance, then resume recognition; retain originals and partial work.
 #[tauri::command(async)]
 pub(crate) fn transcribe_audio_copy(
     service: State<'_, Arc<Service>>,
