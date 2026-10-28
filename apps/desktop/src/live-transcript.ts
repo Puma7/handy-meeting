@@ -15,7 +15,17 @@ export function mergeLiveTranscript(
   const key = (part: AudioPart) =>
     part.file ?? `${part.source}:${part.startSample}`;
   const parts = new Map(previous.parts.map((part) => [key(part), part]));
-  for (const part of next.parts) parts.set(key(part), part);
+  for (const part of next.parts) {
+    const saved = parts.get(key(part));
+    if (
+      !saved ||
+      (part.transcriptSequence ?? 0) > (saved.transcriptSequence ?? 0) ||
+      ((part.transcriptSequence ?? 0) === (saved.transcriptSequence ?? 0) &&
+        (part.confirmedSampleCount ?? part.sampleCount) >=
+          (saved.confirmedSampleCount ?? saved.sampleCount))
+    )
+      parts.set(key(part), part);
+  }
   return {
     ...next,
     parts: [...parts.values()],

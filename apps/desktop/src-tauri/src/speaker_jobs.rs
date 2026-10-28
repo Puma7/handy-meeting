@@ -16,6 +16,27 @@ use std::{
     time::{Duration, Instant},
 };
 
+const MAX_MODEL_CHECK_FOLDERS: usize = 128;
+
+/// Preserve all prior checks, including partial failures. Stop reserving new evidence
+/// folders at a fixed ceiling instead of silently deleting or overwriting their contents.
+fn reserve_model_check_folder(root: &Path) -> AppResult<std::path::PathBuf> {
+    let checks = root.join("speaker-model-checks");
+    std::fs::create_dir_all(&checks).map_err(|_| "Model check folder unavailable")?;
+    meeting_core::metadata::checked_directory(&checks).map_err(|_| "Unsafe model check folder")?;
+    let used = std::fs::read_dir(&checks)
+        .map_err(|_| "Model check evidence unavailable")?
+        .take(MAX_MODEL_CHECK_FOLDERS)
+        .try_fold(0_usize, |count, entry| entry.map(|_| count + 1))
+        .map_err(|_| "Model check evidence could not be counted")?;
+    if used >= MAX_MODEL_CHECK_FOLDERS {
+        return Err("128 Sprecher-Prüfnachweise sind bereits vorhanden und bleiben erhalten. Weitere Modellprüfungen sind gesperrt; das lokale Prüfarchiv muss vor weiteren Prüfungen ausdrücklich überprüft werden. / 128 speaker-check records are retained. Further model checks are blocked until the local check archive is explicitly reviewed.".into());
+    }
+    let folder = checks.join(meeting_notes::new_job_id());
+    std::fs::create_dir(&folder).map_err(|_| "Could not reserve model check")?;
+    Ok(folder)
+}
+
 /// Explicit capability check in an owned CPU child, without access to any recording folder.
 /// Exclusive admission avoids loading another model while capture or analysis is running.
 pub(crate) fn check_model(service: &Service, model_id: &str) -> AppResult<bool> {
@@ -25,17 +46,13 @@ pub(crate) fn check_model(service: &Service, model_id: &str) -> AppResult<bool> 
     let resolved = bridge
         .resolve_downloaded_model(model)
         .map_err(|e| e.to_string())?;
+    let folder = reserve_model_check_folder(&service.root)?;
     let identity = handy_bridge::capture_optional_model_identity(
         model,
         &resolved,
         handy_bridge::native::runtime_identity(),
     )
     .map_err(|e| e.to_string())?;
-    let checks = service.root.join("speaker-model-checks");
-    std::fs::create_dir_all(&checks).map_err(|_| "Model check folder unavailable")?;
-    meeting_core::metadata::checked_directory(&checks).map_err(|_| "Unsafe model check folder")?;
-    let folder = checks.join(meeting_notes::new_job_id());
-    std::fs::create_dir(&folder).map_err(|_| "Could not reserve model check")?;
     crate::create_json(&folder.join("model.json"), &identity)?;
     let mut worker = Worker::start_speaker(
         &resolved.path,
@@ -53,6 +70,43 @@ pub(crate) fn check_model(service: &Service, model_id: &str) -> AppResult<bool> 
         &serde_json::json!({"modelId":model_id,"supported":supported,"checkedAt":chrono::Utc::now().to_rfc3339(),"audioAccess":false}),
     )?;
     Ok(supported)
+}
+
+#[cfg(test)]
+mod model_check_tests {
+    use super::*;
+
+    #[test]
+    fn model_check_evidence_is_bounded_without_removing_partial_or_complete_records() {
+        let root = std::env::temp_dir().join(format!(
+            "hm-speaker-check-cap-{}",
+            meeting_notes::new_job_id()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let mut retained = Vec::new();
+        for index in 0..MAX_MODEL_CHECK_FOLDERS {
+            let folder = reserve_model_check_folder(&root).unwrap();
+            if index % 2 == 0 {
+                let proof = folder.join("synthetic-proof.json");
+                std::fs::write(&proof, b"preserve this confirmed check").unwrap();
+                retained.push(proof);
+            }
+        }
+        let error = reserve_model_check_folder(&root).unwrap_err();
+        assert!(error.contains("128"));
+        assert_eq!(
+            std::fs::read_dir(root.join("speaker-model-checks"))
+                .unwrap()
+                .count(),
+            MAX_MODEL_CHECK_FOLDERS
+        );
+        for path in retained {
+            assert_eq!(
+                std::fs::read(path).unwrap(),
+                b"preserve this confirmed check"
+            );
+        }
+    }
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

@@ -107,7 +107,7 @@ impl Job {
             meeting_id: self.meeting_id.clone(),
             status: shared.status.clone(),
             running,
-            waiting_for_transcript: shared.waiting_for_transcript,
+            waiting_for_transcript: running && shared.waiting_for_transcript,
             error: shared.error.clone(),
             pending_chars: shared.pending_chars,
             interval_ms,
@@ -626,6 +626,36 @@ impl Worker {
 mod tests {
     use super::*;
     use meeting_core::SessionStore;
+
+    #[test]
+    fn terminal_status_never_reports_waiting_for_transcript() {
+        let shared = Arc::new(Mutex::new(Shared {
+            status: "waiting".into(),
+            waiting_for_transcript: true,
+            error: None,
+            pending_chars: 250,
+            last_update: Instant::now(),
+            last_trigger: None,
+            retry_at: None,
+            view: None,
+        }));
+        let job = Job {
+            meeting_id: "a".repeat(32),
+            control: AnalysisControl::default(),
+            manual: Arc::new(AtomicBool::new(false)),
+            interval_ms: Arc::new(AtomicU64::new(DEFAULT_INTERVAL_MS)),
+            shared: Arc::clone(&shared),
+            worker: None,
+        };
+        assert!(job.status().waiting_for_transcript);
+        for status in ["stopped", "finished", "failed"] {
+            shared.lock().unwrap().status = status.into();
+            let view = job.status();
+            assert!(!view.running);
+            assert!(!view.waiting_for_transcript, "{status}");
+            assert_eq!(view.pending_chars, 250);
+        }
+    }
 
     #[test]
     fn live_generation_defers_for_real_unprocessed_audio_only() {

@@ -195,7 +195,9 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     if (
       page !== "meeting" ||
       !liveMeeting?.id ||
-      !["recording", "streaming", "recorded"].includes(liveMeeting.status)
+      !["recording", "streaming", "recorded", "catching-up"].includes(
+        liveMeeting.status,
+      )
     )
       return;
     // Full text is read outside the application lock at a slower cadence than status.
@@ -211,6 +213,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
   const [speakerChecks, setSpeakerChecks] = useState<Record<string, boolean>>(
     {},
   );
+  const [speakerModelId, setSpeakerModelId] = useState("");
   const [speakerChecksInFlight, setSpeakerChecksInFlight] = useState(0);
   const speakerChecking = speakerChecksInFlight > 0;
   const onSpeakerCheckingChange = useCallback((checking: boolean) => {
@@ -759,7 +762,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
           return;
         lastModelRefresh.current = Date.now();
         queriedHandy = true;
-        setSpeakerChecks({});
+        if (!automatic) setSpeakerChecks({});
         setRefreshingHandy(true);
         // The backend retains discovery/native origin. A displayed cached path
         // must not turn an automatic refresh into an explicit file selection.
@@ -773,6 +776,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             // supersede the reread below, but cannot restore an invalid model.
             catalogueFailure.current = reason;
             if (mounted.current) {
+              setSpeakerChecks({});
               setHandyRefreshFailure(reason);
               setModelId("");
             }
@@ -782,6 +786,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             throw failure;
           });
         if (!mounted.current) return;
+        if (automatic && JSON.stringify(fresh.handy) !== JSON.stringify(handy))
+          setSpeakerChecks({});
         // An older automatic query, or an earlier same-path confirmation, has
         // no authority to release the latest still-pending native choice.
         if (
@@ -1576,6 +1582,11 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
                 <SpeakerExperiments
                   embedded
                   checkedModels={speakerChecks}
+                  selectedModelId={speakerModelId}
+                  onSelectedModelChange={setSpeakerModelId}
+                  checkingBlocked={
+                    speakerChecking || notesBusy || busy || refreshingHandy
+                  }
                   onModelChecked={onSpeakerModelChecked}
                   onCheckingChange={onSpeakerCheckingChange}
                   key={
@@ -1839,6 +1850,28 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         {page === "settings" && (
           <SettingsView
             textModelSettings={textModelSettings}
+            speakerModelSettings={
+              api.checkSpeakerModel && (
+                <SpeakerExperiments
+                  setupOnly
+                  embedded
+                  api={api}
+                  locale={locale}
+                  models={app?.handy?.models ?? []}
+                  recording={
+                    recording || catchingUp || Boolean(app?.transitioning)
+                  }
+                  checkedModels={speakerChecks}
+                  selectedModelId={speakerModelId}
+                  onSelectedModelChange={setSpeakerModelId}
+                  onModelChecked={onSpeakerModelChecked}
+                  onCheckingChange={onSpeakerCheckingChange}
+                  checkingBlocked={
+                    speakerChecking || notesBusy || busy || refreshingHandy
+                  }
+                />
+              )
+            }
             api={api}
             app={app}
             locale={locale}

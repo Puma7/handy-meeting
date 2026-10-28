@@ -153,16 +153,18 @@ fn ollama_root_from(value: Option<&str>) -> String {
         return OLLAMA_ROOT.into();
     }
     let host = match url.host() {
-        Some(url::Host::Domain("localhost")) => "127.0.0.1",
-        Some(url::Host::Ipv4(ip)) if ip.is_loopback() || ip.is_unspecified() => "127.0.0.1",
-        Some(url::Host::Ipv6(ip)) if ip.is_loopback() || ip.is_unspecified() => "[::1]",
+        Some(url::Host::Domain("localhost")) => "localhost".to_owned(),
+        Some(url::Host::Ipv4(ip)) if ip.is_loopback() => ip.to_string(),
+        Some(url::Host::Ipv4(ip)) if ip.is_unspecified() => "127.0.0.1".to_owned(),
+        Some(url::Host::Ipv6(ip)) if ip.is_loopback() => format!("[{ip}]"),
+        Some(url::Host::Ipv6(ip)) if ip.is_unspecified() => "[::1]".to_owned(),
         _ => return OLLAMA_ROOT.into(),
     };
     let port = url.port().unwrap_or(11434);
     if port == 0 {
         return OLLAMA_ROOT.into();
     }
-    if url.set_host(Some(host)).is_err() || url.set_port(Some(port)).is_err() {
+    if url.set_host(Some(&host)).is_err() || url.set_port(Some(port)).is_err() {
         return OLLAMA_ROOT.into();
     }
     url.to_string()
@@ -458,12 +460,20 @@ mod tests {
     }
 
     #[test]
-    fn ollama_bind_settings_never_contact_remote_hosts_or_forward_credentials() {
-        for address in [
-            "127.0.0.1:2345",
-            "http://localhost:2345",
-            "http://0.0.0.0:2345",
+    fn explicit_ollama_loopback_addresses_keep_their_bind_identity() {
+        for (input, expected) in [
+            ("127.0.0.2:2345", "http://127.0.0.2:2345/"),
+            ("http://127.23.45.67:2345", "http://127.23.45.67:2345/"),
+            ("localhost:2345", "http://localhost:2345/"),
+            ("[::1]:2345", "http://[::1]:2345/"),
         ] {
+            assert_eq!(ollama_root_from(Some(input)), expected, "{input}");
+        }
+    }
+
+    #[test]
+    fn ollama_bind_settings_never_contact_remote_hosts_or_forward_credentials() {
+        for address in ["127.0.0.1:2345", "http://0.0.0.0:2345"] {
             assert_eq!(ollama_root_from(Some(address)), "http://127.0.0.1:2345/");
         }
         assert_eq!(ollama_root_from(Some("[::1]:2345")), "http://[::1]:2345/");

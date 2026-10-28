@@ -412,7 +412,7 @@ export default function LiveNotesPanel({
       ? Math.max(1, Math.ceil(status.nextUpdateInMs / 60_000))
       : null;
   const stateText = (() => {
-    if (status?.waitingForTranscript)
+    if (status?.running && status.waitingForTranscript)
       return de
         ? "Wartet auf Spracherkennung · Aufnahme und Transkript haben Vorrang"
         : "Waiting for recognition · recording and transcription take priority";

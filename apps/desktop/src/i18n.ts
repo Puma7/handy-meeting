@@ -132,7 +132,7 @@ export const de = {
   emptyTranscript:
     "Hier erscheint der Text, sobald die lokale Erkennung Abschnitte liefert.",
   emptyHistory:
-    "Noch keine gespeicherten Meetings. Starte eine Aufnahme oder importiere eine vorhandene Sitzung unter Einstellungen.",
+    "Noch keine gespeicherten Meetings. Starte eine Aufnahme. Ältere Prototyp-Sitzungen lassen sich unter Einstellungen importieren.",
   open: "Öffnen",
   duration: "Dauer",
   sourceTimes:
@@ -455,7 +455,7 @@ export const en: Record<MessageKey, string> = {
   emptyTranscript:
     "Text appears here when local recognition produces transcript sections.",
   emptyHistory:
-    "No saved meetings yet. Start a recording or import an existing session in Settings.",
+    "No saved meetings yet. Start a recording. Older prototype sessions can be imported in Settings.",
   open: "Open",
   duration: "Duration",
   sourceTimes: "Times identify recording sections, not exact word timestamps.",

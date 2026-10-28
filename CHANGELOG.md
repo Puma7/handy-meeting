@@ -8,6 +8,7 @@
 - A compact running view keeps both level meters and pause/mute/stop controls visible. Narrow windows offer a direct transcript/summary switch. Rename controls and export actions align, and compact-audio pagination uses lookahead.
 - Settings and post-processing share one connection/model form. Detection reads LM Studio's configured server port and a local-only Ollama host; local/cloud drafts are kept separately and transient credentials are cleared on switching. Templates and optional speaker tools have a clearer grouping; local speaker jobs require an explicit capability check.
 - Live task deduplication retains different owners and deadlines, and saved live summaries from another meeting are rejected without changing their files. Confirmed speaker names load even while editing controls are closed; model-discovery actions respect a running analysis lock.
+- Speaker capability can be checked in Settings before the first recording and is retained across unchanged automatic catalogue refreshes. Explicit loopback bind addresses are preserved. Catch-up refreshes and preview sequencing retain later text, stopped summaries clear their waiting label, and speaker-check evidence has a fixed 128-folder ceiling that preserves existing complete and partial records.
 - This source follow-up does not change the published 1.0.6 assets or authorize a new release. The real local text-model reference run and longer combined capture/recognition/model/GPU evidence remain open; see TEST_REPORT.md.
 
 ## 1.0.6 — live summary and easy local text models (in development)

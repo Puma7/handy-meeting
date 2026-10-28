@@ -29,6 +29,7 @@ export default function SettingsView({
   onLocale,
   onTheme,
   textModelSettings,
+  speakerModelSettings,
 }: {
   api: DesktopApi;
   app: AppState | null;
@@ -49,6 +50,7 @@ export default function SettingsView({
   onLocale: (locale: Locale) => void;
   onTheme: (theme: Theme) => void;
   textModelSettings?: ReactNode;
+  speakerModelSettings?: ReactNode;
 }) {
   const de = locale === "de";
   const unavailable = busy || blocked || !connected;
@@ -104,6 +106,16 @@ export default function SettingsView({
           <section id="text-model-settings" tabIndex={-1}>
             <h2>{de ? "Textmodelle" : "Text models"}</h2>
             {textModelSettings}
+          </section>
+        )}
+        {speakerModelSettings && (
+          <section>
+            <h2>
+              {de
+                ? "Sprecherfunktionen · optional"
+                : "Speaker features · optional"}
+            </h2>
+            {speakerModelSettings}
           </section>
         )}
         <section>

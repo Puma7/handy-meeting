@@ -230,6 +230,21 @@ it("retries an automatic start while the previous meeting's summary is still fin
   }
 });
 
+it("does not show a stopped summary as waiting for recognition", async () => {
+  setup({
+    startLiveNotes: vi.fn(),
+    getLiveNotes: vi.fn().mockResolvedValue(
+      status({
+        status: "stopped",
+        running: false,
+        waitingForTranscript: true,
+      }),
+    ),
+  });
+  await screen.findByText("Angehalten");
+  expect(screen.queryByText(/Wartet auf Spracherkennung/)).toBeNull();
+});
+
 it("does not auto-start after an explicit stop or without a model", async () => {
   const start = vi.fn();
   setup(

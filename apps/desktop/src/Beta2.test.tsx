@@ -737,6 +737,95 @@ describe("beta.2 guided meeting analysis", () => {
   });
 });
 
+it.each([false, true])(
+  "invalidates speaker support only when an automatic catalogue refresh changes (%s)",
+  async (changed) => {
+    const { api } = apiFixture();
+    if (changed)
+      vi.mocked(api.refreshHandy).mockResolvedValue({
+        ...appState().handy!,
+        version: "synthetic-new-runtime",
+      });
+    api.startSpeakerExperiment = vi.fn();
+    api.checkSpeakerModel = vi.fn().mockResolvedValue(true);
+    api.getSpeakerProgress = vi.fn().mockResolvedValue(null);
+    api.getSpeakerSections = vi.fn().mockResolvedValue(null);
+    render(<App api={api} />);
+    await screen.findByRole("button", { name: "Dieses Meeting auswerten" });
+    await userEvent.click(screen.getByText("Sprecher zuordnen · optional"));
+    await userEvent.selectOptions(
+      screen.getByLabelText("Installiertes Modell für die Sprecherprüfung"),
+      "synthetic-asr",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Sprecherunterstützung prüfen" }),
+    );
+    const run = screen.getByRole("button", {
+      name: "Lokale Sprechertrennung prüfen",
+    }) as HTMLButtonElement;
+    await waitFor(() => expect(run.disabled).toBe(false));
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 31_000);
+    try {
+      fireEvent(window, new Event("focus"));
+      await waitFor(() => expect(api.refreshHandy).toHaveBeenCalled());
+      expect(run.disabled).toBe(changed);
+    } finally {
+      clock.mockRestore();
+    }
+    expect(api.startSpeakerExperiment).not.toHaveBeenCalled();
+  },
+);
+
+it("can check a speaker model in Settings before the first recording and use it live", async () => {
+  const { api } = apiFixture();
+  let runtime: AppState = {
+    ...appState(),
+    recording: false,
+    activeMeeting: null,
+  };
+  vi.mocked(api.getAppState).mockImplementation(async () => runtime);
+  vi.mocked(api.listMeetings).mockResolvedValue([]);
+  vi.mocked(api.startMeeting).mockImplementation(async () => {
+    const active = { ...first, status: "recording" };
+    runtime = { ...runtime, recording: true, activeMeeting: active };
+    return active;
+  });
+  api.checkSpeakerModel = vi.fn().mockResolvedValue(true);
+  api.startSpeakerExperiment = vi.fn().mockResolvedValue("owned-speaker-job");
+  api.getSpeakerProgress = vi.fn().mockResolvedValue(null);
+  api.getSpeakerSections = vi.fn().mockResolvedValue(null);
+  render(<App api={api} />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Einstellungen" }),
+  );
+  await userEvent.selectOptions(
+    screen.getByLabelText("Installiertes Modell für die Sprecherprüfung"),
+    "synthetic-asr",
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "Sprecherunterstützung prüfen" }),
+  );
+  await waitFor(() =>
+    expect(api.checkSpeakerModel).toHaveBeenCalledWith("synthetic-asr"),
+  );
+  expect(api.startMeeting).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByRole("button", { name: "Meeting" }));
+  await userEvent.click(
+    screen.getByRole("button", { name: "Aufnahme starten" }),
+  );
+  await userEvent.click(
+    await screen.findByText("Sprecher zuordnen · optional"),
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "Live-Stimmenabschnitte prüfen" }),
+  );
+  expect(api.startSpeakerExperiment).toHaveBeenCalledWith(
+    first.id,
+    "synthetic-asr",
+    "live",
+  );
+});
+
 it("displays validated saved speaker names without opening the editing disclosure", async () => {
   const { api } = apiFixture();
   api.getSpeakerLabels = vi.fn().mockResolvedValue({

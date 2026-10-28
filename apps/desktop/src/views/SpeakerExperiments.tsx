@@ -22,6 +22,10 @@ export default function SpeakerExperiments({
   checkedModels = {},
   onModelChecked,
   onCheckingChange,
+  setupOnly = false,
+  selectedModelId,
+  onSelectedModelChange,
+  checkingBlocked = false,
 }: {
   api: DesktopApi;
   locale: Locale;
@@ -33,9 +37,13 @@ export default function SpeakerExperiments({
   checkedModels?: Record<string, boolean>;
   onModelChecked?: (modelId: string, supported: boolean) => void;
   onCheckingChange?: (checking: boolean) => void;
+  setupOnly?: boolean;
+  selectedModelId?: string;
+  onSelectedModelChange?: (id: string) => void;
+  checkingBlocked?: boolean;
 }) {
   const de = locale === "de";
-  const [model, setModel] = useState(""),
+  const [localModel, setLocalModel] = useState(""),
     [job, setJob] = useState<SpeakerProgress | null>(null),
     [saved, setSaved] = useState<SavedSpeakerSections | null>(null),
     [actionError, setError] = useState<string | null>(null),
@@ -44,8 +52,10 @@ export default function SpeakerExperiments({
     [busy, setBusy] = useState(false),
     [hidden, setHidden] = useState<string | null>(null);
   const error = actionError ?? pollError;
+  const model = selectedModelId ?? localModel;
+  const setModel = onSelectedModelChange ?? setLocalModel;
   useEffect(() => {
-    if (!api.getSpeakerProgress) return;
+    if (setupOnly || !api.getSpeakerProgress) return;
     let active = true,
       running = false;
     const stop = startAdaptivePoll(async () => {
@@ -65,9 +75,9 @@ export default function SpeakerExperiments({
       active = false;
       stop();
     };
-  }, [api]);
+  }, [api, setupOnly]);
   useEffect(() => {
-    if (footer || !meeting || !api.getSpeakerSections) return;
+    if (setupOnly || footer || !meeting || !api.getSpeakerSections) return;
     let active = true;
     setSaved(null);
     api
@@ -81,13 +91,20 @@ export default function SpeakerExperiments({
     return () => {
       active = false;
     };
-  }, [api, meeting?.id, footer, job?.status]);
+  }, [api, meeting?.id, footer, setupOnly, job?.status]);
   if (!api.startSpeakerExperiment) return null;
   const running = job?.status === "running";
   const label = de ? "Sprecherexperiment" : "Speaker experiment";
   const supported = checkedModels[model] === true;
   async function checkModel() {
-    if (!model || !api.checkSpeakerModel || busy || recording) return;
+    if (
+      !model ||
+      !api.checkSpeakerModel ||
+      busy ||
+      recording ||
+      checkingBlocked
+    )
+      return;
     setBusy(true);
     onCheckingChange?.(true);
     setError(null);
@@ -214,7 +231,7 @@ export default function SpeakerExperiments({
       </section>
     );
   }
-  if (!meeting) return null;
+  if (!setupOnly && !meeting) return null;
   const Container = embedded ? "section" : "details";
   return (
     <Container className="speaker-options">
@@ -240,7 +257,7 @@ export default function SpeakerExperiments({
           : "Installed model for speaker capability check"}
         <select
           value={model}
-          disabled={busy || running}
+          disabled={busy || running || checkingBlocked}
           onChange={(e) => setModel(e.target.value)}
         >
           <option value="">
@@ -265,7 +282,12 @@ export default function SpeakerExperiments({
       <button
         className="secondary"
         disabled={
-          busy || running || recording || !model || !api.checkSpeakerModel
+          busy ||
+          running ||
+          recording ||
+          checkingBlocked ||
+          !model ||
+          !api.checkSpeakerModel
         }
         onClick={() => void checkModel()}
       >
@@ -279,103 +301,75 @@ export default function SpeakerExperiments({
             : "Speaker support checked. Analysis remains an optional draft."}
         </p>
       )}
-      <div>
-        <h3>{de ? "Nach dem Meeting · Beta" : "After the meeting · beta"}</h3>
-        <p>
-          {de
-            ? "Prüft abgeschlossene Abschnitte auf unterschiedliche Stimmen. Originaltexte werden nicht ersetzt."
-            : "Checks closed audio sections for different voices. Original transcripts are retained."}
-        </p>
-        <button
-          className="secondary"
-          disabled={
-            busy ||
-            running ||
-            recording ||
-            meeting.status !== "complete" ||
-            !supported
-          }
-          onClick={() => void start("post-meeting")}
-        >
-          {de
-            ? "Lokale Sprechertrennung prüfen"
-            : "Run local speaker separation"}
-        </button>
-      </div>
-      <div>
-        <h3>
-          {de
-            ? "Während der Aufnahme · experimentell"
-            : "During recording · experimental"}
-        </h3>
-        <p>
-          {de
-            ? "Verarbeitet neue geschlossene Audioabschnitte im Hintergrund, mit entsprechender Verzögerung. Kein Eingriff in die Audiosicherung."
-            : "Processes newly closed audio sections in the background, with a corresponding delay. Audio saving remains independent."}
-        </p>
-        <button
-          className="secondary"
-          disabled={busy || running || !recording || !supported}
-          onClick={() => void start("live")}
-        >
-          {de ? "Live-Stimmenabschnitte prüfen" : "Check live voice sections"}
-        </button>
-      </div>
-      <p className="notice warning">
-        {de
-          ? "Stimme 1 usw. sind neutrale Modell-Entwürfe pro Abschnitt und Spur, keine Personennamen. Nummern können zwischen Abschnitten wechseln. Kein automatischer Abgleich mit Namensnennungen und keine behaupteten Wortzeiten."
-          : "Voice 1 etc. are neutral model drafts per section and track, not personal identities. Numbers can change between sections. They are not automatically matched to names, and no word timing is claimed."}
-      </p>
-      {error && <p role="alert">{error}</p>}
-      {job?.meetingId === meeting.id && status}
-      {job?.meetingId === meeting.id && running && job.lastSection && (
-        <div>
-          <h3>
-            {de
-              ? "Letzter bestätigter Stimmenabschnitt"
-              : "Latest confirmed voice section"}
-          </h3>
-          {job.lastSection.turns.length ? (
-            <ul>
-              {job.lastSection.turns.slice(0, 100).map((turn, i) => (
-                <li key={i}>
-                  {clock(job.lastSection!.startMs + turn.startMs)}–
-                  {clock(job.lastSection!.startMs + turn.endMs)} ·{" "}
-                  {de ? "Stimme" : "Voice"} {turn.speakerId}{" "}
-                  {de ? "(nur dieser Abschnitt)" : "(this section only)"}
-                </li>
-              ))}
-            </ul>
-          ) : (
+      {setupOnly && error && <p role="alert">{error}</p>}
+      {!setupOnly && meeting && (
+        <>
+          <div>
+            <h3>
+              {de ? "Nach dem Meeting · Beta" : "After the meeting · beta"}
+            </h3>
             <p>
               {de
-                ? "Keine verwertbaren Stimmenzeiten in diesem Abschnitt."
-                : "No usable timed voice turns in this section."}
+                ? "Prüft abgeschlossene Abschnitte auf unterschiedliche Stimmen. Originaltexte werden nicht ersetzt."
+                : "Checks closed audio sections for different voices. Original transcripts are retained."}
             </p>
-          )}
-        </div>
-      )}
-      {saved && (
-        <div>
-          <h3>
+            <button
+              className="secondary"
+              disabled={
+                busy ||
+                running ||
+                recording ||
+                meeting.status !== "complete" ||
+                !supported
+              }
+              onClick={() => void start("post-meeting")}
+            >
+              {de
+                ? "Lokale Sprechertrennung prüfen"
+                : "Run local speaker separation"}
+            </button>
+          </div>
+          <div>
+            <h3>
+              {de
+                ? "Während der Aufnahme · experimentell"
+                : "During recording · experimental"}
+            </h3>
+            <p>
+              {de
+                ? "Verarbeitet neue geschlossene Audioabschnitte im Hintergrund, mit entsprechender Verzögerung. Kein Eingriff in die Audiosicherung."
+                : "Processes newly closed audio sections in the background, with a corresponding delay. Audio saving remains independent."}
+            </p>
+            <button
+              className="secondary"
+              disabled={busy || running || !recording || !supported}
+              onClick={() => void start("live")}
+            >
+              {de
+                ? "Live-Stimmenabschnitte prüfen"
+                : "Check live voice sections"}
+            </button>
+          </div>
+          <p className="notice warning">
             {de
-              ? "Letzte gespeicherte Fassung · letzte 25 Abschnitte"
-              : "Latest saved revision · last 25 sections"}
-          </h3>
-          <p>{saved.modelId}</p>
-          {saved.sections.map((section) => (
-            <article key={section.sourceId}>
-              <strong>
-                {de ? "Originalabschnitt" : "Original section"}{" "}
-                {clock(section.startMs)}–
-                {clock(section.startMs + section.durationMs)}
-              </strong>
-              {section.turns.length ? (
+              ? "Stimme 1 usw. sind neutrale Modell-Entwürfe pro Abschnitt und Spur, keine Personennamen. Nummern können zwischen Abschnitten wechseln. Kein automatischer Abgleich mit Namensnennungen und keine behaupteten Wortzeiten."
+              : "Voice 1 etc. are neutral model drafts per section and track, not personal identities. Numbers can change between sections. They are not automatically matched to names, and no word timing is claimed."}
+          </p>
+          {error && <p role="alert">{error}</p>}
+          {job?.meetingId === meeting.id && status}
+          {job?.meetingId === meeting.id && running && job.lastSection && (
+            <div>
+              <h3>
+                {de
+                  ? "Letzter bestätigter Stimmenabschnitt"
+                  : "Latest confirmed voice section"}
+              </h3>
+              {job.lastSection.turns.length ? (
                 <ul>
-                  {section.turns.slice(0, 100).map((turn, i) => (
+                  {job.lastSection.turns.slice(0, 100).map((turn, i) => (
                     <li key={i}>
-                      {clock(section.startMs + turn.startMs)}–
-                      {clock(section.startMs + turn.endMs)} ·{" "}
+                      {clock(job.lastSection!.startMs + turn.startMs)}–
+                      {clock(job.lastSection!.startMs + turn.endMs)} ·{" "}
                       {de ? "Stimme" : "Voice"} {turn.speakerId}{" "}
                       {de ? "(nur dieser Abschnitt)" : "(this section only)"}
                     </li>
@@ -384,13 +378,52 @@ export default function SpeakerExperiments({
               ) : (
                 <p>
                   {de
-                    ? "Keine verwertbaren zeitlichen Stimmenabschnitte vom Modell geliefert."
-                    : "The model returned no usable timed voice sections."}
+                    ? "Keine verwertbaren Stimmenzeiten in diesem Abschnitt."
+                    : "No usable timed voice turns in this section."}
                 </p>
               )}
-            </article>
-          ))}
-        </div>
+            </div>
+          )}
+          {saved && (
+            <div>
+              <h3>
+                {de
+                  ? "Letzte gespeicherte Fassung · letzte 25 Abschnitte"
+                  : "Latest saved revision · last 25 sections"}
+              </h3>
+              <p>{saved.modelId}</p>
+              {saved.sections.map((section) => (
+                <article key={section.sourceId}>
+                  <strong>
+                    {de ? "Originalabschnitt" : "Original section"}{" "}
+                    {clock(section.startMs)}–
+                    {clock(section.startMs + section.durationMs)}
+                  </strong>
+                  {section.turns.length ? (
+                    <ul>
+                      {section.turns.slice(0, 100).map((turn, i) => (
+                        <li key={i}>
+                          {clock(section.startMs + turn.startMs)}–
+                          {clock(section.startMs + turn.endMs)} ·{" "}
+                          {de ? "Stimme" : "Voice"} {turn.speakerId}{" "}
+                          {de
+                            ? "(nur dieser Abschnitt)"
+                            : "(this section only)"}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>
+                      {de
+                        ? "Keine verwertbaren zeitlichen Stimmenabschnitte vom Modell geliefert."
+                        : "The model returned no usable timed voice sections."}
+                    </p>
+                  )}
+                </article>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </Container>
   );

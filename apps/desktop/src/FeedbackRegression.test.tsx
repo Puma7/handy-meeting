@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import App from "./App";
 import TranscriptBody from "./views/TranscriptBody";
@@ -149,6 +155,66 @@ it("marks the original Unicode match without shifting its start", () => {
   expect(container.querySelector("mark")?.textContent).toBe("Budget");
   expect(container.querySelector(".transcript-part p")?.textContent).toBe(
     "İstanbul Budget",
+  );
+});
+
+it("keeps refreshing old sections throughout catch-up", async () => {
+  vi.useFakeTimers();
+  let full = {
+    ...meeting,
+    status: "catching-up",
+    parts: [
+      { ...parts[0], text: null, transcriptSequence: 1 },
+      ...parts.slice(1),
+    ],
+  };
+  const api = {
+    ...testServices(),
+    getAppState: vi.fn(async () => ({
+      version: "1.0.6",
+      recording: false,
+      handy: null,
+      activeMeeting: {
+        ...full,
+        parts: full.parts.slice(-16),
+        livePreviewLimited: true,
+      },
+    })),
+    listDevices: vi.fn(async () => []),
+    listMeetings: vi.fn(async () => []),
+    getMeeting: vi.fn(async () => full),
+  } as unknown as DesktopApi;
+  render(<App api={api} />);
+  await act(async () => {});
+  full = {
+    ...full,
+    parts: [
+      {
+        ...full.parts[0],
+        text: "Spät erkannter Anfang",
+        transcriptSequence: 2,
+      },
+      ...full.parts.slice(1),
+    ],
+  };
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(5001);
+  });
+  expect(screen.getByText("Spät erkannter Anfang")).toBeTruthy();
+});
+
+it("does not roll a hydrated transcript back to an older bounded preview", () => {
+  const latest = {
+    ...meeting,
+    parts: [{ ...parts[0], transcriptSequence: 9, text: "Neu bestätigt" }],
+  };
+  const older = {
+    ...meeting,
+    livePreviewLimited: true,
+    parts: [{ ...parts[0], transcriptSequence: 8, text: "Älterer Stand" }],
+  };
+  expect(mergeLiveTranscript(latest, older).parts[0].text).toBe(
+    "Neu bestätigt",
   );
 });
 
