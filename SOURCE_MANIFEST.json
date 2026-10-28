@@ -561,8 +561,8 @@
   },
   {
     "Path": "scripts/test_release_ci.py",
-    "SHA256": "832CBD89602A9D4F8A271A058767620950649462EC528AB5A0F7E3C17C069A03",
-    "Bytes": 11478
+    "SHA256": "8943B0D09F000F0BC7DF28E243671060C8D936A3ADAEDA90ECF257BE9A46DB5B",
+    "Bytes": 13271
   },
   {
     "Path": "scripts/test_release_packages.py",
