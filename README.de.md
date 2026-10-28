@@ -88,7 +88,7 @@ Der sichtbare Name lautet **Meeting for Handy**. Daten-/Schlüssel-/Bundle-Kennu
 
 ## Entwicklung in Richtung 1.0.5 (unveröffentlicht)
 
-Die [Audit-Korrekturen vom 28. Oktober](docs/AUDIT_FIXES_20261028.md) betreffen Aufnahmediagnosen, Navigation und Darstellung, Datenerhalt und abgesicherte Exporte der früheren Prototypen, die Herkunft von Prüfergebnissen, begrenzte Quellexporte und Hintergrundaufgaben. Diese Quelländerungen sind getrennt vom öffentlichen Download 1.0.4. Version 1.0.5 ist geplant; dafür gibt es noch keinen Tag oder veröffentlichten Release. Aktuelle Prüfungen und offene Grenzen stehen im [TEST_REPORT.md](TEST_REPORT.md).
+Die [Audit-Korrekturen vom 28. Oktober](docs/AUDIT_FIXES_20261028.md) betreffen Aufnahmediagnosen, Navigation und Darstellung, Datenerhalt und abgesicherte Exporte der früheren Prototypen, die Herkunft von Prüfergebnissen, begrenzte Quellexporte und Hintergrundaufgaben. Diese Quelländerungen sind getrennt vom öffentlichen Download 1.0.4. Der Quellstand ist als Release-Kandidat 1.0.5 vorbereitet; dafür gibt es noch keinen Tag oder veröffentlichten Release. Aktuelle Prüfungen und offene Grenzen stehen im [TEST_REPORT.md](TEST_REPORT.md).
 
 Im Entwicklungsstand gibt es außerdem getrennte Live-Pegel direkt unter Computerton und Mikrofon. Grün/Gelb/Rot und digitale Spitzenwerte zeigen den ankommenden wirksamen Ton; Übersteuerung, Stille, Pause/Stumm sowie fehlende oder veraltete Messwerte werden getrennt dargestellt. Die Pegel bleiben bei eingeklappter Aufnahmeeinrichtung sichtbar. [Bedienung und Grenzen](docs/1.0.2-USER-GUIDE.md#live-input-levels-unreleased-development).
 

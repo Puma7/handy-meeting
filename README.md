@@ -104,7 +104,7 @@ The visible name is **Meeting for Handy**. Existing data/key/bundle identifiers,
 
 ## Development toward 1.0.5 (unreleased)
 
-The [28 October audit corrections](docs/AUDIT_FIXES_20261028.md) cover capture diagnostics, navigation and layout, legacy file preservation and safe exports, report provenance, source-export containment and background-job handling. These source changes are separate from the public 1.0.4 download. Version 1.0.5 is planned; it has not been tagged or released. Current checks and remaining limits belong in [TEST_REPORT.md](TEST_REPORT.md).
+The [28 October audit corrections](docs/AUDIT_FIXES_20261028.md) cover capture diagnostics, navigation and layout, legacy file preservation and safe exports, report provenance, source-export containment and background-job handling. These source changes are separate from the public 1.0.4 download. The source is prepared as release candidate 1.0.5; it has not been tagged or released. Current checks and remaining limits belong in [TEST_REPORT.md](TEST_REPORT.md).
 
 The development source also adds separate live meters directly below the system-audio and microphone controls. Green/yellow/red segments and digital peak values show incoming effective audio; clipping, silence, pause/mute and unavailable or old measurements have distinct states. The meters remain visible with recording setup collapsed. See [live input levels](docs/1.0.2-USER-GUIDE.md#live-input-levels-unreleased-development) for interpretation and limits.
 

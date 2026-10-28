@@ -1,4 +1,4 @@
-## Meeting for Handy
+## Meeting for Handy 1.0.5
 
 A release of the independent Rust/Tauri meeting companion for Handy. The release tag and attached manifests identify the exact application version, source commit and checked package bytes.
 
@@ -50,13 +50,13 @@ A release of the independent Rust/Tauri meeting companion for Handy. The release
 ### Choose your download
 
 - **Windows 10/11 x64:** `windows-x64-setup.exe`, or extract the complete `windows-x64.zip`. WebView2 and Microsoft Visual C++ x64 are required; .NET is not needed.
-- **Ubuntu 22.04+ / Debian 12–13 x64:** install `linux-amd64.deb` with your package manager. PulseAudio or PipeWire-Pulse is required.
+- **Ubuntu 22.04+ / Debian 12â€“13 x64:** install `linux-amd64.deb` with your package manager. PulseAudio or PipeWire-Pulse is required.
 - **Mac M-series / Apple Silicon:** `osx-arm64.dmg`, macOS 15+.
 - **Mac Intel:** `osx-x64.dmg`, macOS 15+.
 
 Install Handy and a compatible downloaded streaming model first. The companion detects its model metadata and reuses the existing weights in its own local inference processes. For local summaries, additionally run a local text-model service such as LM Studio and choose a text model in the app.
 
-Meeting for Handy can find later releases itself (Settings → updates). Version 1.0.1 has no update check; install the latest complete release manually once. Earlier program versions and all user data are preserved.
+Meeting for Handy can find later releases itself (Settings â†’ updates). Version 1.0.1 has no update check; install the latest complete release manually once. Earlier program versions and all user data are preserved.
 
 ### Read before relying on a recording
 
@@ -68,6 +68,6 @@ A locked `cargo audit` check reports no known vulnerabilities; nine maintenance 
 
 SHA-256 sidecars, `SHA256SUMS.txt`, package proofs and `RELEASE_MANIFEST.json` accompany the complete matrix. The manifest records the exact source commit and fingerprint; it explicitly distinguishes automated checks from unperformed real-device/notarization checks. No models, recordings, settings or keys are included. Existing user data and earlier releases are preserved.
 
-[English guide](https://github.com/Puma7/meeting-for-handy/blob/main/README.md) · [Deutsche Anleitung](https://github.com/Puma7/meeting-for-handy/blob/main/README.de.md) · [Test evidence](https://github.com/Puma7/meeting-for-handy/blob/main/TEST_REPORT.md) · [Open issues](https://github.com/Puma7/meeting-for-handy/issues)
+[English guide](https://github.com/Puma7/meeting-for-handy/blob/main/README.md) Â· [Deutsche Anleitung](https://github.com/Puma7/meeting-for-handy/blob/main/README.de.md) Â· [Test evidence](https://github.com/Puma7/meeting-for-handy/blob/main/TEST_REPORT.md) Â· [Open issues](https://github.com/Puma7/meeting-for-handy/issues)
 
 Meeting for Handy is independently developed and is not an official Handy product or an endorsed integration. MIT licensed; original dependency and installer notices are included.

@@ -1,6 +1,6 @@
 # Releases: version tag to downloadable packages
 
-The Rust distribution is versioned together in the workspace Cargo manifest, desktop package/lock and Tauri configuration. Existing native dependency versions and model weights are not changed by a release. **[1.0.4 is public](https://github.com/Puma7/meeting-for-handy/releases/tag/v1.0.4)** as of 28 October 2026, with five packages and twelve checksum/source proofs (17 assets). The [audit corrections](AUDIT_FIXES_20261028.md) are subsequent unreleased source work; the planned 1.0.5 has no release or tag. Future releases must use a new version: update the Cargo workspace, desktop package/lock and Tauri configuration together, then tag that exact reviewed commit. Existing published tags and asset bytes are preserved.
+The Rust distribution is versioned together in the workspace Cargo manifest, desktop package/lock and Tauri configuration. Existing native dependency versions and model weights are not changed by a release. **[1.0.4 is public](https://github.com/Puma7/meeting-for-handy/releases/tag/v1.0.4)** as of 28 October 2026, with five packages and twelve checksum/source proofs (17 assets). The [audit corrections](AUDIT_FIXES_20261028.md) are subsequent unreleased source work; the synchronized 1.0.5 release candidate has no release or tag yet. Future releases must use a new version: update the Cargo workspace, desktop package/lock and Tauri configuration together, then tag that exact reviewed commit. Existing published tags and asset bytes are preserved.
 
 ## What is attached
 
