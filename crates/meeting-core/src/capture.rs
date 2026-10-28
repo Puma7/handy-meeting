@@ -1,4 +1,4 @@
-use crate::{AudioDevice, CaptureSnapshot, Result, SessionStore};
+use crate::{AudioDevice, CaptureAudioLevels, CaptureSnapshot, Result, SessionStore};
 use serde::{Deserialize, Serialize};
 #[path = "capture_controls.rs"]
 mod controls;
@@ -58,6 +58,7 @@ pub struct CaptureOptions {
 /// A track owns its capture client and disk writer on one dedicated thread.
 /// There is no unbounded queue between the device and durable storage.
 pub struct CaptureController {
+    meeting_id: String,
     stop: Arc<AtomicBool>,
     tracks: Vec<(&'static str, JoinHandle<()>)>,
     store: SessionStore,
@@ -88,6 +89,7 @@ impl CaptureController {
         let stop = Arc::new(AtomicBool::new(false));
         let controls = Arc::new(CaptureControls::new(&store)?);
         let mut controller = Self {
+            meeting_id: store.preview_snapshot(0)?.id,
             stop,
             tracks: vec![],
             store,
@@ -165,6 +167,28 @@ impl CaptureController {
                 .iter()
                 .any(|(source, track)| *source == "microphone" && !track.is_finished());
         snapshot
+    }
+
+    /// Read-only real-PCM telemetry. Dead/missing tracks are unavailable even if
+    /// their old samples are recent; an explicit stop removes the whole snapshot.
+    pub fn audio_levels(&self) -> Option<CaptureAudioLevels> {
+        if self.stop.load(Ordering::Acquire) {
+            return None;
+        }
+        let alive = |name| {
+            self.tracks
+                .iter()
+                .any(|(source, track)| *source == name && !track.is_finished())
+        };
+        let [system, microphone] = self.controls.audio_levels(
+            alive("system"),
+            self.controls.snapshot().has_microphone && alive("microphone"),
+        );
+        Some(CaptureAudioLevels {
+            meeting_id: self.meeting_id.clone(),
+            system,
+            microphone,
+        })
     }
 
     /// Changes both track gates only while capture runs; successful return excludes old-epoch speech writes.
@@ -297,6 +321,10 @@ mod tests {
         )
         .expect("Only the optional microphone failed; system ownership must survive");
         assert!(controller.is_running());
+        assert_eq!(
+            controller.audio_levels().unwrap().microphone.status,
+            crate::AudioLevelStatus::Unavailable
+        );
         let initial = controller.snapshot().unwrap().session.parts[0].confirmed_sample_count;
         let deadline = std::time::Instant::now() + Duration::from_secs(5);
         while controller.controls().has_microphone {
@@ -376,6 +404,7 @@ mod tests {
             tail_finished.store(true, Ordering::Release);
         });
         let mut controller = CaptureController {
+            meeting_id: store.preview_snapshot(0).unwrap().id,
             stop,
             tracks: vec![
                 (
@@ -481,6 +510,7 @@ mod tests {
         });
         let microphone = std::thread::spawn(|| {});
         let mut controller = CaptureController {
+            meeting_id: store.preview_snapshot(0).unwrap().id,
             stop,
             tracks: vec![("system", system), ("microphone", microphone)],
             controls: Arc::new(CaptureControls::new(&store).unwrap()),
@@ -493,7 +523,14 @@ mod tests {
         }
         assert!(controller.is_running(), "system audio still records");
         assert_eq!(controller.stopped_tracks(), vec!["microphone"]);
+        let levels = controller.audio_levels().unwrap();
+        assert_eq!(levels.system.status, crate::AudioLevelStatus::Waiting);
+        assert_eq!(
+            levels.microphone.status,
+            crate::AudioLevelStatus::Unavailable
+        );
         controller.stop().unwrap();
         assert!(controller.stopped_tracks().is_empty());
+        assert!(controller.audio_levels().is_none());
     }
 }

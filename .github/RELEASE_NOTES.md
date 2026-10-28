@@ -4,6 +4,7 @@ A release of the independent Rust/Tauri meeting companion for Handy. The release
 
 ### Reliability and desktop clarity
 
+- Separate live system-audio and microphone meters stay visible below their controls. Green/yellow/red segments, digital peak values and clear silence, clipping, pause/mute and unavailable states help check incoming audio independently of the transcript. Meters do not start devices while idle or replace saved-audio progress checks.
 - Recording diagnostics preserve healthy audio capture when a warning cannot be saved. Stopping still waits for every owned audio writer and reports failures.
 - Consistent borders, aligned retention checkboxes and page focus make navigation clearer without interrupting background work or source jumps.
 - Legacy session writes and repairs preserve unrelated linked files and original backups; transcript Markdown treats supplied text literally. Original TXT, JSON and saved source values remain intact.

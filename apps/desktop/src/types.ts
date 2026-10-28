@@ -20,6 +20,19 @@ export interface AudioDevice {
   source: Track;
   isDefault?: boolean;
 }
+/** Read-only levels of the effective capture signal; no audio or file access is exposed. */
+export interface AudioLevel {
+  status: "active" | "waiting" | "stale" | "paused" | "muted" | "unavailable";
+  peakDbfs: number | null;
+  rmsDbfs: number | null;
+  clipped: boolean;
+  ageMs: number | null;
+}
+export interface AudioLevels {
+  meetingId: string;
+  system: AudioLevel;
+  microphone: AudioLevel;
+}
 export interface AudioPart {
   source: Track;
   startSample: number;
@@ -325,6 +338,8 @@ export interface DesktopApi {
   getLibraryProgress?(): Promise<LibraryProgress | null>;
   cancelLibraryJob?(jobId: string): Promise<boolean>;
   getAppState(): Promise<AppState>;
+  /** Lightweight, read-only capture snapshot; null when no capture is active. */
+  getAudioLevels?(): Promise<AudioLevels | null>;
   /** Binds a pause request to the current meeting; resolves with native acknowledgement. */
   setCapturePaused?(meetingId: string, paused: boolean): Promise<AppState>;
   /** Mutes only this app's microphone track for the bound meeting, retaining system audio. */

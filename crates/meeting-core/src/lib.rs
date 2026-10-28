@@ -3,6 +3,7 @@
 
 pub mod archive;
 pub mod audio_codec;
+mod audio_levels;
 mod capture;
 pub mod library;
 mod live_text;
@@ -13,6 +14,7 @@ pub mod retention;
 pub mod speakers;
 mod storage;
 
+pub use audio_levels::{AudioLevel, AudioLevelStatus, CaptureAudioLevels};
 pub use capture::{
     list_devices, read_capture_control_events, CaptureControlEvent, CaptureControlLog,
     CaptureControlSnapshot, CaptureController, CaptureOptions,

@@ -2,6 +2,14 @@
 use super::*;
 use tauri::State;
 
+/// Return only scalar telemetry of the active capture; idle polling opens no devices.
+#[tauri::command]
+pub(crate) fn get_audio_levels(
+    service: State<'_, Arc<Service>>,
+) -> AppResult<Option<meeting_core::CaptureAudioLevels>> {
+    service.audio_levels()
+}
+
 /// Collect finished catch-up work when the transition gate is free, then return bounded app state.
 /// A collection error is left for a later poll rather than blocking the state snapshot.
 #[tauri::command]

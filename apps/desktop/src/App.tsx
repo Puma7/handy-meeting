@@ -1435,6 +1435,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             controlsAvailable={Boolean(
               api.setCapturePaused && api.setMicrophoneMuted,
             )}
+            getAudioLevels={api.getAudioLevels}
             onPause={(paused) => {
               const id = app?.activeMeeting?.id;
               if (!id || !api.setCapturePaused) return;

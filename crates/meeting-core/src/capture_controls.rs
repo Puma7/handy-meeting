@@ -1,6 +1,6 @@
 //! Per-track privacy gates. A control change invalidates the whole old device/pipe epoch;
 //! reopening never makes already-buffered private audio eligible for persistence.
-use crate::{PcmWriter, Result, SessionStore, SAMPLE_RATE};
+use crate::{audio_levels::AudioMeter, AudioLevel, PcmWriter, Result, SessionStore, SAMPLE_RATE};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{File, OpenOptions},
@@ -122,6 +122,7 @@ pub(super) struct CaptureControls {
     sequence: AtomicU64,
     start: Instant,
     journal_failed: AtomicBool,
+    meters: [AudioMeter; 2],
 }
 
 impl CaptureControls {
@@ -155,6 +156,7 @@ impl CaptureControls {
             sequence: AtomicU64::new(0),
             start: Instant::now(),
             journal_failed: AtomicBool::new(false),
+            meters: [AudioMeter::default(), AudioMeter::default()],
         }
     }
 
@@ -169,6 +171,27 @@ impl CaptureControls {
             microphone_muted: self.microphone_muted.load(Ordering::Acquire),
             has_microphone: self.has_microphone.load(Ordering::Acquire),
         }
+    }
+    /// Reads only bounded in-memory telemetry, never the session or devices.
+    pub fn audio_levels(&self, system_alive: bool, microphone_alive: bool) -> [AudioLevel; 2] {
+        let gates = self.snapshot();
+        let now_ms = self.start.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+        [
+            self.meters[0].snapshot(
+                self.epoch("system"),
+                now_ms,
+                system_alive,
+                gates.paused,
+                false,
+            ),
+            self.meters[1].snapshot(
+                self.epoch("microphone"),
+                now_ms,
+                microphone_alive,
+                gates.paused,
+                gates.microphone_muted,
+            ),
+        ]
     }
     /// Maps the internal microphone/system source labels to their separate gate slots.
     fn index(source: &str) -> usize {
@@ -341,6 +364,9 @@ impl CaptureControls {
         writer: &mut PcmWriter,
         samples: &[i16],
     ) -> Result<()> {
+        // Use packet receipt at this gate, before any filesystem/checkpoint stall.
+        // A slow append must not make old captured PCM appear freshly received.
+        let received_ms = self.start.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
         let _write = self.writes[Self::index(source)]
             .lock()
             .map_err(|_| "Capture write gate is unavailable")?;
@@ -351,7 +377,12 @@ impl CaptureControls {
             }
             Ok(())
         } else {
-            writer.append(samples)
+            writer.append(samples)?;
+            // Adapters already produce effective 16 kHz mono i16 PCM here. Do
+            // not meter synthetic pad_to silence, private/stale-epoch packets,
+            // transcripts or recognition output. Telemetry cannot fail this write.
+            self.meters[Self::index(source)].observe(epoch, samples, received_ms);
+            Ok(())
         }
     }
 }
@@ -359,6 +390,7 @@ impl CaptureControls {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::AudioLevelStatus;
     /// Collects synthetic persisted PCM for one track's privacy assertions.
     fn read(store: &SessionStore, source: &str) -> Vec<i16> {
         let mut result = vec![];
@@ -377,6 +409,123 @@ mod tests {
             );
         }
         result
+    }
+
+    #[test]
+    /// Synthetic PCM exercises the real common write gate, including controls,
+    /// with independent sources and exact retained samples; no devices are opened.
+    fn synthetic_meters_follow_separate_effective_pcm_without_changing_audio_or_gates() {
+        let root = tempfile::tempdir().unwrap();
+        let store =
+            SessionStore::create(root.path(), "Synthetic audio meters", "m", "s", Some("mic"))
+                .unwrap();
+        let controls = CaptureControls::new(&store).unwrap();
+        controls.set_has_microphone(true);
+        let mut system = PcmWriter::new(store.clone(), "system").unwrap();
+        let mut microphone = PcmWriter::new(store.clone(), "microphone").unwrap();
+        let initial = controls.audio_levels(true, false);
+        assert_eq!(initial[0].status, AudioLevelStatus::Waiting);
+        assert_eq!(initial[1].status, AudioLevelStatus::Unavailable);
+        // Estimated gap padding is not an observation of actual captured PCM.
+        system.pad_to(2).unwrap();
+        assert_eq!(
+            controls.audio_levels(true, true)[0].status,
+            AudioLevelStatus::Waiting
+        );
+        controls
+            .write("system", 0, &mut system, &[16_384, -16_384])
+            .unwrap();
+        controls
+            .write("microphone", 0, &mut microphone, &[0, 0])
+            .unwrap();
+        let levels = controls.audio_levels(true, true);
+        assert!((levels[0].peak_dbfs.unwrap() - -6.020_599_913).abs() < 0.000_001);
+        assert_eq!(levels[1].peak_dbfs, Some(-96.0));
+        assert_eq!(levels[1].status, AudioLevelStatus::Active);
+        assert!(!levels[0].clipped && !levels[1].clipped);
+        // A microphone-only signal must not contaminate the system level.
+        controls
+            .write("microphone", 0, &mut microphone, &[i16::MIN, i16::MAX])
+            .unwrap();
+        let levels = controls.audio_levels(true, true);
+        assert_eq!(levels[1].peak_dbfs, Some(0.0));
+        assert!(levels[1].clipped);
+        assert!(!levels[0].clipped);
+        controls.set_microphone_muted(true).unwrap();
+        let levels = controls.audio_levels(true, true);
+        assert_eq!(levels[0].status, AudioLevelStatus::Active);
+        assert_eq!(levels[1].status, AudioLevelStatus::Muted);
+        assert_eq!(levels[1].peak_dbfs, None);
+        controls
+            .write("microphone", 0, &mut microphone, &[111, 112])
+            .unwrap();
+        controls.set_microphone_muted(false).unwrap();
+        controls
+            .write("microphone", 0, &mut microphone, &[211, 212])
+            .unwrap();
+        assert_eq!(
+            controls.audio_levels(true, true)[1].status,
+            AudioLevelStatus::Waiting
+        );
+        controls
+            .write(
+                "microphone",
+                controls.epoch("microphone"),
+                &mut microphone,
+                &[8192, -8192],
+            )
+            .unwrap();
+        assert!(!controls.audio_levels(true, true)[1].clipped);
+        let system_epoch = controls.epoch("system");
+        controls.set_paused(true).unwrap();
+        for level in controls.audio_levels(true, true) {
+            assert_eq!(level.status, AudioLevelStatus::Paused);
+            assert_eq!(
+                (level.peak_dbfs, level.rms_dbfs, level.age_ms),
+                (None, None, None)
+            );
+            assert!(!level.clipped);
+        }
+        controls
+            .write("system", system_epoch, &mut system, &[311, 312])
+            .unwrap();
+        controls.set_paused(false).unwrap();
+        controls
+            .write("system", system_epoch, &mut system, &[411, 412])
+            .unwrap();
+        for level in controls.audio_levels(true, true) {
+            assert_eq!(level.status, AudioLevelStatus::Waiting);
+        }
+        controls
+            .write("system", controls.epoch("system"), &mut system, &[0, 0])
+            .unwrap();
+        assert_eq!(controls.audio_levels(true, true)[0].peak_dbfs, Some(-96.0));
+        assert_eq!(
+            controls.audio_levels(true, false)[1].status,
+            AudioLevelStatus::Unavailable
+        );
+        system.finish().unwrap();
+        microphone.finish().unwrap();
+        assert_eq!(
+            read(&store, "system"),
+            [0, 0, 16_384, -16_384, 0, 0, 0, 0, 0, 0]
+        );
+        assert_eq!(
+            read(&store, "microphone"),
+            [0, 0, i16::MIN, i16::MAX, 0, 0, 0, 0, 8192, -8192]
+        );
+        assert_eq!(
+            read_capture_control_events(store.folder())
+                .unwrap()
+                .unwrap()
+                .events
+                .len(),
+            5
+        );
+        assert_eq!(
+            CaptureControls::uncontrolled().audio_levels(true, true)[0].status,
+            AudioLevelStatus::Waiting
+        );
     }
     #[test]
     /// Checks synthetic PCM from old privacy epochs stays silent after mute/pause and reopening.
