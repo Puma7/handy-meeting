@@ -1,6 +1,5 @@
 """Synthetic event fixtures; no GitHub mutations, builds or hardware claims."""
 import ast
-import fnmatch
 import importlib.util
 import json
 import os
@@ -32,12 +31,21 @@ def job(text, name):
 
 
 def pr_paths(text):
-    """Read the repository's inline/block PR filters for real changed-path fixtures."""
+    """Read and validate every PR filter before a caller can short-circuit on a match."""
     section = re.search(r'^  pull_request:\n(.*?)(?=^  [\w-]+:|\Z)', text, re.M | re.S).group(1)
     inline = re.search(r'^    paths: (\[.*\])$', section, re.M)
-    if inline:
-        return ast.literal_eval(inline.group(1))
-    return re.findall(r"^      - '([^']+)'$", section, re.M)
+    patterns = ast.literal_eval(inline.group(1)) if inline else re.findall(r"^      - '([^']+)'$", section, re.M)
+    for pattern in patterns:
+        path_matches('', pattern)
+    return patterns
+
+
+def path_matches(path, pattern):
+    """Match the literal/*/** subset used here, keeping single stars inside one path segment."""
+    if any(char in pattern for char in '?+[]!{}'):
+        raise ValueError('Add explicit coverage before using another GitHub path-filter feature')
+    expression = re.escape(pattern).replace(r'\*\*/', '(?:.*/)?').replace(r'\*\*', '.*').replace(r'\*', '[^/]*')
+    return re.fullmatch(expression, path, flags=re.DOTALL) is not None
 
 
 class EventRouting(unittest.TestCase):
@@ -85,21 +93,48 @@ class EventRouting(unittest.TestCase):
 
 
 class WorkflowBoundaries(unittest.TestCase):
+    def test_single_star_does_not_mask_missing_recursive_platform_coverage(self):
+        nested = 'platform/macos/AudioCapture.swift'
+        self.assertFalse(path_matches(nested, 'platform/*'))
+        self.assertTrue(path_matches(nested, 'platform/**'))
+        self.assertTrue(path_matches('platform/helper.swift', 'platform/*'))
+
+    def test_globstar_directory_matches_zero_or_multiple_directories(self):
+        for path in ('apps/config.json', 'apps/desktop/config.json', 'apps/desktop/nested/config.json'):
+            self.assertTrue(path_matches(path, 'apps/**/config.json'))
+        self.assertFalse(path_matches('apps/desktop/config.json', 'apps/*.json'))
+
+    def test_unimplemented_pattern_features_fail_closed(self):
+        for pattern in ('!platform/**', 'platform/?.swift', 'platform/[ab].swift', 'platform/{a,b}.swift'):
+            with self.assertRaises(ValueError):
+                path_matches('platform/a.swift', pattern)
+
+    def test_unsupported_filter_after_positive_match_rejects_real_workflows(self):
+        for name in ('rust.yml', 'rust-portable.yml'):
+            text = workflow(name)
+            for unsupported in ('!platform/macos/**', 'platform/?.swift', 'platform/[ab].swift'):
+                separator = ', ' if '    paths: [' in text else '\n      - '
+                mutated = text.replace("'platform/**'", "'platform/**'" + separator + repr(unsupported))
+                self.assertNotEqual(mutated, text, name)
+                with self.subTest(workflow=name, pattern=unsupported), self.assertRaises(ValueError):
+                    patterns = pr_paths(mutated)
+                    any(path_matches('platform/macos/AudioCapture.swift', pattern) for pattern in patterns)
+
     def test_legacy_source_only_ready_changes_trigger_both_candidate_workflows(self):
         for changed in ('src/HandyMeeting/Models.cs', 'verify.ps1'):
             for name in ('rust.yml', 'rust-portable.yml'):
-                self.assertTrue(any(fnmatch.fnmatchcase(changed, pattern) for pattern in pr_paths(workflow(name))), (changed, name))
+                self.assertTrue(any(path_matches(changed, pattern) for pattern in pr_paths(workflow(name))), (changed, name))
 
     def test_platform_only_ready_changes_trigger_both_candidate_workflows(self):
         for name in ('rust.yml', 'rust-portable.yml'):
-            self.assertTrue(any(fnmatch.fnmatchcase('platform/macos/AudioCapture.swift', pattern) for pattern in pr_paths(workflow(name))), name)
+            self.assertTrue(any(path_matches('platform/macos/AudioCapture.swift', pattern) for pattern in pr_paths(workflow(name))), name)
 
     def test_both_candidate_workflow_definitions_and_native_inputs_share_pr_filters(self):
         windows, portable = (pr_paths(workflow(name)) for name in ('rust.yml', 'rust-portable.yml'))
         self.assertEqual(set(windows), set(portable))
         for changed in ('.github/workflows/rust.yml', '.github/workflows/rust-portable.yml', 'global.json'):
             for patterns in (windows, portable):
-                self.assertTrue(any(fnmatch.fnmatchcase(changed, pattern) for pattern in patterns), changed)
+                self.assertTrue(any(path_matches(changed, pattern) for pattern in patterns), changed)
 
     def test_ready_transition_is_subscribed_and_shared_plan_controls_both_workflows(self):
         for name in ('rust.yml', 'rust-portable.yml'):
