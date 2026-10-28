@@ -751,3 +751,4 @@ Lokal bestanden: 166 Vitest-Fälle, `tsc` und `prettier`.
 - **Dokumentation:** `docs/RELEASING.md` beschreibt, was mit einer früheren Installation geschieht, deren App nach 15 Sekunden noch läuft. Sie bleibt erhalten und wird im Setup-Protokoll genannt. Ein früherer Versionsordner bleibt unter Windows-Einstellungen > Apps gelistet. Ein bisher registrierter Ordner verliert seinen Eintrag an die neue Registrierung und wird später über seine eigene `Uninstall.exe` entfernt.
 
 Lokal bestanden: `makensis -WX` ohne Warnung und 72 Release-Skripttests.
+- **Weitere Dokumentationshinweise aus demselben Review:** `docs/RELEASING.md` beschreibt die CI-Prüfung jetzt korrekt als synthetisch gesperrte Programmdatei (ohne Freigabe geöffnet). Es wird weder ein echter Prozess noch eine Aufnahme gestartet. Beide READMEs nennen für jede Aussage der Live-Zusammenfassung Quellenkennung, wörtliches Zitat, Zeit und Audiospur.

@@ -104,7 +104,7 @@ The visible name is **Meeting for Handy**. Existing data/key/bundle identifiers,
 
 ## Development toward 1.0.6 (unreleased)
 
-A **live summary** panel beside the transcript summarizes a running meeting: summary so far, decisions, tasks, questions raised and important points, each with its original evidence and audio track. It updates at a chosen interval and earlier when a long contribution on one audio track is followed by a reply on the other, works best with a small local text model, and can be copied to read out at any time. A **local model setup** finds Ollama or LM Studio, suggests Gemma 4 E2B/E4B from installed memory and can download the suggestion through Ollama. Design and limits: [1.0.6 plan](docs/1.0.6-LIVE-SUMMARY-PLAN.md).
+A **live summary** panel beside the transcript summarizes a running meeting: summary so far, decisions, tasks, questions raised and important points, each with its source identifier, verbatim quote, time and audio track. It updates at a chosen interval and earlier when a long contribution on one audio track is followed by a reply on the other, works best with a small local text model, and can be copied to read out at any time. A **local model setup** finds Ollama or LM Studio, suggests Gemma 4 E2B/E4B from installed memory and can download the suggestion through Ollama. Design and limits: [1.0.6 plan](docs/1.0.6-LIVE-SUMMARY-PLAN.md).
 
 ## Development toward 1.0.5 (unreleased)
 
