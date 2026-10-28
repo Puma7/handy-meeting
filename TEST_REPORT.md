@@ -745,3 +745,9 @@ Lokal bestanden: 291 Rust-Tests (2 ignoriert), Clippy mit `-D warnings`, fmt, 16
 - **Automatischer Start auf anderen Seiten:** Der automatische Start der Live-Zusammenfassung läuft jetzt unabhängig von der geöffneten Seite. Außerhalb der Aufnahmeseite ist die Zusammenfassung ohne eigene Anzeige eingebunden. Bisher startete eine Aufnahme, die etwa über eine Agentenfreigabe begann, während Verlauf oder Einstellungen offen waren, ihre Zusammenfassung erst nach dem Öffnen der Aufnahmeseite.
 
 Lokal bestanden: 166 Vitest-Fälle, `tsc` und `prettier`.
+
+**CodeRabbit-Review auf a12ffb9 bearbeitet (beide „Minor“):**
+- **Startmenü-Verknüpfung:** Das Setup ersetzt „Meeting for Handy.lnk“ im Startmenü nur noch, wenn sie dieses oder das bisher registrierte Programm startet. Eine gleichnamige Verknüpfung auf ein anderes Programm bleibt erhalten und wird im Setup-Protokoll genannt. Die frühere Ordnerverknüpfung aus dem Versionsordner-Layout wird nur gelöscht, wenn sie `HandyMeeting.exe` startet. `-RunChecks` prüft auf echtem Windows, dass eine fremde Startmenü-Verknüpfung Installation und Deinstallation übersteht. Lokal ist das mit Wine 9 nachgestellt (synthetisch), auch die eigene und die fremde frühere Ordnerverknüpfung.
+- **Dokumentation:** `docs/RELEASING.md` beschreibt, was mit einer früheren Installation geschieht, deren App nach 15 Sekunden noch läuft. Sie bleibt erhalten und wird im Setup-Protokoll genannt. Ein früherer Versionsordner bleibt unter Windows-Einstellungen > Apps gelistet. Ein bisher registrierter Ordner verliert seinen Eintrag an die neue Registrierung und wird später über seine eigene `Uninstall.exe` entfernt.
+
+Lokal bestanden: `makensis -WX` ohne Warnung und 72 Release-Skripttests.

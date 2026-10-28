@@ -123,12 +123,19 @@ try {
         foreach ($file in $receipt.programFiles) { if (Test-Path -LiteralPath (Join-Path $install $file.path)) { throw 'Uninstall left an owned program payload file.' } }
         if ([IO.File]::ReadAllText($sentinel) -ne 'Synthetic user data must survive repair and uninstall.') { throw 'Uninstall removed user data.' }
         if ((Test-Path -LiteralPath $startLink) -or (Test-Path -LiteralPath $registration)) { throw 'Uninstall left its Start menu link or registration.' }
-        # The setup's own desktop link goes with its uninstall.
+        # The setup's own desktop link goes with its uninstall. A Start menu link of the same
+        # name that starts another program is neither replaced nor deleted.
+        $foreignStart = $shell.CreateShortcut($startLink)
+        $foreignStart.TargetPath = $foreignTarget
+        $foreignStart.Save()
         $second = Join-Path $work 'Second programs/Meeting for Handy'
         if ((Invoke-Setup @('/S','/DESKTOPSHORTCUT',('/D=' + $second))) -ne 0) { throw 'Second silent installer check failed.' }
         if ((Link-Target $desktopLink) -ne [IO.Path]::GetFullPath((Join-Path $second 'HandyMeeting.exe'))) { throw 'The second installation has no own desktop link.' }
+        if ((Link-Target $startLink) -ne [IO.Path]::GetFullPath($foreignTarget)) { throw 'Setup replaced a foreign Start menu link.' }
         $child = Start-Process -FilePath (Join-Path $second 'Uninstall.exe') -ArgumentList @('/S',('_?=' + $second)) -WindowStyle Hidden -Wait -PassThru
-        if ($child.ExitCode -ne 0 -or (Test-Path -LiteralPath $desktopLink) -or (Test-Path -LiteralPath $startLink) -or (Test-Path -LiteralPath $registration)) { throw 'Uninstall left its own desktop link, Start menu link or registration.' }
+        if ($child.ExitCode -ne 0 -or (Test-Path -LiteralPath $desktopLink) -or (Test-Path -LiteralPath $registration)) { throw 'Uninstall left its own desktop link or registration.' }
+        if ((Link-Target $startLink) -ne [IO.Path]::GetFullPath($foreignTarget)) { throw 'Uninstall deleted a Start menu link it did not create.' }
+        Remove-Item -LiteralPath $startLink
         $tested = $true
     }
     $hash = (Get-FileHash -LiteralPath $package -Algorithm SHA256).Hash.ToLowerInvariant()

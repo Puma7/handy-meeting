@@ -69,6 +69,8 @@ LangString LegacyRemoved ${LANG_ENGLISH} "Removed the former program folder"
 LangString LegacyRemoved ${LANG_GERMAN} "Früheren Programmordner entfernt"
 LangString MovedKept ${LANG_ENGLISH} "The previous installation is still running and was kept; remove it later with its Uninstall.exe"
 LangString MovedKept ${LANG_GERMAN} "Die bisherige Installation läuft noch und bleibt erhalten; später über ihre Uninstall.exe entfernen"
+LangString StartMenuKept ${LANG_ENGLISH} "A Start menu link named ${PRODUCT} that starts another program was kept; open the app from its program folder or remove that link and run setup again"
+LangString StartMenuKept ${LANG_GERMAN} "Eine Startmenü-Verknüpfung „${PRODUCT}“, die ein anderes Programm startet, bleibt erhalten; die App aus ihrem Programmordner starten oder diese Verknüpfung entfernen und Setup erneut ausführen"
 LangString LegacyKept ${LANG_ENGLISH} "A former version is still running and was kept; remove it later in Windows Settings > Apps"
 LangString LegacyKept ${LANG_GERMAN} "Eine frühere Version läuft noch und bleibt erhalten; später unter Windows-Einstellungen > Apps entfernen"
 Function .onInit
@@ -258,7 +260,13 @@ Function RemoveFormerInstallations
     Goto legacy_loop
   legacy_done:
   RMDir "$LOCALAPPDATA\Programs\HandyMeeting"
-  ; The former Start menu folder link pointed into a version folder.
+  ; The former Start menu folder link pointed into a version folder; a link there that starts
+  ; another program stays.
+  Push "$SMPROGRAMS\${PRODUCT}\${PRODUCT}.lnk"
+  Call LinkTarget
+  Pop $R4
+  StrCpy $R4 $R4 "" -17
+  StrCmp $R4 "\HandyMeeting.exe" 0 +2
   Delete "$SMPROGRAMS\${PRODUCT}\${PRODUCT}.lnk"
   RMDir "$SMPROGRAMS\${PRODUCT}"
   DeleteRegKey HKCU "Software\HandyMeeting\BrandedStartMenuLink"
@@ -324,8 +332,23 @@ Section "${PRODUCT}" Main
   !include "${INSTALL_FILES}"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   Call RemoveFormerInstallations
-  ; Created natively, so a restricted PowerShell execution policy cannot block it.
+  ; Created natively, so a restricted PowerShell execution policy cannot block it. An existing
+  ; link is replaced only when it starts this or the previously registered program; a link of
+  ; the same name that starts another program is kept.
+  IfFileExists "$SMPROGRAMS\${PRODUCT}.lnk" 0 start_link_create
+  ReadRegStr $1 HKCU "${UNINSTALL_KEY}" "InstallLocation"
+  Push "$SMPROGRAMS\${PRODUCT}.lnk"
+  Call LinkTarget
+  Pop $0
+  StrCmp $0 "$INSTDIR\HandyMeeting.exe" start_link_create
+  StrCmp $1 "" start_link_kept
+  StrCmp $0 "$1\HandyMeeting.exe" start_link_create
+  start_link_kept:
+  DetailPrint "$(StartMenuKept)"
+  Goto start_link_done
+  start_link_create:
   CreateShortCut "$SMPROGRAMS\${PRODUCT}.lnk" "$INSTDIR\HandyMeeting.exe" "" "$INSTDIR\HandyMeeting.exe" 0
+  start_link_done:
   WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayName" "${PRODUCT}"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayVersion" "${APP_VERSION}"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "Publisher" "${PRODUCT} contributors"
