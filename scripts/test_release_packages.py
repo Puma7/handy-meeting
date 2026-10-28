@@ -41,7 +41,7 @@ class ReleaseGuards(unittest.TestCase):
             file = self.put(f'{scope}/{name}', b'not-executable-synthetic-' + suffix.encode())
             self.package_files.append(file)
             self.put(f'{scope}/{name}.sha256', (packages.sha(file) + '  ' + name + '\n').encode())
-            proof = {'success': True, 'version': VERSION, 'applicationVersion': VERSION, 'sourceFingerprintSHA256': FINGERPRINT, 'sourceSHA256': FINGERPRINT, 'package': name, 'sha256': packages.sha(file), 'bytes': file.stat().st_size, 'userRecordingsIncluded': False, 'rid': rid, 'releaseChecks': {'success': True}, 'relocatedReleaseChecks': {'success': True}, 'actualInstallUninstallChecked': True, 'freshMissingParentsChecked': True, 'existingDestinationRejected': True, 'reinstallRepaired': True, 'startMenuShortcutChecked': True, 'legacyVersionsMigrated': True, 'runningProgramPreserved': True, 'unknownUserFilePreserved': True, 'recursiveDeletion': False}
+            proof = {'success': True, 'version': VERSION, 'applicationVersion': VERSION, 'sourceFingerprintSHA256': FINGERPRINT, 'sourceSHA256': FINGERPRINT, 'package': name, 'sha256': packages.sha(file), 'bytes': file.stat().st_size, 'userRecordingsIncluded': False, 'rid': rid, 'releaseChecks': {'success': True}, 'relocatedReleaseChecks': {'success': True}, 'actualInstallUninstallChecked': True, 'freshMissingParentsChecked': True, 'existingDestinationRejected': True, 'reinstallRepaired': True, 'startMenuShortcutChecked': True, 'legacyVersionsMigrated': True, 'runningProgramPreserved': True, 'desktopShortcutOwnershipChecked': True, 'unknownUserFilePreserved': True, 'recursiveDeletion': False}
             self.put(f'{scope}/{name}.' + ('verification' if scope == 'windows' else 'manifest') + '.json', proof)
 
     def put(self, name, value):
@@ -146,7 +146,7 @@ class ReleaseGuards(unittest.TestCase):
     def test_installer_requires_actual_repair_shortcut_migration_and_running_app_checks(self):
         # 1.0.5 setups refused a second run and left no Start menu link under the default policy.
         file = next((self.input / 'windows').glob('*setup.exe.verification.json'))
-        for key in ['reinstallRepaired', 'startMenuShortcutChecked', 'legacyVersionsMigrated', 'runningProgramPreserved']:
+        for key in ['reinstallRepaired', 'startMenuShortcutChecked', 'legacyVersionsMigrated', 'runningProgramPreserved', 'desktopShortcutOwnershipChecked']:
             for value in [False, None]:
                 with self.subTest(key=key, value=value):
                     original = packages.read(file)

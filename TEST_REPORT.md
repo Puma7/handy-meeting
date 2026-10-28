@@ -726,3 +726,16 @@ Lokal bestanden: 163 Vitest-Fälle, `tsc` und `prettier`.
 - **Fehler beim Wiederverbinden:** Ein fehlgeschlagenes Abfragen eines laufenden Downloads beim Wiederöffnen der Modelleinrichtung erscheint als Fehlermeldung statt als unbehandelte Ablehnung.
 
 Lokal bestanden: 294 Rust-Tests (2 ignoriert), Clippy mit `-D warnings`, 164 Vitest-Fälle, `tsc` und `prettier`.
+
+**Review 6474935681 (Maintainer, P2) auf d30c196 bearbeitet:** Jede Korrektur hat einen Regressionstest, der vor der Korrektur fehlschlug.
+- **Live-Zusammenfassung beim Meetingwechsel:** Startantwort, Fehler und Wartezustand eines Aufrufs gehören jetzt zu dem Meeting und der Verbindung, für die er gestartet wurde. Wechselt beides vorher, wird die verspätete Antwort ignoriert. Bisher zeigte eine späte Antwort für Meeting A ihren Stand unter Meeting B, und „Kopieren“ setzte den Titel von B darüber. Das gilt auch für Abfragen, Stopp, Aktualisieren, Intervall und Kopieren. Kopieren verlangt zusätzlich, dass der angezeigte Stand zum aktuellen Meeting gehört. Synthetischer Vitest-Fall mit zurückgehaltener Startantwort und Meetingwechsel.
+- **Rückstand nach jedem Fenster:** Nach jedem gespeicherten Fenster wird der Rest des bereits erfassten Texts sofort im nächsten Durchlauf zusammengefasst, nicht nur nach einem manuellen Fenster. Bisher blieben bei 6.550 bestätigten Zeichen nach dem Fenster mit 6.400 Zeichen 150 Zeichen liegen, bis neue Sprache oder das Intervall eine Aktualisierung auslöste. Nach Meetingende konnte das nie geschehen. Später erfasster Text folgt weiter den normalen Regeln. Abbruch und Fehlerpause gelten unverändert: Während der Pause wird nichts genommen. Synthetischer Rust-Test mit den echten Auswahl- und Auslöseregeln.
+- **Desktop-Verknüpfung:** Das Setup legt die Verknüpfung nur an, wenn keine gleichnamige existiert, oder wenn die vorhandene seine eigene ist und noch auf diesen Programmordner zeigt. Es vermerkt sie in seiner Registrierung (`DesktopShortcut`). Die Deinstallation löscht die Desktop-Verknüpfung nur mit diesem Vermerk und nur, wenn ihr Ziel (gelesen über IShellLink) das Programm dieses Ordners ist. Die Startmenü-Verknüpfung entfernt sie ebenfalls nur bei diesem Ziel. Bisher wurde „Meeting for Handy.lnk“ auf dem Desktop allein am Namen erkannt und gelöscht. Neue stille Option `/DESKTOPSHORTCUT`, entsprechend dem Kontrollkästchen auf der Abschlussseite. `package-rust-installer.ps1 -RunChecks` prüft auf echtem Windows in der CI:
+  - eine fremde gleichnamige Verknüpfung bleibt bei der Installation erhalten und wird nicht vermerkt;
+  - die Reparatur legt die eigene an und vermerkt sie;
+  - eine danach ersetzte fremde Verknüpfung übersteht die Deinstallation;
+  - eine eigene wird mit der Deinstallation entfernt.
+
+  Neuer Nachweis: `desktopShortcutOwnershipChecked`, von der Release-Prüfung verlangt. Lokal sind diese Abläufe mit Wine 9 nachgestellt (synthetisch, Pfade ohne Leerzeichen), mit identischem Ergebnis.
+
+Lokal bestanden: 291 Rust-Tests (2 ignoriert), Clippy mit `-D warnings`, fmt, 165 Vitest-Fälle, `tsc`, `prettier`, 72 Release-Skripttests und `makensis -WX` ohne Warnung. Kein vollständiger `verify.ps1`-Lauf (kein Windows hier). Der echte lokale Referenztest mit Gemma bleibt offen.

@@ -388,10 +388,9 @@ impl LiveNotes {
     }
 }
 
-/// Whether only the overview should be rebuilt now: a bounded number of attempts, never in a
-/// tight loop, also after the meeting has ended.
 /// A failed update keeps its trigger: once the backoff has passed it runs again, even when the
 /// pending text alone would not trigger an update. During backoff nothing is taken.
+/// The same carry holds the rest of a backlog after a stored window (see `after_window`).
 fn with_retry(
     trigger: Option<Trigger>,
     retry: &mut Option<Trigger>,
@@ -403,6 +402,14 @@ fn with_retry(
     }
     retry.take()
 }
+/// After a stored window, text that was already captured before it is summarized next without
+/// waiting for a threshold or the interval, whatever triggered the window; text that arrives
+/// later follows the normal rules. `captured_left` counts that rest in the same snapshot.
+fn after_window(trigger: Trigger, captured_left: usize) -> Option<Trigger> {
+    (captured_left > 0).then_some(trigger)
+}
+/// Whether only the overview should be rebuilt now: a bounded number of attempts, never in a
+/// tight loop, also after the meeting has ended.
 fn overview_retry(due: bool, failures: u32, manual: bool, since_attempt: Option<Duration>) -> bool {
     due && failures < MAX_OVERVIEW_FAILURES
         && (manual || since_attempt.is_none_or(|elapsed| elapsed >= OVERVIEW_RETRY))
@@ -450,7 +457,8 @@ impl Worker {
         let mut failures: u32 = 0;
         let mut overview_failures: u32 = 0;
         let mut overview_attempt: Option<Instant> = None;
-        let mut retry_trigger: Option<Trigger> = None;
+        // A failed update or the rest of a captured backlog, taken by the next round.
+        let mut carry: Option<Trigger> = None;
         let mut finished_state: Option<SessionData> = None;
         self.set(|s| s.status = "waiting".into());
         while !self.control.is_cancelled() {
@@ -488,7 +496,7 @@ impl Worker {
                 manual,
                 finished,
             );
-            trigger = with_retry(trigger, &mut retry_trigger, backing_off, pending_chars);
+            trigger = with_retry(trigger, &mut carry, backing_off, pending_chars);
             // A missing overview is retried at a bounded pace, also after the meeting ended.
             let overview_open = runner.overview_due() && overview_failures < MAX_OVERVIEW_FAILURES;
             if trigger.is_none()
@@ -517,15 +525,13 @@ impl Worker {
                     if self.control.is_cancelled() {
                         break;
                     }
-                    // Another window is due at once when a manual or initial update left text.
-                    if trigger == Trigger::Manual
-                        && result.as_ref().is_ok_and(|o| o.window.is_some())
-                    {
-                        self.manual.store(true, Ordering::Release);
-                    }
                     match result {
                         Ok(outcome) => {
-                            retry_trigger = None;
+                            // The rest of the already captured text follows at once, after any
+                            // window and not only after a manual one.
+                            carry = outcome.window.and_then(|_| {
+                                after_window(trigger, live::pending_chars(&runner.pending(&texts)))
+                            });
                             failures = 0;
                             if outcome.overview_error.is_some() {
                                 overview_failures = overview_failures.saturating_add(1);
@@ -552,7 +558,7 @@ impl Worker {
                             }
                         }
                         Err(error) => {
-                            retry_trigger = Some(trigger);
+                            carry = Some(trigger);
                             failures = failures.saturating_add(1);
                             let pause = FIRST_BACKOFF
                                 .saturating_mul(1 << failures.min(5).saturating_sub(1))
@@ -717,6 +723,59 @@ mod tests {
             Some(Trigger::Interval)
         );
         assert_eq!(retry, Some(Trigger::Manual));
+    }
+
+    #[test]
+    fn the_captured_rest_of_a_backlog_follows_any_window_at_once() {
+        // Review 6474935681 (P2): only a manual window queued the next one. With 6,550
+        // confirmed characters a volume window took 6,400 and the remaining 150 stayed
+        // unsummarized until new speech or the interval, which may never come.
+        let texts: Vec<LiveText> = (0..5u64)
+            .map(|i| LiveText {
+                key: format!("system-{i}.wav"),
+                track: "system".into(),
+                start_ms: i * 60_000,
+                end_ms: (i + 1) * 60_000,
+                text: if i < 4 {
+                    "a".repeat(1600)
+                } else {
+                    "b".repeat(150)
+                },
+            })
+            .collect();
+        let pending = live::pending(&[], &texts);
+        assert_eq!(live::pending_chars(&pending), 6_550);
+        let trigger = live::decide(&pending, 0, live::MIN_INTERVAL_MS, false, false);
+        assert_eq!(trigger, Some(Trigger::Volume));
+        let window = live::next_window(&pending);
+        assert_eq!(live::pending_chars(&window), 6_400);
+        let rest = live::pending(&window, &texts);
+        assert_eq!(live::pending_chars(&rest), 150);
+        assert_eq!(
+            live::decide(&rest, 0, live::MIN_INTERVAL_MS, false, false),
+            None,
+            "the thresholds alone leave the rest waiting"
+        );
+        let mut carry = after_window(Trigger::Volume, live::pending_chars(&rest));
+        assert_eq!(carry, Some(Trigger::Volume));
+        assert_eq!(
+            with_retry(None, &mut carry, true, 150),
+            None,
+            "an error backoff still applies"
+        );
+        assert_eq!(
+            with_retry(None, &mut carry, false, 150),
+            Some(Trigger::Volume),
+            "taken by the next round"
+        );
+        for trigger in [Trigger::Interval, Trigger::LongContribution, Trigger::Final] {
+            assert_eq!(after_window(trigger, 150), Some(trigger));
+        }
+        assert_eq!(
+            after_window(Trigger::Volume, 0),
+            None,
+            "nothing captured is left"
+        );
     }
 
     #[test]

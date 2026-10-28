@@ -186,6 +186,9 @@ export default function LiveNotesPanel({
     [copied, setCopied] = useState(false);
   const sequence = useRef(0),
     mounted = useRef(true),
+    // Counts meeting and connection changes; an answer to a call made before a change is
+    // ignored, so a late answer for one meeting never shows up under another.
+    generation = useRef(0),
     autoStarted = useRef<string | null>(null),
     autoAttempts = useRef(new Map<string, number>());
   const [autoRetry, setAutoRetry] = useState(0);
@@ -201,23 +204,31 @@ export default function LiveNotesPanel({
     };
   }, []);
   useEffect(() => {
+    generation.current += 1;
     setCloudConsent(false);
     setStatus(null);
     setError(null);
+    setBusy(false);
   }, [meetingId, connection.mode, connection.endpoint]);
+  // Whether the answer to a call made in `call` may still change what this panel shows.
+  const current = useCallback(
+    (call: number) => mounted.current && call === generation.current,
+    [],
+  );
 
   const poll = useCallback(async () => {
     if (!meetingId || !api.getLiveNotes || !connected) return null;
-    const id = ++sequence.current;
+    const id = ++sequence.current,
+      call = generation.current;
     try {
       const next = await api.getLiveNotes(meetingId);
-      if (mounted.current && id === sequence.current) setStatus(next);
+      if (current(call) && id === sequence.current) setStatus(next);
       return next;
     } catch (e) {
-      if (mounted.current && id === sequence.current) setError(errorMessage(e));
+      if (current(call) && id === sequence.current) setError(errorMessage(e));
       return null;
     }
-  }, [api, meetingId, connected]);
+  }, [api, meetingId, connected, current]);
 
   useEffect(() => {
     let stopped = false;
@@ -239,6 +250,7 @@ export default function LiveNotesPanel({
 
   const start = useCallback(async (): Promise<boolean> => {
     if (!meetingId || !api.startLiveNotes) return false;
+    const call = generation.current;
     setBusy(true);
     setError(null);
     let started = false;
@@ -254,15 +266,15 @@ export default function LiveNotesPanel({
         intervalMs: preferences.intervalMinutes * 60_000,
         language: locale,
       });
-      if (mounted.current) setStatus(next);
+      if (current(call)) setStatus(next);
       started = true;
     } catch (e) {
-      if (mounted.current) setError(errorMessage(e));
+      if (current(call)) setError(errorMessage(e));
     } finally {
-      if (mounted.current) setBusy(false);
+      if (current(call)) setBusy(false);
     }
     // The release covers this start only.
-    setCloudConsent(false);
+    if (current(call)) setCloudConsent(false);
     return started;
   }, [
     api,
@@ -271,6 +283,7 @@ export default function LiveNotesPanel({
     cloudConsent,
     preferences.intervalMinutes,
     locale,
+    current,
   ]);
 
   // Automatic start: local models only, once per meeting, never after an explicit stop.
@@ -315,47 +328,52 @@ export default function LiveNotesPanel({
 
   async function stop() {
     if (!api.stopLiveNotes) return;
+    const call = generation.current;
     setBusy(true);
     try {
       await api.stopLiveNotes();
       await poll();
     } catch (e) {
-      setError(errorMessage(e));
+      if (current(call)) setError(errorMessage(e));
     } finally {
-      if (mounted.current) setBusy(false);
+      if (current(call)) setBusy(false);
     }
   }
 
   async function refresh() {
+    const call = generation.current;
     try {
       await api.refreshLiveNotes?.();
       await poll();
     } catch (e) {
-      setError(errorMessage(e));
+      if (current(call)) setError(errorMessage(e));
     }
   }
 
   async function changeInterval(minutes: number) {
     setPreferences({ ...preferences, intervalMinutes: minutes });
     if (status?.running) {
+      const call = generation.current;
       try {
         await api.setLiveNotesInterval?.(minutes * 60_000);
       } catch (e) {
-        setError(errorMessage(e));
+        if (current(call)) setError(errorMessage(e));
       }
     }
   }
 
   async function copy() {
-    if (!status?.view) return;
+    // Only a summary of the meeting shown now gets this meeting's title.
+    if (!status?.view || status.meetingId !== meetingId) return;
+    const call = generation.current;
     try {
       await api.copyText(liveNotesText(status.view, meetingTitle, locale));
-      if (mounted.current) {
+      if (current(call)) {
         setCopied(true);
         setTimeout(() => mounted.current && setCopied(false), 1500);
       }
     } catch (e) {
-      setError(errorMessage(e));
+      if (current(call)) setError(errorMessage(e));
     }
   }
 

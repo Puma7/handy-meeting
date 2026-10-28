@@ -120,6 +120,53 @@ FunctionEnd
 !macroend
 !insertmacro WAIT_FOR_RELEASE ""
 !insertmacro WAIT_FOR_RELEASE "un."
+; Returns the program a shortcut starts, read through IShellLink, or "" when it cannot be read.
+!macro LINK_TARGET UN
+Function ${UN}LinkTarget
+  Exch $0
+  Push $1
+  Push $2
+  Push $3
+  Push $4
+  StrCpy $3 ""
+  IfFileExists "$0" 0 target_done
+  System::Call 'ole32::CoCreateInstance(g "{00021401-0000-0000-C000-000000000046}", p 0, i 1, g "{000214F9-0000-0000-C000-000000000046}", *p .r1) i .r4'
+  IntCmp $4 0 0 target_done target_done
+  System::Call '$1->0(g "{0000010b-0000-0000-C000-000000000046}", *p .r2) i .r4'
+  IntCmp $4 0 0 target_release target_release
+  System::Call '$2->5(w r0, i 0) i .r4'
+  IntCmp $4 0 0 target_persist target_persist
+  System::Call '$1->3(w .r3, i ${NSIS_MAX_STRLEN}, p 0, i 0) i .r4'
+  IntCmp $4 0 target_persist
+  StrCpy $3 ""
+  target_persist:
+  System::Call '$2->2()'
+  target_release:
+  System::Call '$1->2()'
+  target_done:
+  StrCpy $0 $3
+  Pop $4
+  Pop $3
+  Pop $2
+  Pop $1
+  Exch $0
+FunctionEnd
+!macroend
+!insertmacro LINK_TARGET ""
+!insertmacro LINK_TARGET "un."
+; Deletes a shortcut only when it starts this folder's program; a link of the same name that
+; points elsewhere belongs to someone else and stays.
+Function un.DeleteOwnLink
+  Exch $0
+  Push $1
+  Push $0
+  Call un.LinkTarget
+  Pop $1
+  StrCmp $1 "$INSTDIR\HandyMeeting.exe" 0 +2
+  Delete "$0"
+  Pop $1
+  Pop $0
+FunctionEnd
 ; Accepts the registered installation (repair or update) or a folder that does not exist yet.
 Function CheckDestination
   StrCpy $Upgrade 0
@@ -219,8 +266,23 @@ FunctionEnd
 Function LaunchProgram
   Exec '"$INSTDIR\HandyMeeting.exe"'
 FunctionEnd
+; The desktop link is recorded as this setup's own, so uninstall removes only that one. An
+; existing link of the same name is replaced only when it is that recorded link and still
+; starts this folder's program.
 Function CreateDesktopShortcut
+  IfFileExists "$DESKTOP\${PRODUCT}.lnk" 0 desktop_create
+  ReadRegStr $0 HKCU "${UNINSTALL_KEY}" "DesktopShortcut"
+  StrCmp $0 "$DESKTOP\${PRODUCT}.lnk" 0 desktop_done
+  Push "$DESKTOP\${PRODUCT}.lnk"
+  Call LinkTarget
+  Pop $0
+  StrCmp $0 "$INSTDIR\HandyMeeting.exe" 0 desktop_done
+  desktop_create:
+  ClearErrors
   CreateShortCut "$DESKTOP\${PRODUCT}.lnk" "$INSTDIR\HandyMeeting.exe" "" "$INSTDIR\HandyMeeting.exe" 0
+  IfErrors desktop_done
+  WriteRegStr HKCU "${UNINSTALL_KEY}" "DesktopShortcut" "$DESKTOP\${PRODUCT}.lnk"
+  desktop_done:
 FunctionEnd
 Section "${PRODUCT}" Main
   SetShellVarContext current
@@ -275,6 +337,14 @@ Section "${PRODUCT}" Main
   WriteRegDWORD HKCU "${UNINSTALL_KEY}" "EstimatedSize" $0
   WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoModify" 1
   WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoRepair" 1
+  ; Silent setups add the desktop link only on request (/DESKTOPSHORTCUT), like the checkbox.
+  IfSilent 0 desktop_option_done
+  ${GetParameters} $0
+  ClearErrors
+  ${GetOptions} $0 "/DESKTOPSHORTCUT" $1
+  IfErrors desktop_option_done
+  Call CreateDesktopShortcut
+  desktop_option_done:
 SectionEnd
 Section "Uninstall"
   ; /UPGRADE: a newer setup replaces the program files; links and registration stay.
@@ -298,12 +368,17 @@ Section "Uninstall"
   Delete "$INSTDIR\Uninstall.exe"
   ; Links and registration of a different folder belong to the current installation and stay.
   ReadRegStr $0 HKCU "${UNINSTALL_KEY}" "InstallLocation"
+  ReadRegStr $2 HKCU "${UNINSTALL_KEY}" "DesktopShortcut"
   StrCmp $0 "" own_links
   StrCmp $0 "$INSTDIR" 0 keep_registration
   DeleteRegKey HKCU "${UNINSTALL_KEY}"
   own_links:
-  Delete "$SMPROGRAMS\${PRODUCT}.lnk"
-  Delete "$DESKTOP\${PRODUCT}.lnk"
+  Push "$SMPROGRAMS\${PRODUCT}.lnk"
+  Call un.DeleteOwnLink
+  ; Only a desktop link this setup recorded as created, and only while it starts this program.
+  StrCmp $2 "" keep_registration
+  Push $2
+  Call un.DeleteOwnLink
   keep_registration:
   ; Non-recursive: unknown files and all user sessions are retained.
   RMDir "$INSTDIR"

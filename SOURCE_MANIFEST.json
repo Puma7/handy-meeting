@@ -26,8 +26,8 @@
   },
   {
     "Path": "CHANGELOG.md",
-    "SHA256": "CBE7537CCAAF1B8039171D16EB95C2D6C3BB5014E4EEC6F5B5A47BB8FFA431DE",
-    "Bytes": 15596
+    "SHA256": "E1D1614BC019F4EB64A07618E2D2E625E524B0189E1ACFC2FB36E5D00F1CCBD8",
+    "Bytes": 15707
   },
   {
     "Path": "BUILD_STATUS.md",
@@ -41,8 +41,8 @@
   },
   {
     "Path": "TEST_REPORT.md",
-    "SHA256": "F5543999DD2494530DD3193DA75DDE21250D43030DFEF7260FE694BFA5F0B9FA",
-    "Bytes": 163386
+    "SHA256": "91AB6C9B9E006E69B8E1FE1630F689853FF8BA05D2008B4E379B55BBE6C9EE97",
+    "Bytes": 166292
   },
   {
     "Path": "DAUERTEST.md",
@@ -481,8 +481,8 @@
   },
   {
     "Path": "scripts/package-rust-installer.ps1",
-    "SHA256": "2FE16CF3969A7270347263A2623971524AEF61B100EAA75C41E948B52798B4AB",
-    "Bytes": 10880
+    "SHA256": "81022A3BCF724768B301BC2108CE1F3CFC96BFDAF3A36BC037882990D1B1C336",
+    "Bytes": 13433
   },
   {
     "Path": "scripts/package-rust-portable.sh",
@@ -531,8 +531,8 @@
   },
   {
     "Path": "scripts/release-packages.py",
-    "SHA256": "2F01119791751E0C5A7FA850B53EBD272877D79364D164F7E1285443D4E6235F",
-    "Bytes": 7229
+    "SHA256": "15848299156B002A91E3911629875142A00F3D7B14B0462D91C684FB01FB2D55",
+    "Bytes": 7289
   },
   {
     "Path": "scripts/rust-artifacts.mjs",
@@ -556,8 +556,8 @@
   },
   {
     "Path": "scripts/test_release_packages.py",
-    "SHA256": "EF19CB2E904EC84B92554175E52920D2250B6135F119E009D254DE7E8BA93DFD",
-    "Bytes": 27462
+    "SHA256": "64C2A9FDF43C1F0CFDEA8BE63D9C1695D3485F19EE3EBF2A331BD1DCFC16949C",
+    "Bytes": 27538
   },
   {
     "Path": "scripts/test_release_publisher.py",
@@ -581,8 +581,8 @@
   },
   {
     "Path": "scripts/windows-installer.nsi",
-    "SHA256": "536D805378450322743BB23537C0D27A44D2C1BD88299DDE6EAC4E7CD236DA19",
-    "Bytes": 13542
+    "SHA256": "F4C47C3D2A5D6D8C6E0E9BA2EC19B774B7975F6D2D223044363E18A35FA04702",
+    "Bytes": 16012
   },
   {
     "Path": "platform/macos/HandyMeetingCapture.swift",
@@ -14361,8 +14361,8 @@
   },
   {
     "Path": "apps/desktop/src/views/LiveNotesPanel.tsx",
-    "SHA256": "B2D5DE69EEA60CB64A06556C395C2DC9078949A7AE0BBDFE00C03CEA5797348E",
-    "Bytes": 24185
+    "SHA256": "7A7D3AFE4A9BAAABB82907CD8B48535B75EE60545EAC532BC1C088AB9DFDE0CC",
+    "Bytes": 25065
   },
   {
     "Path": "apps/desktop/src/views/LocalModelSetup.tsx",
@@ -14526,8 +14526,8 @@
   },
   {
     "Path": "apps/desktop/src/LiveNotes.test.tsx",
-    "SHA256": "20DD82CC58105FF8C4C9E5E078DB1BE82DB9205F8036432AC646CA34E08098E9",
-    "Bytes": 25143
+    "SHA256": "1FDA0E97F17A90578A74A04179A30B7E9183E2F9AD70D6321A2FC95CC47AF6A5",
+    "Bytes": 27781
   },
   {
     "Path": "apps/desktop/src-tauri/capabilities/default.json",
@@ -14661,8 +14661,8 @@
   },
   {
     "Path": "apps/desktop/src-tauri/src/live_notes.rs",
-    "SHA256": "DC742AB1A5BA188816D7C24E9872F53489132AF72EFD9F4EB2FC9577FDFA00D5",
-    "Bytes": 32961
+    "SHA256": "30AEA236776A3DAB587F37CFE024951BF1B953FF2A6005496E1A22CC4285F57D",
+    "Bytes": 35649
   },
   {
     "Path": "apps/desktop/src-tauri/src/local_models.rs",
@@ -14796,8 +14796,8 @@
   },
   {
     "Path": "docs/RELEASING.md",
-    "SHA256": "C09794A8070E05F2A823D06ADEA415BEA5D84E53EC09C5B35FC641C0798BA027",
-    "Bytes": 11592
+    "SHA256": "096188AF8829D32656E73A91DF578DE8EED35B6222D29E4AD19E3350100A0808",
+    "Bytes": 11916
   },
   {
     "Path": "docs/RUST_AGENT_PROTOCOL.md",

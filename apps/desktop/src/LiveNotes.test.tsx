@@ -789,3 +789,81 @@ it("reports a failed download-state lookup instead of leaving an unhandled rejec
     await screen.findByText("Synthetic: download state unavailable"),
   ).toBeTruthy();
 });
+
+it("ignores start answers and errors that arrive after the meeting was switched", async () => {
+  // Review 6474935681 (P2): only the mount was checked, so a late answer for meeting A
+  // replaced meeting B's state, error and busy flag, and Copy used B's title for A's notes.
+  const a = "a".repeat(32),
+    b = "b".repeat(32);
+  const answers: {
+    resolve: (next: LiveNotesStatus) => void;
+    reject: (error: unknown) => void;
+  }[] = [];
+  const start = vi.fn(
+    () =>
+      new Promise<LiveNotesStatus>((resolve, reject) =>
+        answers.push({ resolve, reject }),
+      ),
+  );
+  const copyText = vi.fn().mockResolvedValue(undefined);
+  const api = {
+    copyText,
+    getLiveNotes: vi.fn((id: string) =>
+      Promise.resolve(status({ meetingId: id })),
+    ),
+    startLiveNotes: start,
+  } as unknown as DesktopApi;
+  const panel = (meetingId: string, title: string) => (
+    <LiveNotesPanel
+      api={api}
+      locale="de"
+      connected
+      meetingId={meetingId}
+      meetingTitle={title}
+      meetingActive
+      connection={local}
+      preferences={{ auto: false, intervalMinutes: 3 }}
+      setPreferences={vi.fn()}
+      onUseLocalModel={vi.fn()}
+      onOpenTextModelSettings={vi.fn()}
+      focus={false}
+      setFocus={vi.fn()}
+    />
+  );
+  const { rerender } = render(panel(a, "Meeting A"));
+  const startButton = () =>
+    screen.getByRole("button", {
+      name: "Live-Zusammenfassung starten",
+    }) as HTMLButtonElement;
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Live-Zusammenfassung starten" }),
+  );
+  expect(start).toHaveBeenCalledWith(expect.objectContaining({ meetingId: a }));
+  rerender(panel(b, "Meeting B"));
+  await waitFor(() => expect(startButton().disabled).toBe(false));
+  await act(async () =>
+    answers[0].resolve(
+      status({ meetingId: a, status: "waiting", running: true, view }),
+    ),
+  );
+  expect(screen.queryByText("Erster Punkt")).toBeNull();
+  expect(startButton().disabled).toBe(false);
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "Zusammenfassung kopieren",
+      }) as HTMLButtonElement
+    ).disabled,
+  ).toBe(true);
+
+  // The same for a refusal: meeting B's start fails only after A is shown again.
+  await userEvent.click(startButton());
+  expect(start).toHaveBeenLastCalledWith(
+    expect.objectContaining({ meetingId: b }),
+  );
+  rerender(panel(a, "Meeting A"));
+  await act(async () => answers[1].reject("Synthetischer Fehler für B"));
+  expect(screen.queryByText(/Synthetischer Fehler für B/)).toBeNull();
+  expect(startButton().disabled).toBe(false);
+  expect(copyText).not.toHaveBeenCalled();
+});

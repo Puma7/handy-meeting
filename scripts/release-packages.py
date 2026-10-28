@@ -67,7 +67,7 @@ def assemble(artifacts, version, commit, fingerprint, output):
         if proof_kind == 'verification':
             if proof.get('success') is not True or proof.get('package') != name or proof.get('sha256') != actual or proof.get('bytes') != package.stat().st_size or proof.get('userRecordingsIncluded') is not False:
                 raise ValueError('Windows package proof mismatch')
-            if suffix.endswith('setup.exe') and (proof.get('actualInstallUninstallChecked') is not True or proof.get('freshMissingParentsChecked') is not True or proof.get('existingDestinationRejected') is not True or proof.get('reinstallRepaired') is not True or proof.get('startMenuShortcutChecked') is not True or proof.get('legacyVersionsMigrated') is not True or proof.get('runningProgramPreserved') is not True or proof.get('unknownUserFilePreserved') is not True or proof.get('recursiveDeletion') is not False):
+            if suffix.endswith('setup.exe') and (proof.get('actualInstallUninstallChecked') is not True or proof.get('freshMissingParentsChecked') is not True or proof.get('existingDestinationRejected') is not True or proof.get('reinstallRepaired') is not True or proof.get('startMenuShortcutChecked') is not True or proof.get('legacyVersionsMigrated') is not True or proof.get('runningProgramPreserved') is not True or proof.get('desktopShortcutOwnershipChecked') is not True or proof.get('unknownUserFilePreserved') is not True or proof.get('recursiveDeletion') is not False):
                 raise ValueError('Actual installer/uninstaller preservation check required')
         else:
             if proof.get('package') != name or proof.get('sha256') != actual or proof.get('bytes') != package.stat().st_size:
