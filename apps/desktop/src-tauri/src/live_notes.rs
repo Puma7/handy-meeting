@@ -390,6 +390,19 @@ impl LiveNotes {
 
 /// Whether only the overview should be rebuilt now: a bounded number of attempts, never in a
 /// tight loop, also after the meeting has ended.
+/// A failed update keeps its trigger: once the backoff has passed it runs again, even when the
+/// pending text alone would not trigger an update. During backoff nothing is taken.
+fn with_retry(
+    trigger: Option<Trigger>,
+    retry: &mut Option<Trigger>,
+    backing_off: bool,
+    pending_chars: usize,
+) -> Option<Trigger> {
+    if trigger.is_some() || backing_off || pending_chars == 0 {
+        return trigger;
+    }
+    retry.take()
+}
 fn overview_retry(due: bool, failures: u32, manual: bool, since_attempt: Option<Duration>) -> bool {
     due && failures < MAX_OVERVIEW_FAILURES
         && (manual || since_attempt.is_none_or(|elapsed| elapsed >= OVERVIEW_RETRY))
@@ -437,6 +450,7 @@ impl Worker {
         let mut failures: u32 = 0;
         let mut overview_failures: u32 = 0;
         let mut overview_attempt: Option<Instant> = None;
+        let mut retry_trigger: Option<Trigger> = None;
         let mut finished_state: Option<SessionData> = None;
         self.set(|s| s.status = "waiting".into());
         while !self.control.is_cancelled() {
@@ -474,6 +488,7 @@ impl Worker {
                 manual,
                 finished,
             );
+            trigger = with_retry(trigger, &mut retry_trigger, backing_off, pending_chars);
             // A missing overview is retried at a bounded pace, also after the meeting ended.
             let overview_open = runner.overview_due() && overview_failures < MAX_OVERVIEW_FAILURES;
             if trigger.is_none()
@@ -510,6 +525,7 @@ impl Worker {
                     }
                     match result {
                         Ok(outcome) => {
+                            retry_trigger = None;
                             failures = 0;
                             if outcome.overview_error.is_some() {
                                 overview_failures = overview_failures.saturating_add(1);
@@ -536,6 +552,7 @@ impl Worker {
                             }
                         }
                         Err(error) => {
+                            retry_trigger = Some(trigger);
                             failures = failures.saturating_add(1);
                             let pause = FIRST_BACKOFF
                                 .saturating_mul(1 << failures.min(5).saturating_sub(1))
@@ -671,6 +688,35 @@ mod tests {
         }
         wait_for(&service, &id, "finished");
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_failed_update_is_retried_after_its_backoff_even_below_the_thresholds() {
+        // CodeRabbit review 5682803580: a failed manual update with little pending text was
+        // dropped, because the normal rules do not trigger for so few characters.
+        let mut retry = Some(Trigger::Manual);
+        assert_eq!(
+            with_retry(None, &mut retry, true, 50),
+            None,
+            "waits during backoff"
+        );
+        assert_eq!(retry, Some(Trigger::Manual));
+        assert_eq!(
+            with_retry(None, &mut retry, false, 50),
+            Some(Trigger::Manual)
+        );
+        assert_eq!(retry, None, "taken once; a new failure stores it again");
+        let mut retry = Some(Trigger::Manual);
+        assert_eq!(
+            with_retry(None, &mut retry, false, 0),
+            None,
+            "nothing left to summarize"
+        );
+        assert_eq!(
+            with_retry(Some(Trigger::Interval), &mut retry, false, 50),
+            Some(Trigger::Interval)
+        );
+        assert_eq!(retry, Some(Trigger::Manual));
     }
 
     #[test]

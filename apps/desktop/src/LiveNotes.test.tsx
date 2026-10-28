@@ -5,6 +5,7 @@ import { testServices } from "./test-services";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
 import LiveNotesPanel, {
+  endpointAllowed,
   liveNotesText,
   type LiveConnection,
 } from "./views/LiveNotesPanel";
@@ -587,4 +588,24 @@ it("shows the detected local servers on the analysis page when the configured en
     await screen.findByRole("button", { name: "Verwenden: gemma4:e4b" }),
   ).toBeTruthy();
   expect(api.localModelSetup).toHaveBeenCalled();
+});
+
+it("offers the start only for endpoints the backend transport accepts", () => {
+  // CodeRabbit review 5682803580: a remote address in local mode passed the start gate and
+  // failed only in the backend.
+  expect(endpointAllowed("local", "http://127.0.0.1:11434/v1/")).toBe(true);
+  expect(endpointAllowed("local", "http://localhost:1234/v1/")).toBe(true);
+  expect(endpointAllowed("local", "http://[::1]:1234/v1/")).toBe(true);
+  expect(endpointAllowed("local", "https://ai.example.com/v1/")).toBe(false);
+  expect(endpointAllowed("local", "http://192.168.1.5:11434/v1/")).toBe(false);
+  expect(endpointAllowed("local", "http://user:pw@127.0.0.1:1234/v1/")).toBe(
+    false,
+  );
+  expect(endpointAllowed("local", "ftp://127.0.0.1/")).toBe(false);
+  expect(endpointAllowed("local", "not a url")).toBe(false);
+  expect(endpointAllowed("cloud", "https://openrouter.ai/api/v1/")).toBe(true);
+  expect(endpointAllowed("cloud", "http://openrouter.ai/api/v1/")).toBe(false);
+  expect(endpointAllowed("cloud", "https://openrouter.ai/api/v1/?key=x")).toBe(
+    false,
+  );
 });

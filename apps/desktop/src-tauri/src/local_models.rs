@@ -203,6 +203,12 @@ impl Pulls {
             if let Ok(flag) = self.cancel.lock() {
                 flag.store(true, Ordering::Release);
             }
+            // Stays "running" until the connection has ended; then it reads "cancelled".
+            if let Ok(mut state) = self.state.lock() {
+                if let Some(progress) = state.as_mut() {
+                    progress.detail = "wird abgebrochen …".into();
+                }
+            }
         }
         running
     }
@@ -276,8 +282,12 @@ struct PullLine {
     error: Option<String>,
 }
 
+/// Longest silence of a running Ollama stream (it reports progress continuously, also while
+/// verifying). Applied per read, not to the whole download, so large models are not cut off.
+const PULL_IDLE: Duration = Duration::from_secs(300);
+
 fn pull(model: &str, cancel: &AtomicBool, mut progress: impl FnMut(PullLine)) -> AppResult<()> {
-    pull_from(OLLAMA_PULL, model, cancel, &mut progress)
+    pull_from(OLLAMA_PULL, model, cancel, PULL_IDLE, &mut progress)
 }
 
 /// One message from the reader thread that follows Ollama's stream.
@@ -293,24 +303,24 @@ fn pull_from(
     url: &str,
     model: &str,
     cancel: &AtomicBool,
+    idle: Duration,
     progress: &mut impl FnMut(PullLine),
 ) -> AppResult<()> {
     let (sender, events) = std::sync::mpsc::channel();
     let url = url.to_owned();
     let body = serde_json::json!({"model": model, "stream": true});
-    std::thread::Builder::new()
+    let reader = std::thread::Builder::new()
         .name("ollama-pull-read".into())
-        .spawn(move || read_pull(&url, &body, &sender))
+        .spawn(move || read_pull(&url, &body, idle, &sender))
         .map_err(|_| "Der Download konnte nicht gestartet werden.")?;
-    loop {
+    let result = loop {
         if cancel.load(Ordering::Acquire) {
-            // The reader ends when its connection closes; its messages are no longer read.
-            return Err("Download abgebrochen.".into());
+            break Err("Download abgebrochen.".into());
         }
         match events.recv_timeout(Duration::from_millis(100)) {
             Ok(PullEvent::Line(update)) => {
                 if let Some(error) = &update.error {
-                    return Err(format!(
+                    break Err(format!(
                         "Ollama meldet: {}",
                         error.chars().take(300).collect::<String>()
                     ));
@@ -318,19 +328,29 @@ fn pull_from(
                 let success = update.status == "success";
                 progress(update);
                 if success {
-                    return Ok(());
+                    break Ok(());
                 }
             }
-            Ok(PullEvent::Failed(error)) => return Err(error),
+            Ok(PullEvent::Failed(error)) => break Err(error),
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                return Err("Ollama hat den Download ohne Abschluss beendet.".into())
+                break Err("Ollama hat den Download ohne Abschluss beendet.".into())
             }
         }
-    }
+    };
+    // The reader stops at its next line (nobody receives) or after `idle` of silence. Waiting
+    // here keeps the pull marked as running, so a retry never stacks stalled connections.
+    drop(events);
+    let _ = reader.join();
+    result
 }
 
-fn read_pull(url: &str, body: &serde_json::Value, events: &std::sync::mpsc::Sender<PullEvent>) {
+fn read_pull(
+    url: &str,
+    body: &serde_json::Value,
+    idle: Duration,
+    events: &std::sync::mpsc::Sender<PullEvent>,
+) {
     let fail = |message: &str| {
         let _ = events.send(PullEvent::Failed(message.to_owned()));
     };
@@ -338,7 +358,8 @@ fn read_pull(url: &str, body: &serde_json::Value, events: &std::sync::mpsc::Send
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(Duration::from_secs(5))
-        .timeout(None)
+        // Blocking clients apply this to each read, so a stalled stream cannot pin the reader.
+        .timeout(idle)
         .build()
     else {
         return fail("Lokale Verbindung konnte nicht vorbereitet werden.");
@@ -446,9 +467,13 @@ mod tests {
             "{\"status\":\"pulling manifest\"}\n{\"status\":\"downloading\",\"completed\":5,\"total\":10}\n{\"status\":\"success\"}\n",
         );
         let mut seen = Vec::new();
-        pull_from(&url, "gemma4:e4b", &AtomicBool::new(false), &mut |l| {
-            seen.push((l.status, l.completed))
-        })
+        pull_from(
+            &url,
+            "gemma4:e4b",
+            &AtomicBool::new(false),
+            PULL_IDLE,
+            &mut |l| seen.push((l.status, l.completed)),
+        )
         .unwrap();
         assert_eq!(seen.len(), 3);
         assert_eq!(seen[1], ("downloading".into(), Some(5)));
@@ -458,11 +483,12 @@ mod tests {
     }
 
     #[test]
-    fn a_cancel_ends_a_download_whose_server_stalls() {
+    fn a_cancel_ends_a_download_whose_server_stalls_and_closes_its_connection() {
+        // CodeRabbit review 5682803580: a cancelled pull left its reader blocked on a stalled
+        // stream (no read timeout), so each retry could keep another connection open.
         for headers_first in [false, true] {
             let listener = TcpListener::bind("127.0.0.1:0").unwrap();
             let url = format!("http://{}/api/pull", listener.local_addr().unwrap());
-            let (release, wait) = std::sync::mpsc::channel::<()>();
             let server = std::thread::spawn(move || {
                 let (mut stream, _) = listener.accept().unwrap();
                 let mut request = vec![0_u8; 4096];
@@ -474,8 +500,12 @@ mod tests {
                     write!(stream, "{:x}\r\n{line}\r\n", line.len()).unwrap();
                     stream.flush().unwrap();
                 }
-                // Synthetic stall: no further bytes until the test ends.
-                let _ = wait.recv();
+                // Synthetic stall: no further bytes. The client must close the connection.
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(10)))
+                    .unwrap();
+                let mut rest = [0_u8; 64];
+                matches!(stream.read(&mut rest), Ok(0))
             });
             let cancel = Arc::new(AtomicBool::new(false));
             let flag = Arc::clone(&cancel);
@@ -484,27 +514,49 @@ mod tests {
                 flag.store(true, Ordering::Release);
             });
             let started = std::time::Instant::now();
-            let error = pull_from(&url, "gemma4:e4b", &cancel, &mut |_| {}).unwrap_err();
+            let error = pull_from(
+                &url,
+                "gemma4:e4b",
+                &cancel,
+                Duration::from_secs(1),
+                &mut |_| {},
+            )
+            .unwrap_err();
             assert!(error.contains("abgebrochen"), "{error}");
             assert!(
                 started.elapsed() < Duration::from_secs(5),
                 "cancel must not wait for the server"
             );
             canceller.join().unwrap();
-            release.send(()).unwrap();
-            server.join().unwrap();
+            assert!(
+                server.join().unwrap(),
+                "the cancelled pull kept its connection open"
+            );
         }
     }
 
     #[test]
     fn a_pull_error_or_an_unfinished_stream_is_reported_not_treated_as_success() {
         let (url, server) = serve("{\"error\":\"pull model manifest: file does not exist\"}\n");
-        let error =
-            pull_from(&url, "gemma4:e9b", &AtomicBool::new(false), &mut |_| {}).unwrap_err();
+        let error = pull_from(
+            &url,
+            "gemma4:e9b",
+            &AtomicBool::new(false),
+            PULL_IDLE,
+            &mut |_| {},
+        )
+        .unwrap_err();
         assert!(error.contains("file does not exist"), "{error}");
         server.join().unwrap();
         let (url, server) = serve("{\"status\":\"downloading\"}\n");
-        assert!(pull_from(&url, "gemma4:e4b", &AtomicBool::new(false), &mut |_| {}).is_err());
+        assert!(pull_from(
+            &url,
+            "gemma4:e4b",
+            &AtomicBool::new(false),
+            PULL_IDLE,
+            &mut |_| {}
+        )
+        .is_err());
         server.join().unwrap();
     }
 }

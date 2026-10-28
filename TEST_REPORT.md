@@ -683,3 +683,19 @@ Neue Vitest-Fälle:
 Alle 159 Vitest-Fälle, `tsc`, `prettier` und der Produktions-Build bestanden. Das Layout wurde mit synthetischen Daten in Chromium bei 1600×900 angesehen: ein Scrollbalken, die Live-Zusammenfassung bleibt beim Scrollen sichtbar, die Suche markiert Treffer.
 
 Nicht geprüft: echte Geräte, echte Ollama-/LM-Studio-Server. Offene Fragen aus dem Durchgang, etwa ob FFmpeg mitgeliefert werden soll, sind nicht entschieden.
+
+**CodeRabbit-Reviews 5682803580 und 5682945190 bearbeitet:**
+
+Korrekturen, jeweils mit einem Regressionstest, der vor der Korrektur fehlschlug:
+- **Ollama-Download:** Ein abgebrochener Download ließ seinen Lesethread auf einem stillstehenden Stream ohne Lese-Zeitlimit hängen. Jetzt gilt ein Ruhe-Limit von 5 Minuten je Lesevorgang, nicht für den ganzen Download. Der Abbruch wartet auf das Ende der Verbindung, bevor ein neuer Download möglich ist. Der Test verlangt, dass der synthetische Server das Schließen der Verbindung sieht.
+- **Live-Zusammenfassung, Wiederholung:** Ein fehlgeschlagenes Update behält seinen Auslöser und wird nach der Wartezeit wiederholt, auch unterhalb der normalen Schwellen.
+- **Live-Panel, Endpunkt:** Gestartet werden kann nur mit Endpunkten, die der Transport akzeptiert: lokal nur Loopback mit HTTP oder HTTPS, Cloud nur HTTPS, jeweils ohne Zugangsdaten oder Zusatzparameter.
+- **CI-Filterleser:** Ein vierfach eingerückter Filtereintrag beendet den Block nicht mehr vorzeitig.
+
+Ohne eigenen Regressionstest:
+- **Deinstallation:** Eine nicht registrierte Kopie entfernt keine fremden Verknüpfungen mehr. Unter Wine geprüft.
+- **README:** Die Formulierung zur Altordner-Bereinigung bei laufender alter App ist präzisiert.
+
+Nicht übernommen: Die Kurzfassung erzwingt keine Übernahme früherer Punkte. Sie ist auf 8 Punkte begrenzt und darf zusammenfassen. Jede belegte Aussage bleibt in den Detaillisten und in den unveränderlichen Fenster- und Kurzfassungsdateien erhalten.
+
+Ergebnisse: 294 Rust-Tests bestanden (2 ignoriert), 160 Vitest-Fälle, Clippy, fmt, tsc, prettier und die Release-Skripttests bestanden. `makensis -WX` kompiliert ohne Warnung.

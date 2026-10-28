@@ -39,7 +39,8 @@ def pr_paths(text):
     else:
         # The whole block up to the next key at the same or a lower level: blank and comment
         # lines are skipped, entries are read, and anything else fails closed.
-        block = re.search(r'^    paths:\n(.*?)(?=^ {0,4}\S|\Z)', section, re.M | re.S)
+        # The block ends at the next key; a wrongly indented list entry stays in it and is rejected.
+        block = re.search(r'^    paths:\n(.*?)(?=^ {0,3}\S|^    [A-Za-z_][\w-]*:|\Z)', section, re.M | re.S)
         if not block:
             raise ValueError('No readable pull_request paths filter')
         patterns = []
@@ -164,6 +165,9 @@ class WorkflowBoundaries(unittest.TestCase):
         # A blank or comment line must not hide a later entry from validation.
         with self.assertRaises(ValueError):
             pr_paths(with_entry("\n      # later entries\n      - '!platform/macos/**'\n"))
+        # A four-space entry must not end the block early and escape validation.
+        with self.assertRaises(ValueError):
+            pr_paths(with_entry("    - '!platform/macos/**'\n"))
         separated = with_entry("\n      - 'docs/**'\n")
         self.assertIn('docs/**', pr_paths(separated))
         for unreadable in ('platform/macos/**', "'platform/**' # note", '"platform/**'):

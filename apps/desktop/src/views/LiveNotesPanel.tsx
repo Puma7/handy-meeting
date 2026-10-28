@@ -185,9 +185,8 @@ export default function LiveNotesPanel({
     mounted = useRef(true),
     autoStarted = useRef<string | null>(null);
   const available = Boolean(api.getLiveNotes && api.startLiveNotes);
-  const modelReady = Boolean(
-    connection.model.trim() && connection.endpoint.trim(),
-  );
+  const endpointValid = endpointAllowed(connection.mode, connection.endpoint);
+  const modelReady = Boolean(connection.model.trim()) && endpointValid;
 
   useEffect(() => {
     // Restored on every setup: StrictMode runs setup, cleanup and setup again.
@@ -475,8 +474,18 @@ export default function LiveNotesPanel({
             )}
           </>
         ) : (
-          <span>
-            {de ? "Noch kein Textmodell gewählt." : "No text model chosen yet."}
+          <span role={connection.model.trim() ? "alert" : undefined}>
+            {!connection.model.trim()
+              ? de
+                ? "Noch kein Textmodell gewählt."
+                : "No text model chosen yet."
+              : connection.mode === "local"
+                ? de
+                  ? "Lokale Verarbeitung erlaubt nur Adressen auf diesem Computer (127.0.0.1, localhost oder [::1]) mit HTTP oder HTTPS."
+                  : "Local processing only allows addresses on this computer (127.0.0.1, localhost or [::1]) over HTTP or HTTPS."
+                : de
+                  ? "Cloud benötigt eine HTTPS-Adresse ohne Zugangsdaten oder Zusatzparameter."
+                  : "Cloud needs an HTTPS address without credentials or extra parameters."}
           </span>
         )}
         <button
@@ -671,5 +680,26 @@ export default function LiveNotesPanel({
         )
       )}
     </aside>
+  );
+}
+
+/**
+ * Mirrors the backend transport rules so the start button is only offered for an endpoint the
+ * backend accepts: no credentials or extra parameters; local is loopback HTTP(S), cloud HTTPS.
+ */
+export function endpointAllowed(mode: string, endpoint: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(endpoint.trim());
+  } catch {
+    return false;
+  }
+  if (url.username || url.password || url.search || url.hash) return false;
+  if (mode === "cloud") return url.protocol === "https:";
+  if (mode !== "local" || !["http:", "https:"].includes(url.protocol))
+    return false;
+  const host = url.hostname;
+  return (
+    host === "localhost" || host === "[::1]" || /^127(\.\d{1,3}){3}$/.test(host)
   );
 }

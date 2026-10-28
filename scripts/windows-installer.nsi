@@ -67,6 +67,8 @@ LangString ReplaceFailed ${LANG_ENGLISH} "The previous program files could not b
 LangString ReplaceFailed ${LANG_GERMAN} "Die bisherigen Programmdateien konnten nicht ersetzt werden. Sonst wurde nichts geändert; Setup nach dem Schließen von ${PRODUCT} erneut ausführen."
 LangString LegacyRemoved ${LANG_ENGLISH} "Removed the former program folder"
 LangString LegacyRemoved ${LANG_GERMAN} "Früheren Programmordner entfernt"
+LangString MovedKept ${LANG_ENGLISH} "The previous installation is still running and was kept; remove it later with its Uninstall.exe"
+LangString MovedKept ${LANG_GERMAN} "Die bisherige Installation läuft noch und bleibt erhalten; später über ihre Uninstall.exe entfernen"
 LangString LegacyKept ${LANG_ENGLISH} "A former version is still running and was kept; remove it later in Windows Settings > Apps"
 LangString LegacyKept ${LANG_GERMAN} "Eine frühere Version läuft noch und bleibt erhalten; später unter Windows-Einstellungen > Apps entfernen"
 Function .onInit
@@ -168,7 +170,8 @@ Function RemoveFormerInstallations
   Call WaitForRelease
   Pop $R4
   StrCmp $R4 1 moved_remove
-  DetailPrint "$(LegacyKept): $R3"
+  ; Its registration is replaced by this installation, so Windows Apps cannot list it.
+  DetailPrint "$(MovedKept): $R3"
   Goto legacy_scan
   moved_remove:
   ExecWait '"$R3\Uninstall.exe" /S _?=$R3' $R4
@@ -293,12 +296,14 @@ Section "Uninstall"
   Quit
   StrCmp $R1 "remove" 0 uninstall_done
   Delete "$INSTDIR\Uninstall.exe"
-  Delete "$SMPROGRAMS\${PRODUCT}.lnk"
-  Delete "$DESKTOP\${PRODUCT}.lnk"
-  ; A registration of a different folder belongs to another installation and stays.
+  ; Links and registration of a different folder belong to the current installation and stay.
   ReadRegStr $0 HKCU "${UNINSTALL_KEY}" "InstallLocation"
+  StrCmp $0 "" own_links
   StrCmp $0 "$INSTDIR" 0 keep_registration
   DeleteRegKey HKCU "${UNINSTALL_KEY}"
+  own_links:
+  Delete "$SMPROGRAMS\${PRODUCT}.lnk"
+  Delete "$DESKTOP\${PRODUCT}.lnk"
   keep_registration:
   ; Non-recursive: unknown files and all user sessions are retained.
   RMDir "$INSTDIR"
