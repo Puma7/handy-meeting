@@ -78,6 +78,9 @@ fn timestamp(samples: u64) -> String {
     format!("{:02}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60)
 }
 
+/// Render every section with its stable source ID, track, status and checked nominal sample range.
+/// Availability notices distinguish absent/empty/whitespace text without inferring silence or speakers;
+/// every stored Some(text) retains its original characters in this plain-text representation.
 fn transcript(data: &SessionData, locale: &str) -> AppResult<String> {
     if !["de", "en"].contains(&locale) {
         return Err("Unsupported export language".into());
@@ -89,9 +92,9 @@ fn transcript(data: &SessionData, locale: &str) -> AppResult<String> {
         data.started_at,
         data.model_id,
         if de {
-            "Abschnittszeiten, keine exakten Wortzeiten."
+            "Nominale Abschnittszeiten, keine exakten Wortzeiten."
         } else {
-            "Section times, not exact word timestamps."
+            "Nominal section times, not exact word timestamps."
         }
     );
     if data.status != "complete" {
@@ -113,24 +116,52 @@ fn transcript(data: &SessionData, locale: &str) -> AppResult<String> {
         });
     }
     let mut parts: Vec<_> = data.parts.iter().collect();
-    parts.sort_by_key(|p| (p.start_sample, &p.source));
+    parts.sort_by_key(|p| (p.start_sample, &p.source, &p.file));
     for part in parts {
-        if let Some(value) = part.text.as_ref().filter(|value| !value.trim().is_empty()) {
-            let label = match (part.source.as_str(), de) {
-                ("system", true) => "Computerton",
-                ("system", false) => "System audio",
-                ("microphone", true) => "Mikrofon",
-                ("microphone", false) => "Microphone",
-                _ => &part.source,
-            };
-            text.push_str(&format!(
-                "\n[{}–{}] {}\n\n{}\n",
-                timestamp(part.start_sample),
-                timestamp(part.start_sample + part.sample_count),
-                label,
-                value
-            ));
+        let end = part
+            .start_sample
+            .checked_add(part.sample_count)
+            .ok_or("Ungültiger Abschnittsbereich. / Invalid section range.")?;
+        let label = match (part.source.as_str(), de) {
+            ("system", true) => "Computerton",
+            ("system", false) => "System audio",
+            ("microphone", true) => "Mikrofon",
+            ("microphone", false) => "Microphone",
+            _ => &part.source,
+        };
+        text.push_str(&format!(
+            "\n[{}–{}] {}\nsourceId: {} | track: {} | status: {}\n\n",
+            timestamp(part.start_sample),
+            timestamp(end),
+            label,
+            part.file,
+            part.source,
+            part.status
+        ));
+        match part.text.as_deref() {
+            None => text.push_str(if de {
+                "[Exporthinweis] Kein Transkripttext gespeichert."
+            } else {
+                "[Export note] No transcript text is stored."
+            }),
+            Some(value) => {
+                if value.is_empty() {
+                    text.push_str(if de {
+                        "[Exporthinweis] Gespeicherter Transkripttext ist eine leere Zeichenfolge.\n"
+                    } else {
+                        "[Export note] Stored transcript text is an empty string.\n"
+                    });
+                } else if value.trim().is_empty() {
+                    text.push_str(if de {
+                        "[Exporthinweis] Gespeicherter Transkripttext enthält nur Leerraum; Originalzeichen folgen.\n"
+                    } else {
+                        "[Export note] Stored transcript text contains only whitespace; original characters follow.\n"
+                    });
+                }
+                text.push_str(value);
+            }
         }
+        text.push('\n');
         if text.len() > 32 * 1024 * 1024 {
             return Err(
                 "Transkriptexport überschreitet 32 MiB. / Transcript export exceeds 32 MiB.".into(),
@@ -140,13 +171,151 @@ fn transcript(data: &SessionData, locale: &str) -> AppResult<String> {
     Ok(text)
 }
 
+/// Save compatible TXT output through the same create-new export path used by other formats.
 pub(super) fn save_transcript(
     folder: &Path,
     data: &SessionData,
     locale: &str,
 ) -> AppResult<String> {
-    let text = transcript(data, locale)?;
-    let exports = export_directory(folder)?;
+    save_transcript_format(folder, data, locale, "txt")
+}
+
+// Quote every line as code: transcript text cannot introduce Markdown links,
+// images, HTML, headings or a closing fence. The original characters are retained.
+/// Return code-indented Markdown with presentation line endings normalized so transcript links,
+/// HTML and fence text remain passive; JSON retains raw text.
+fn markdown_literal(value: &str) -> String {
+    // CommonMark accepts CR, LF and CRLF. Normalize this presentation copy
+    // so a lone CR cannot escape the code indentation; JSON keeps raw text.
+    value
+        .replace("\r\n", "\n")
+        .replace('\r', "\n")
+        .split('\n')
+        .map(|line| format!("    {line}\n"))
+        .collect()
+}
+
+/// Render bounded TXT, passive Markdown or JSON from the full snapshot. JSON preserves section
+/// provenance and checked confirmed ranges independently of the text formats' nominal ranges.
+fn render_export(
+    data: &SessionData,
+    locale: &str,
+    format: &str,
+) -> AppResult<(String, &'static str)> {
+    if !["de", "en"].contains(&locale) {
+        return Err("Unsupported export language".into());
+    }
+    match format {
+        "txt" => Ok((transcript(data, locale)?, "txt")),
+        "md" | "markdown" => Ok((
+            format!(
+                "# Meeting for Handy — {}\n\n{}",
+                if locale == "de" {
+                    "Originaltranskript"
+                } else {
+                    "Original transcript"
+                },
+                markdown_literal(&transcript(data, locale)?)
+            ),
+            "md",
+        )),
+        "json" => {
+            let mut parts: Vec<_> = data.parts.iter().collect();
+            parts.sort_by_key(|p| (p.start_sample, &p.source, &p.file));
+            let sections: Vec<_> = parts.into_iter().map(|p| {
+                let count = if p.confirmed_sample_count == 0 && data.read_only { p.sample_count } else { p.confirmed_sample_count };
+                let end = p.start_sample.checked_add(count).ok_or("Invalid section range")?;
+                Ok(serde_json::json!({
+                    "sourceId": p.file, "track": p.source,
+                    "startSample": p.start_sample, "confirmedEndSample": end,
+                    "startMs": p.start_sample.saturating_mul(1000) / u64::from(meeting_core::SAMPLE_RATE),
+                    "confirmedEndMs": end.saturating_mul(1000) / u64::from(meeting_core::SAMPLE_RATE),
+                    "status": p.status, "text": p.text, "committedText": p.committed_text,
+                    "tentativeText": p.tentative_text, "modelId": p.model_id,
+                    "transcriptSequence": p.transcript_sequence,
+                    "untrustedText": true
+                }))
+            }).collect::<AppResult<_>>()?;
+            let value = serde_json::json!({
+                "schemaVersion": 1, "exportKind": "original-transcript",
+                "application": "Meeting for Handy", "applicationVersion": crate::VERSION,
+                "meetingId": data.id, "title": data.title,
+                "startedAt": data.started_at, "endedAt": data.ended_at,
+                "status": data.status, "modelId": data.model_id,
+                "captureIncomplete": data.capture_incomplete,
+                "warnings": data.warnings, "snapshotSequence": data.snapshot_sequence,
+                "sampleRate": meeting_core::SAMPLE_RATE,
+                "timeSemantics": "section-boundaries-not-word-timestamps",
+                "speakerIdentity": "unknown-unless-separately-confirmed",
+                "untrustedText": true, "sections": sections
+            });
+            let output = serde_json::to_string_pretty(&value)
+                .map_err(|_| "Export could not be serialized")?;
+            if output.len() > 32 * 1024 * 1024 {
+                return Err(
+                    "Transkriptexport überschreitet 32 MiB. / Transcript export exceeds 32 MiB."
+                        .into(),
+                );
+            }
+            Ok((output, "json"))
+        }
+        _ => Err("Unbekanntes Exportformat. / Unsupported export format.".into()),
+    }
+}
+
+/// Validate the session folder and create a new transcript export with control-event evidence;
+/// retain originals, earlier exports and pending bytes on publication failure.
+pub(super) fn save_transcript_format(
+    folder: &Path,
+    data: &SessionData,
+    locale: &str,
+    format: &str,
+) -> AppResult<String> {
+    let folder = directory(folder)?;
+    let controls = meeting_core::read_capture_control_events(&folder)
+        .map_err(|_| "Aufnahmesteuerung konnte nicht geprüft werden; Originale bleiben erhalten. / Capture control evidence could not be verified; originals are retained.")?;
+    let (mut text, extension) = render_export(data, locale, format)?;
+    if let Some(controls) = controls {
+        if extension == "json" {
+            let mut value: serde_json::Value =
+                serde_json::from_str(&text).map_err(|_| "Export serialization failed")?;
+            value["captureControls"] =
+                serde_json::to_value(controls).map_err(|_| "Capture control export failed")?;
+            text =
+                serde_json::to_string_pretty(&value).map_err(|_| "Export serialization failed")?;
+        } else {
+            let mut evidence = if locale == "de" {
+                "\nAufnahmesteuerung (kein Gesprächsinhalt; ungefähre Abschnittszeiten):\n"
+            } else {
+                "\nCapture controls (not spoken content; approximate section times):\n"
+            }
+            .to_owned();
+            for event in controls.events {
+                evidence.push_str(&format!(
+                    "{} | {} | paused={} | microphoneMuted={} | missingSamples={}\n",
+                    timestamp(event.requested_sample),
+                    event.kind,
+                    event.paused,
+                    event.microphone_muted,
+                    event.missing_samples.unwrap_or(0)
+                ));
+            }
+            if controls.incomplete_tail {
+                evidence.push_str(if locale == "de" { "Unvollständiger letzter Steuerungseintrag; nur bestätigter Präfix ausgegeben.\n" } else { "Incomplete final control event; only the confirmed prefix is exported.\n" });
+            }
+            text.push_str(&if extension == "md" {
+                markdown_literal(&evidence)
+            } else {
+                evidence
+            });
+        }
+    }
+    if text.len() > 32 * 1024 * 1024 {
+        return Err(
+            "Transkriptexport überschreitet 32 MiB. / Transcript export exceeds 32 MiB.".into(),
+        );
+    }
+    let exports = export_directory(&folder)?;
     static SEQUENCE: AtomicU64 = AtomicU64::new(0);
     let at = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -154,7 +323,7 @@ pub(super) fn save_transcript(
         .as_millis();
     for _ in 0..32 {
         let name = format!(
-            "transcript-{at}-{}.txt",
+            "transcript-{at}-{}.{extension}",
             SEQUENCE.fetch_add(1, Ordering::Relaxed)
         );
         // A failed write remains explicitly pending; only synced complete text
@@ -315,16 +484,83 @@ mod tests {
             .unwrap()
             .contains("INCOMPLETE"));
     }
+    /// Refuse unsupported languages for every format before creating or replacing export paths.
     #[test]
     fn invalid_language_or_export_file_never_overwrites_any_file() {
         let (_, store) = fixture();
-        assert!(save_transcript(store.folder(), &store.snapshot().unwrap(), "xx").is_err());
+        for format in ["txt", "md", "json"] {
+            assert!(save_transcript_format(
+                store.folder(),
+                &store.snapshot().unwrap(),
+                "xx",
+                format
+            )
+            .is_err());
+        }
         assert!(!store.folder().join("exports").exists());
         fs::write(store.folder().join("exports"), "keep").unwrap();
         assert!(save_transcript(store.folder(), &store.snapshot().unwrap(), "de").is_err());
         assert_eq!(
             fs::read_to_string(store.folder().join("exports")).unwrap(),
             "keep"
+        );
+    }
+    /// Verify synthetic hostile transcript markup stays passive and all original sections survive
+    /// both formats.
+    #[test]
+    fn json_and_markdown_exports_preserve_original_sections_and_never_activate_transcript_markup() {
+        let (_, store) = fixture();
+        let manifest = fs::read(store.folder().join("session.json")).unwrap();
+        let mut data = store.snapshot().unwrap();
+        let original = "<script>alert(1)</script>\n```\n![leak](https://example.invalid/private)\n# fake heading\n[run](javascript:alert(1))\r<img src=\"https://example.invalid/secret\">\r![second](https://example.invalid/secret)";
+        data.parts[0].text = Some(original.into());
+        data.parts[0].committed_text = original.into();
+        data.parts[0].tentative_text = "Unconfirmed tail".into();
+        data.parts[0].processed_samples = 16000;
+        data.parts[0].transcript_sequence = 37;
+        let mut pending = data.parts[0].clone();
+        pending.file = "microphone-000000032000.wav".into();
+        pending.source = "microphone".into();
+        pending.start_sample = 32000;
+        pending.text = None;
+        pending.committed_text.clear();
+        pending.tentative_text.clear();
+        pending.transcript_sequence = 0;
+        data.parts.push(pending);
+        let json_path = save_transcript_format(store.folder(), &data, "en", "json").unwrap();
+        let value: serde_json::Value =
+            serde_json::from_slice(&fs::read(store.folder().join(&json_path)).unwrap()).unwrap();
+        assert_eq!(value["sections"].as_array().unwrap().len(), 2);
+        assert_eq!(value["sections"][0]["sourceId"], data.parts[0].file);
+        assert_eq!(value["sections"][0]["text"], original);
+        assert_eq!(value["sections"][0]["tentativeText"], "Unconfirmed tail");
+        assert_eq!(value["sections"][0]["transcriptSequence"], 37);
+        assert_eq!(value["sections"][1]["startMs"], 2000);
+        assert!(value["sections"][1]["text"].is_null());
+        assert_eq!(
+            value["timeSemantics"],
+            "section-boundaries-not-word-timestamps"
+        );
+        assert!(value.get("audioPath").is_none());
+        let md_path = save_transcript_format(store.folder(), &data, "de", "markdown").unwrap();
+        let markdown = fs::read_to_string(store.folder().join(md_path)).unwrap();
+        for line in original.replace('\r', "\n").lines() {
+            assert!(markdown.contains(&format!("    {line}\n")));
+        }
+        assert!(!markdown.contains("\n<script>"));
+        assert!(!markdown.contains("\n```"));
+        assert!(!markdown.contains("\n!["));
+        assert!(!markdown.contains('\r'));
+        assert!(markdown.contains("\n    <img src=\"https://example.invalid/secret\">\n"));
+        let json_before = fs::read(store.folder().join(&json_path)).unwrap();
+        assert!(save_transcript_format(store.folder(), &data, "en", "../../exe").is_err());
+        assert_eq!(
+            fs::read(store.folder().join(json_path)).unwrap(),
+            json_before
+        );
+        assert_eq!(
+            fs::read(store.folder().join("session.json")).unwrap(),
+            manifest
         );
     }
     #[test]
@@ -335,6 +571,197 @@ mod tests {
             command.get_args().collect::<Vec<_>>(),
             vec![path.as_os_str()]
         );
+    }
+
+    /// Snapshot every synthetic source file after its store has closed, before exporting.
+    fn retained_source_files(folder: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+        let mut folders = vec![folder.to_owned()];
+        let mut files = Vec::new();
+        while let Some(folder) = folders.pop() {
+            for entry in fs::read_dir(folder).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    folders.push(path);
+                } else {
+                    files.push((path.clone(), fs::read(&path).unwrap()));
+                }
+            }
+        }
+        files.sort_by(|a, b| a.0.cmp(&b.0));
+        files
+    }
+
+    /// Keep every synthetic section visible in text formats, including absent, empty and whitespace text.
+    /// JSON retains raw text states and original files remain unchanged across all exports.
+    #[test]
+    fn text_exports_keep_every_source_identity_status_and_original_text_state() {
+        for locale in ["de", "en"] {
+            let (_, store) = fixture();
+            let folder = store.folder().to_owned();
+            let mut data = store.snapshot().unwrap();
+            let base = data.parts[0].clone();
+            drop(store);
+            let originals = retained_source_files(&folder);
+            let supplied = [
+                ("system", 0, None, "pending"),
+                ("microphone", 0, Some(""), "pending"),
+                ("system", 16000, Some(" \t "), "error"),
+                ("microphone", 16000, Some("\t\n  \r\n"), "complete"),
+                (
+                    "system",
+                    32000,
+                    Some("  Original <script>literal</script>\t\n![passive](https://example.invalid/)  "),
+                    "complete",
+                ),
+            ];
+            data.parts = supplied
+                .into_iter()
+                .map(|(track, start, value, status)| {
+                    let mut part = base.clone();
+                    part.file = format!("{track}-{start:012}.wav");
+                    part.source = track.into();
+                    part.start_sample = start;
+                    part.text = value.map(str::to_owned);
+                    part.committed_text = value.unwrap_or_default().into();
+                    part.tentative_text = "Separate unconfirmed candidate".into();
+                    part.status = status.into();
+                    part
+                })
+                .collect();
+            let txt = save_transcript(&folder, &data, locale).unwrap();
+            let md = save_transcript_format(&folder, &data, locale, "md").unwrap();
+            let json = save_transcript_format(&folder, &data, locale, "json").unwrap();
+            let txt = fs::read_to_string(folder.join(txt)).unwrap();
+            let md = fs::read_to_string(folder.join(md)).unwrap();
+            let json: serde_json::Value =
+                serde_json::from_slice(&fs::read(folder.join(json)).unwrap()).unwrap();
+            let sections = json["sections"].as_array().unwrap();
+            assert_eq!(sections.len(), supplied.len());
+            for part in &data.parts {
+                let identity = format!(
+                    "sourceId: {} | track: {} | status: {}",
+                    part.file, part.source, part.status
+                );
+                assert_eq!(txt.matches(&identity).count(), 1, "{identity}");
+                assert_eq!(
+                    md.matches(&format!("    {identity}\n")).count(),
+                    1,
+                    "{identity}"
+                );
+                let section = sections
+                    .iter()
+                    .find(|item| item["sourceId"] == part.file)
+                    .unwrap();
+                assert_eq!(section["status"], part.status);
+                assert_eq!(section["track"], part.source);
+                assert_eq!(section["text"], serde_json::to_value(&part.text).unwrap());
+                assert_eq!(section["committedText"], part.committed_text);
+                assert_eq!(section["tentativeText"], part.tentative_text);
+                if let Some(value) = &part.text {
+                    assert!(txt.contains(&format!("\n{value}\n")));
+                }
+            }
+            for notice in if locale == "de" {
+                [
+                    "[Exporthinweis] Kein Transkripttext gespeichert.",
+                    "[Exporthinweis] Gespeicherter Transkripttext ist eine leere Zeichenfolge.",
+                    "[Exporthinweis] Gespeicherter Transkripttext enthält nur Leerraum; Originalzeichen folgen.",
+                ]
+            } else {
+                [
+                    "[Export note] No transcript text is stored.",
+                    "[Export note] Stored transcript text is an empty string.",
+                    "[Export note] Stored transcript text contains only whitespace; original characters follow.",
+                ]
+            } {
+                assert!(txt.contains(notice), "{notice}");
+                assert!(md.contains(&format!("    {notice}\n")), "{notice}");
+            }
+            assert_eq!(txt.matches("[00:00:00–00:00:01]").count(), 2);
+            assert_eq!(
+                json["timeSemantics"],
+                "section-boundaries-not-word-timestamps"
+            );
+            assert!(!md.contains("\n<script>"));
+            assert!(!md.contains("\n!["));
+            for (path, before) in originals {
+                assert_eq!(fs::read(path).unwrap(), before);
+            }
+        }
+    }
+
+    /// Count whitespace-only section payloads toward the export bound before creating files.
+    #[test]
+    fn whitespace_sections_cannot_bypass_the_export_size_limit() {
+        let (_, store) = fixture();
+        let folder = store.folder().to_owned();
+        let mut data = store.snapshot().unwrap();
+        drop(store);
+        let originals = retained_source_files(&folder);
+        data.parts[0].text = Some(" ".repeat(32 * 1024 * 1024));
+        assert!(save_transcript_format(&folder, &data, "en", "md").is_err());
+        assert!(!folder.join("exports").exists());
+        for (path, before) in originals {
+            assert_eq!(fs::read(path).unwrap(), before);
+        }
+    }
+
+    /// Reject overflowing ranges even on formerly omitted sections before creating any export file.
+    #[test]
+    fn invalid_empty_section_ranges_return_errors_without_panics_or_partial_exports() {
+        for value in [None, Some(""), Some(" \t "), Some("Original text")] {
+            let (_, store) = fixture();
+            let folder = store.folder().to_owned();
+            let mut data = store.snapshot().unwrap();
+            drop(store);
+            let originals = retained_source_files(&folder);
+            data.parts[0].start_sample = u64::MAX;
+            data.parts[0].sample_count = 1;
+            data.parts[0].confirmed_sample_count = 1;
+            data.parts[0].text = value.map(str::to_owned);
+            for format in ["txt", "md", "json"] {
+                let result = std::panic::catch_unwind(|| {
+                    save_transcript_format(&folder, &data, "en", format)
+                });
+                assert!(result.is_ok(), "{format} panicked for {value:?}");
+                assert!(result.unwrap().is_err(), "{format} accepted {value:?}");
+                assert!(!folder.join("exports").exists());
+            }
+            for (path, before) in originals {
+                assert_eq!(fs::read(path).unwrap(), before);
+            }
+        }
+    }
+
+    /// Keep JSON's confirmed-range contract independent from text-only nominal-range validation.
+    #[test]
+    fn json_retains_null_text_with_a_valid_confirmed_but_overflowing_nominal_range() {
+        let (_, store) = fixture();
+        let folder = store.folder().to_owned();
+        let mut data = store.snapshot().unwrap();
+        drop(store);
+        let originals = retained_source_files(&folder);
+        data.parts[0].start_sample = u64::MAX - 1;
+        data.parts[0].sample_count = 2;
+        data.parts[0].confirmed_sample_count = 1;
+        data.parts[0].text = None;
+        for format in ["txt", "md"] {
+            let result =
+                std::panic::catch_unwind(|| save_transcript_format(&folder, &data, "en", format));
+            assert!(result.is_ok(), "{format} panicked");
+            assert!(result.unwrap().is_err());
+            assert!(!folder.join("exports").exists());
+        }
+        let json = save_transcript_format(&folder, &data, "en", "json").unwrap();
+        let value: serde_json::Value =
+            serde_json::from_slice(&fs::read(folder.join(json)).unwrap()).unwrap();
+        assert_eq!(value["sections"][0]["startSample"], u64::MAX - 1);
+        assert_eq!(value["sections"][0]["confirmedEndSample"], u64::MAX);
+        assert!(value["sections"][0]["text"].is_null());
+        assert_eq!(value["sections"][0]["sourceId"], data.parts[0].file);
+        for (path, before) in originals {
+            assert_eq!(fs::read(path).unwrap(), before);
+        }
     }
     #[cfg(windows)]
     #[test]

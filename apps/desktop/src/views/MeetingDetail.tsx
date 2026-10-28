@@ -1,10 +1,14 @@
 import { ArrowLeft, Check, Copy, Sparkles } from "lucide-react";
 import { meetingLabel } from "../domain";
-import type { Meeting, Locale } from "../types";
+import type { Meeting, Locale, TranscriptFormat } from "../types";
 import type { MessageKey } from "../i18n";
 import TranscriptBody from "./TranscriptBody";
 import SessionWarnings from "./SessionWarnings";
 import MeetingFiles from "./MeetingFiles";
+/**
+ * Renders one historical meeting's literal source sections. Callers bind copy/export
+ * actions to that meeting's ID; displayed section times are not word timestamps.
+ */
 export default function MeetingDetail({
   meeting,
   locale,
@@ -29,7 +33,7 @@ export default function MeetingDetail({
   onCopy: () => void;
   onAnalyse: () => void;
   onOpenFolder: () => void;
-  onExport: () => void;
+  onExport: (format: TranscriptFormat) => void;
   savedFile: string | null;
   selectedFile?: string | null;
   speakers?: Record<string, string>;

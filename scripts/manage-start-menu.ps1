@@ -1,12 +1,12 @@
-# A failed ownership check preserves the existing shortcut. The installer passes a
-# process-scope -ExecutionPolicy only; persistent and Group Policy settings are untouched.
+# A failed ownership check preserves the existing shortcut. Installer and helper
+# never override execution policy; a blocked helper leaves the executable available.
 # Exit codes: 0 link ready or nothing to do, 3 link preserved or blocked, 4 link kept on a newer version.
 param([Parameter(Mandatory)][ValidateSet('install','uninstall')][string]$Mode,[Parameter(Mandatory)][string]$InstallDirectory,[string]$Version='')
 $ErrorActionPreference='Stop'
 $program=[IO.Path]::GetFullPath((Join-Path $InstallDirectory 'HandyMeeting.exe'))
-$shortcutDirectory=Join-Path ([Environment]::GetFolderPath('Programs')) 'HandyMeeting'
-$shortcut=Join-Path $shortcutDirectory 'HandyMeeting.lnk'
-$owner='HKCU:\Software\HandyMeeting\StartMenuLink'
+$shortcutDirectory=Join-Path ([Environment]::GetFolderPath('Programs')) 'Meeting for Handy'
+$shortcut=Join-Path $shortcutDirectory 'Meeting for Handy.lnk'
+$owner='HKCU:\Software\HandyMeeting\BrandedStartMenuLink'
 $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 $mutex=[Threading.Mutex]::new($false,('Local\HandyMeeting-StartMenu-'+$sid))
 $locked=$false
@@ -74,6 +74,13 @@ function Get-HandyInstallations {
 }
 # Publishes a link to $Target and records ownership; existing bytes are backed up first.
 function Publish-HandyLink([string]$Target) {
+    <#
+    .SYNOPSIS
+    Publish the branded shortcut only when its previous ownership bytes still match.
+    .DESCRIPTION
+    Preserve foreign or edited links. Back up an owned link before replacement and
+    bind the resulting ownership record to its target and hash under the caller's mutex.
+    #>
     if (Test-Path -LiteralPath $shortcutDirectory) {
         $directory=Get-Item -LiteralPath $shortcutDirectory -Force
         if (-not $directory.PSIsContainer -or ($directory.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {exit 3}
@@ -88,7 +95,7 @@ function Publish-HandyLink([string]$Target) {
     $link=$shell.CreateShortcut($script:temporary)
     $link.TargetPath=$Target
     $link.WorkingDirectory=[IO.Path]::GetDirectoryName($Target)
-    $link.Description='HandyMeeting'
+    $link.Description='Meeting for Handy'
     $link.Save()
     # The named mutex serializes cooperating installers; verify old bytes again.
     if ($exists -and (Get-LinkHash $shortcut) -ne $record.SHA256) {exit 3}

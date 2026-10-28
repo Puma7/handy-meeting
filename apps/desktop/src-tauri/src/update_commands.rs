@@ -26,6 +26,8 @@ pub(crate) fn get_update_progress(
 pub(crate) fn cancel_update(service: State<'_, Arc<Service>>) {
     service.updater.cancel();
 }
+/// On Windows, hold installation admission and recheck the installer before launch. Exit only
+/// after spawning it; launch failure clears the transition and reports an error.
 #[tauri::command]
 pub(crate) async fn install_update(
     service: State<'_, Arc<Service>>,
@@ -34,9 +36,7 @@ pub(crate) async fn install_update(
     let service = Arc::clone(&service);
     blocking(move||{
   if !cfg!(target_os="windows"){return Err("Use the official release page for this platform".into());}
-  let _gate=service.transition.lock().map_err(|_|"Application state unavailable")?;
-  service.reap_finished()?;
-  {let inner=service.lock()?;if inner.active.is_some()||inner.transitioning||service.notes_jobs.running()||service.speaker_jobs.snapshot().is_some_and(|p|p.status=="running")||service.maintenance_jobs.snapshot().is_some_and(|p|p.status=="running")||service.library_jobs.snapshot().is_some_and(|p|p.status=="running"){return Err("Finish recording, recognition, analysis, speaker experiments, archive maintenance and search indexing before installing. / Bitte Aufnahme, Erkennung, Auswertung, Sprecherexperimente, Archivpflege und Indexierung vor der Installation abschließen.".into());}}
+  let _lease=service.reserve_operation(crate::operations::Kind::Installation)?;
   let installer=service.updater.installer()?;
   service.lock()?.transitioning=true;
   let mut command=std::process::Command::new(&installer.path);
@@ -50,7 +50,7 @@ pub(crate) async fn open_release_page(service: State<'_, Arc<Service>>) -> AppRe
     let service = Arc::clone(&service);
     blocking(move || {
         let page = service.updater.release_page()?;
-        let mut child = browser_command(&page).spawn().map_err(|_| {
+        let mut child = browser_command(&page)?.spawn().map_err(|_| {
             format!("Could not open the browser. Open {page} in your browser to see the official downloads. / Browser konnte nicht geöffnet werden; bitte die Seite manuell öffnen.")
         })?;
         // Reap the short-lived launcher without waiting for the browser window.
@@ -61,20 +61,69 @@ pub(crate) async fn open_release_page(service: State<'_, Arc<Service>>) -> AppRe
     })
     .await
 }
-fn browser_command(page: &str) -> std::process::Command {
-    #[cfg(windows)]
-    let mut command = {
-        use std::os::windows::process::CommandExt;
-        let base = std::env::var_os("SystemRoot").unwrap_or_else(|| "C:\\Windows".into());
-        let mut command =
-            std::process::Command::new(std::path::PathBuf::from(base).join("explorer.exe"));
-        command.creation_flags(0x08000000);
-        command
+/// Build the current OS browser launcher without spawning it; unsupported hosts return an error.
+fn browser_command(page: &str) -> AppResult<std::process::Command> {
+    browser_command_for(std::env::consts::OS, page)
+}
+/// Pass the official page as one literal OS-launcher argument; unsupported platforms receive a
+/// manual-open error instead of a guessed command.
+fn browser_command_for(platform: &str, page: &str) -> AppResult<std::process::Command> {
+    let mut command = match platform {
+        "windows" => {
+            let base = std::env::var_os("SystemRoot").unwrap_or_else(|| "C:\\Windows".into());
+            let command = std::process::Command::new(std::path::PathBuf::from(base).join("explorer.exe"));
+            #[cfg(windows)]
+            let command = {
+                use std::os::windows::process::CommandExt;
+                let mut command = command;
+                command.creation_flags(0x08000000);
+                command
+            };
+            command
+        }
+        "macos" => std::process::Command::new("/usr/bin/open"),
+        "linux" => std::process::Command::new("xdg-open"),
+        _ => return Err(format!("Opening a browser is not supported on this platform. Open the official release page manually: {page} / Browserstart wird auf dieser Plattform nicht unterstützt. Bitte die offizielle Release-Seite manuell öffnen: {page}")),
     };
-    #[cfg(target_os = "macos")]
-    let mut command = std::process::Command::new("/usr/bin/open");
-    #[cfg(target_os = "linux")]
-    let mut command = std::process::Command::new("xdg-open");
     command.arg(page);
-    command
+    Ok(command)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    /// Verify supported launcher arguments stay literal through command inspection only, without
+    /// opening a browser.
+    #[test]
+    fn supported_browser_launchers_keep_one_literal_url_without_starting_any_process() {
+        let page = "https://github.com/Puma7/meeting-for-handy/releases/tag/v1.0.4";
+        for (platform, program) in [
+            ("windows", "explorer.exe"),
+            ("macos", "open"),
+            ("linux", "xdg-open"),
+        ] {
+            let command = browser_command_for(platform, page).unwrap();
+            assert_eq!(
+                std::path::Path::new(command.get_program())
+                    .file_name()
+                    .unwrap(),
+                program
+            );
+            assert_eq!(
+                command.get_args().collect::<Vec<_>>(),
+                [std::ffi::OsStr::new(page)]
+            );
+        }
+    }
+    /// Verify unsupported hosts return an actionable official-page error without starting a
+    /// process.
+    #[test]
+    fn unsupported_browser_platforms_return_the_manual_release_action() {
+        let page = "https://github.com/Puma7/meeting-for-handy/releases/tag/v1.0.4";
+        for platform in ["freebsd", "android", "unknown"] {
+            let error = browser_command_for(platform, page).unwrap_err();
+            assert!(error.contains("not supported"));
+            assert!(error.contains(page));
+        }
+    }
 }

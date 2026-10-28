@@ -19,6 +19,7 @@ tauri-build = { version = "=2.6.3", features = [] }
 
 [dependencies]
 tauri = { version = "=2.11.5", features = [] }
+tauri-plugin-dialog = "=2.7.1"
 handy-bridge = { path = "../../../crates/handy-bridge", features = ["native-asr"] }
 meeting-core = { path = "../../../crates/meeting-core" }
 meeting-notes = { path = "../../../crates/meeting-notes" }

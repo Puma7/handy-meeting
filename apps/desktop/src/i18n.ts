@@ -6,12 +6,13 @@ export const de = {
   openFolder: "Sitzungsordner öffnen",
   openFolderHelp:
     "Öffnet den lokalen Ordner mit Audiospuren, Textjournalen und gespeicherten Auswertungen im Dateimanager.",
-  exportTranscript: "Transkript als Text speichern",
+  exportTranscript: "Transkript speichern",
+  exportFormat: "Exportformat",
   exportTranscriptHelp:
-    "Speichert den vollständigen aktuell gesicherten Text beider Spuren als neue TXT-Datei im Unterordner exports. Frühere Exporte bleiben erhalten.",
+    "Speichert den vollständigen aktuell gesicherten Text beider Spuren als neue Text-, Markdown- oder JSON-Datei im Unterordner exports. Frühere Exporte bleiben erhalten; Zeiten bleiben Abschnittszeiten.",
   exportSaved: "Transkript gespeichert:",
   savedFilesHelp:
-    "Audio und Textjournale werden bereits automatisch lokal gesichert. Der Textexport ist eine zusätzliche Momentaufnahme.",
+    "Audio und Textjournale werden bereits automatisch lokal gesichert. Jeder Export ist eine zusätzliche Momentaufnahme.",
   captureSetup: "Aufnahme einrichten",
   analysisSetup: "Auswertung einrichten",
   connectionSettings: "Verbindung und Zugangsschlüssel",
@@ -143,7 +144,7 @@ export const de = {
   installation: "Handy-Installation",
   executable: "Handy-Programmdatei (optional)",
   executableHelp:
-    "Leer lassen für automatische Erkennung. Modelllisten werden aus dem installierten Handy gelesen, nicht als eigener Katalog gepflegt.",
+    "Handy wird automatisch erkannt. Eine andere Installation kann über den Dateidialog ausgewählt werden. Die Modellliste stammt aus dem installierten Handy.",
   version: "Version",
   notFound: "Noch nicht erkannt",
   compatibility:
@@ -301,7 +302,7 @@ export const de = {
     "Zeigt ausschließlich installierte, streamingfähige Modelle aus Handy. Neue Modellformate benötigen zusätzlich eine kompatible Erkennungslaufzeit.",
   emptyTitle: "Mein Meeting",
   connectHelp:
-    "Diese Ansicht benötigt den Rust-Desktopkern. Bitte HandyMeeting als Desktop-App starten.",
+    "Diese Ansicht benötigt den Rust-Desktopkern. Bitte Meeting for Handy als Desktop-App starten.",
   busy: "Bitte warten …",
   pending: "Noch nicht vollständig erkannt",
   complete: "Abgeschlossen",
@@ -329,12 +330,13 @@ export const en: Record<MessageKey, string> = {
   openFolder: "Open session folder",
   openFolderHelp:
     "Opens the local audio tracks, transcript journals and saved analyses in your file manager.",
-  exportTranscript: "Save transcript as text",
+  exportTranscript: "Save transcript",
+  exportFormat: "Export format",
   exportTranscriptHelp:
-    "Saves the complete currently stored text of both tracks as a new TXT file in exports. Earlier exports are retained.",
+    "Saves the complete currently stored text of both tracks as a new text, Markdown or JSON file in exports. Earlier exports are retained; times describe sections.",
   exportSaved: "Transcript saved:",
   savedFilesHelp:
-    "Audio and transcript journals are already saved locally. A text export is an additional snapshot.",
+    "Audio and transcript journals are already saved locally. Each export is an additional snapshot.",
   captureSetup: "Recording setup",
   analysisSetup: "Analysis setup",
   connectionSettings: "Connection and access keys",
@@ -462,7 +464,7 @@ export const en: Record<MessageKey, string> = {
   installation: "Handy installation",
   executable: "Handy executable (optional)",
   executableHelp:
-    "Leave blank for automatic discovery. Model lists come from the installed Handy, rather than a separate catalogue.",
+    "Handy is detected automatically. Choose another installation through the file dialog. Model lists come from the installed Handy.",
   version: "Version",
   notFound: "Not detected yet",
   compatibility:
@@ -614,7 +616,7 @@ export const en: Record<MessageKey, string> = {
     "Shows installed streaming models from Handy. New model formats also require a compatible recognition runtime.",
   emptyTitle: "My meeting",
   connectHelp:
-    "This view requires the Rust desktop core. Start HandyMeeting as a desktop application.",
+    "This view requires the Rust desktop core. Start Meeting for Handy as a desktop application.",
   busy: "Please wait …",
   pending: "Recognition incomplete",
   complete: "Complete",

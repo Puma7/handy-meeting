@@ -1,5 +1,5 @@
 {
-  "PackageLockSHA256": "02ea9ecd03c86cbc30f38bfd8f39fef1ed4fe9bddfa2f80d5393236cda39f83f",
+  "PackageLockSHA256": "450a9e3c9399b16f3095f1e0a9a36deb45596c3d1e7ca8732a2cd2baeb30e97b",
   "Scope": "Locked production JavaScript packages and reused Handy palette; development tools are excluded from the shipped bundle notices.",
   "PackageCount": 7,
   "Packages": [

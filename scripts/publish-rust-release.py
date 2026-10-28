@@ -143,6 +143,11 @@ def existing_complete(repository, tag, commit, fingerprint, release_id=None):
 
 
 def publish(folder, repository, tag, commit, notes, make_public, release_id=None):
+    """Verify the exact bundle and tag, preserve existing assets, then optionally publish.
+
+    A release ID selects an existing draft unambiguously. Conflicting asset bytes
+    or names abort promotion; this routine never replaces or deletes an asset.
+    """
     validate_target(repository, tag, commit)
     checks = verification_module()
     manifest = checks.read(folder / 'RELEASE_MANIFEST.json')
@@ -159,7 +164,7 @@ def publish(folder, repository, tag, commit, notes, make_public, release_id=None
             raise ValueError('Release bundle changed before upload')
     existing = find_release(repository, tag, release_id)
     if existing is None:
-        gh('release', 'create', tag, '-R', repository, '--verify-tag', '--target', commit, '--draft', '--title', 'HandyMeeting ' + tag[1:], '--notes-file', notes)
+        gh('release', 'create', tag, '-R', repository, '--verify-tag', '--target', commit, '--draft', '--title', 'Meeting for Handy ' + tag[1:], '--notes-file', notes)
         existing = find_release(repository, tag)
         if existing is None:
             raise ValueError('Created draft could not be located; inspect before retrying')

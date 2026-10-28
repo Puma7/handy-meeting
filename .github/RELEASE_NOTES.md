@@ -1,8 +1,17 @@
-## HandyMeeting 1.0.3
+## Meeting for Handy 1.0.4
 
 A feature and reliability release of the independent Rust/Tauri meeting companion for Handy. It contains the unreleased 1.0.2 work and the 1.0.3 follow-ups.
 
-### New since 1.0.1
+### New in 1.0.4
+
+- Pause/resume recording and mute only the app microphone. Ignored audio becomes explicit silent sections; other apps are unchanged. Depending on the platform, the operating system may still display a recording indicator.
+- Full transcript snapshots as TXT, inert Markdown or structured JSON, with original section/source identifiers and explicit section-time semantics.
+- Native file choice and confirmation for local Handy/FFmpeg programs and imported sessions. Approvals bind purpose/path/SHA256 and expire when the app closes.
+- Conservative Windows microphone clock-gap alignment and explicit capture-control provenance; impossible clock jumps stop before padding. Missing audio is not recovered speech.
+- Shared operation leases and additional archive-marker/path protections while retaining live rename and all original data.
+- Visible name **Meeting for Handy**; existing internal data/key/bundle/executable/package identifiers remain compatible. Installer helpers respect execution policy.
+
+### Also included since 1.0.1
 
 - **Meeting library:** names, VIP flags and a rebuildable local search over meeting titles and transcripts. Search hits open the highlighted source section.
 - **Retention and archive:** disabled-by-default retention rules with a reviewed preview, verified archives, restore, FLAC/Opus audio copies and permanent deletion only after typed confirmation. Interrupted moves and deletions can be continued.
@@ -13,7 +22,7 @@ A feature and reliability release of the independent Rust/Tauri meeting companio
 ### Recording and recovery
 
 - "Stop meeting" returns at once; remaining sections are recognized in the background ("catching up"). A recognition run that ends without a full result leaves a resumable session.
-- A track that stops while the other continues is reported on its own. Windows microphone gaps are reported with the note that later times can be shifted.
+- A track that stops while the other continues is reported on its own. Trustworthy Windows microphone gaps are marked with explicit silence; uncertain clocks are rejected and warnings remain visible.
 - When recognition continues on CPU after a GPU failure and decodes a section differently, the new text is kept as a marked revision; earlier text stays in the journal.
 - Opening a session closes every audio part at its confirmed prefix. Journals and the manifest are written outside the shared lock, so a slow disk does not delay audio capture.
 - The readable TXT copy retries briefly after a short file lock instead of staying out of date.
@@ -38,7 +47,7 @@ A feature and reliability release of the independent Rust/Tauri meeting companio
 
 Install Handy and a compatible downloaded streaming model first. The companion detects its model metadata and reuses the existing weights in its own local inference processes. For local summaries, additionally run a local text-model service such as LM Studio and choose a text model in the app.
 
-Starting with this version, HandyMeeting can find later releases itself (Settings → updates). Version 1.0.1 has no update check; install 1.0.3 manually once. Earlier program versions and all user data are preserved.
+Starting with this version, Meeting for Handy can find later releases itself (Settings → updates). Version 1.0.1 has no update check; install 1.0.4 manually once. Earlier program versions and all user data are preserved.
 
 ### Read before relying on a recording
 
@@ -52,4 +61,4 @@ SHA-256 sidecars, `SHA256SUMS.txt`, package proofs and `RELEASE_MANIFEST.json` a
 
 [English guide](https://github.com/Puma7/meeting-for-handy/blob/main/README.md) · [Deutsche Anleitung](https://github.com/Puma7/meeting-for-handy/blob/main/README.de.md) · [Test evidence](https://github.com/Puma7/meeting-for-handy/blob/main/TEST_REPORT.md) · [Open issues](https://github.com/Puma7/meeting-for-handy/issues)
 
-HandyMeeting is independently developed and is not an official Handy product or an endorsed integration. MIT licensed; original dependency and installer notices are included.
+Meeting for Handy is independently developed and is not an official Handy product or an endorsed integration. MIT licensed; original dependency and installer notices are included.

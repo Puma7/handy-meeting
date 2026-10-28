@@ -4,6 +4,11 @@ import { errorMessage } from "../api";
 import { clock } from "../domain";
 import { requestJobStatusRefresh, startAdaptivePoll } from "../jobPolling";
 import type { DesktopApi, Locale, UpdateProgress } from "../types";
+/**
+ * Displays explicit update checks/downloads and native job progress. The backend
+ * authorizes installation; platforms without in-app downloads use the official
+ * release-page action.
+ */
 export default function UpdatePanel({
   api,
   locale,
@@ -68,6 +73,10 @@ export default function UpdatePanel({
   const canDownload = job?.canDownload ?? windows;
   const releasePage =
     job?.releaseUrl ?? "https://github.com/Puma7/meeting-for-handy/releases";
+  /**
+   * Tracks one requested update operation and wakes progress pollers while retaining
+   * command failures in the panel.
+   */
   async function action(run: () => Promise<unknown>) {
     requesting.current = true;
     setRequest(true);
@@ -84,6 +93,10 @@ export default function UpdatePanel({
       setRequest(false);
     }
   }
+  /**
+   * Requests the backend's fixed official release page, or opens the displayed release URL
+   * in a browser-only preview without granting WebView opener permissions.
+   */
   async function openReleasePage() {
     setError(null);
     try {
@@ -160,8 +173,8 @@ export default function UpdatePanel({
                 ? "Updates werden nur auf deinen Klick geprüft. Der Windows-Installer wird mit Größe und GitHub-SHA256 geprüft; das Setup ist weiterhin unsigniert. Die Installation startet erst nach deinem zweiten Klick und beendet nur diese App, wenn keine Aufnahme, Erkennung oder Auswertung läuft."
                 : "Updates are checked only when you click. The Windows installer is verified against its size and GitHub SHA256; setup remains unsigned. Installation requires another click and closes only this app when recording, recognition and analysis are finished."
               : de
-                ? "Updates werden nur auf deinen Klick geprüft. Auf diesem System lädt und installiert HandyMeeting Updates nicht selbst: Lade das passende Paket von der offiziellen Release-Seite und installiere es dort. Aufnahmen bleiben erhalten."
-                : "Updates are checked only when you click. On this system HandyMeeting does not download or install updates itself: get the matching package from the official release page and install it there. Recordings are kept."}
+                ? "Updates werden nur auf deinen Klick geprüft. Auf diesem System lädt und installiert Meeting for Handy Updates nicht selbst: Lade das passende Paket von der offiziellen Release-Seite und installiere es dort. Aufnahmen bleiben erhalten."
+                : "Updates are checked only when you click. On this system Meeting for Handy does not download or install updates itself: get the matching package from the official release page and install it there. Recordings are kept."}
           </p>
           <button
             className="secondary"
@@ -200,8 +213,8 @@ export default function UpdatePanel({
                 if (
                   window.confirm(
                     de
-                      ? "Geprüften Windows-Installer starten und HandyMeeting schließen? Vorhandene Aufnahmen und ältere Programmordner bleiben erhalten."
-                      : "Start the verified Windows installer and close HandyMeeting? Recordings and older program folders are retained.",
+                      ? "Geprüften Windows-Installer starten und Meeting for Handy schließen? Vorhandene Aufnahmen und ältere Programmordner bleiben erhalten."
+                      : "Start the verified Windows installer and close Meeting for Handy? Recordings and older program folders are retained.",
                   )
                 )
                   void action(api.installUpdate!);

@@ -14,6 +14,9 @@ New-Item -ItemType Directory -Path $rustOutput, $frontendOutput -Force | Out-Nul
 # separately retained historical notices are explicitly labeled below. No text
 # is synthesized from SPDX identifiers. selectors references Mozilla's MPL.
 $fallback = @{
+    'tauri-plugin@2.6.3' = @(
+        @{ Original = 'LICENSE_MIT'; Url = 'https://raw.githubusercontent.com/tauri-apps/tauri/6f6ab1207bb3923c2721fbc67d2fdb1c8deb0c7a/LICENSE_MIT'; Note = 'Original MIT option from this crate archive''s exact .cargo_vcs_info.json revision; the build-helper crate omits a standalone notice.' }
+    )
     'alloc-stdlib@0.2.2' = @(
         @{ Original = 'LICENSE'; Url = 'https://raw.githubusercontent.com/dropbox/rust-alloc-no-stdlib/6032b6a9b20e03737135c55a0270ccffcc1438ef/LICENSE' }
     )
@@ -69,6 +72,7 @@ foreach ($version in @('webview2-com@0.38.2', 'webview2-com-macros@0.8.1', 'webv
     )
 }
 $remoteHashes = @{
+    'https://raw.githubusercontent.com/tauri-apps/tauri/6f6ab1207bb3923c2721fbc67d2fdb1c8deb0c7a/LICENSE_MIT' = '9dd42ea92cff2ede5cd477cbfcce051b2d0115c0ac7f368ee88cb545055dff1d'
     'https://raw.githubusercontent.com/OpenByteDev/dlopen2/cc80e4a0a90d499b677fdf7743699b4b3a43a989/LICENSE' = '39fa265207450e77c62e90c5594a06c085b655d8374c7ced4bf7894b6bd95dd2'
     'https://raw.githubusercontent.com/dropbox/rust-alloc-no-stdlib/6032b6a9b20e03737135c55a0270ccffcc1438ef/LICENSE' = 'c0c56f26d9c051cac4d200c34c84e7ae9aaa853e01a982a1df08b09931e518ae'
     'https://raw.githubusercontent.com/DoumanAsh/clipboard-win/ed27008ae5d1f10cfbb266de039f0fb35fd05a56/LICENSE' = 'c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566'
@@ -217,7 +221,7 @@ try {
     $applicationVersion = @($metadata.packages | Where-Object name -EQ 'handy-meeting-desktop')[0].version
     if (-not $applicationVersion) { throw 'Application version missing from locked metadata.' }
     $addition = @"
-HandyMeeting $applicationVersion - additional third-party notices
+Meeting for Handy $applicationVersion - additional third-party notices
 
 Rust dependency records and verbatim license texts: licenses/rust/$Target/.
 Frontend production dependency records and verbatim license texts: licenses/frontend/.

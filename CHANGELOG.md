@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.4 — Meeting for Handy follow-up (unreleased)
+
+- Recording pause/resume and separate app microphone mute with old-buffer privacy gates, explicit silent sections and retained control events.
+- Trustworthy Windows microphone discontinuities align to the monotonic/device clock; impossible jumps fail before padding.
+- Complete TXT/Markdown/JSON transcript snapshots with original source IDs and section-time semantics.
+- Native purpose/path/SHA256-bound executable/import selection; shared operation leases including metadata changes.
+- Separate capture, archive, UI, session and command modules; malformed restored audio markers cannot escape their session.
+- Meeting for Handy display branding across UI and new packages, with earlier data/update compatibility. Installer helpers preserve execution policy.
+
 ## 1.0.3 — recording reliability, recovery and platform follow-ups (in development)
 
 - Stop a meeting without waiting for the recognition backlog; the session shows "catching up" and completes in the background. A track that stops while the other continues is reported on its own (#17, #20).

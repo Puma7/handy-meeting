@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { Archive } from "lucide-react";
 import { errorMessage } from "../api";
 import AudioCopiesPanel from "./AudioCopiesPanel";
@@ -18,6 +25,52 @@ type Rule =
   | "convertAfterDays"
   | "maxVisibleMeetings"
   | "deleteArchivesAfterDays";
+/**
+ * Session-only preview consent shared across settings views. Retaining these IDs
+ * through navigation does not persist program paths or confirmation text.
+ */
+interface PreviewValidity {
+  invalidated: Set<string>;
+  observed: Set<string>;
+  requireExplicitPreview: boolean;
+  allowedPreviewId: string | null;
+  generation: number;
+  listeners: Set<() => void>;
+}
+const previewValidityByApi = new WeakMap<DesktopApi, PreviewValidity>();
+/**
+ * Returns the API-session preview-consent state shared across settings remounts; no paths
+ * or confirmation text are persisted.
+ */
+function previewValidity(api: DesktopApi): PreviewValidity {
+  let validity = previewValidityByApi.get(api);
+  if (!validity) {
+    validity = {
+      invalidated: new Set<string>(),
+      observed: new Set<string>(),
+      requireExplicitPreview: false,
+      allowedPreviewId: null,
+      generation: 0,
+      listeners: new Set<() => void>(),
+    };
+    previewValidityByApi.set(api, validity);
+  }
+  return validity;
+}
+/**
+ * Checks session-local consent for a preview ID. Backend plan, file and fingerprint
+ * validation is still required before maintenance can change data.
+ */
+function previewIsValid(validity: PreviewValidity, id: string): boolean {
+  return (
+    !validity.invalidated.has(id) &&
+    (!validity.requireExplicitPreview || validity.allowedPreviewId === id)
+  );
+}
+/**
+ * Edits revisioned local policy while keeping saving, preview and single-action consent
+ * separate. Native grant changes revoke old previews across mounted consumers.
+ */
 export default function RetentionPanel({
   api,
   locale,
@@ -29,11 +82,29 @@ export default function RetentionPanel({
 }) {
   const de = locale === "de";
   const latestJob = useRef<string | null>(null);
+  const previewSession = useMemo(() => previewValidity(api), [api]);
+  /**
+   * Registers this view for shared preview invalidations and returns the unmount cleanup
+   * used by the external-store hook.
+   */
+  const subscribe = useCallback(
+    (listener: () => void) => {
+      previewSession.listeners.add(listener);
+      return () => {
+        previewSession.listeners.delete(listener);
+      };
+    },
+    [previewSession],
+  );
+  const previewGeneration = useSyncExternalStore(
+    subscribe,
+    () => previewSession.generation,
+  );
   // A remounted status bar reports the last finished preview; only a current one is shown.
   const policyRevision = useRef<number | null>(null);
   const [policy, setPolicy] = useState<RetentionPolicy | null>(null),
     [draft, setDraft] = useState<RetentionPolicy | null>(null),
-    [plan, setPlan] = useState<RetentionPlan | null>(null),
+    [storedPlan, setPlan] = useState<RetentionPlan | null>(null),
     [job, setJob] = useState<LibraryProgress | null>(null),
     [error, setError] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
@@ -41,6 +112,13 @@ export default function RetentionPanel({
     [selected, setSelected] = useState<number | null>(null),
     [confirmation, setConfirmation] = useState(""),
     [accepted, setAccepted] = useState(false);
+  useEffect(() => {
+    latestJob.current = null;
+    setPlan(null);
+    setSelected(null);
+    setAccepted(false);
+    setConfirmation("");
+  }, [previewSession, previewGeneration]);
   useEffect(() => {
     if (!api.getRetentionPolicy) return;
     let active = true;
@@ -62,15 +140,27 @@ export default function RetentionPanel({
   useEffect(() => {
     policyRevision.current = policy?.revision ?? null;
   }, [policy]);
+  /**
+   * Loads only current, unrevoked preview receipts with the saved policy revision and a
+   * valid 24-hour age. Stale successes or failures cannot restore previous consent.
+   */
   const progress = useCallback(
     (value: LibraryProgress) => {
-      latestJob.current = value.jobId;
       setJob(value);
+      if (value.kind === "cleanup-preview") {
+        previewSession.observed.add(value.jobId);
+        if (!previewIsValid(previewSession, value.jobId)) return;
+      }
+      latestJob.current = value.jobId;
       if (value.kind === "cleanup-preview" && value.status === "complete")
         void api
           .getRetentionPlan?.(value.jobId)
           .then((p) => {
-            if (latestJob.current !== value.jobId || p.id !== value.jobId)
+            if (
+              !previewIsValid(previewSession, value.jobId) ||
+              latestJob.current !== value.jobId ||
+              p.id !== value.jobId
+            )
               return;
             const age = Date.now() - Date.parse(p.createdAt);
             if (
@@ -84,11 +174,22 @@ export default function RetentionPanel({
             setPlan(p);
             setPage(0);
           })
-          .catch((e) => setError(errorMessage(e)));
+          .catch((e) => {
+            if (
+              !previewIsValid(previewSession, value.jobId) ||
+              latestJob.current !== value.jobId
+            )
+              return;
+            setError(errorMessage(e));
+          });
     },
-    [api],
+    [api, previewSession],
   );
   if (!api.getRetentionPolicy) return null;
+  const plan =
+    storedPlan && previewIsValid(previewSession, storedPlan.id)
+      ? storedPlan
+      : null;
   const candidate = selected === null ? null : plan?.candidates[selected];
   const deleting = candidate?.action === "delete-archived-meeting";
   const expectedDelete = candidate ? `DELETE ${candidate.meetingId}` : "";
@@ -109,6 +210,10 @@ export default function RetentionPanel({
         "delete-archived-meeting":
           "Permanently delete archive · extra confirmation required",
       };
+  /**
+   * Saves the draft against the current policy revision without starting a preview or
+   * applying any candidate action.
+   */
   async function save() {
     if (!policy || !draft || !api.saveRetentionPolicy) return;
     setBusy(true);
@@ -127,6 +232,10 @@ export default function RetentionPanel({
       setBusy(false);
     }
   }
+  /**
+   * Requests a new read-only plan and, after native grant changes, accepts only a new job
+   * ID started in the current invalidation generation.
+   */
   async function preview() {
     if (!api.previewRetention) return;
     setBusy(true);
@@ -134,8 +243,21 @@ export default function RetentionPanel({
     setAccepted(false);
     setConfirmation("");
     setError(null);
+    const generation = previewSession.generation;
+    const knownIds = new Set(previewSession.observed);
     try {
-      await api.previewRetention();
+      const id = await api.previewRetention();
+      if (previewSession.requireExplicitPreview) {
+        if (
+          generation !== previewSession.generation ||
+          knownIds.has(id) ||
+          previewSession.invalidated.has(id)
+        ) {
+          previewSession.invalidated.add(id);
+          return;
+        }
+        previewSession.allowedPreviewId = id;
+      }
       if (api.getMaintenanceProgress) {
         const value = await api.getMaintenanceProgress();
         if (value) progress(value);
@@ -146,8 +268,70 @@ export default function RetentionPanel({
       setBusy(false);
     }
   }
+  /**
+   * Requests a native-approved FFmpeg selection. Cancellation leaves the draft/consent
+   * unchanged; every approval, including the same path, revokes old previews.
+   */
+  async function chooseFfmpeg() {
+    if (!api.chooseFfmpegExecutable || !draft || busy || running) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const selected = await api.chooseFfmpegExecutable();
+      if (selected) {
+        // A confirmed native choice may approve new bytes even at the same path.
+        // An earlier preview and its consent cannot authorize this selection.
+        invalidatePreview();
+        setDraft({ ...draft, ffmpegExecutable: selected });
+      }
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  /**
+   * Clears only the draft program selection and preview consent. The program and
+   * recordings remain intact, and saving policy is a separate action.
+   */
+  function clearFfmpeg() {
+    if (!draft || busy || running) return;
+    setDraft({ ...draft, ffmpegExecutable: null });
+    setError(null);
+    invalidatePreview();
+  }
+  /**
+   * Revokes all previous preview consent for this API session, requires a newly requested
+   * plan and notifies every mounted consumer, including after an originating picker view
+   * unmounts.
+   */
+  function invalidatePreview() {
+    // Keep rejected job IDs blocked when an old completion is reported again;
+    // only a new preview job may establish a new plan and confirmation.
+    for (const id of [plan?.id, latestJob.current])
+      if (id) previewSession.observed.add(id);
+    for (const id of previewSession.observed)
+      previewSession.invalidated.add(id);
+    // A chooser can finish after its original panel unmounts, before that panel
+    // ever learned a preview ID. Require a newly requested ID in every consumer.
+    previewSession.requireExplicitPreview = true;
+    previewSession.allowedPreviewId = null;
+    previewSession.generation++;
+    for (const listener of previewSession.listeners) listener();
+    latestJob.current = null;
+    setPlan(null);
+    setSelected(null);
+    setAccepted(false);
+    setConfirmation("");
+  }
+  /**
+   * Submits the selected still-valid plan row with its separate confirmation. The native
+   * service revalidates the immutable receipt before applying a change.
+   */
   async function apply() {
     if (!plan || selected === null || !candidate || !api.applyRetention) return;
+    // An already queued click may run before the invalidation render commits.
+    if (!previewIsValid(previewSession, plan.id)) return;
     setBusy(true);
     setError(null);
     try {
@@ -170,6 +354,10 @@ export default function RetentionPanel({
       setBusy(false);
     }
   }
+  /**
+   * Renders a nullable opt-in rule with its numeric input bounds, editing only the policy
+   * draft.
+   */
   function rule(key: Rule, label: string, initial: number) {
     if (!draft) return null;
     const number = draft[key];
@@ -301,17 +489,34 @@ export default function RetentionPanel({
             {de
               ? "Separat installiertes FFmpeg · nur für optionale Formatumwandlung"
               : "Separately installed FFmpeg · only for optional format conversion"}
-            <input
-              value={draft.ffmpegExecutable ?? ""}
-              disabled={busy || running}
-              onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  ffmpegExecutable: e.target.value.trim() || null,
-                })
-              }
-            />
+            <input value={draft.ffmpegExecutable ?? ""} readOnly />
           </label>
+          <button
+            className="secondary"
+            disabled={busy || running || !api.chooseFfmpegExecutable}
+            onClick={() => void chooseFfmpeg()}
+          >
+            {de
+              ? "FFmpeg im Dateidialog auswählen …"
+              : "Choose FFmpeg in file dialog …"}
+          </button>
+          <button
+            className="secondary"
+            disabled={busy || running || !draft.ffmpegExecutable}
+            onClick={clearFfmpeg}
+          >
+            {de ? "FFmpeg-Auswahl entfernen" : "Clear FFmpeg selection"}
+          </button>
+          <p className="muted">
+            {de
+              ? "Das Entfernen ändert nur die Programmauswahl. Programmdatei und Aufnahmen bleiben erhalten. Übernimm die Änderung mit „Regeln speichern“, bevor du eine neue Vorschau erstellst."
+              : "Clearing changes only the program selection. The program file and recordings are retained. Apply the change with Save rules before creating a new preview."}
+          </p>
+          <p className="muted">
+            {de
+              ? "Die ausgewählte Programmdatei wird geprüft. Wähle und bestätige sie nach jedem App-Neustart sowie nach einem Austausch erneut, bevor du sie verwendest. Der gespeicherte Pfad allein ist keine neue Freigabe. Abbrechen lässt die bisherige Wahl unverändert."
+              : "The selected program is checked. Choose and confirm it again after each app restart or replacement before using it. The saved path alone does not grant renewed permission. Cancelling preserves the previous selection."}
+          </p>
           <button
             className="secondary"
             disabled={busy || running || !changed}

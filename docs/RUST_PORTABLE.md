@@ -10,8 +10,8 @@ device recording are different evidence. See `TEST_REPORT.md` for completed chec
 | Target | Build baseline | Intended runtime | Package |
 | --- | --- | --- | --- |
 | Linux x86-64 | Ubuntu22.04, Rust1.91.1, WebKitGTK4.1 | Ubuntu22.04/24.04; Debian12/13 | `HandyMeeting-1.0.0-linux-amd64.deb` |
-| Apple Silicon | macOS runner, Rust1.91.1, deployment target13.0 | macOS13 or newer, M-series | `HandyMeeting-1.0.0-osx-arm64.dmg` |
-| Intel Mac | macOS runner, Rust1.91.1, deployment target13.0 | macOS13 or newer, Intel x86-64 | `HandyMeeting-1.0.0-osx-x64.dmg` |
+| Apple Silicon | macOS runner, Rust1.91.1, deployment target13.0 | macOS15 or newer, M-series | `HandyMeeting-1.0.0-osx-arm64.dmg` |
+| Intel Mac | macOS runner, Rust1.91.1, deployment target13.0 | macOS15 or newer, Intel x86-64 | `HandyMeeting-1.0.0-osx-x64.dmg` |
 
 These are intended targets, subject to each build and hardware test. Linux ARM, ALSA-only
 systems without a PulseAudio-compatible service, macOS12 and universal Mac binaries are

@@ -1,17 +1,24 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import type { DesktopApi } from "./types";
 import { requestJobStatusRefresh } from "./jobPolling";
+/**
+ * Invokes a typed native command only inside Tauri; browser previews reject instead of
+ * pretending a desktop operation succeeded.
+ */
 function desktopInvoke<T>(
   command: string,
   args?: Record<string, unknown>,
 ): Promise<T> {
   if (!isTauri())
     return Promise.reject(
-      "Diese Ansicht benötigt die installierte HandyMeeting-Desktop-App. / Open the installed HandyMeeting desktop application.",
+      "Diese Ansicht benötigt die installierte Meeting for Handy-Desktop-App. / Open the installed Meeting for Handy desktop application.",
     );
   return invoke<T>(command, args);
 }
-// Background jobs: status bars check right away instead of waiting for their idle interval.
+/**
+ * Submits a native job request and wakes status pollers immediately and on settlement. The
+ * returned promise still carries the command's original success or failure.
+ */
 function jobInvoke<T>(
   command: string,
   args?: Record<string, unknown>,
@@ -78,6 +85,13 @@ export const desktopApi: DesktopApi = {
   getLibraryProgress: () => desktopInvoke("get_library_progress"),
   cancelLibraryJob: (jobId) => desktopInvoke("cancel_library_job", { jobId }),
   getAppState: () => desktopInvoke("get_app_state"),
+  setCapturePaused: (meetingId, paused) =>
+    desktopInvoke("set_capture_paused", { meetingId, paused }),
+  setMicrophoneMuted: (meetingId, muted) =>
+    desktopInvoke("set_microphone_muted", { meetingId, muted }),
+  chooseHandyExecutable: () => desktopInvoke("choose_handy_executable"),
+  chooseFfmpegExecutable: () => desktopInvoke("choose_ffmpeg_executable"),
+  chooseLegacyManifest: () => desktopInvoke("choose_legacy_manifest"),
   refreshHandy: (executable) => desktopInvoke("refresh_handy", { executable }),
   listDevices: () => desktopInvoke("list_devices"),
   startMeeting: (request) => desktopInvoke("start_meeting", { request }),
@@ -98,8 +112,8 @@ export const desktopApi: DesktopApi = {
     desktopInvoke("notes_markdown", { meetingId, analysisId }),
   copyText: (text) => desktopInvoke("copy_text", { text }),
   openMeetingFolder: (id) => desktopInvoke("open_meeting_folder", { id }),
-  exportTranscript: (id, locale) =>
-    desktopInvoke("export_transcript", { id, locale }),
+  exportTranscript: (id, locale, format = "txt") =>
+    desktopInvoke("export_transcript", { id, locale, format }),
   listTemplates: () => desktopInvoke("list_templates"),
   saveTemplates: (library) => desktopInvoke("save_templates", { library }),
   importTemplates: (templates) =>
@@ -113,10 +127,14 @@ export const desktopApi: DesktopApi = {
     desktopInvoke("agent_decide_recording", { requestId, approve, request }),
   agentRevoke: () => desktopInvoke("agent_revoke"),
 };
+/**
+ * Preserves a supplied Error message or string for the UI and uses a desktop-connection
+ * instruction for unknown error shapes.
+ */
 export function errorMessage(error: unknown): string {
   return error instanceof Error
     ? error.message
     : typeof error === "string"
       ? error
-      : "Die Desktop-Verbindung ist nicht verfügbar. Bitte die installierte HandyMeeting-App öffnen. / Open the installed desktop application.";
+      : "Die Desktop-Verbindung ist nicht verfügbar. Bitte die installierte Meeting for Handy-App öffnen. / Open the installed desktop application.";
 }

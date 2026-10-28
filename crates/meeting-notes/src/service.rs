@@ -5,15 +5,22 @@ use crate::{
     RESULT_SCHEMA,
 };
 use anyhow::{ensure, Context, Result};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::{collections::HashSet, fs, io::Write, path::Path};
+use std::{
+    collections::HashSet,
+    fs,
+    io::{Read, Write},
+    path::Path,
+};
+/// Hashes the ordered serialized source snapshot to bind saved work to its original input text.
 pub fn source_hash(sources: &[Source]) -> Result<String> {
     Ok(format!(
         "{:x}",
         Sha256::digest(serde_json::to_vec(sources)?)
     ))
 }
+/// Syncs a new JSON work state and atomically commits it without replacing an existing version.
 fn create_json(path: &Path, data: &impl Serialize) -> Result<()> {
     let mut file =
         tempfile::NamedTempFile::new_in(path.parent().context("Auswertungsordner fehlt.")?)?;
@@ -28,6 +35,7 @@ fn create_json(path: &Path, data: &impl Serialize) -> Result<()> {
 #[derive(Debug)]
 pub struct UnsupportedFormat(pub u32);
 impl std::fmt::Display for UnsupportedFormat {
+    /// Formats the unsupported-schema error while stating that the saved work remains unchanged.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Dieser Auswertungsstand verwendet ein unbekanntes Speicherformat ({}). Er bleibt unverändert erhalten.", self.0)
     }
@@ -49,6 +57,7 @@ fn validate_versions(stored: &Analysis) -> Result<()> {
     Ok(())
 }
 
+/// Recognizes symbolic links and Windows reparse points before reading stored analysis files.
 pub(crate) fn is_linked(metadata: &fs::Metadata) -> bool {
     #[cfg(windows)]
     {
@@ -64,15 +73,35 @@ pub(crate) fn is_linked(metadata: &fs::Metadata) -> bool {
 /// Reads a finished result of any known prompt version. Callers that continue or extend work
 /// must compare `prompt_version` with [`PROMPT_VERSION`] themselves.
 pub fn read_analysis(path: &Path) -> Result<Analysis> {
+    let metadata = fs::symlink_metadata(path)?;
     ensure!(
-        fs::metadata(path)?.len() <= 64_000_000,
-        "Auswertungsdatei zu groß."
+        metadata.is_file() && !is_linked(&metadata) && metadata.len() <= 64_000_000,
+        "Auswertungsdatei ist nicht sicher lesbar oder zu groß."
     );
-    let result: Analysis = serde_json::from_slice(&fs::read(path)?)?;
+    let mut bytes = Vec::new();
+    fs::File::open(path)?
+        .take(64_000_001)
+        .read_to_end(&mut bytes)?;
+    ensure!(bytes.len() <= 64_000_000, "Auswertungsdatei zu groß.");
+    // Read the format label before assuming any of the current payload shapes.
+    // A newer file may no longer deserialize as today's Analysis at all.
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Header {
+        #[serde(default)]
+        result_schema: Option<u32>,
+    }
+    let header: Header = serde_json::from_slice(&bytes)?;
+    let schema = header.result_schema.unwrap_or(1);
+    if !(1..=RESULT_SCHEMA).contains(&schema) {
+        return Err(UnsupportedFormat(schema).into());
+    }
+    let result: Analysis = serde_json::from_slice(&bytes)?;
     validate_analysis(&result)?;
     Ok(result)
 }
 
+/// Checks source-count/text bounds and unique IDs before creating a model request.
 fn validate_sources(sources: &[Source]) -> Result<()> {
     ensure!(
         !sources.is_empty()
@@ -129,6 +158,7 @@ fn inspect_snapshot(path: &Path) -> Result<Analysis> {
     Ok(snapshot)
 }
 
+/// Inspects saved unfinished work and counts validated checkpoints without creating a client or restoring consent.
 pub fn read_pending_analysis(folder: &Path) -> Result<Option<PendingAnalysis>> {
     if folder.join("result.json").exists() || !folder.join("snapshot.json").exists() {
         return Ok(None);
@@ -176,6 +206,7 @@ pub fn read_pending_analysis(folder: &Path) -> Result<Option<PendingAnalysis>> {
         confirmed_tasks,
     }))
 }
+/// Checks schema, template, source hashes and literal evidence; these checks do not prove interpretation.
 pub(crate) fn validate_analysis(result: &Analysis) -> Result<()> {
     validate_versions(result)?;
     validate_template(&result.template)?;
@@ -232,6 +263,7 @@ pub fn analyze(
     )
 }
 
+/// Retains a rejected checkpoint at a numbered path before the batch is requested again.
 fn set_aside_rejected(path: &Path) -> Result<()> {
     for attempt in 0..1000 {
         let target = path.with_extension(format!("rejected-{attempt}.json"));
@@ -243,6 +275,8 @@ fn set_aside_rejected(path: &Path) -> Result<()> {
     anyhow::bail!("Zu viele verworfene Antworten für diesen Arbeitsschritt.")
 }
 #[allow(clippy::too_many_arguments)]
+/// Runs cancellable text-only batches against immutable snapshots and checkpoints; callers supply consent.
+/// Completion is reported only after the durable result JSON is committed.
 pub fn analyze_controlled(
     root: &Path,
     meeting_id: &str,
@@ -418,6 +452,7 @@ pub fn analyze_controlled(
     on_progress(progress);
     Ok(analysis)
 }
+/// Groups whole source sections under the text budget without splitting a section's quoted evidence.
 fn source_batches(sources: &[Source]) -> Vec<Vec<Source>> {
     let mut batches = Vec::new();
     let mut batch = Vec::new();
@@ -436,6 +471,7 @@ fn source_batches(sources: &[Source]) -> Vec<Vec<Source>> {
     }
     batches
 }
+/// Accepts identical saved export bytes or atomically creates a new file; different existing bytes are rejected.
 fn create_export(path: &Path, bytes: &[u8]) -> Result<()> {
     if path.exists() {
         ensure!(fs::read(path)?==bytes,"Ein gespeicherter Export weicht vom bestätigten Auswertungsstand ab; vorhandene Daten bleiben erhalten.");
@@ -452,6 +488,7 @@ fn create_export(path: &Path, bytes: &[u8]) -> Result<()> {
     })?;
     Ok(())
 }
+/// Renders saved sections and quoted evidence as plain text with draft and section-timing notices.
 pub fn render_text(analysis: &Analysis) -> String {
     let mut text = format!("KI-Entwurf · {} · {}\nAbschnittszeiten sind keine Wortzeiten. Belege bestätigen Originalzitate, nicht automatisch die Deutung.\n", analysis.mode, analysis.model);
     for section in &analysis.sections {

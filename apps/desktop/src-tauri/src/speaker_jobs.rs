@@ -80,6 +80,8 @@ impl Jobs {
             }
         }
     }
+    /// Validate live/post-meeting experiment state and retain speaker admission in its worker;
+    /// optional-worker failure does not own normal capture shutdown.
     pub fn start(
         self: &Arc<Self>,
         service: Arc<Service>,
@@ -93,6 +95,7 @@ impl Jobs {
         {
             return Err("Invalid experimental speaker request".into());
         }
+        let lease = service.reserve_operation(crate::operations::Kind::Speakers)?;
         let data = service.data(&meeting_id)?;
         let recording = service.lock()?.active.as_ref().is_some_and(|a| {
             a.capture.is_some()
@@ -138,6 +141,7 @@ impl Jobs {
         let jobs = self.clone();
         let owned = id.clone();
         let spawn=std::thread::Builder::new().name("meeting-optional-speakers".into()).spawn(move||{
+   let _lease = lease;
    let result=std::panic::catch_unwind(std::panic::AssertUnwindSafe(||run(&service,&jobs,&owned,&meeting_id,&model_id,&mode,&cancel))).unwrap_or_else(|_|Err("Optional speaker worker stopped unexpectedly; capture and original transcripts are preserved".into()));
    jobs.update(&owned,|p|{p.status=if result.is_ok(){"complete"}else if cancel.load(Ordering::Acquire){"cancelled"}else{"failed"}.into();p.stage="finished".into();p.error=result.err();if p.total_tasks==0{p.total_tasks=p.confirmed_tasks;}});
   });

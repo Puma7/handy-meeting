@@ -1,5 +1,9 @@
 """Synthetic package/proof fixtures only: never install software or publish a release."""
 import importlib.util
+import hashlib
+import shutil
+import subprocess
+import zipfile
 import json
 import pathlib
 import tempfile
@@ -231,6 +235,106 @@ class ReleaseGuards(unittest.TestCase):
             with mock.patch.object(publisher, 'gh', side_effect=cli):
                 with self.assertRaisesRegex(ValueError, 'Unexpected existing release assets'):
                     publisher.existing_complete('owner/repo', 'v1.0.0', COMMIT, FINGERPRINT)
+
+
+class SourceExportContract(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('pwsh'), 'PowerShell required for the real source exporter')
+    def test_nested_private_build_and_browser_proofs_never_enter_the_source_bundle(self):
+        """Run the real exporter: retain legitimate sources and exclude private nested proofs."""
+        with tempfile.TemporaryDirectory(prefix='meeting-source-fixture-') as temp:
+            # An isolated checkout may itself live below a parent's .build directory.
+            root = (pathlib.Path(temp) / '.build' / 'isolated-source').resolve()
+            root.mkdir(parents=True)
+            script = root / 'scripts/export-source.ps1'
+            script.parent.mkdir()
+            shutil.copyfile(pathlib.Path(__file__).with_name(script.name), script)
+            kept = {
+                'apps/desktop/package.json': json.dumps({'version': '0.0.0-test'}).encode(),
+                'apps/desktop/src/App.tsx': b'export const syntheticPublicSource = true;\n',
+            }
+            excluded = [
+                'apps/desktop/.build/probe/private.json',
+                'scripts/.build/probe/private.md',
+                'apps/desktop/.vite/cache.json',
+                'apps/desktop/test-results/receipt.json',
+                'apps/desktop/playwright-report/report.html',
+                '.build/earlier-proof/retained.json',
+            ]
+            private = b'{"syntheticPrivateProbe":"never-export"}\n'
+            for name, data in list(kept.items()) + [(name, private) for name in excluded]:
+                file = root / name
+                file.parent.mkdir(parents=True, exist_ok=True)
+                file.write_bytes(data)
+            result = subprocess.run([shutil.which('pwsh'), '-NoProfile', '-NonInteractive', '-File', str(script)], cwd=root, capture_output=True, text=True, timeout=60)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            receipt = json.loads(result.stdout.lstrip('\ufeff'))
+            with zipfile.ZipFile(receipt['Archive']) as bundle:
+                names = {name.replace('\\', '/') for name in bundle.namelist()}
+                manifest = json.loads(bundle.read('SOURCE_MANIFEST.json').decode('utf-8-sig'))
+                rows = {row['Path'].replace('\\', '/'): row for row in manifest}
+                for name in excluded:
+                    self.assertNotIn(name, names)
+                    self.assertNotIn(name, rows)
+                    self.assertEqual((root / name).read_bytes(), private)
+                for name, data in kept.items():
+                    self.assertIn(name, names)
+                    self.assertEqual(rows[name]['Bytes'], len(data))
+                    self.assertEqual(rows[name]['SHA256'].lower(), hashlib.sha256(data).hexdigest())
+                self.assertEqual(receipt['Files'], len(rows))
+                self.assertEqual(names, set(rows) | {'SOURCE_MANIFEST.json'})
+            self.assertFalse(receipt['UserRecordingsIncluded'])
+            self.assertFalse(receipt['Published'])
+
+
+class WindowsZipContract(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('pwsh'), 'PowerShell required for the Windows-only ZIP packager')
+    def test_branded_launcher_is_packaged_and_instructions_name_the_existing_file(self):
+        """Inspect a synthetic ZIP and verify launcher naming plus no-overwrite behavior."""
+        # Synthetic file-only receipt, isolated from real build proofs. Never executes a payload.
+        with tempfile.TemporaryDirectory(prefix='meeting-zip-fixture-') as temp:
+            root = pathlib.Path(temp).resolve()
+            scripts = root / 'scripts'
+            scripts.mkdir()
+            packager = scripts / 'package-rust-windows.ps1'
+            shutil.copyfile(pathlib.Path(__file__).with_name(packager.name), packager)
+            version = '0.0.0-test'
+            config = root / 'apps/desktop/src-tauri/tauri.conf.json'
+            config.parent.mkdir(parents=True)
+            config.write_text(json.dumps({'version': version}), encoding='utf-8')
+            dist = root / ('dist-rust-' + version)
+            dist.mkdir()
+            executable = dist / 'HandyMeeting.exe'
+            executable.write_bytes(b'non-executable synthetic packaging fixture')
+            launcher = root / ('Meeting for Handy ' + version + ' starten.cmd')
+            launcher.write_bytes(b'synthetic launcher fixture; never execute')
+            def invoke(*args):
+                """Run only the copied filesystem packager; fixture program bytes are never executed."""
+                return subprocess.run([shutil.which('pwsh'), '-NoProfile', '-NonInteractive', '-File', str(packager), *args], cwd=root, capture_output=True, text=True, timeout=60)
+            fingerprint = invoke('-SourceFingerprintOnly')
+            self.assertEqual(fingerprint.returncode, 0, fingerprint.stderr)
+            digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+            receipt = {'success': True, 'version': version, 'releaseBinaryChecksPassed': True, 'legacyChecksExecuted': True, 'sourceFingerprintSHA256': fingerprint.stdout.strip(), 'programDirectory': dist.name, 'executableSHA256': digest(executable), 'programFiles': [{'path': executable.name, 'sha256': digest(executable)}], 'launcherFile': launcher.name, 'launcherSHA256': digest(launcher)}
+            proof = root / '.build'
+            proof.mkdir()
+            (proof / 'rust-release-verification.json').write_text(json.dumps(receipt), encoding='utf-8')
+            (proof / 'rust-verification.json').write_text(json.dumps({'success': True, 'sourceFingerprintSHA256': receipt['sourceFingerprintSHA256']}), encoding='utf-8')
+            output = root / 'packages'
+            result = invoke('-OutputDirectory', str(output))
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            archive = output / ('HandyMeeting-' + version + '-windows-x64.zip')
+            with zipfile.ZipFile(archive) as package:
+                names = package.namelist()
+                self.assertIn('HandyMeeting/' + launcher.name, names)
+                self.assertEqual(package.read('HandyMeeting/' + launcher.name), launcher.read_bytes())
+                instructions = package.read('HandyMeeting/START-HERE.txt').decode('utf-8')
+                self.assertIn('open ' + launcher.name + '.', instructions)
+                self.assertIn('Meeting for Handy ' + version, instructions)
+                self.assertIn('HandyMeeting/RustBeta', instructions)
+                self.assertEqual(package.read('HandyMeeting/' + dist.name + '/HandyMeeting.exe'), executable.read_bytes())
+            original = archive.read_bytes()
+            repeated = invoke('-OutputDirectory', str(output))
+            self.assertNotEqual(repeated.returncode, 0)
+            self.assertEqual(archive.read_bytes(), original)
 
 
 class InstallerGuards(unittest.TestCase):

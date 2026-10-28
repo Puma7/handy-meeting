@@ -1,7 +1,7 @@
 use meeting_core::{read_legacy, AudioPart, PcmWriter, SessionStore, TranscriptCheckpoint};
 use sha2::{Digest, Sha256};
 use std::{
-    fs::{self, File, OpenOptions},
+    fs::{self, OpenOptions},
     io::Write,
     path::Path,
     process::{Command, Stdio},
@@ -419,6 +419,83 @@ fn durable_manifest_prevents_downgrade_when_latest_journal_tails_are_damaged() {
     assert_eq!(part.transcript_sequence, 2);
 }
 
+/// Stages synthetic readiness privately; only closed, synced bytes get a no-clobber public link.
+/// The pending file stays available as fixture evidence after either success or failure.
+fn publish_ready_marker(
+    root: &Path,
+    folder: &Path,
+    before_write: impl FnOnce(&Path),
+) -> std::io::Result<()> {
+    let pending = root.join(format!(".ready-{}.pending", uuid::Uuid::new_v4().simple()));
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&pending)?;
+    before_write(&pending);
+    write!(file, "{}", folder.display())?;
+    file.sync_all()?;
+    drop(file);
+    // A new hard link publishes the already complete bytes atomically and refuses
+    // an existing public marker. No pending or earlier marker is removed.
+    fs::hard_link(&pending, root.join("ready.txt"))?;
+    Ok(())
+}
+
+/// Parks a synthetic publisher before writing so an empty public marker cannot be mistaken for readiness.
+#[test]
+fn readiness_marker_is_absent_until_the_complete_child_folder_is_published() {
+    let root = tempfile::tempdir().unwrap();
+    let folder = root.path().join("synthetic-recording");
+    fs::create_dir_all(folder.join("audio")).unwrap();
+    let expected = folder.display().to_string().into_bytes();
+    let ready = root.path().join("ready.txt");
+    let publisher_root = root.path().to_owned();
+    let (staged, staged_path) = std::sync::mpsc::sync_channel(0);
+    let (release, resume) = std::sync::mpsc::sync_channel(0);
+    let publisher = thread::spawn(move || {
+        publish_ready_marker(&publisher_root, &folder, |path| {
+            staged.send(path.to_owned()).unwrap();
+            resume.recv().unwrap();
+        })
+    });
+    let pending = staged_path.recv().unwrap();
+    let early_public = fs::read(&ready);
+    let early_pending = fs::read(&pending);
+    // Release and join even when the assertion below will fail under the old sequence.
+    release.send(()).unwrap();
+    publisher.join().unwrap().unwrap();
+    assert!(
+        matches!(&early_public, Err(error) if error.kind() == std::io::ErrorKind::NotFound),
+        "The public readiness marker appeared before its complete payload: {early_public:?}"
+    );
+    assert!(early_pending.unwrap().is_empty());
+    assert_ne!(pending, ready);
+    assert_eq!(fs::read(&pending).unwrap(), expected);
+    assert_eq!(fs::read(&ready).unwrap(), expected);
+    let published_folder = fs::read_to_string(&ready).unwrap();
+    assert!(Path::new(&published_folder).join("audio").is_dir());
+}
+
+/// Checks atomic readiness publication never replaces an earlier synthetic marker or removes staged evidence.
+#[test]
+fn readiness_publication_preserves_an_existing_marker_and_complete_pending_bytes() {
+    let root = tempfile::tempdir().unwrap();
+    let ready = root.path().join("ready.txt");
+    fs::write(&ready, b"earlier synthetic ready marker").unwrap();
+    let folder = root.path().join("later-synthetic-recording");
+    let mut pending = None;
+    assert!(publish_ready_marker(root.path(), &folder, |path| {
+        pending = Some(path.to_owned());
+    })
+    .is_err());
+    assert_eq!(fs::read(&ready).unwrap(), b"earlier synthetic ready marker");
+    assert_eq!(
+        fs::read(pending.unwrap()).unwrap(),
+        folder.display().to_string().as_bytes()
+    );
+}
+
+/// Writes confirmed synthetic data, publishes its folder, then waits for its parent to kill this child.
 #[test]
 #[ignore = "Dedicated child entry point; invoked only by hard_killed_child_recovers_both_confirmed_tracks"]
 fn crash_writer_child() {
@@ -449,9 +526,7 @@ fn crash_writer_child() {
         fixture(Path::new(&root))
     };
     let folder = store.folder().to_owned();
-    let mut ready = File::create(Path::new(&root).join("ready.txt")).unwrap();
-    write!(ready, "{}", folder.display()).unwrap();
-    ready.sync_all().unwrap();
+    publish_ready_marker(Path::new(&root), &folder, |_| {}).unwrap();
     // Keep lease and in-memory state live until parent force-kills this own process.
     let _store = store;
     loop {

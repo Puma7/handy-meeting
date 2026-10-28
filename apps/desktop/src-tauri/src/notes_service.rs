@@ -198,18 +198,12 @@ fn canonical_job_id(id: &str) -> AppResult<String> {
     Ok(id.replace('-', "").to_ascii_lowercase())
 }
 
+/// Hold analysis admission while selecting immutable source text for one controlled run. Saved
+/// keys still require per-run cloud consent; progress retains confirmed work.
 pub(crate) fn analyze(service: &Service, mut request: NotesRequest) -> AppResult<Analysis> {
     let mut key = Zeroizing::new(std::mem::take(&mut request.api_key));
-    let (id, control) = {
-        let _gate = service
-            .transition
-            .lock()
-            .map_err(|_| "Anwendungszustand nicht verfügbar. / Application state unavailable.")?;
-        if service.lock()?.transitioning {
-            return Err("Bitte den laufenden Anwendungswechsel abschließen. / Finish the current application transition first.".into());
-        }
-        service.notes_jobs.begin(&request)?
-    };
+    let _operation = service.reserve_operation(crate::operations::Kind::Analysis)?;
+    let (id, control) = service.notes_jobs.begin(&request)?;
     struct Guard<'a> {
         jobs: &'a NotesJobs,
         id: &'a str,

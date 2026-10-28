@@ -52,11 +52,11 @@ foreach ($entry in $receipt.programFiles) {
     Copy-Item -LiteralPath $source -Destination $target
     if ((FileHash $target) -ne $entry.sha256) { throw 'A payload file changed while being copied.' }
 }
-if ($receipt.launcherFile -ne ('HandyMeeting ' + $version + ' starten.cmd')) { throw 'Unexpected checked launcher.' }
+if ($receipt.launcherFile -ne ('Meeting for Handy ' + $version + ' starten.cmd')) { throw 'Unexpected checked launcher.' }
 $launcher = Join-Path $root $receipt.launcherFile
 if ((FileHash $launcher) -ne $receipt.launcherSHA256) { throw 'The checked Rust launcher changed.' }
 Copy-Item -LiteralPath $launcher -Destination $app
-$instructions = "HandyMeeting $version - Rust/Tauri Windows x64`n`nExtract the full archive and open HandyMeeting $version starten.cmd. Keep the version folder together.`nInstall Handy with a compatible downloaded streaming model. Future native model formats can require a HandyMeeting update.`nWindows WebView2 and the Microsoft Visual C++ runtime may be required. .NET is not required to run HandyMeeting.`nUser data stays in local application data under HandyMeeting/RustBeta, outside the program folder. Existing C# sessions remain unchanged.`nNo models, recordings, settings or keys are included. This is an independent companion app, not an official Handy product. Real-device capture, device loss, full disk and a new two-hour Rust run are not yet validated. Test only with recordings that are independently backed up.`nEvidence and limits: https://github.com/Puma7/handy-meeting/blob/main/TEST_REPORT.md`n"
+$instructions = "Meeting for Handy $version - Rust/Tauri Windows x64`n`nExtract the full archive and open $($receipt.launcherFile). Keep the version folder together.`nInstall Handy with a compatible downloaded streaming model. Future native model formats can require a Meeting for Handy update.`nWindows WebView2 and the Microsoft Visual C++ runtime may be required. .NET is not required to run Meeting for Handy.`nUser data stays in local application data under HandyMeeting/RustBeta, outside the program folder. Existing C# sessions remain unchanged.`nNo models, recordings, settings or keys are included. This is an independent companion app, not an official Handy product. Real-device capture, device loss, full disk and a new two-hour Rust run are not yet validated. Test only with recordings that are independently backed up.`nEvidence and limits: https://github.com/Puma7/meeting-for-handy/blob/main/TEST_REPORT.md`n"
 [IO.File]::WriteAllText((Join-Path $app 'START-HERE.txt'),$instructions,[Text.UTF8Encoding]::new($false))
 if (-not $OutputDirectory) { $OutputDirectory = Join-Path $root 'packages' }
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)

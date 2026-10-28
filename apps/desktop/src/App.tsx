@@ -5,7 +5,8 @@ import { SPEAKER_NAME_TEMPLATE } from "./speaker-proposals";
 import HistorySearch from "./views/HistorySearch";
 import LibraryStatus from "./views/LibraryStatus";
 import UpdatePanel from "./views/UpdatePanel";
-import RetentionPanel from "./views/RetentionPanel";
+import SettingsView from "./views/SettingsView";
+import HistoryList from "./views/HistoryList";
 import MaintenanceStatus from "./views/MaintenanceStatus";
 import NotesView from "./views/NotesView";
 import ResumeAnalysisDialog from "./views/ResumeAnalysisDialog";
@@ -20,10 +21,9 @@ import { useTemplateLibrary } from "./useTemplateLibrary";
 import { useLocalTextModels } from "./useLocalTextModels";
 import { useNotesJob } from "./useNotesJob";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FolderClock, RefreshCw, X } from "lucide-react";
+import { RefreshCw, X } from "lucide-react";
 import { desktopApi, errorMessage } from "./api";
 import {
-  clock,
   defaultMeetingTitle,
   meetingLabel,
   defaultTemplate,
@@ -49,6 +49,10 @@ import type {
 } from "./types";
 
 const PREFS_KEY = "handymeeting.rust.beta.preferences.v1";
+/**
+ * Reads only locale/theme preferences. Malformed saved data returns safe defaults with
+ * persistence disabled so the original value is retained.
+ */
 function loadPreferences(): {
   locale: Locale;
   theme: Theme;
@@ -69,6 +73,10 @@ function loadPreferences(): {
     return { locale: "de", theme: "system", persistable: false };
   }
 }
+/**
+ * Coordinates live and selected meetings, native IPC, explicit analysis consent and job
+ * feedback. Child actions are bound to meeting IDs rather than display titles.
+ */
 export default function App({ api = desktopApi }: { api?: DesktopApi }) {
   const [preferences] = useState(loadPreferences);
   const [locale, setLocale] = useState<Locale>(preferences.locale),
@@ -83,6 +91,9 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     [busy, setBusy] = useState(false),
     [isStopping, setIsStopping] = useState(false),
     [refreshingHandy, setRefreshingHandy] = useState(false),
+    [handyRefreshFailure, setHandyRefreshFailure] = useState<string | null>(
+      null,
+    ),
     [copied, setCopied] = useState<"transcript" | "notes" | null>(null);
   const [fileExport, setFileExport] = useState<{
     id: string;
@@ -98,6 +109,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     meetingId: string;
     labels: Record<string, string>;
   } | null>(null);
+  /**
+   * Keeps caller-supplied speaker labels with their meeting ID so another selected meeting
+   * cannot inherit the display mapping.
+   */
   const onSpeakerLabels = useCallback(
     (meetingId: string, labels: Record<string, string>) =>
       setSpeakerLabels({ meetingId, labels }),
@@ -107,7 +122,6 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     meetingId: string;
     file: string | null;
   } | null>(null);
-  const [legacyManifest, setLegacyManifest] = useState("");
   const [title, setTitle] = useState(""),
     [modelId, setModelId] = useState(""),
     [systemId, setSystemId] = useState(""),
@@ -139,6 +153,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     [mode, setMode] = useState<"local" | "cloud">("local");
   const credentialScope = JSON.stringify([mode, endpoint.trim()]);
   const useSavedKey = savedKeyScope === credentialScope;
+  /**
+   * Scopes saved-key use to the current endpoint and mode; the encrypted stored secret is
+   * never read into this callback.
+   */
   const setUseSavedKey = useCallback(
     (value: boolean) => setSavedKeyScope(value ? credentialScope : null),
     [credentialScope],
@@ -167,6 +185,9 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     initialCatalogSeen = useRef(false),
     lastModelRefresh = useRef(Date.now()),
     modelRefreshInFlight = useRef<Promise<void> | null>(null),
+    nativeChoiceSequence = useRef(0),
+    pendingNativeChoice = useRef<{ id: number; path: string } | null>(null),
+    catalogueFailure = useRef<string | null>(null),
     mounted = useRef(true),
     copyTimer = useRef<ReturnType<typeof setTimeout>>();
   const template =
@@ -174,7 +195,9 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
   const templatePending = useRef(templateStore.pending);
   templatePending.current = templateStore.pending;
   const result = analyses.find((item) => item.id === resultId);
-  const models = (app?.handy?.models ?? []).filter(
+  const models = (
+    handyRefreshFailure !== null ? [] : (app?.handy?.models ?? [])
+  ).filter(
     (item) =>
       item.isDownloaded && item.supportsStreaming && !item.compatibilityError,
   );
@@ -184,6 +207,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     ["catching-up", "streaming"].includes(app?.activeMeeting?.status ?? "");
   const latestRuntime = useRef({ app, busy, isStopping, connected });
   latestRuntime.current = { app, busy, isStopping, connected };
+  /**
+   * Merges a completed result only into its still-selected meeting and removes the
+   * corresponding resumable placeholder.
+   */
   const onNotesResult = useCallback((next: AnalysisResult) => {
     if (notesSelectionRef.current !== next.meetingId) return;
     setAnalyses((items) => [
@@ -274,6 +301,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     surfaces.forEach((element) => {
       element.inert = true;
     });
+    /**
+     * Finds eligible focus targets inside the current modal, excluding hidden elements and
+     * controls inside closed details sections.
+     */
     const focusable = () =>
       Array.from(
         dialog?.querySelectorAll<HTMLElement>(
@@ -298,6 +329,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       initialTargets.find((element) => element.matches("input,textarea")) ??
       initialTargets[0]
     )?.focus();
+    /**
+     * Keeps keyboard focus inside the modal and handles Escape while retaining an
+     * in-progress template save.
+     */
     const keydown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         if (templatePending.current) {
@@ -356,13 +391,17 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       initialModelSelected.current = true;
       if (!models.some((item) => item.id === modelId)) {
         setModelId("");
-        setError(t.modelUnavailable);
+        setError(handyRefreshFailure || app.handy.error || t.modelUnavailable);
       }
     } else if (!initialModelSelected.current && models.length) {
       initialModelSelected.current = true;
       setModelId(models[0].id);
     }
-  }, [app?.handy, modelId, t.modelUnavailable]);
+  }, [app?.handy, modelId, handyRefreshFailure, t.modelUnavailable]);
+  /**
+   * Retains available device selections; otherwise chooses the default or first device
+   * separately for system audio and microphone.
+   */
   const applyDevices = useCallback((items: AudioDevice[]) => {
     setDevices(items);
     setSystemId((old) =>
@@ -380,19 +419,35 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
           ""),
     );
   }, []);
+  /**
+   * Reloads the backend meeting summaries without changing the currently selected meeting
+   * or opening its source files.
+   */
   const refreshHistory = useCallback(async () => {
     setHistory(await api.listMeetings());
   }, [api]);
   useEffect(() => {
+    /**
+     * Refreshes history after the local index-update event and reports refresh failures
+     * through the existing error display.
+     */
     const updated = () => {
       void refreshHistory().catch((e) => setError(errorMessage(e)));
     };
     window.addEventListener("library-index-updated", updated);
     return () => window.removeEventListener("library-index-updated", updated);
   }, [refreshHistory]);
+  /**
+   * Reloads native device metadata and reconciles the two selected track IDs without
+   * opening an audio stream.
+   */
   const refreshDevices = useCallback(async () => {
     applyDevices(await api.listDevices());
   }, [api, applyDevices]);
+  /**
+   * Applies only the newest state request and loads a complete transcript when the active
+   * session has finished. It observes capture rather than starting or stopping it.
+   */
   const poll = useCallback(async () => {
     const seq = ++requestSequence.current;
     try {
@@ -437,9 +492,27 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       setError(errorMessage(failure));
     }
   }, [api]);
+  /**
+   * Serializes native-confirmed program choices with model discovery. Only a successful
+   * query for the pending choice may release its failure gate; automatic replies cannot
+   * substitute an older origin.
+   */
   const refreshModels = useCallback(
-    async (automatic: boolean) => {
+    async (automatic: boolean, selectedPath?: string) => {
+      if (selectedPath !== undefined) {
+        pendingNativeChoice.current = {
+          id: ++nativeChoiceSequence.current,
+          path: selectedPath,
+        };
+      }
+      // A native confirmation remains an unverified choice across failed or
+      // postponed queries. Manual Refresh must validate that exact choice.
+      const choice = automatic ? null : pendingNativeChoice.current;
       const current = latestRuntime.current;
+      /**
+       * Identifies capture, transition and ASR catch-up states that must finish before
+       * another program/model query is started.
+       */
       const blocked = (state: AppState | null) =>
         Boolean(
           state?.recording ||
@@ -450,7 +523,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         );
       if (
         automatic &&
-        (!initialCatalogSeen.current ||
+        (pendingNativeChoice.current !== null ||
+          !initialCatalogSeen.current ||
           !current.connected ||
           current.busy ||
           current.isStopping ||
@@ -458,12 +532,38 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
           Date.now() - lastModelRefresh.current < 30000)
       )
         return;
-      if (modelRefreshInFlight.current) return modelRefreshInFlight.current;
+      const previous = modelRefreshInFlight.current;
+      if (previous && choice === null) return previous;
       let queriedHandy = false;
       const pending = (async () => {
+        // This new native choice owns the queue immediately. Drain the older
+        // query, then verify the chosen path even if the older query failed.
+        if (previous) {
+          try {
+            await previous;
+          } catch {
+            // The previous query owns its error and catalogue-failure gate.
+          }
+          if (!mounted.current) return;
+        }
+        if (choice && pendingNativeChoice.current?.id !== choice.id) return;
         // Recheck the backend before spawning Handy: the last rendered status can
         // predate a recording or ASR catch-up started by another command.
         const fresh = await api.getAppState();
+        if (
+          mounted.current &&
+          choice !== null &&
+          (blocked(fresh) || latestRuntime.current.isStopping)
+        ) {
+          const reason =
+            locale === "de"
+              ? "Die gewählte Programmdatei wurde noch nicht geprüft. Beende zuerst die laufende Aufnahme oder Verarbeitung und klicke dann auf „Aktualisieren“."
+              : "The selected program has not been checked yet. Finish the current recording or processing, then click Refresh.";
+          catalogueFailure.current = reason;
+          setHandyRefreshFailure(reason);
+          setModelId("");
+          throw new Error(reason);
+        }
         if (
           !mounted.current ||
           (automatic && !fresh.handy) ||
@@ -475,30 +575,79 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         lastModelRefresh.current = Date.now();
         queriedHandy = true;
         setRefreshingHandy(true);
-        const handy = await api.refreshHandy(
-          automatic
-            ? (fresh.handy?.executable ?? null)
-            : handyPath.trim() || null,
-        );
+        // The backend retains discovery/native origin. A displayed cached path
+        // must not turn an automatic refresh into an explicit file selection.
+        const handy = await api
+          .refreshHandy(
+            automatic ? null : (choice?.path ?? (handyPath.trim() || null)),
+          )
+          .catch(async (failure) => {
+            const reason = errorMessage(failure) || t.modelUnavailable;
+            // This gate is independent of status-poll ordering. A newer poll can
+            // supersede the reread below, but cannot restore an invalid model.
+            catalogueFailure.current = reason;
+            if (mounted.current) {
+              setHandyRefreshFailure(reason);
+              setModelId("");
+            }
+            // A rejected refresh can invalidate the backend catalogue. Re-read
+            // it before releasing the busy state so stale models cannot start.
+            if (mounted.current) await poll();
+            throw failure;
+          });
         if (!mounted.current) return;
+        // An older automatic query, or an earlier same-path confirmation, has
+        // no authority to release the latest still-pending native choice.
+        if (
+          pendingNativeChoice.current !== null &&
+          pendingNativeChoice.current.id !== choice?.id
+        )
+          return;
+        if (choice && handy.error == null) pendingNativeChoice.current = null;
+        // Only a successful program/model query may clear a prior failure gate;
+        // an older getAppState response has no authority to clear it.
+        catalogueFailure.current =
+          handy.error == null ? null : handy.error || t.modelUnavailable;
+        setHandyRefreshFailure(catalogueFailure.current);
+        if (catalogueFailure.current !== null) setModelId("");
         requestSequence.current++;
         setApp((previous) =>
           previous ? { ...previous, handy } : { ...fresh, handy },
         );
-        if (handy.error) setError(handy.error);
+        if (catalogueFailure.current !== null)
+          setError(catalogueFailure.current);
+        else if (choice !== null) setError(null);
       })();
       modelRefreshInFlight.current = pending;
       try {
         await pending;
+      } catch (failure) {
+        // A confirmed choice that failed before querying Handy is unverified too.
+        // Never release the queue back to the previous installation's catalogue.
+        if (choice !== null && !queriedHandy) {
+          const reason = errorMessage(failure) || t.modelUnavailable;
+          catalogueFailure.current = reason;
+          if (mounted.current) {
+            setHandyRefreshFailure(reason);
+            setModelId("");
+          }
+        }
+        throw failure;
       } finally {
-        modelRefreshInFlight.current = null;
+        if (modelRefreshInFlight.current === pending) {
+          modelRefreshInFlight.current = null;
+          if (mounted.current) setRefreshingHandy(false);
+        }
         if (queriedHandy) lastModelRefresh.current = Date.now();
-        if (mounted.current) setRefreshingHandy(false);
       }
     },
-    [api, handyPath],
+    [api, handyPath, poll, locale, t.modelUnavailable],
   );
   useEffect(() => {
+    /**
+     * Requests a throttled automatic catalogue refresh on window focus and keeps any
+     * failure visible to the user.
+     */
     const onFocus = () => {
       void refreshModels(true).catch((failure) => {
         if (mounted.current) setError(errorMessage(failure));
@@ -524,6 +673,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       clearInterval(timer);
     };
   }, [poll, refreshDevices, refreshHistory]);
+  /**
+   * Wraps a requested foreground operation with visible busy/error state. Native services
+   * remain responsible for conflicts and durable changes.
+   */
   async function action(work: () => Promise<void>) {
     if (busy) return;
     setBusy(true);
@@ -536,6 +689,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       setBusy(false);
     }
   }
+  /**
+   * Loads the exact requested meeting before switching its detail or analysis view; a
+   * search-source highlight stays bound to that meeting ID.
+   */
   async function openMeeting(
     id: string,
     nextPage: Page = "detail",
@@ -557,8 +714,17 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       setPage(nextPage);
     });
   }
+  /**
+   * Discovers finished and resumable analyses independently for one meeting. Generation
+   * checks discard stale selection replies while preserving results from a successful
+   * sibling lookup.
+   */
   async function selectNotesMeeting(id: string) {
     const sequence = ++notesLoadSequence.current;
+    /**
+     * Checks mounted state, request generation and meeting ownership before a discovery
+     * reply may update the analysis view.
+     */
     const isCurrentSelection = () =>
       mounted.current &&
       sequence === notesLoadSequence.current &&
@@ -590,6 +756,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       fullMeetingRef.current = current.id;
       setMeeting(current);
       const failures: string[] = [];
+      /**
+       * Combines distinct discovery failures only for the still-current selection, leaving
+       * successful sibling results visible.
+       */
       const reportDiscoveryFailure = (failure: unknown) => {
         if (!isCurrentSelection()) return;
         failures.push(errorMessage(failure));
@@ -626,11 +796,19 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         setNotesMeetingLoading(false);
     }
   }
+  /**
+   * Opens analysis for an explicit meeting ID and refreshes history without starting an
+   * analysis job.
+   */
   async function openNotesFor(id: string) {
     setPage("notes");
     void refreshHistory().catch((failure) => setError(errorMessage(failure)));
     await selectNotesMeeting(id);
   }
+  /**
+   * Changes the visible page and refreshes the corresponding history or meeting-bound
+   * analysis selection when needed.
+   */
   async function navigate(next: Page) {
     setPage(next);
     if (next === "history") void action(refreshHistory);
@@ -647,8 +825,16 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       void selectNotesMeeting(id);
     }
   }
+  /**
+   * Starts capture only after the synchronous catalogue, pending-choice and refresh gates
+   * pass. It sends the selected model and separate track IDs to the native service.
+   */
   async function start() {
     await action(async () => {
+      if (catalogueFailure.current !== null)
+        throw new Error(catalogueFailure.current);
+      if (pendingNativeChoice.current !== null) throw new Error(t.busy);
+      if (modelRefreshInFlight.current) throw new Error(t.busy);
       const item = await api.startMeeting({
         title: title.trim() || defaultMeetingTitle(locale),
         modelId,
@@ -666,6 +852,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       await refreshHistory();
     });
   }
+  /**
+   * Requests native capture finalization, then refreshes the retained meeting and history
+   * while keeping the stopping state visible.
+   */
   async function stop() {
     await action(async () => {
       setIsStopping(true);
@@ -683,6 +873,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       }
     });
   }
+  /**
+   * Reloads the bound meeting before copying every original section, bypassing the bounded
+   * live preview used for display.
+   */
   async function copyFullTranscript(target: Meeting | null = meeting) {
     if (!target) return;
     const id = target.id;
@@ -694,6 +888,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       copyTimer.current = setTimeout(() => setCopied(null), 2000);
     });
   }
+  /**
+   * Commits a replacement template through the revisioned library; editing the protected
+   * speaker-name template requires duplication first.
+   */
   async function updateTemplate(next: AnalysisTemplate) {
     if (next.id === SPEAKER_NAME_TEMPLATE.id) {
       setError(
@@ -709,6 +907,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       ),
     );
   }
+  /**
+   * Saves a validated new or edited template step and closes the editor only after the
+   * library accepts the change.
+   */
   async function saveStep() {
     if (!editing) return;
     if (!editing.name.trim() || !editing.prompt.trim()) {
@@ -732,6 +934,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     setStepId(next.id);
     setEditing(null);
   }
+  /**
+   * Swaps the selected template step with an in-range offset target and delegates
+   * persistence to the template library.
+   */
   function moveStep(delta: number) {
     const index = template.steps.findIndex((item) => item.id === stepId);
     if (
@@ -744,6 +950,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     [steps[index], steps[index + delta]] = [steps[index + delta], steps[index]];
     void updateTemplate({ ...template, steps });
   }
+  /**
+   * Prepares a detached template-action draft so opening a rename, duplicate or delete
+   * dialog cannot mutate the stored template.
+   */
   function openTemplateAction(
     kind: TemplateAction["kind"],
     original = template,
@@ -760,6 +970,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             : original.name,
     });
   }
+  /**
+   * Validates the template action and commits one new library revision. Duplicates receive
+   * fresh template and step IDs; protected/last-template deletions are refused.
+   */
   async function saveTemplateAction() {
     if (!templateAction) return;
     const { kind, original } = templateAction;
@@ -818,6 +1032,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     setResultId("");
     setTemplateAction(null);
   }
+  /**
+   * Snapshots the current meeting/template/model choice. Local analysis starts directly;
+   * cloud text remains pending explicit per-run consent.
+   */
   function beginNotes() {
     if (!notesMeeting || !canStartNotes) return;
     const request: NotesRequest = {
@@ -833,6 +1051,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     if (mode === "cloud") setCloudRequest(request);
     else void runNotes(request);
   }
+  /**
+   * Runs the requested analysis and rediscovers resumable work only for its still-selected
+   * meeting, retaining discovery errors for review.
+   */
   async function runNotes(request: NotesRequest) {
     setError(null);
     setCloudRequest(null);
@@ -857,6 +1079,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         setError(errorMessage(failure));
     }
   }
+  /**
+   * Retries the last in-memory run only for the same meeting and resets cloud consent
+   * before any cloud retry.
+   */
   function resumeNotes() {
     const previous = notesJob.lastRequest,
       runId = notesJob.progress?.runId;
@@ -865,6 +1091,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     if (request.mode === "cloud") setCloudRequest(request);
     else void runNotes(request);
   }
+  /**
+   * Copies backend-rendered Markdown only when the selected result belongs to the selected
+   * meeting; it does not render model text as browser markup.
+   */
   async function copyNotesMarkdown() {
     if (!result || !notesMeeting || result.meetingId !== notesMeeting.id) {
       setError(t.wrongMeeting);
@@ -878,6 +1108,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       copyTimer.current = setTimeout(() => setCopied(null), 2000);
     });
   }
+  /**
+   * Opens a source only when its ID exists and its text contains the literal quote. This
+   * structural check does not establish semantic correctness.
+   */
   function showEvidence(evidence: Evidence) {
     const original = result?.sources.find(
       (item) => item.id === evidence.sourceId,
@@ -892,6 +1126,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       quote: evidence.quote,
     });
   }
+  /**
+   * Maps known meeting states to localized labels and treats unrecognized states as
+   * pending rather than complete.
+   */
   const statusName = (value: string) =>
     value === "complete"
       ? t.complete
@@ -917,6 +1155,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     shownMeeting?.status === "complete" && !shownMeeting.livePreviewLimited
       ? orderedParts
       : orderedParts.slice(-40);
+  /**
+   * Uses native saved-audio totals or the greatest confirmed 16 kHz sample boundary,
+   * expressed in milliseconds independently of ASR progress.
+   */
   const savedByTrack = (track: "system" | "microphone") =>
     shownMeeting?.savedAudioMs?.[track] ??
     Math.max(
@@ -1164,6 +1406,27 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
               catchingUp ||
               (app?.transitioning ?? false)
             }
+            controlsAvailable={Boolean(
+              api.setCapturePaused && api.setMicrophoneMuted,
+            )}
+            onPause={(paused) => {
+              const id = app?.activeMeeting?.id;
+              if (!id || !api.setCapturePaused) return;
+              void action(async () => {
+                const state = await api.setCapturePaused!(id, paused);
+                requestSequence.current++;
+                setApp(state);
+              });
+            }}
+            onMute={(muted) => {
+              const id = app?.activeMeeting?.id;
+              if (!id || !api.setMicrophoneMuted) return;
+              void action(async () => {
+                const state = await api.setMicrophoneMuted!(id, muted);
+                requestSequence.current++;
+                setApp(state);
+              });
+            }}
             isStopping={isStopping}
             connected={connected}
             title={title}
@@ -1176,11 +1439,15 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
                 if (liveMeeting) await api.openMeetingFolder(liveMeeting.id);
               })
             }
-            onExport={() =>
+            onExport={(format) =>
               void action(async () => {
                 if (liveMeeting) {
                   const id = liveMeeting.id;
-                  const file = await api.exportTranscript(id, locale);
+                  setFileExport(null);
+                  const file =
+                    format === "txt"
+                      ? await api.exportTranscript(id, locale)
+                      : await api.exportTranscript(id, locale, format);
                   setFileExport({ id, file });
                 }
               })
@@ -1238,10 +1505,14 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             onOpenFolder={() =>
               void action(() => api.openMeetingFolder(meeting.id))
             }
-            onExport={() =>
+            onExport={(format) =>
               void action(async () => {
                 const id = meeting.id;
-                const file = await api.exportTranscript(id, locale);
+                setFileExport(null);
+                const file =
+                  format === "txt"
+                    ? await api.exportTranscript(id, locale)
+                    : await api.exportTranscript(id, locale, format);
                 setFileExport({ id, file });
               })
             }
@@ -1264,230 +1535,67 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
           />
         )}
         {page === "history" && !api.searchMeetings && (
-          <section className="history-panel">
-            <div className="section-heading">
-              <h2>{t.storage}</h2>
-              <button
-                className="secondary"
-                disabled={busy || !connected}
-                onClick={() => void action(refreshHistory)}
-              >
-                <RefreshCw size={15} />
-                {t.refresh}
-              </button>
-            </div>
-            {history.length ? (
-              <div className="session-list">
-                {history.map((item) => (
-                  <div className="session-row" key={item.id}>
-                    <div>
-                      <strong>{item.title}</strong>
-                      <p>
-                        {new Date(item.startedAt).toLocaleString(
-                          locale === "de" ? "de-DE" : "en-GB",
-                        )}{" "}
-                        · {clock(item.durationMs)} · {statusName(item.status)}
-                      </p>
-                    </div>
-                    <button
-                      className="secondary"
-                      disabled={busy}
-                      onClick={() => void openMeeting(item.id)}
-                    >
-                      {t.open}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="empty">
-                <FolderClock size={30} />
-                <p>{t.emptyHistory}</p>
-              </div>
-            )}
-          </section>
-        )}
-        {page === "settings" && (
-          <div className="settings-sections">
-            {!preferences.persistable && (
-              <div className="notice warning">{t.preferencesError}</div>
-            )}
-            <section>
-              <h2>{t.installation}</h2>
-              <p>{t.executableHelp}</p>
-              <label>
-                {t.executable}
-                <input
-                  value={handyPath}
-                  onChange={(event) => setHandyPath(event.target.value)}
-                  disabled={
-                    recording ||
-                    busy ||
-                    refreshingHandy ||
-                    catchingUp ||
-                    (app?.transitioning ?? false)
-                  }
-                  placeholder={
-                    locale === "de"
-                      ? "Automatisch erkennen"
-                      : "Detect automatically"
-                  }
-                />
-              </label>
-              <div className="settings-actions">
-                <span>
-                  {t.version}:{" "}
-                  {app?.handy?.version ??
-                    (app?.handy?.executable
-                      ? t.handyVersionMissing
-                      : t.notFound)}
-                </span>
-                <button
-                  className="secondary"
-                  disabled={
-                    !connected ||
-                    busy ||
-                    recording ||
-                    refreshingHandy ||
-                    catchingUp ||
-                    (app?.transitioning ?? false)
-                  }
-                  onClick={() => void action(() => refreshModels(false))}
-                >
-                  <RefreshCw size={15} />
-                  {t.refresh}
-                </button>
-              </div>
-              <p className="muted">{app?.handy?.executable}</p>
-            </section>
-            <section>
-              <h2>{t.theme}</h2>
-              <div className="settings-grid">
-                <label>
-                  {t.language}
-                  <select
-                    value={locale}
-                    onChange={(event) =>
-                      setLocale(event.target.value as Locale)
-                    }
-                  >
-                    <option value="de">Deutsch</option>
-                    <option value="en">English</option>
-                  </select>
-                </label>
-                <label>
-                  {t.theme}
-                  <select
-                    value={theme}
-                    onChange={(event) => setTheme(event.target.value as Theme)}
-                  >
-                    <option value="system">{t.systemTheme}</option>
-                    <option value="light">{t.light}</option>
-                    <option value="dark">{t.dark}</option>
-                  </select>
-                </label>
-              </div>
-            </section>
-            <section>
-              <h2>{t.system}</h2>
-              <button
-                className="secondary"
-                disabled={recording || busy || !connected}
-                onClick={() => void action(refreshDevices)}
-              >
-                <RefreshCw size={15} />
-                {t.refreshDevices}
-              </button>
-            </section>
-            <section>
-              <h2>{t.storage}</h2>
-              <p>{t.legacyHelp}</p>
-              {app?.dataDirectory && (
-                <code className="storage-path">{app.dataDirectory}</code>
-              )}
-            </section>
-          </div>
-        )}
-        {page === "settings" && (
-          <UpdatePanel
-            api={api}
+          <HistoryList
+            history={history}
             locale={locale}
-            blocked={Boolean(
-              app?.recording ||
-                app?.transitioning ||
-                app?.notesRunning ||
-                liveMeeting?.status === "catching-up",
-            )}
-          />
-        )}
-        {page === "settings" && api.rebuildSearchIndex && (
-          <section className="legacy-panel">
-            <h2>
-              {locale === "de" ? "Lokaler Suchindex" : "Local search index"}
-            </h2>
-            <p className="muted">
-              {locale === "de"
-                ? "Der Suchindex beschleunigt große Historien. Er wird lokal aus deinen Sitzungen aufgebaut; Originale werden nicht geändert."
-                : "The local index speeds up large histories. Rebuilding never changes original sessions."}
-            </p>
-            <button
-              className="secondary"
-              onClick={() =>
-                void api
-                  .rebuildSearchIndex?.()
-                  .catch((e) => setError(errorMessage(e)))
-              }
-            >
-              <RefreshCw size={15} />
-              {locale === "de"
-                ? "Suchindex aktualisieren"
-                : "Update search index"}
-            </button>
-          </section>
-        )}
-        {page === "settings" && (
-          <RetentionPanel
-            api={api}
-            locale={locale}
-            models={app?.handy?.models ?? []}
+            t={t}
+            busy={busy}
+            connected={connected}
+            onRefresh={() => void action(refreshHistory)}
+            onOpen={(id) => void openMeeting(id)}
+            statusName={statusName}
           />
         )}
         {page === "settings" && (
-          <section className="legacy-panel">
-            <h2>{t.legacy}</h2>
-            <p className="muted">{t.legacyHelp}</p>
-            <label>
-              {x.manifest}
-              <input
-                value={legacyManifest}
-                onChange={(event) => setLegacyManifest(event.target.value)}
-                autoComplete="off"
-                placeholder="session.json"
-              />
-            </label>
-            <button
-              className="secondary"
-              disabled={
-                busy || recording || !connected || !legacyManifest.trim()
-              }
-              onClick={() =>
-                void action(async () => {
-                  const imported = await api.importLegacy(
-                    legacyManifest.trim(),
-                  );
-                  selectedRef.current = imported.id;
-                  fullMeetingRef.current = imported.id;
-                  setMeeting(imported);
-                  setAnalyses([]);
-                  setResultId("");
-                  setPage("detail");
-                  await refreshHistory();
-                })
-              }
-            >
-              {x.importSession}
-            </button>
-          </section>
+          <SettingsView
+            api={api}
+            app={app}
+            locale={locale}
+            theme={theme}
+            t={t}
+            busy={busy}
+            connected={connected}
+            refreshingHandy={refreshingHandy}
+            blocked={
+              recording ||
+              isStopping ||
+              catchingUp ||
+              Boolean(app?.transitioning)
+            }
+            preferencesPersistable={preferences.persistable}
+            handyPath={handyPath}
+            onLocale={setLocale}
+            onTheme={setTheme}
+            onRefreshHandy={() => void action(() => refreshModels(false))}
+            onRefreshDevices={() => void action(refreshDevices)}
+            onChooseHandy={() =>
+              void action(async () => {
+                const selected = await api.chooseHandyExecutable?.();
+                if (!selected) return;
+                setHandyPath(selected);
+                await refreshModels(false, selected);
+              })
+            }
+            onRebuildIndex={() =>
+              void api
+                .rebuildSearchIndex?.()
+                .catch((e) => setError(errorMessage(e)))
+            }
+            onImportLegacy={() =>
+              void action(async () => {
+                const selected = await api.chooseLegacyManifest?.();
+                if (!selected) return;
+                const imported = await api.importLegacy(selected);
+                selectedRef.current = imported.id;
+                fullMeetingRef.current = imported.id;
+                setMeeting(imported);
+                setAnalyses([]);
+                setResultId("");
+                setPage("detail");
+                await refreshHistory();
+              })
+            }
+          />
         )}
         {page === "notes" && skippedRuns.length > 0 && (
           <div className="notice warning" role="status">

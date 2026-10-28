@@ -1,5 +1,11 @@
 use crate::{AudioDevice, CaptureSnapshot, Result, SessionStore};
 use serde::{Deserialize, Serialize};
+#[path = "capture_controls.rs"]
+mod controls;
+use controls::CaptureControls;
+pub use controls::{
+    read_capture_control_events, CaptureControlEvent, CaptureControlLog, CaptureControlSnapshot,
+};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -45,9 +51,11 @@ pub struct CaptureController {
     stop: Arc<AtomicBool>,
     tracks: Vec<(&'static str, JoinHandle<()>)>,
     store: SessionStore,
+    controls: Arc<CaptureControls>,
 }
 
 impl CaptureController {
+    /// Starts independent system/microphone writers; a microphone startup failure leaves system capture running.
     pub fn start(store: SessionStore, options: CaptureOptions) -> Result<Self> {
         #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
         {
@@ -57,10 +65,12 @@ impl CaptureController {
         #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
         {
             let stop = Arc::new(AtomicBool::new(false));
+            let controls = Arc::new(CaptureControls::new(&store)?);
             let mut controller = Self {
                 stop,
                 tracks: vec![],
                 store,
+                controls,
             };
             if let Err(error) = controller.start_track("system", options.output_id) {
                 controller.stop()?;
@@ -72,6 +82,8 @@ impl CaptureController {
                     controller.store.warn(&format!(
                         "Microphone could not start: {error}. System audio continues."
                     ))?;
+                } else {
+                    controller.controls.set_has_microphone(true);
                 }
             }
             Ok(controller)
@@ -79,12 +91,14 @@ impl CaptureController {
     }
 
     #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    /// Starts one owned capture thread and waits for its bounded readiness acknowledgment.
     fn start_track(&mut self, source: &'static str, device_id: Option<String>) -> Result<()> {
         let stop = Arc::clone(&self.stop);
         let store = self.store.clone();
+        let controls = Arc::clone(&self.controls);
         let (ready, result) = mpsc::sync_channel(1);
         let track = thread::Builder::new().name(format!("meeting-{source}-capture")).spawn(move || {
-            if let Err(error) = platform::record(store.clone(), source, device_id, stop, ready) {
+            if let Err(error) = platform::record(store.clone(), source, device_id, stop, ready, controls) {
                 let _ = store.warn(&format!("{source}: capture stopped: {error}. Saved audio is retained; check the device before recording again."));
             }
         })?;
@@ -97,6 +111,7 @@ impl CaptureController {
         }
     }
 
+    /// Returns capture liveness and a bounded session preview without cloning the full transcript.
     pub fn snapshot(&self) -> Result<CaptureSnapshot> {
         Ok(CaptureSnapshot {
             running: self.is_running(),
@@ -104,9 +119,37 @@ impl CaptureController {
         })
     }
 
+    /// Reports whether an owned track is still alive before an explicit stop request.
     pub fn is_running(&self) -> bool {
         !self.stop.load(Ordering::Acquire)
             && self.tracks.iter().any(|(_, track)| !track.is_finished())
+    }
+
+    /// Returns pause/mute state and derives microphone availability from its live capture thread.
+    pub fn controls(&self) -> CaptureControlSnapshot {
+        let mut snapshot = self.controls.snapshot();
+        snapshot.has_microphone = !self.stop.load(Ordering::Acquire)
+            && self
+                .tracks
+                .iter()
+                .any(|(source, track)| *source == "microphone" && !track.is_finished());
+        snapshot
+    }
+
+    /// Changes both track gates only while capture runs; successful return excludes old-epoch speech writes.
+    pub fn set_paused(&self, paused: bool) -> Result<()> {
+        if !self.is_running() {
+            return Err("No capture is running".into());
+        }
+        self.controls.set_paused(paused)
+    }
+
+    /// Changes only the live microphone gate; system capture continues independently.
+    pub fn set_microphone_muted(&self, muted: bool) -> Result<()> {
+        if !self.is_running() || self.stopped_tracks().contains(&"microphone") {
+            return Err("No microphone capture is running".into());
+        }
+        self.controls.set_microphone_muted(muted)
     }
 
     /// Tracks ("system", "microphone") whose capture ended before an explicit stop, while
@@ -122,6 +165,7 @@ impl CaptureController {
             .collect()
     }
 
+    /// Requests owned tracks to stop, joins their writers and marks the retained session recorded.
     pub fn stop(&mut self) -> Result<()> {
         self.stop.store(true, Ordering::Release);
         for (_, track) in self.tracks.drain(..) {
@@ -136,11 +180,13 @@ impl CaptureController {
 }
 
 impl Drop for CaptureController {
+    /// Stops only this controller's owned capture threads when the controller is released.
     fn drop(&mut self) {
         let _ = self.stop();
     }
 }
 
+/// Enumerates supported platform devices on a separate thread without starting a recording.
 pub fn list_devices() -> Result<Vec<AudioDevice>> {
     #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
     {
@@ -158,6 +204,7 @@ pub fn list_devices() -> Result<Vec<AudioDevice>> {
 mod tests {
     use super::*;
     #[test]
+    /// Checks synthetic thread liveness reports one failed track while the other remains active.
     fn a_track_that_ends_early_is_reported_while_the_other_keeps_recording() {
         let root = tempfile::tempdir().unwrap();
         let store = SessionStore::create(root.path(), "Synthetic", "m", "s", None).unwrap();
@@ -172,6 +219,7 @@ mod tests {
         let mut controller = CaptureController {
             stop,
             tracks: vec![("system", system), ("microphone", microphone)],
+            controls: Arc::new(CaptureControls::new(&store).unwrap()),
             store,
         };
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);

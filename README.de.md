@@ -1,14 +1,14 @@
-<p align="center"><img src="assets/handymeeting.svg" width="76" alt="HandyMeeting-Logo"></p>
-<h1 align="center">HandyMeeting</h1>
+<p align="center"><img src="assets/handymeeting.svg" width="76" alt="Meeting for Handy-Logo"></p>
+<h1 align="center">Meeting for Handy</h1>
 <p align="center"><strong>Dein Meeting. Dein Computer. Dein Transkript.</strong></p>
 
-[Downloads](https://github.com/Puma7/handy-meeting/releases) · [English](README.md) · [Veröffentlichen](docs/RELEASING.md) · [Feedback](https://github.com/Puma7/handy-meeting/issues)
+[Downloads](https://github.com/Puma7/meeting-for-handy/releases) · [English](README.md) · [Veröffentlichen](docs/RELEASING.md) · [Feedback](https://github.com/Puma7/meeting-for-handy/issues)
 
-HandyMeeting ist eine eigenständige **Rust-/Tauri-Companion-App für [Handy](https://github.com/cjpais/Handy)**. Sie nimmt Computerton und auf Wunsch dein Mikrofon getrennt auf, transkribiert lokal während des Meetings und erstellt anschließend belegte Zusammenfassungen, Entscheidungen und To-dos. Audiodateien werden dafür nicht in die Cloud geschickt.
+Meeting for Handy ist eine eigenständige **Rust-/Tauri-Companion-App für [Handy](https://github.com/cjpais/Handy)**. Sie nimmt Computerton und auf Wunsch dein Mikrofon getrennt auf, transkribiert lokal während des Meetings und erstellt anschließend belegte Zusammenfassungen, Entscheidungen und To-dos. Audiodateien werden dafür nicht in die Cloud geschickt.
 
 ## Pakete für deinen Computer
 
-**[Releases und passende Downloads öffnen](https://github.com/Puma7/handy-meeting/releases)**. Einen vollständigen Release öffnen und unter „Assets“ das passende Paket auswählen. Dort liegen die versionierten Dateien mit ihren Prüfsummen.
+**[Releases und passende Downloads öffnen](https://github.com/Puma7/meeting-for-handy/releases)**. Einen vollständigen Release öffnen und unter „Assets“ das passende Paket auswählen. Dort liegen die versionierten Dateien mit ihren Prüfsummen.
 
 | System | Pakettyp | Voraussetzung |
 | --- | --- | --- |
@@ -32,24 +32,24 @@ HandyMeeting ist eine eigenständige **Rust-/Tauri-Companion-App für [Handy](ht
 - **Nachvollziehbare Ergebnisse:** vorhandene Originalstellen und wörtliche Zitate, unbekannte Zuständige und Termine bleiben unbekannt.
 - **Sichtbarer Fortschritt:** bestätigte Teilaufgaben, Laufzeit, Abbruch und Wiederaufnahme; heller und dunkler Modus sowie Deutsch und Englisch.
 
-![Transkript und lokale Dateien in HandyMeeting](assets/screenshots/transcript-light.png)
+![Transkript und lokale Dateien in Meeting for Handy](assets/screenshots/transcript-light.png)
 *Echte App-Komponenten mit künstlichen Demo-Inhalten. Die dargestellten zwei Stunden sind eine Oberflächenprüfung und kein Geräte-Dauertest.*
 
 ![Nachbearbeitung mit Originalbelegen](assets/screenshots/analysis-light.png)
 
 Die Vorlage ist wiederverwendbar, eine gespeicherte Auswertung behält dagegen ihren eigenen Originalstand und ihre Arbeitsaufträge. **Alle Ergebnisse als Markdown kopieren** enthält sämtliche Ergebnis-Tabs, Belege und das zugehörige Originaltranskript. Technisch vorhandene Zitate beweisen noch keine richtige inhaltliche Deutung.
 
-![HandyMeeting im dunklen Modus](assets/screenshots/analysis-dark.png)
+![Meeting for Handy im dunklen Modus](assets/screenshots/analysis-dark.png)
 
 ## Das erste Meeting
 
-1. Handy installieren und dort ein kompatibles **Streaming-Sprachmodell** herunterladen. HandyMeeting erkennt die Installation und liest deren Modellliste. Gewichte sind nicht im Download enthalten.
+1. Handy installieren und dort ein kompatibles **Streaming-Sprachmodell** herunterladen. Meeting for Handy erkennt die Installation und liest deren Modellliste. Gewichte sind nicht im Download enthalten.
 2. Das passende Paket installieren. Das Windows-ZIP vollständig entpacken und über die enthaltene Startdatei öffnen. Unter Linux das DEB mit dem Paketmanager installieren; auf dem Mac die App aus der passenden DMG in „Programme“ ziehen.
 3. **Meeting → Aufnahme einrichten:** Namen, Modell und die von der Meeting-App verwendete Tonausgabe auswählen. Das Mikrofon nur bei Bedarf zusätzlich aktivieren. Auf Mac werden derzeit die Standardgeräte verwendet.
 4. Kurz testen, ob beide gewünschten Seiten ankommen. Die gewählte Tonausgabe kann auch andere Programme und Benachrichtigungen enthalten.
 5. Meeting beenden, Transkript kontrollieren und **Dieses Meeting auswerten** wählen. **Sitzungsordner öffnen** zeigt Audio, Journale und gespeicherte Fassungen direkt im Dateimanager.
 
-Für die lokale Nachbearbeitung wird zusätzlich ein lokaler Textmodelldienst benötigt, beispielsweise LM Studio. Dort ein Textmodell laden und den lokalen Server starten. Die Standardadresse lautet `http://127.0.0.1:1234/v1/`. HandyMeeting fragt dessen verfügbare Modellkennungen ab; das Modell wird ausdrücklich ausgewählt. Ein Sprachmodell für die Audioerkennung ersetzt kein Textmodell für Zusammenfassungen.
+Für die lokale Nachbearbeitung wird zusätzlich ein lokaler Textmodelldienst benötigt, beispielsweise LM Studio. Dort ein Textmodell laden und den lokalen Server starten. Die Standardadresse lautet `http://127.0.0.1:1234/v1/`. Meeting for Handy fragt dessen verfügbare Modellkennungen ab; das Modell wird ausdrücklich ausgewählt. Ein Sprachmodell für die Audioerkennung ersetzt kein Textmodell für Zusammenfassungen.
 
 ## Datenschutz und Wiederherstellung
 
@@ -65,9 +65,9 @@ Zwei Audiospuren sind keine Personenerkennung. Sprechernamen werden nur nach dei
 
 ## Im Handy-Ökosystem
 
-Die Companion-Richtung entstand aus [Handy Discussion #1923](https://github.com/cjpais/Handy/discussions/1923). HandyMeeting liest installierte Modelle und verwendet gepflegte transcribe.cpp-Bindings mit festgelegter nativer Laufzeit. Handy-Einstellungen, Schlüssel und Gewichte werden nicht geändert. Die Erkennung läuft in eigenen Prozessen; eine bereits geladene Handy-Modellinstanz wird nicht geteilt. Neue Modellformate können ein Laufzeitupdate erfordern.
+Die Companion-Richtung entstand aus [Handy Discussion #1923](https://github.com/cjpais/Handy/discussions/1923). Meeting for Handy liest installierte Modelle und verwendet gepflegte transcribe.cpp-Bindings mit festgelegter nativer Laufzeit. Handy-Einstellungen, Schlüssel und Gewichte werden nicht geändert. Die Erkennung läuft in eigenen Prozessen; eine bereits geladene Handy-Modellinstanz wird nicht geteilt. Neue Modellformate können ein Laufzeitupdate erfordern.
 
-HandyMeeting ist **kein offizielles Handy-Produkt** und hat keine bestätigte Integrationsvereinbarung. [Vorschlag für eine unterstützte Companion-Schnittstelle](docs/HANDY_UPSTREAM_PROPOSAL.md).
+Meeting for Handy ist **kein offizielles Handy-Produkt** und hat keine bestätigte Integrationsvereinbarung. [Vorschlag für eine unterstützte Companion-Schnittstelle](docs/HANDY_UPSTREAM_PROPOSAL.md).
 
 ## Mitwirken
 
@@ -76,3 +76,10 @@ HandyMeeting ist **kein offizielles Handy-Produkt** und hat keine bestätigte In
 Paket- und Bibliotheksversionen sind gesperrt. GitHub prüft Quellstandbindung, Sicherung, Wiederaufnahme, Quellen, Oberflächenabläufe, native Schlüsselablage, verschobene Programmpakete sowie Windows-Installation und Datenerhalt bei der Deinstallation. Erfolgreiche Builds und echte Gerätenachweise werden getrennt ausgewiesen. Ältere C#-Downloads und ihre Anleitung bleiben über [BUILD_STATUS.md](BUILD_STATUS.md) und die früheren Release-Tags zugänglich.
 
 MIT-Lizenz; Originalhinweise unter [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) und `licenses/`. Modelle, Aufnahmen, Einstellungen und Zugangsschlüssel gehören weder zum Quellpaket noch zu den Downloads.
+
+
+## Folgeabschnitt 1.0.4 (unveröffentlicht)
+
+Pause/Fortsetzen der Aufnahme und eine getrennte App-Mikrofonstummschaltung halten die Zeitachse mit ausdrücklich markierter Stille und erhaltenen Steuerungsereignissen. Vollständige Transkripte lassen sich als TXT, abgesichertes Markdown oder strukturiertes JSON mit Quellenkennungen und Abschnittszeiten speichern. Ausdrückliche Programm-/Importauswahlen verlangen einen nativen Dateidialog und eine Bestätigung je App-Start. Echte Unterbrechungs-, Langzeit-, Mac-/Linux-Geräte- und Signaturprüfungen bleiben eigene Freigabekriterien.
+
+Der sichtbare Name lautet **Meeting for Handy**. Daten-/Schlüssel-/Bundle-Kennungen, interne Programmnamen und der Downloadpräfix `HandyMeeting-<Version>-...` bleiben für ältere Installationen und deren Updates erhalten. Frühere Programme und Verknüpfungen werden erhalten. Der neue Windows-Startmenüeintrag heißt **Meeting for Handy**; eine blockierende Skriptausführungsrichtlinie wird nicht abgeschwächt.

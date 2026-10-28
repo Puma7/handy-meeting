@@ -1,25 +1,25 @@
-<p align="center"><img src="assets/handymeeting.svg" width="76" alt="HandyMeeting logo"></p>
-<h1 align="center">HandyMeeting</h1>
+<p align="center"><img src="assets/handymeeting.svg" width="76" alt="Meeting for Handy logo"></p>
+<h1 align="center">Meeting for Handy</h1>
 <p align="center"><strong>Your meeting. Your computer. Your transcript.</strong></p>
 <p align="center">Local recording, streaming transcripts and meeting notes with original quotes.</p>
 
 <p align="center">
-<a href="https://github.com/Puma7/handy-meeting/releases">Downloads</a> ·
+<a href="https://github.com/Puma7/meeting-for-handy/releases">Downloads</a> ·
 <a href="README.de.md">Deutsch</a> ·
 <a href="docs/RELEASING.md">Releasing</a> ·
-<a href="https://github.com/Puma7/handy-meeting/issues">Feedback</a>
+<a href="https://github.com/Puma7/meeting-for-handy/issues">Feedback</a>
 </p>
 
-[![Rust checks](https://github.com/Puma7/handy-meeting/actions/workflows/rust.yml/badge.svg)](https://github.com/Puma7/handy-meeting/actions/workflows/rust.yml)
-[![Linux and Mac packages](https://github.com/Puma7/handy-meeting/actions/workflows/rust-portable.yml/badge.svg)](https://github.com/Puma7/handy-meeting/actions/workflows/rust-portable.yml)
-[![Release packages](https://github.com/Puma7/handy-meeting/actions/workflows/rust-release.yml/badge.svg)](https://github.com/Puma7/handy-meeting/actions/workflows/rust-release.yml)
+[![Rust checks](https://github.com/Puma7/meeting-for-handy/actions/workflows/rust.yml/badge.svg)](https://github.com/Puma7/meeting-for-handy/actions/workflows/rust.yml)
+[![Linux and Mac packages](https://github.com/Puma7/meeting-for-handy/actions/workflows/rust-portable.yml/badge.svg)](https://github.com/Puma7/meeting-for-handy/actions/workflows/rust-portable.yml)
+[![Release packages](https://github.com/Puma7/meeting-for-handy/actions/workflows/rust-release.yml/badge.svg)](https://github.com/Puma7/meeting-for-handy/actions/workflows/rust-release.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 An independent **Rust + Tauri companion for [Handy](https://github.com/cjpais/Handy)**. Record the audio from Zoom, Teams or another desktop meeting, optionally record your microphone as a separate track, and transcribe it locally while the meeting runs. Turn the transcript into summaries, decisions and tasks without sending the audio to a cloud service.
 
 ## Download
 
-**[Download the latest complete release](https://github.com/Puma7/handy-meeting/releases/latest)**. Open Assets and choose the package for your computer. The versioned downloads are listed together with their checksums. [Older releases](https://github.com/Puma7/handy-meeting/releases) remain available.
+**[Download the latest complete release](https://github.com/Puma7/meeting-for-handy/releases/latest)**. Open Assets and choose the package for your computer. The versioned downloads are listed together with their checksums. [Older releases](https://github.com/Puma7/meeting-for-handy/releases) remain available.
 
 | Your computer | Package type | Requirements |
 | --- | --- | --- |
@@ -28,7 +28,7 @@ An independent **Rust + Tauri companion for [Handy](https://github.com/cjpais/Ha
 | Mac · Apple Silicon / M-series | Apple Silicon DMG | macOS 15+; recording permissions |
 | Mac · Intel | Intel DMG | macOS 15+; recording permissions |
 
-**Installer status:** the current public release is 1.0.1, which corrects the first-install Windows folder failure found in 1.0.0; 1.0.2 and 1.0.3 are in development. Every complete release includes five packages and `RELEASE_MANIFEST.json`. Keep the versioned program folders separate; recordings and older installations are preserved.
+**Installer status:** the current public release is 1.0.1, which corrects the first-install Windows folder failure found in 1.0.0; the separate 1.0.4 follow-up is in development and is not a published release. Every complete release includes five packages and `RELEASE_MANIFEST.json`. Keep the versioned program folders separate; recordings and older installations are preserved.
 
 **Future releases:** a matching version tag automatically starts the full Windows/Linux/Mac build matrix. Successful checks produce all five packages and their proofs in a release draft. Publish the populated draft to make the downloads public; publishing a release directly also starts this workflow. [Release procedure](docs/RELEASING.md).
 
@@ -44,29 +44,29 @@ Version 1.0.2 is in development and not yet released; the download above is 1.0.
 | Live transcript, saved-audio counters and recording warnings | Summaries, decisions and tasks with verbatim source quotes | Local session history, original snapshots and retained analysis versions |
 | Complete TXT export and one-click session folder | Editable named templates and ordered analysis tabs | Visible progress, elapsed time, targeted cancellation and resumable work |
 
-![HandyMeeting transcript and local file controls](assets/screenshots/transcript-light.png)
+![Meeting for Handy transcript and local file controls](assets/screenshots/transcript-light.png)
 *Actual app components, rendered with synthetic demo data. The displayed two-hour timeline is a UI fixture, not a hardware endurance result. English and German interfaces are included.*
 
 ### Notes you can check
 
 Choose a local text model, select a template and run the analysis. Every result links to an existing source section and a verbatim quote. Unknown owners and deadlines remain unknown. Each saved analysis keeps the transcript and instructions that produced it.
 
-![HandyMeeting source-linked analysis in light mode](assets/screenshots/analysis-light.png)
+![Meeting for Handy source-linked analysis in light mode](assets/screenshots/analysis-light.png)
 
 Add processing tabs, edit their instructions and save templates for different kinds of meeting. Original saved results remain unchanged when a reusable template changes. Copy all tabs together as Markdown, including evidence and the original transcript.
 
-![HandyMeeting analysis in dark mode](assets/screenshots/analysis-dark.png)
+![Meeting for Handy analysis in dark mode](assets/screenshots/analysis-dark.png)
 *Light, dark and system themes. Demo results are illustrative; source verification does not prove the model interpreted a statement correctly.*
 
 ## First meeting
 
-1. Install **Handy** and download a compatible **streaming speech model** there. HandyMeeting detects the installation and reads its current model list; model weights are not included in our downloads.
+1. Install **Handy** and download a compatible **streaming speech model** there. Meeting for Handy detects the installation and reads its current model list; model weights are not included in our downloads.
 2. Install the package for your computer. With the Windows ZIP, extract the complete archive and use its start file. Keep the program folder and its libraries together. On Linux, install the DEB with your package manager; on Mac, copy the app from the matching DMG into Applications.
 3. Open **Meeting → Recording setup**. Name the meeting and select a model and the audio output used by the meeting app. Enable your microphone if you want that separate track.
 4. Start a short test and check both sources. The selected output can contain other apps' sounds, not just the meeting. On Mac, the current adapter uses the default audio devices.
 5. End the meeting, inspect its transcript, then open **Analyse this meeting**. **Open session folder** gives you the audio, journals, exports and saved analyses directly.
 
-For a local summary, run a local text-model service such as LM Studio, load an appropriate text model and start its local server. The default address is `http://127.0.0.1:1234/v1/`. HandyMeeting discovers the model IDs offered by that service and asks you to choose one. Speech models and text models serve different purposes; a speech model alone does not generate meeting notes.
+For a local summary, run a local text-model service such as LM Studio, load an appropriate text model and start its local server. The default address is `http://127.0.0.1:1234/v1/`. Meeting for Handy discovers the model IDs offered by that service and asks you to choose one. Speech models and text models serve different purposes; a speech model alone does not generate meeting notes.
 
 ## Privacy, recovery and honest limits
 
@@ -81,7 +81,7 @@ Files live in the existing local `HandyMeeting/RustBeta` application-data folder
 
 ## Built alongside Handy
 
-The [original discussion](https://github.com/cjpais/Handy/discussions/1923) places meeting features outside Handy's own scope. HandyMeeting explores that companion direction with its own lifecycle. It reads installed model metadata and uses the maintained transcribe.cpp bindings and a pinned native runtime. It does not modify Handy's settings, credentials or model weights. New model formats can require a compatible runtime update.
+The [original discussion](https://github.com/cjpais/Handy/discussions/1923) places meeting features outside Handy's own scope. Meeting for Handy explores that companion direction with its own lifecycle. It reads installed model metadata and uses the maintained transcribe.cpp bindings and a pinned native runtime. It does not modify Handy's settings, credentials or model weights. New model formats can require a compatible runtime update.
 
 This is **an independent project**, not an official Handy product or an endorsed integration. A supported upstream companion contract is still being discussed. [Integration boundary](docs/HANDY_UPSTREAM_PROPOSAL.md).
 
@@ -94,3 +94,10 @@ Dependencies and native downloads are pinned. CI checks Rust, frontend behavior,
 The previous C# prototypes and their recordings remain preserved. Their published packages and historical checks are documented in [BUILD_STATUS.md](BUILD_STATUS.md); they are not the Rust 1.0 packages above.
 
 MIT licensed. Thanks to Handy, transcribe.cpp, Tauri and the maintained libraries this project builds on. Original dependency notices are included in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) and `licenses/`. No model weights, recordings, settings or API keys are included in the source repository or download packages.
+
+
+## 1.0.4 follow-up (unreleased)
+
+Recording pause/resume and independent app microphone mute keep the meeting timeline with explicit silence and retained control events. Full transcript snapshots can be saved as TXT, safe Markdown or structured JSON with source IDs and section times. Explicit program/import choices now require a native picker and confirmation for the current app start. Physical interruption, endurance, Mac/Linux-device and signing gates remain separate from automated tests.
+
+The visible name is **Meeting for Handy**. Existing data/key/bundle identifiers, executable filenames and the `HandyMeeting-<version>-...` download prefix stay compatible with earlier installations and updater clients. Earlier installed programs and their shortcuts are preserved. The new Windows Start menu entry is **Meeting for Handy**; an execution policy that blocks scripts is respected and the installer reports the retained executable location.

@@ -1,4 +1,5 @@
 //! WASAPI COM lifetime is confined to dedicated threads; no raw COM calls here.
+use super::controls::CaptureControls;
 use crate::{AudioDevice, PcmWriter, Result, SessionStore, SAMPLE_RATE};
 use serde::Serialize;
 use std::{
@@ -26,13 +27,17 @@ struct PacketInfo {
     silent: bool,
 }
 trait PacketReader {
+    /// Reports the next packet's converted frame count, or zero when no packet is queued.
     fn next_frames(&self) -> Result<u32>;
+    /// Consumes one packet into the byte queue and returns its device timing and flag evidence.
     fn read_packet(&self, queue: &mut VecDeque<u8>) -> Result<PacketInfo>;
 }
 impl PacketReader for AudioCaptureClient {
+    /// Adapts an empty WASAPI packet-size response to zero without consuming audio.
     fn next_frames(&self) -> Result<u32> {
         Ok(self.get_next_packet_size()?.unwrap_or(0))
     }
+    /// Copies the next WASAPI packet and translates its timing, discontinuity and silence flags.
     fn read_packet(&self, queue: &mut VecDeque<u8>) -> Result<PacketInfo> {
         let info = self.read_from_device_to_deque(queue)?;
         Ok(PacketInfo {
@@ -60,8 +65,10 @@ struct CaptureDiagnostics {
     omitted_events: u64,
     elapsed_ms: u128,
     written_samples: u64,
+    gap_silence_samples: u64,
 }
 impl CaptureDiagnostics {
+    /// Initializes bounded diagnostic counters for one independently captured track.
     fn new(source: &str) -> Self {
         Self {
             schema_version: 1,
@@ -76,8 +83,10 @@ impl CaptureDiagnostics {
             omitted_events: 0,
             elapsed_ms: 0,
             written_samples: 0,
+            gap_silence_samples: 0,
         }
     }
+    /// Counts every packet while retaining only the first bounded set of discontinuity/timestamp events.
     fn observe(&mut self, info: PacketInfo, count: usize, elapsed_ms: u128, start_sample: u64) {
         self.first_packet.get_or_insert(info);
         self.last_packet = Some(info);
@@ -92,6 +101,57 @@ impl CaptureDiagnostics {
                 self.omitted_events += 1;
             }
         }
+    }
+}
+
+#[derive(Default)]
+struct PacketTimeline {
+    origin_hns: Option<u64>,
+    base_sample: u64,
+}
+impl PacketTimeline {
+    /// Inserts explicit microphone gap silence from valid device timestamps within the monotonic capture bound.
+    fn align_microphone(
+        &mut self,
+        info: PacketInfo,
+        writer: &mut PcmWriter,
+        latest_possible_sample: u64,
+    ) -> Result<u64> {
+        if info.timestamp_error {
+            self.origin_hns = None;
+            return Ok(0);
+        }
+        let Some(origin) = self.origin_hns else {
+            self.origin_hns = Some(info.device_timestamp_hns);
+            self.base_sample = writer.written_samples();
+            return Ok(0);
+        };
+        if !info.discontinuity {
+            return Ok(0);
+        }
+        // GetBuffer QPC timestamps are in 100 ns units, independent of the endpoint's
+        // native sample rate. They locate the first converted sample in this packet.
+        // Only insert an explicit silence gap; never rewrite already-confirmed audio.
+        let elapsed = info
+            .device_timestamp_hns
+            .checked_sub(origin)
+            .ok_or("Microphone clock moved backwards; saved audio is retained")?;
+        let target = self
+            .base_sample
+            .checked_add(u64::try_from(
+                u128::from(elapsed) * u128::from(SAMPLE_RATE) / 10_000_000,
+            )?)
+            .ok_or("Microphone timeline exceeded its safety limit")?;
+        let missing = target.saturating_sub(writer.written_samples());
+        if target > latest_possible_sample {
+            return Err("Microphone clock jumped beyond monotonic capture time; saved audio is retained and the affected timeline requires review".into());
+        }
+        if missing > 0 {
+            writer.finish()?;
+            writer.pad_to(target)?;
+            writer.finish()?;
+        }
+        Ok(missing)
     }
 }
 
@@ -140,6 +200,8 @@ fn drain_packets(
     }
 }
 
+#[cfg(test)]
+/// Exercises packet persistence without privacy controls in synthetic WASAPI fixtures.
 fn drain_track(
     capture: &impl PacketReader,
     queue: &mut VecDeque<u8>,
@@ -149,6 +211,21 @@ fn drain_track(
     start: Instant,
     store: &SessionStore,
 ) -> Result<()> {
+    drain_track_controlled(capture, queue, pcm, writer, diagnostics, start, store, None)
+}
+
+#[allow(clippy::too_many_arguments)]
+/// Drains packet PCM through optional privacy gates and records bounded timing/discontinuity evidence.
+fn drain_track_controlled(
+    capture: &impl PacketReader,
+    queue: &mut VecDeque<u8>,
+    pcm: &mut Vec<i16>,
+    writer: &mut PcmWriter,
+    diagnostics: &mut CaptureDiagnostics,
+    start: Instant,
+    store: &SessionStore,
+    mut control: Option<(&CaptureControls, u64, &mut PacketTimeline)>,
+) -> Result<()> {
     drain_packets(capture, queue, pcm, |info, samples| {
         diagnostics.observe(
             info,
@@ -157,14 +234,7 @@ fn drain_track(
             writer.written_samples(),
         );
         if info.discontinuity && diagnostics.discontinuities == 1 {
-            // Only the system track is padded to wall time; a microphone gap is not filled,
-            // so its later section times can move earlier relative to the meeting.
-            let shifted = if diagnostics.source == "system" {
-                ""
-            } else {
-                " Later section times of this track can be shifted earlier."
-            };
-            store.warn(&format!("{}: audio driver reported a discontinuity; affected recording ranges can be incomplete.{shifted}", diagnostics.source))?;
+            store.warn(&format!("{}: audio driver reported a discontinuity. Missing audio remains missing; trustworthy microphone clock gaps are represented by explicit silence, not recovered speech. Check the affected range.", diagnostics.source))?;
         }
         if info.timestamp_error && diagnostics.timestamp_errors == 1 {
             store.warn(&format!(
@@ -172,7 +242,27 @@ fn drain_track(
                 diagnostics.source
             ))?;
         }
-        writer.append(samples)
+        if let Some((controls, epoch, timeline)) = control.as_mut() {
+            if diagnostics.source == "microphone" && !controls.changed("microphone", *epoch) {
+                // The device uses a bounded200ms buffer. Allow two seconds for clock/
+                // startup uncertainty, but never let an unflagged corrupt QPC timestamp
+                // fabricate minutes or hours of future audio on disk.
+                let latest_possible = controls
+                    .elapsed_samples()
+                    .saturating_add(u64::from(SAMPLE_RATE) * 2);
+                let missing = timeline.align_microphone(info, writer, latest_possible)?;
+                diagnostics.gap_silence_samples += missing;
+                if missing > 0 {
+                    controls.record_microphone_gap(
+                        writer.written_samples().saturating_sub(missing),
+                        missing,
+                    )?;
+                }
+            }
+            controls.write(&diagnostics.source, *epoch, writer, samples)
+        } else {
+            writer.append(samples)
+        }
     })
 }
 
@@ -196,17 +286,20 @@ fn pad_stopped_track(
 
 struct Com;
 impl Com {
+    /// Initializes the calling thread's multithreaded COM apartment and propagates initialization failure.
     fn initialize() -> Result<Self> {
         initialize_mta().ok()?;
         Ok(Self)
     }
 }
 impl Drop for Com {
+    /// Balances this thread's owned COM initialization when its guard is dropped.
     fn drop(&mut self) {
         deinitialize();
     }
 }
 
+/// Enumerates render/capture endpoints and reported defaults inside a scoped COM apartment.
 pub(super) fn list_devices() -> Result<Vec<AudioDevice>> {
     let _com = Com::initialize()?;
     let enumerator = DeviceEnumerator::new()?;
@@ -234,12 +327,14 @@ pub(super) fn list_devices() -> Result<Vec<AudioDevice>> {
     Ok(devices)
 }
 
+/// Owns one WASAPI track, flushing invalidated device epochs and retaining confirmed PCM on stop or error.
 pub(super) fn record(
     store: SessionStore,
     source: &str,
     device_id: Option<String>,
     stop: Arc<AtomicBool>,
     ready: SyncSender<std::result::Result<(), String>>,
+    controls: Arc<CaptureControls>,
 ) -> Result<()> {
     let mut started = false;
     let result = (|| -> Result<()> {
@@ -271,20 +366,49 @@ pub(super) fn record(
         let mut pcm = Vec::with_capacity(SAMPLE_RATE as usize / 10);
         let mut diagnostics = CaptureDiagnostics::new(source);
         let start = Instant::now();
+        writer.pad_to(controls.elapsed_samples())?;
         client.start_stream()?;
+        let mut stream_running = true;
+        let mut epoch = controls.epoch(source);
+        let mut timeline = PacketTimeline::default();
         ready
             .send(Ok(()))
             .map_err(|_| "Capture controller was closed")?;
         started = true;
         let loop_result = (|| -> Result<()> {
             while !stop.load(Ordering::Acquire) {
+                if controls.changed(source, epoch) || controls.suppressed(source) {
+                    if controls.changed(source, epoch) {
+                        writer.finish()?;
+                        epoch = controls.epoch(source);
+                    }
+                    if stream_running {
+                        client.stop_stream()?;
+                        client.reset_stream()?;
+                        stream_running = false;
+                        queue.clear();
+                        pcm.clear();
+                        timeline = PacketTimeline::default();
+                    }
+                    writer.pad_to(controls.elapsed_samples())?;
+                    writer.checkpoint_if_due()?;
+                    if controls.suppressed(source) {
+                        std::thread::sleep(Duration::from_millis(50));
+                        continue;
+                    }
+                    // Reset discarded every old packet. Only this new stream epoch can
+                    // write speech after Resume/Unmute; stale in-flight packets stay gated.
+                    epoch = controls.epoch(source);
+                    client.start_stream()?;
+                    stream_running = true;
+                }
                 // A short timeout is normal during digital silence. Pad the system track
                 // to wall time so remote speech remains aligned with microphone audio.
                 let _ = handle.wait_for_event(100);
                 // A timeout alone is normal. Query the client on every tick
                 // nevertheless: this also detects invalidated devices before
                 // a missing event can be mistaken for continuing silence.
-                drain_track(
+                drain_track_controlled(
                     &capture,
                     &mut queue,
                     &mut pcm,
@@ -292,6 +416,7 @@ pub(super) fn record(
                     &mut diagnostics,
                     start,
                     &store,
+                    Some((&controls, epoch, &mut timeline)),
                 )?;
                 if source == "system" && queue.is_empty() {
                     // Keep one buffer of headroom; events already received are written first.
@@ -305,12 +430,16 @@ pub(super) fn record(
             }
             Ok(())
         })();
-        let stop_result = client.stop_stream();
+        let stop_result = if stream_running {
+            client.stop_stream()
+        } else {
+            Ok(())
+        };
         let stopped_at = start.elapsed();
         // Stop prevents new packets, but already buffered frames still belong
         // to this recording and must be drained without waiting for an event.
-        let tail_result = if loop_result.is_ok() {
-            drain_track(
+        let tail_result = if loop_result.is_ok() && stream_running {
+            drain_track_controlled(
                 &capture,
                 &mut queue,
                 &mut pcm,
@@ -318,10 +447,18 @@ pub(super) fn record(
                 &mut diagnostics,
                 start,
                 &store,
+                Some((&controls, epoch, &mut timeline)),
             )
         } else {
             Ok(())
         };
+        if controls.suppressed(source)
+            && loop_result.is_ok()
+            && stop_result.is_ok()
+            && tail_result.is_ok()
+        {
+            writer.pad_to(controls.elapsed_samples())?;
+        }
         let pad_result = pad_stopped_track(
             &mut writer,
             source,
@@ -361,7 +498,143 @@ mod tests {
     use super::*;
     use std::cell::RefCell;
 
+    #[test]
+    /// Checks synthetic device-clock gaps insert silence without moving confirmed microphone samples.
+    fn microphone_discontinuity_inserts_device_clock_gap_without_moving_original_samples() {
+        let root = tempfile::tempdir().unwrap();
+        let store = SessionStore::create(
+            root.path(),
+            "Synthetic timestamp gap",
+            "m",
+            "s",
+            Some("mic"),
+        )
+        .unwrap();
+        let controls = CaptureControls::new(&store).unwrap();
+        let mut writer = PcmWriter::new(store.clone(), "microphone").unwrap();
+        let mut timeline = PacketTimeline::default();
+        let mut first = info(false);
+        first.device_timestamp_hns = 40_000_000;
+        assert_eq!(
+            timeline
+                .align_microphone(first, &mut writer, 32_000)
+                .unwrap(),
+            0
+        );
+        controls
+            .write("microphone", 0, &mut writer, &[11; 320])
+            .unwrap();
+        let mut after_gap = info(false);
+        after_gap.discontinuity = true;
+        after_gap.device_timestamp_hns = 50_000_000;
+        let missing = timeline
+            .align_microphone(after_gap, &mut writer, 32_000)
+            .unwrap();
+        assert_eq!(missing, 15_680);
+        controls
+            .record_microphone_gap(writer.written_samples() - missing, missing)
+            .unwrap();
+        controls
+            .write("microphone", 0, &mut writer, &[22; 320])
+            .unwrap();
+        writer.finish().unwrap();
+        let data = store.snapshot().unwrap();
+        let mut audio = vec![];
+        for part in &data.parts {
+            audio.extend(
+                hound::WavReader::open(store.audio_path(part).unwrap())
+                    .unwrap()
+                    .samples::<i16>()
+                    .map(std::result::Result::unwrap),
+            );
+        }
+        assert_eq!(data.parts.len(), 3);
+        assert!(!data.parts[1].has_signal);
+        assert_eq!(data.parts[1].confirmed_sample_count, 15_680);
+        assert_eq!(audio.len(), 16_320);
+        assert!(audio[..320].iter().all(|s| *s == 11));
+        assert!(audio[320..16_000].iter().all(|s| *s == 0));
+        assert!(audio[16_000..].iter().all(|s| *s == 22));
+        let events = super::super::controls::read_capture_control_events(store.folder())
+            .unwrap()
+            .unwrap();
+        assert_eq!(events.events[1].kind, "device-gap");
+        assert_eq!(events.events[1].missing_samples, Some(15_680));
+        assert_eq!(events.events[1].source_start_sample, Some(320));
+    }
+
+    #[test]
+    /// Checks a flagged synthetic timestamp error resets alignment instead of inventing a long gap.
+    fn an_uncertain_device_timestamp_never_invents_a_long_silence_gap() {
+        let root = tempfile::tempdir().unwrap();
+        let store =
+            SessionStore::create(root.path(), "Synthetic uncertain timestamp", "m", "s", None)
+                .unwrap();
+        let mut writer = PcmWriter::new(store, "microphone").unwrap();
+        let mut timeline = PacketTimeline::default();
+        let first = info(false);
+        timeline
+            .align_microphone(first, &mut writer, 32_000)
+            .unwrap();
+        writer.append(&[11, 12]).unwrap();
+        let mut uncertain = info(false);
+        uncertain.device_timestamp_hns = u64::MAX;
+        uncertain.timestamp_error = true;
+        uncertain.discontinuity = true;
+        assert_eq!(
+            timeline
+                .align_microphone(uncertain, &mut writer, 32_000)
+                .unwrap(),
+            0
+        );
+        assert_eq!(writer.written_samples(), 2);
+        // A later trusted packet establishes a new anchor; no earlier confirmed byte moves.
+        assert_eq!(
+            timeline
+                .align_microphone(first, &mut writer, 32_000)
+                .unwrap(),
+            0
+        );
+        writer.finish().unwrap();
+    }
+
+    #[test]
+    /// Checks an unflagged synthetic future clock jump is rejected before existing PCM or headers change.
+    fn unflagged_future_device_clock_is_rejected_before_audio_or_padding_changes() {
+        let root = tempfile::tempdir().unwrap();
+        let store = SessionStore::create(
+            root.path(),
+            "Synthetic corrupt future clock",
+            "m",
+            "s",
+            None,
+        )
+        .unwrap();
+        let mut writer = PcmWriter::new(store.clone(), "microphone").unwrap();
+        let mut timeline = PacketTimeline::default();
+        timeline
+            .align_microphone(info(false), &mut writer, 32_000)
+            .unwrap();
+        writer.append(&[11, 12, 13, 14]).unwrap();
+        writer.checkpoint().unwrap();
+        let part = store.snapshot().unwrap().parts[0].clone();
+        let path = store.audio_path(&part).unwrap();
+        let before = std::fs::read(&path).unwrap();
+        let mut corrupt = info(false);
+        corrupt.discontinuity = true;
+        corrupt.device_timestamp_hns = 10_000_000 * 86_400;
+        // Timestamp-error is false: the monotonic bound must independently reject it.
+        assert!(timeline
+            .align_microphone(corrupt, &mut writer, 32_000)
+            .is_err());
+        assert_eq!(writer.written_samples(), 4);
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+        assert!(!store.snapshot().unwrap().parts[0].audio_closed);
+        writer.finish().unwrap();
+    }
+
     struct Packets(RefCell<VecDeque<(Vec<i16>, PacketInfo)>>);
+    /// Constructs synthetic packet metadata with an explicit silence flag for drain regressions.
     fn info(silent: bool) -> PacketInfo {
         PacketInfo {
             device_position: 0,
@@ -372,9 +645,11 @@ mod tests {
         }
     }
     impl PacketReader for Packets {
+        /// Reports the next synthetic packet length without removing it from the fixture queue.
         fn next_frames(&self) -> Result<u32> {
             Ok(self.0.borrow().front().map_or(0, |p| p.0.len() as u32))
         }
+        /// Serializes one synthetic sample packet into little-endian PCM and returns its fixture flags.
         fn read_packet(&self, queue: &mut VecDeque<u8>) -> Result<PacketInfo> {
             let (samples, packet) = self.0.borrow_mut().pop_front().ok_or("No packet")?;
             queue.extend(samples.into_iter().flat_map(i16::to_le_bytes));
@@ -382,6 +657,7 @@ mod tests {
         }
     }
     #[test]
+    /// Checks one synthetic capture wake drains all packets and converts silence-flagged bytes to silence.
     fn one_event_drains_every_packet_and_silent_flags_never_become_false_speech() {
         let packets = Packets(RefCell::new(VecDeque::from([
             (vec![1, -2, 3], info(false)),
@@ -426,6 +702,7 @@ mod tests {
     }
 
     #[test]
+    /// Checks synthetic stop draining persists the queued tail without waiting for another device event.
     fn buffered_tail_can_be_saved_without_any_further_capture_event() {
         let packets = Packets(RefCell::new(VecDeque::from([(
             vec![21, 22, 23],
@@ -443,6 +720,7 @@ mod tests {
     }
 
     #[test]
+    /// Checks an oversized synthetic packet is refused before consumption or checkpoint acknowledgment.
     fn oversized_device_packet_is_rejected_before_reading_or_acknowledging_it() {
         let packets = Packets(RefCell::new(VecDeque::from([(
             vec![1; SAMPLE_RATE as usize * 5 + 1],
@@ -461,6 +739,7 @@ mod tests {
     }
 
     #[test]
+    /// Checks synthetic diagnostics cap retained event details while preserving total event counters.
     fn discontinuity_evidence_is_bounded_and_keeps_total_event_counts() {
         let mut diagnostic = CaptureDiagnostics::new("microphone");
         for index in 0..100 {
@@ -476,6 +755,7 @@ mod tests {
     }
 
     #[test]
+    /// Checks synthetic delayed shutdown work cannot extend system audio beyond the captured stop time.
     fn slow_tail_persistence_does_not_extend_stopped_system_audio_with_extra_silence() {
         let root = tempfile::tempdir().unwrap();
         let store = SessionStore::create(
@@ -506,12 +786,15 @@ mod tests {
     }
 
     #[test]
+    /// Checks a synthetic invalid device fails before padding, while an empty packet queue remains normal.
     fn device_query_failure_propagates_before_padding_but_empty_timeout_is_normal() {
         struct InvalidatedDevice;
         impl PacketReader for InvalidatedDevice {
+            /// Injects a deterministic device-query failure without consulting a real audio endpoint.
             fn next_frames(&self) -> Result<u32> {
                 Err("Synthetic device invalidated".into())
             }
+            /// Fails the fixture if code tries to read audio after its synthetic device-query error.
             fn read_packet(&self, _: &mut VecDeque<u8>) -> Result<PacketInfo> {
                 panic!("Invalidated packets must never be read")
             }

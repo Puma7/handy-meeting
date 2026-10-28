@@ -4,23 +4,23 @@ Unicode true
 !include WinVer.nsh
 !include LogicLib.nsh
 !include FileFunc.nsh
-Name "HandyMeeting"
+Name "Meeting for Handy"
 OutFile "${OUTPUT_FILE}"
 InstallDir "$LOCALAPPDATA\Programs\HandyMeeting\${APP_VERSION}"
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
 SetDatablockOptimize on
 VIProductVersion "${NUMERIC_VERSION}"
-VIAddVersionKey /LANG=1033 "ProductName" "HandyMeeting"
-VIAddVersionKey /LANG=1033 "FileDescription" "HandyMeeting installer"
+VIAddVersionKey /LANG=1033 "ProductName" "Meeting for Handy"
+VIAddVersionKey /LANG=1033 "FileDescription" "Meeting for Handy installer"
 VIAddVersionKey /LANG=1033 "FileVersion" "${APP_VERSION}"
-VIAddVersionKey /LANG=1033 "LegalCopyright" "HandyMeeting contributors"
+VIAddVersionKey /LANG=1033 "LegalCopyright" "Meeting for Handy contributors"
 !define MUI_ICON "${APP_ICON}"
 !define MUI_UNICON "${APP_ICON}"
 !define MUI_ABORTWARNING
-!define MUI_WELCOMEPAGE_TEXT "Install HandyMeeting for this Windows user. Handy, a compatible streaming model, Microsoft WebView2 and the Microsoft Visual C++ x64 runtime are required. Existing recordings and older program versions are preserved."
+!define MUI_WELCOMEPAGE_TEXT "Install Meeting for Handy for this Windows user. Handy, a compatible streaming model, Microsoft WebView2 and the Microsoft Visual C++ x64 runtime are required. Existing recordings and older program versions are preserved."
 !define MUI_FINISHPAGE_LINK "Installation help / Installationshilfe"
-!define MUI_FINISHPAGE_LINK_LOCATION "https://github.com/Puma7/handy-meeting/blob/main/README.md"
+!define MUI_FINISHPAGE_LINK_LOCATION "https://github.com/Puma7/meeting-for-handy/blob/main/README.md"
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "${APP_LICENSE}"
 !define MUI_PAGE_CUSTOMFUNCTION_LEAVE CheckNewDirectory
@@ -43,11 +43,11 @@ Function .onInit
     Abort
   version_available:
   ${IfNot} ${RunningX64}
-    MessageBox MB_ICONSTOP "HandyMeeting requires 64-bit Windows."
+    MessageBox MB_ICONSTOP "Meeting for Handy requires 64-bit Windows."
     Abort
   ${EndIf}
   ${IfNot} ${AtLeastWin10}
-    MessageBox MB_ICONSTOP "HandyMeeting requires Windows 10 or newer."
+    MessageBox MB_ICONSTOP "Meeting for Handy requires Windows 10 or newer."
     Abort
   ${EndIf}
 FunctionEnd
@@ -80,7 +80,7 @@ Function ReserveNewDirectory
   reserve_failed:
   Push 0
 FunctionEnd
-Section "HandyMeeting" Main
+Section "Meeting for Handy" Main
   Call CheckNewDirectory
   SetShellVarContext current
   SetRegView 64
@@ -97,19 +97,19 @@ Section "HandyMeeting" Main
   SetOverwrite off
   !include "${INSTALL_FILES}"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
-  nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -File "$INSTDIR\ManageStartMenu.ps1" -Mode install -InstallDirectory "$INSTDIR" -Version "${APP_VERSION}"'
+  nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -File "$INSTDIR\ManageStartMenu.ps1" -Mode install -InstallDirectory "$INSTDIR" -Version "${APP_VERSION}"'
   Pop $0
   Pop $1
   StrCmp $0 "0" shortcut_ready
   StrCmp $0 "4" 0 shortcut_blocked
-  DetailPrint "The HandyMeeting Start menu link keeps opening the newer installed version. This version remains available in its program folder."
+  DetailPrint "The Meeting for Handy Start menu link keeps opening the newer installed version. This version remains available in its program folder."
   Goto shortcut_ready
   shortcut_blocked:
   DetailPrint "Existing/custom Start menu links were preserved, or shortcut creation was blocked. HandyMeeting.exe remains available in the new program folder."
   shortcut_ready:
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-${APP_VERSION}" "DisplayName" "HandyMeeting ${APP_VERSION}"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-${APP_VERSION}" "DisplayName" "Meeting for Handy ${APP_VERSION}"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-${APP_VERSION}" "DisplayVersion" "${APP_VERSION}"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-${APP_VERSION}" "Publisher" "HandyMeeting contributors"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-${APP_VERSION}" "Publisher" "Meeting for Handy contributors"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-${APP_VERSION}" "InstallLocation" "$INSTDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-${APP_VERSION}" "DisplayIcon" "$INSTDIR\HandyMeeting.exe"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-${APP_VERSION}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
@@ -120,7 +120,7 @@ Section "Uninstall"
   SetShellVarContext current
   SetRegView 64
   ; An owned link to this version moves to the newest remaining registered installation.
-  nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -File "$INSTDIR\ManageStartMenu.ps1" -Mode uninstall -InstallDirectory "$INSTDIR"'
+  nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -File "$INSTDIR\ManageStartMenu.ps1" -Mode uninstall -InstallDirectory "$INSTDIR"'
   Pop $0
   Pop $1
   !include "${UNINSTALL_FILES}"
@@ -128,7 +128,7 @@ Section "Uninstall"
   ; A different installation must retain its shared registration and shortcut.
   ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-${APP_VERSION}" "InstallLocation"
   StrCmp $0 "$INSTDIR" 0 keep_registration
-  RMDir "$SMPROGRAMS\HandyMeeting"
+  RMDir "$SMPROGRAMS\Meeting for Handy"
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandyMeeting-${APP_VERSION}"
   keep_registration:
   ; Non-recursive: unknown files and all user sessions are retained.
