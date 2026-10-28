@@ -20,6 +20,7 @@ on:
       - 'THIRD_PARTY_NOTICES.txt'
       - '.github/workflows/rust.yml'
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
       - '.gitattributes'
       - 'Cargo.toml'
@@ -38,22 +39,48 @@ on:
       - 'THIRD_PARTY_NOTICES.txt'
       - '.github/workflows/rust.yml'
   workflow_dispatch:
+    inputs:
+      packages:
+        description: Build and verify Windows installer/ZIP (false runs source checks only)
+        type: boolean
+        default: true
   workflow_call:
+    inputs:
+      packages:
+        type: boolean
+        default: true
 permissions:
   contents: read
 concurrency:
   group: rust-beta-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
 env:
   CARGO_TERM_COLOR: never
   RUSTFLAGS: '-D warnings'
 jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      packages: ${{ steps.plan.outputs.packages }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - name: Select source checks or complete candidate verification
+        id: plan
+        env:
+          CI_PACKAGES: ${{ inputs.packages }}
+        run: python3 scripts/ci-plan.py
   windows:
-    name: Windows Rust beta verification and package
+    needs: plan
+    name: Windows Rust verification
     runs-on: windows-latest
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
       - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
         with:
           global-json-file: global.json
@@ -153,33 +180,40 @@ jobs:
         shell: pwsh
         run: node scripts/rust-artifacts.mjs finish-check
       - name: Build release from the independently checked source
+        if: needs.plan.outputs.packages == 'true'
         shell: pwsh
         run: ./scripts/build-rust.ps1 -UseExistingVerification
       - name: Bind release executable to its separate check
+        if: needs.plan.outputs.packages == 'true'
         shell: pwsh
         run: |
           $pending = node scripts/rust-artifacts.mjs begin-release-check | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0) { throw 'Release check preparation failed.' }
           Add-Content -LiteralPath $env:GITHUB_ENV -Value ('HM_RELEASE_CHECK_DIR=' + $pending.outputDirectory)
       - name: Check the exact release executable without Handy or models
+        if: needs.plan.outputs.packages == 'true'
         shell: pwsh
         run: |
           $env:PATH = (Join-Path $PWD '.build/rust-native-0.4.1/bin') + ';' + $env:PATH
           & ./.build/rust-target/x86_64-pc-windows-msvc/release/HandyMeeting.exe --release-checks $env:HM_RELEASE_CHECK_DIR | Out-Host
           if ($LASTEXITCODE -ne 0) { throw 'Release executable checks failed.' }
       - name: Stage only checked payload files
+        if: needs.plan.outputs.packages == 'true'
         shell: pwsh
         run: node scripts/rust-artifacts.mjs stage
       - name: Verify actual Windows Credential Manager using only owned synthetic entries
+        if: needs.plan.outputs.packages == 'true'
         shell: pwsh
         run: |
           $env:PATH = (Join-Path $PWD '.build/rust-native-0.4.1/bin') + ';' + $env:PATH
           & ./.build/rust-target/x86_64-pc-windows-msvc/release/HandyMeeting.exe --credential-checks .build/windows-credential-checks | Out-Host
           if ($LASTEXITCODE -ne 0) { throw 'Native credential checks failed.' }
       - name: Create candidate ZIP using filesystem operations only
+        if: needs.plan.outputs.packages == 'true'
         shell: pwsh
         run: ./scripts/package-rust-windows.ps1
       - name: Build and actually verify the per-user installer and nonrecursive uninstall
+        if: needs.plan.outputs.packages == 'true'
         shell: pwsh
         run: ./scripts/package-rust-installer.ps1 -RunChecks
       - name: Keep model-free verification records
@@ -198,6 +232,7 @@ jobs:
             .build/rust-release-checks-*/release-checks.json
             .build/windows-credential-checks/credential-checks.json
       - name: Keep candidate package without publishing a release
+        if: needs.plan.outputs.packages == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: rust-windows-beta-candidate
@@ -207,6 +242,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
   portable-core:
+    needs: plan
+    if: needs.plan.outputs.packages != 'true'
     name: Portable core (${{ matrix.runner }})
     strategy:
       fail-fast: false
@@ -216,6 +253,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
       - name: Install pinned Rust tooling
         run: |
           set -euo pipefail
@@ -248,5 +287,6 @@ jobs:
         run: |
           set -euo pipefail
           cargo audit
-# No model weights, Handy installation, real-device recording, cloud credentials,
-# native ASR inference, portable GUI build or public release is used by these jobs.
+# Source checks use synthetic data. Complete candidates additionally exercise the
+# exact release executable, isolated native store and installer. Neither mode proves
+# real-device/endurance capture or publishes a release.

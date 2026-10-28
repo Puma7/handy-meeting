@@ -30,7 +30,7 @@ An independent **Rust + Tauri companion for [Handy](https://github.com/cjpais/Ha
 
 **Release status (28 October 2026):** the current public release is **[1.0.4](https://github.com/Puma7/meeting-for-handy/releases/tag/v1.0.4)**, with all 17 assets: five packages and twelve checksum/source proofs, including `RELEASE_MANIFEST.json`. Keep the versioned program folders separate; recordings and older installations are preserved.
 
-**Future releases:** a matching version tag automatically starts the full Windows/Linux/Mac build matrix. Successful checks produce all five packages and their proofs in a release draft. Publish the populated draft to make the downloads public; publishing a release directly also starts this workflow. [Release procedure](docs/RELEASING.md).
+**Future releases:** a matching version tag automatically starts the full Windows/Linux/Mac build matrix. Successful checks produce all five packages and their proofs in a release draft. Publish the populated draft to make the downloads public; publishing verifies the populated draft without starting another build. Draft PRs and ordinary main updates run source checks; full candidates run for ready PRs, explicit manual requests and release tags. [Release procedure](docs/RELEASING.md).
 
 **Validation limits:** Mac/Linux device capture and a new full-app Rust two-hour run still require hardware validation. Mac builds are ad-hoc signed and not Apple-notarized; Windows setup is unsigned. Operating-system trust checks may block them. Do not disable system protection to install a build. Use independently backed-up test meetings first. [Measured evidence and open gates](TEST_REPORT.md).
 

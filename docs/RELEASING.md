@@ -24,7 +24,7 @@ Each has a SHA-256 sidecar and package proof. `SHA256SUMS.txt` covers all five p
 4. The workflow builds all five assets, including a real Windows install/uninstall preservation check in its disposable CI account. Only after the entire matrix passes does it assemble/upload the bundle into a **GitHub release draft**.
 5. Review the populated draft and its notes, then choose **Publish release** when ready. The `published` event verifies the already complete exact-source bundle without recompiling different binaries, and marks a final semantic version as **Latest**. Tags containing a suffix remain prereleases and are not made Latest.
 
-Creating/publishing a release directly in GitHub also triggers the workflow. Its assets appear after the complete build matrix and verification finish; the page may initially contain no packages. Creating the tag first and waiting for the populated draft avoids that gap.
+Publishing a release directly in GitHub triggers verification and promotion only. It never starts a replacement build. If the exact-source draft is incomplete, the run fails with recovery instructions and preserves every existing asset. Create the tag first and wait for its populated draft; publishing an empty page is not a build request.
 
 The manual **Run workflow** form accepts the exact existing tag and a `publish` switch. Default `false` keeps a draft. Select the tag's commit (or `main` only when it is still that exact commit). Setting `publish=true` publishes a fully verified bundle and sets Latest for a final version. This is an operator publication action, not a substitute for the manual gates.
 
@@ -60,6 +60,8 @@ The local data location remains `HandyMeeting/RustBeta` below the platform's loc
 - Draft discovery checks the paginated release list after a missing published-tag response. GitHub's tag endpoint returns published releases only; its 404 is not permission to create another draft blindly. Uploads, binary fallback downloads and promotion use explicit release/asset IDs.
 - Multiple drafts for one tag stop automatic publication before any upload. Preserve them and inspect their IDs, authors, notes and assets. For an explicitly selected original draft, the maintainer can run the verified publisher with `--release-id <id>` and the retained exact-tag `verified-release-bundle`. The ID must still belong to that tag. Omit `--publish` to populate only the draft. Conflicting assets remain a hard failure; an upload failure does not justify rebuilding or replacing different bytes.
 - Release assembly tests use fake package bytes and simulated GitHub calls. They are not a real GitHub upload or real provider test. Actual pipeline results are linked in `BUILD_STATUS.md` only after execution.
+
+The development/candidate split, trigger matrix and measured duplicate runs are documented in [CI scope and resource use](CI.md).
 
 Implementation: `.github/workflows/rust-release.yml`, `scripts/release-packages.py`, `scripts/publish-rust-release.py`. The older C# publishing workflow and old release assets remain historical and are not used for Rust 1.0.
 
