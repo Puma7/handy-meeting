@@ -51,6 +51,8 @@ type Props = {
   onOpenTextModelSettings: () => void;
   focus: boolean;
   setFocus: (focus: boolean) => void;
+  /** Shows nothing and only keeps the automatic start running, e.g. on other pages. */
+  headless?: boolean;
 };
 
 const POLL_RUNNING_MS = 1500;
@@ -105,6 +107,11 @@ export function liveNotesText(
   return (
     `${de ? "Live-Zusammenfassung" : "Live summary"} · ${title} · ${de ? "Stand" : "as of"} ${time(view.updatedAt, locale)}\n` +
     block(de ? "Bisheriger Verlauf" : "Summary so far", view.overview) +
+    // Accepted points also count when the overview failed or is not up to date yet.
+    block(
+      de ? "Wichtige Punkte und Erkenntnisse" : "Important points and insights",
+      view.points,
+    ) +
     block(de ? "Entscheidungen" : "Decisions", view.decisions) +
     block(de ? "Aufgaben" : "Tasks", view.tasks) +
     block(de ? "Aufgeworfene Fragen" : "Questions raised", view.questions) +
@@ -176,6 +183,7 @@ export default function LiveNotesPanel({
   onOpenTextModelSettings,
   focus,
   setFocus,
+  headless = false,
 }: Props) {
   const de = locale === "de";
   const [status, setStatus] = useState<LiveNotesStatus | null>(null),
@@ -377,7 +385,7 @@ export default function LiveNotesPanel({
     }
   }
 
-  if (!available) return null;
+  if (!available || headless) return null;
   const view = status?.view ?? null;
   const running = status?.running ?? false;
   const hasContent = Boolean(

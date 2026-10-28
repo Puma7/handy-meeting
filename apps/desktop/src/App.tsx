@@ -1282,6 +1282,44 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
           ),
         ));
 
+  // The live summary of the recording; without UI on other pages, so an automatic start
+  // also covers recordings started from History or Settings (e.g. an agent approval).
+  const livePanel = (headless: boolean) =>
+    liveMeeting && !liveMeeting.readOnly ? (
+      <LiveNotesPanel
+        api={api}
+        locale={locale}
+        connected={connected}
+        meetingId={liveMeeting.id}
+        meetingTitle={liveMeeting.title}
+        meetingActive={
+          app?.activeMeeting?.id === liveMeeting.id && (recording || catchingUp)
+        }
+        connection={{
+          endpoint,
+          model: textModel,
+          mode,
+          apiKey,
+          useSavedKey,
+        }}
+        preferences={livePreferences}
+        setPreferences={setLivePreferences}
+        onUseLocalModel={(nextEndpoint, nextModel) => {
+          // A key entered for another route must never reach the local server.
+          setApiKey("");
+          setUseSavedKey(false);
+          setMode("local");
+          setEndpoint(nextEndpoint);
+          setTextModel(nextModel);
+          setManualTextModel(false);
+        }}
+        onOpenTextModelSettings={() => void openNotesFor(liveMeeting.id)}
+        focus={liveFocus}
+        setFocus={setLiveFocus}
+        headless={headless}
+      />
+    ) : undefined;
+
   return (
     <div className="app-shell">
       <Sidebar
@@ -1569,44 +1607,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             savedByTrack={savedByTrack}
             copyFullTranscript={() => copyFullTranscript(liveMeeting)}
             liveFocus={liveFocus}
-            liveNotes={
-              liveMeeting && !liveMeeting.readOnly ? (
-                <LiveNotesPanel
-                  api={api}
-                  locale={locale}
-                  connected={connected}
-                  meetingId={liveMeeting.id}
-                  meetingTitle={liveMeeting.title}
-                  meetingActive={
-                    app?.activeMeeting?.id === liveMeeting.id &&
-                    (recording || catchingUp)
-                  }
-                  connection={{
-                    endpoint,
-                    model: textModel,
-                    mode,
-                    apiKey,
-                    useSavedKey,
-                  }}
-                  preferences={livePreferences}
-                  setPreferences={setLivePreferences}
-                  onUseLocalModel={(nextEndpoint, nextModel) => {
-                    // A key entered for another route must never reach the local server.
-                    setApiKey("");
-                    setUseSavedKey(false);
-                    setMode("local");
-                    setEndpoint(nextEndpoint);
-                    setTextModel(nextModel);
-                    setManualTextModel(false);
-                  }}
-                  onOpenTextModelSettings={() =>
-                    void openNotesFor(liveMeeting.id)
-                  }
-                  focus={liveFocus}
-                  setFocus={setLiveFocus}
-                />
-              ) : undefined
-            }
+            liveNotes={livePanel(false)}
             refreshHandy={() => void action(() => refreshModels(false))}
             resume={() =>
               void action(async () => {
@@ -1620,6 +1621,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             }
           />
         )}
+        {page !== "meeting" && livePreferences.auto && livePanel(true)}
         {page === "detail" && meeting && (
           <MeetingDetail
             meeting={meeting}

@@ -41,8 +41,8 @@
   },
   {
     "Path": "TEST_REPORT.md",
-    "SHA256": "91AB6C9B9E006E69B8E1FE1630F689853FF8BA05D2008B4E379B55BBE6C9EE97",
-    "Bytes": 166292
+    "SHA256": "A51164A9689C55953357460ABF559B9911AD9240F98B825FAC7238EDD7B1C466",
+    "Bytes": 167161
   },
   {
     "Path": "DAUERTEST.md",
@@ -14361,8 +14361,8 @@
   },
   {
     "Path": "apps/desktop/src/views/LiveNotesPanel.tsx",
-    "SHA256": "7A7D3AFE4A9BAAABB82907CD8B48535B75EE60545EAC532BC1C088AB9DFDE0CC",
-    "Bytes": 25065
+    "SHA256": "BDCBCE60F825C73C0225D2401DC87CC1154BCD530261900E6FC033C34DBA160D",
+    "Bytes": 25411
   },
   {
     "Path": "apps/desktop/src/views/LocalModelSetup.tsx",
@@ -14396,8 +14396,8 @@
   },
   {
     "Path": "apps/desktop/src/App.tsx",
-    "SHA256": "8E437E1B26C80E846CE136CF2E4AAB4DD68057CCBFAC33280F841BB784E8E5EB",
-    "Bytes": 73389
+    "SHA256": "9D08C5CF8FEF9AC5E904741D01E45899FDDF68D6CBE5D8F332642C6A21D9FDD9",
+    "Bytes": 73324
   },
   {
     "Path": "apps/desktop/src/ArchivePanel.test.tsx",
@@ -14526,8 +14526,8 @@
   },
   {
     "Path": "apps/desktop/src/LiveNotes.test.tsx",
-    "SHA256": "1FDA0E97F17A90578A74A04179A30B7E9183E2F9AD70D6321A2FC95CC47AF6A5",
-    "Bytes": 27781
+    "SHA256": "D48EBACA3568FD4E7B0048BECE3B301E796BA807737E33959E7A5A51EE430CCC",
+    "Bytes": 30734
   },
   {
     "Path": "apps/desktop/src-tauri/capabilities/default.json",

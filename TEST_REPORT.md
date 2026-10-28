@@ -739,3 +739,9 @@ Lokal bestanden: 294 Rust-Tests (2 ignoriert), Clippy mit `-D warnings`, 164 Vit
   Neuer Nachweis: `desktopShortcutOwnershipChecked`, von der Release-Prüfung verlangt. Lokal sind diese Abläufe mit Wine 9 nachgestellt (synthetisch, Pfade ohne Leerzeichen), mit identischem Ergebnis.
 
 Lokal bestanden: 291 Rust-Tests (2 ignoriert), Clippy mit `-D warnings`, fmt, 165 Vitest-Fälle, `tsc`, `prettier`, 72 Release-Skripttests und `makensis -WX` ohne Warnung. Kein vollständiger `verify.ps1`-Lauf (kein Windows hier). Der echte lokale Referenztest mit Gemma bleibt offen.
+
+**Codex-Review 5687252688 auf a12ffb9 bearbeitet:** Jede Korrektur hat einen Regressionstest, der vor der Korrektur fehlschlug.
+- **Kopieren ohne Kurzfassung:** Der kopierte Text enthält jetzt auch die wichtigen Punkte mit Quellenkennung und Zitat. Bisher bestand er nur aus Überschrift und Hinweis, wenn die Kurzfassung fehlschlug und keine Entscheidungen, Aufgaben oder Fragen vorlagen.
+- **Automatischer Start auf anderen Seiten:** Der automatische Start der Live-Zusammenfassung läuft jetzt unabhängig von der geöffneten Seite. Außerhalb der Aufnahmeseite ist die Zusammenfassung ohne eigene Anzeige eingebunden. Bisher startete eine Aufnahme, die etwa über eine Agentenfreigabe begann, während Verlauf oder Einstellungen offen waren, ihre Zusammenfassung erst nach dem Öffnen der Aufnahmeseite.
+
+Lokal bestanden: 166 Vitest-Fälle, `tsc` und `prettier`.

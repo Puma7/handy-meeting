@@ -297,6 +297,16 @@ it("copies a plain text summary for reading out", async () => {
   expect(text).toContain("Bisheriger Verlauf\n- Budget Q3 besprochen");
   expect(text).toContain("Aufgaben\n- Angebot verschicken (Anna, Freitag)");
   expect(text).not.toContain("Aufgeworfene Fragen");
+  // Codex review 5687252688 (P2): accepted points are copied even without an overview.
+  expect(text).toContain(
+    "Wichtige Punkte und Erkenntnisse\n- Erster Punkt\n  [C60 · 01:00 · Computerton] „Zitat zu Erster Punkt“",
+  );
+  const withoutOverview = liveNotesText(
+    { ...view, overview: [], decisions: [], tasks: [] },
+    "T",
+    "de",
+  );
+  expect(withoutOverview).toContain("- Zweiter Punkt");
   expect(text).toContain("KI-Entwurf");
   expect(liveNotesText(view, "T", "en")).toContain("Summary so far");
 });
@@ -866,4 +876,82 @@ it("ignores start answers and errors that arrive after the meeting was switched"
   expect(screen.queryByText(/Synthetischer Fehler für B/)).toBeNull();
   expect(startButton().disabled).toBe(false);
   expect(copyText).not.toHaveBeenCalled();
+});
+
+it("auto-starts the live summary for a recording that begins while another page is open", async () => {
+  // Codex review 5687252688 (P2): the automatic start lived only in the panel on the
+  // recording page, so a recording approved for an agent while Settings was open got no
+  // live summary until the user opened that page.
+  localStorage.clear();
+  localStorage.setItem(
+    "handymeeting.rust.live-notes.v1",
+    JSON.stringify({
+      auto: true,
+      intervalMinutes: 3,
+      endpoint: "http://127.0.0.1:11434/v1/",
+      model: "gemma4:e4b",
+    }),
+  );
+  const meeting: Meeting = {
+    id: "d".repeat(32),
+    title: "Synthetic agent recording",
+    startedAt: "2026-10-28T10:00:00Z",
+    durationMs: 5000,
+    status: "recording",
+    modelId: "synthetic",
+    warnings: [],
+    parts: [],
+  };
+  let state: AppState = {
+    version: "synthetic",
+    handy: null,
+    recording: false,
+    activeMeeting: null,
+    captureControl: {
+      paused: false,
+      microphoneMuted: false,
+      hasMicrophone: true,
+    },
+  };
+  const start = vi
+    .fn()
+    .mockResolvedValue(status({ status: "waiting", running: true }));
+  const api = {
+    ...testServices(),
+    getAppState: vi.fn(async () => structuredClone(state)),
+    listDevices: vi.fn().mockResolvedValue([]),
+    listMeetings: vi.fn().mockResolvedValue([]),
+    getMeeting: vi.fn().mockResolvedValue(meeting),
+    listAnalyses: vi.fn().mockResolvedValue({ analyses: [], skipped: [] }),
+    getNotesProgress: vi.fn().mockResolvedValue(null),
+    listTextModels: vi.fn().mockResolvedValue([]),
+    refreshHandy: vi.fn().mockResolvedValue({
+      executable: "native-choice",
+      version: "synthetic",
+      models: [],
+    }),
+    getLiveNotes: vi.fn((id: string) =>
+      Promise.resolve(status({ meetingId: id })),
+    ),
+    startLiveNotes: start,
+    localModelSetup: vi.fn().mockResolvedValue(ollamaReady),
+  } as unknown as DesktopApi;
+  render(<App api={api} />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Einstellungen" }),
+  );
+  // The recording starts without the recording page (e.g. an approved agent request).
+  state = { ...state, recording: true, activeMeeting: meeting };
+  await waitFor(() => expect(start).toHaveBeenCalledOnce(), {
+    timeout: 8000,
+  });
+  expect(start.mock.calls[0][0]).toMatchObject({
+    meetingId: meeting.id,
+    mode: "local",
+    model: "gemma4:e4b",
+  });
+  expect(
+    screen.queryByRole("button", { name: "Live-Zusammenfassung starten" }),
+  ).toBeNull();
+  localStorage.clear();
 });
