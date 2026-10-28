@@ -132,10 +132,11 @@ fn installed(models: &[String], wanted: Option<&str>) -> bool {
 /// The documented Ollama bind setting is used only for loopback. Wildcard binds are
 /// contacted through loopback too; remote hosts, credentials and URL paths are rejected.
 fn ollama_root_from(value: Option<&str>) -> String {
-    let Some(value) = value.filter(|v| v.len() <= 4096) else {
+    let Some(value) = value.filter(|v| v.len() <= 4096).map(str::trim) else {
         return OLLAMA_ROOT.into();
     };
-    let address = if value.contains("://") {
+    let configured_url = value.split_once("://");
+    let address = if configured_url.is_some() {
         value.to_owned()
     } else {
         format!("http://{value}")
@@ -160,7 +161,29 @@ fn ollama_root_from(value: Option<&str>) -> String {
         Some(url::Host::Ipv6(ip)) if ip.is_unspecified() => "[::1]".to_owned(),
         _ => return OLLAMA_ROOT.into(),
     };
-    let port = url.port().unwrap_or(11434);
+    // URL parsing erases an explicit HTTP :80. Preserve the original port, and
+    // match Ollama's defaults: bare hosts use 11434; HTTP URLs use 80.
+    let authority = configured_url
+        .map_or(value, |(_, rest)| rest)
+        .split('/')
+        .next()
+        .unwrap_or_default();
+    let explicit_port = if authority.starts_with('[') {
+        authority
+            .split_once(']')
+            .and_then(|(_, tail)| tail.strip_prefix(':'))
+    } else {
+        authority.rsplit_once(':').map(|(_, port)| port)
+    };
+    let port = match explicit_port {
+        Some(port) => match port.parse::<u16>() {
+            Ok(port) => port,
+            Err(_) => return OLLAMA_ROOT.into(),
+        },
+        None => url
+            .port()
+            .unwrap_or(if configured_url.is_some() { 80 } else { 11434 }),
+    };
     if port == 0 {
         return OLLAMA_ROOT.into();
     }
@@ -469,6 +492,40 @@ mod tests {
         ] {
             assert_eq!(ollama_root_from(Some(input)), expected, "{input}");
         }
+    }
+
+    #[test]
+    fn explicit_ollama_http_default_ports_are_not_replaced_by_11434() {
+        for input in [
+            "127.0.0.1:80",
+            "http://127.0.0.1:80/",
+            "127.0.0.1:00080",
+            "http://0.0.0.0:80",
+        ] {
+            assert_eq!(
+                ollama_root_from(Some(input)),
+                "http://127.0.0.1/",
+                "{input}"
+            );
+        }
+        assert_eq!(ollama_root_from(Some("localhost:80")), "http://localhost/");
+        assert_eq!(ollama_root_from(Some("[::1]:80")), "http://[::1]/");
+        assert_eq!(ollama_root_from(Some("http://[::]:80/")), "http://[::1]/");
+    }
+
+    #[test]
+    fn omitted_ollama_ports_follow_the_configured_address_form() {
+        assert_eq!(ollama_root_from(Some("127.0.0.1")), OLLAMA_ROOT);
+        assert_eq!(
+            ollama_root_from(Some("http://127.0.0.1")),
+            "http://127.0.0.1/"
+        );
+        assert_eq!(
+            ollama_root_from(Some("http://localhost/")),
+            "http://localhost/"
+        );
+        assert_eq!(ollama_root_from(Some("[::1]")), "http://[::1]:11434/");
+        assert_eq!(ollama_root_from(Some("http://[::1]")), "http://[::1]/");
     }
 
     #[test]
