@@ -1,6 +1,6 @@
-# Building HandyMeeting with Rust/Tauri
+# Building Meeting for Handy with Rust/Tauri
 
-Release preparation targets `1.0.0`. Windows produces a checked ZIP and an NSIS Setup EXE; Linux and Mac packages are built on their target hosts. Actual installer execution checks run in the disposable CI account, never against a developer's existing installation. Existing programs, recordings and settings are preserved. Local build commands do not publish GitHub releases; the separate [release workflow](RELEASING.md) controls that step.
+Builds use the synchronized version in the workspace Cargo manifest, desktop package/lock and Tauri configuration. The source still uses `1.0.4`; subsequent audit corrections are unreleased, and a future `1.0.5` has not been tagged or published. Windows produces a checked ZIP and an NSIS Setup EXE; Linux and Mac packages are built on their target hosts. Actual installer execution checks run in the disposable CI account, never against a developer's existing installation. Existing programs, recordings and settings are preserved. Local build commands do not publish GitHub releases; the separate [release workflow](RELEASING.md) controls that step.
 
 ## Separate tools and filesystem bookkeeping
 
@@ -104,7 +104,7 @@ node scripts/rust-artifacts.mjs stage
 
 Keep the native SDK's `bin` directory in the current process PATH for the direct release check. The release-check mode opens no GUI, microphone, Handy installation or model. Staging requires its fresh successful versioned JSON, the exact unchanged executable SHA-256, and the original checked source fingerprint.
 
-The versioned program destination is `dist-rust-1.0.0` for version 1.0.0. Its payload contains the checked executable, known native DLLs and original native licenses, Rust/frontend/installer notices, project license, and Handy palette attribution. A manifest hashes every retained file. Existing different bytes are rejected before publishing any new payload. The separate launcher is **HandyMeeting 1.0.0 starten.cmd**. Earlier launchers and programs remain intact.
+The versioned program destination is `dist-rust-<application-version>` (currently `dist-rust-1.0.4`). Its payload contains the checked executable, known native DLLs and original native licenses, Rust/frontend/installer notices, project license, and Handy palette attribution. A manifest hashes every retained file. Existing different bytes are rejected before publishing any new payload. The separate launcher is `Meeting for Handy <application-version> starten.cmd`. Earlier launchers and programs remain intact. A build from later source with the same application version is not permission to overwrite an older candidate or its receipts; use a separate source/build folder until the next version is assigned.
 
 Rust user data lives outside this directory under local `HandyMeeting/RustBeta` application data. No model weights, recordings, settings or API keys are staged.
 
@@ -122,8 +122,8 @@ An existing ZIP is preserved. Use a new version or a fresh `-OutputDirectory` in
 
 The additional core jobs exercise the portable crates without ASR. Separately, `.github/workflows/rust-portable.yml` builds the complete native desktop application and DEB/DMGs on Linux and both Mac architectures. `.github/workflows/rust-release.yml` calls both workflows, requires matching source fingerprints and actual credential/installer checks, and assembles the five downloads. See [release instructions](RELEASING.md). These jobs do not capture physical audio or validate a visible desktop session.
 
-Real local text-model references, the native two-track speech/restart smoke test, actual audio devices/disconnects, and a new two-hour Rust memory/recovery run are separate release gates. Private local test sessions and raw recording reports stay outside public source export; synthetic regression fixtures and the explicitly labelled screenshot demos are public. The earlier C# two-hour result does not certify this Rust release. Process termination is not a power-loss test. See `TEST_REPORT.md` and `RUST_STORAGE.md` for actual measurements and outstanding checks.
+Real local text-model references, the native two-track speech/restart smoke test, actual audio devices/disconnects, and a new two-hour Rust memory/recovery run are separate release gates. Private local test sessions and raw recording reports stay outside public source export; synthetic regression fixtures and the explicitly labelled screenshot demos are public. The earlier C# two-hour result does not certify this Rust release. Process termination is not a power-loss test. See [TEST_REPORT.md](../TEST_REPORT.md) and [RUST_STORAGE.md](RUST_STORAGE.md) for actual measurements and outstanding checks.
 
 ## Cross-platform byte identity
 
-The first Windows CI run detected that Git checkout expanded LF lockfiles to CRLF; its Cargo.lock SHA-256 exactly matched an independently reproduced CRLF expansion. The repository now disables checkout text conversion in .gitattributes. Lock and original-license checks remain byte-exact; the expected hashes were not relaxed. Portable desktop packaging is a separate target-host workflow documented in RUST_PORTABLE.md.
+The first Windows CI run detected that Git checkout expanded LF lockfiles to CRLF; its Cargo.lock SHA-256 exactly matched an independently reproduced CRLF expansion. The repository now disables checkout text conversion in .gitattributes. Lock and original-license checks remain byte-exact; the expected hashes were not relaxed. Portable desktop packaging is a separate target-host workflow documented in [RUST_PORTABLE.md](RUST_PORTABLE.md).

@@ -1,8 +1,10 @@
 # Releases: version tag to downloadable packages
 
-The Rust distribution is versioned together in the workspace Cargo manifest, desktop package/lock and Tauri configuration. Existing native dependency versions and model weights are not changed by a release. **1.0.1 is public** with five verified packages. Versions 1.0.2 and 1.0.3 are in development; no completed 1.0.2 or 1.0.3 package or release is claimed by these instructions. Future releases must use a new version: update the Cargo workspace, desktop package/lock and Tauri configuration together, then tag that exact reviewed commit. Existing published tags and asset bytes are preserved.
+The Rust distribution is versioned together in the workspace Cargo manifest, desktop package/lock and Tauri configuration. Existing native dependency versions and model weights are not changed by a release. **[1.0.4 is public](https://github.com/Puma7/meeting-for-handy/releases/tag/v1.0.4)** as of 28 October 2026, with five packages and twelve checksum/source proofs (17 assets). The [audit corrections](AUDIT_FIXES_20261028.md) are subsequent unreleased source work; the planned 1.0.5 has no release or tag. Future releases must use a new version: update the Cargo workspace, desktop package/lock and Tauri configuration together, then tag that exact reviewed commit. Existing published tags and asset bytes are preserved.
 
 ## What is attached
+
+These are the current 1.0.4 asset names. A future release uses its own synchronized application version in every filename and proof; do not reuse or move the published 1.0.4 tag.
 
 | Target | Asset |
 | --- | --- |
@@ -48,6 +50,7 @@ The local data location remains `HandyMeeting/RustBeta` below the platform's loc
 
 ## Failure and retry behavior
 
+- Portable native SDK downloads retry transient connection/body failures and HTTP 408/429/500/502/503/504 at most three times, with one- and two-second delays. The same reviewed URL, 120-second per-attempt timeout, 256 MiB bound and fixed SHA-256 remain enforced. Certificate failures, other HTTP errors and checksum/size mismatches stop immediately. Incomplete attempts are never cached; different existing cache/SDK bytes are retained and rejected.
 - Failed/missing checks, targets, checksums, source fingerprints, native-store proofs or installer preservation proofs prevent assembly before any upload.
 - Publication uses only artifacts from the current successful reusable jobs and exact tag commit. Artifacts from a different commit/run are not substituted.
 - Existing release assets are never overwritten. A conflicting asset aborts; the old bytes are preserved.
@@ -63,4 +66,4 @@ Implementation: `.github/workflows/rust-release.yml`, `scripts/release-packages.
 References: [GitHub reusable workflows](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows), [release workflow events](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#release), [GitHub CLI release creation](https://cli.github.com/manual/gh_release_create), [NSIS distribution and license](https://nsis.sourceforge.io/Download).
 
 
-The 1.0.4 capture changes require current physical-device, interruption and endurance evidence before release. No Mac/Linux devices are available to the maintainer at this checkpoint. WSL, synthetic PCM/helper checks and virtual CI devices are not substitutes. Native file selections are confirmed through Rust-only dialogs and expire on app restart. Installer helpers do not override execution policy; disposable CI checks a stricter child-process refusal without changing account policy. Internal package/executable/data IDs remain compatible with earlier update clients.
+The physical-device, interruption and endurance limits of the 1.0.4 capture changes remain open for the public release and any follow-up. No Mac/Linux devices are available to the maintainer at this checkpoint. Publication does not turn those limits into passed tests; use the manual gates above for each new candidate. WSL, synthetic PCM/helper checks and virtual CI devices are not substitutes. Native file selections are confirmed through Rust-only dialogs and expire on app restart. Installer helpers do not override execution policy; disposable CI checks a stricter child-process refusal without changing account policy. Internal package/executable/data IDs remain compatible with earlier update clients.
