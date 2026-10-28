@@ -196,12 +196,37 @@ impl TextClient {
             Kind::Tasks => "Extrahiere ausschließlich ausdrücklich zugesagte oder zugewiesene Aufgaben.",
             _ => "owner und due bleiben null.",
         };
-        let schema = serde_json::json!({"type":"object","additionalProperties":false,"required":["items"],"properties":{"items":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["text","owner","due","evidence"],"properties":{"text":{"type":"string"},"owner":{"type":["string","null"]},"due":{"type":["string","null"]},"evidence":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["sourceId","quote"],"properties":{"sourceId":{"type":"string"},"quote":{"type":"string"}}}}}}}}});
-        let mut body = serde_json::json!({"model":self.model,"stream":false,"messages":[{"role":"system","content":format!("{INSTRUCTION}\n{extra}\nAnalyseauftrag als JSON-Zeichenfolge: {}",serde_json::to_string(&step.prompt)?)},{"role":"user","content":serde_json::to_string(sources)?}],"response_format":{"type":"json_schema","json_schema":{"name":"meeting_notes","strict":true,"schema":schema}}});
+        let schema = serde_json::json!({"type":"object","additionalProperties":false,"required":["items"],"properties":{"items":item_list_schema()}});
+        self.chat_json(
+            &format!(
+                "{INSTRUCTION}\n{extra}\nAnalyseauftrag als JSON-Zeichenfolge: {}",
+                serde_json::to_string(&step.prompt)?
+            ),
+            &serde_json::to_string(sources)?,
+            "meeting_notes",
+            schema,
+            2048,
+            control,
+        )
+    }
+
+    /// Sends one text-only chat request that must answer with JSON matching `schema` and
+    /// returns the raw answer text for the caller's validation. Nothing else is transmitted.
+    pub(crate) fn chat_json(
+        &self,
+        system: &str,
+        user: &str,
+        schema_name: &str,
+        schema: serde_json::Value,
+        max_tokens: u32,
+        control: &AnalysisControl,
+    ) -> Result<String> {
+        control.check()?;
+        let mut body = serde_json::json!({"model":self.model,"stream":false,"messages":[{"role":"system","content":system},{"role":"user","content":user}],"response_format":{"type":"json_schema","json_schema":{"name":schema_name,"strict":true,"schema":schema}}});
         if self.base.host_str() == Some("api.openai.com") {
-            body["max_completion_tokens"] = 2048.into();
+            body["max_completion_tokens"] = max_tokens.into();
         } else {
-            body["max_tokens"] = 2048.into();
+            body["max_tokens"] = max_tokens.into();
             body["temperature"] = 0.into();
         }
         if self.base.host_str() == Some("openrouter.ai") {
@@ -223,6 +248,11 @@ impl TextClient {
             .context("KI-Antwort enthält keinen strukturierten Text.")?
             .to_string())
     }
+}
+
+/// JSON schema of one statement list as used by every source-linked answer.
+pub(crate) fn item_list_schema() -> serde_json::Value {
+    serde_json::json!({"type":"array","items":{"type":"object","additionalProperties":false,"required":["text","owner","due","evidence"],"properties":{"text":{"type":"string"},"owner":{"type":["string","null"]},"due":{"type":["string","null"]},"evidence":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["sourceId","quote"],"properties":{"sourceId":{"type":"string"},"quote":{"type":"string"}}}}}}})
 }
 
 async fn await_cancellable<T>(
