@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import { StrictMode } from "react";
 import App from "./App";
 import { testServices } from "./test-services";
@@ -203,6 +203,33 @@ it("auto-starts once for a local model while the meeting is recording", async ()
   expect(start.mock.calls[0][0].intervalMs).toBe(300_000);
 });
 
+it("retries an automatic start while the previous meeting's summary is still finishing", async () => {
+  // Codex review 5686078293: a refused first attempt used up the automatic start for good.
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const start = vi
+      .fn()
+      .mockRejectedValueOnce(
+        "Eine Live-Zusammenfassung läuft bereits. Bitte sie zuerst beenden.",
+      )
+      .mockResolvedValue(status({ status: "waiting", running: true }));
+    setup(
+      {
+        getLiveNotes: vi.fn().mockResolvedValue(status()),
+        startLiveNotes: start,
+      },
+      { preferences: { auto: true, intervalMinutes: 3 } },
+    );
+    await waitFor(() => expect(start).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000);
+    });
+    await waitFor(() => expect(start).toHaveBeenCalledTimes(2));
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 it("does not auto-start after an explicit stop or without a model", async () => {
   const start = vi.fn();
   setup(
@@ -238,7 +265,10 @@ it("shows summary, decisions, tasks with owner and track, evidence and the disca
   expect(
     screen.getAllByText(/\[C60\] 01:00 · Computerton/).length,
   ).toBeGreaterThan(0);
-  expect(screen.getByText("Keine offenen Fragen.")).toBeTruthy();
+  // Codex review 5686078293: a later answer is not reconciled, so the list must not claim
+  // that its questions are still open.
+  expect(screen.getByText("Keine Fragen aufgeworfen.")).toBeTruthy();
+  expect(screen.queryByText(/Offene Fragen/)).toBeNull();
   expect(screen.getByText(/nächste Aktualisierung in ca. 2 Min./)).toBeTruthy();
   expect(
     screen.getByText(/2 KI-Aussage\(n\) ohne gültigen Beleg wurden verworfen/),
@@ -266,7 +296,7 @@ it("copies a plain text summary for reading out", async () => {
   const text = copy.mock.calls[0][0] as string;
   expect(text).toContain("Bisheriger Verlauf\n- Budget Q3 besprochen");
   expect(text).toContain("Aufgaben\n- Angebot verschicken (Anna, Freitag)");
-  expect(text).not.toContain("Offene Fragen");
+  expect(text).not.toContain("Aufgeworfene Fragen");
   expect(text).toContain("KI-Entwurf");
   expect(liveNotesText(view, "T", "en")).toContain("Summary so far");
 });

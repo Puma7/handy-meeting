@@ -55,6 +55,9 @@ type Props = {
 
 const POLL_RUNNING_MS = 1500;
 const POLL_IDLE_MS = 5000;
+/** A failed automatic start is retried this often, for at most ten minutes. */
+const AUTO_START_RETRY_MS = 15_000;
+const AUTO_START_ATTEMPTS = 40;
 
 function trackLabel(track: string, de: boolean): string {
   if (track === "microphone") return de ? "Mikrofon" : "Microphone";
@@ -104,7 +107,7 @@ export function liveNotesText(
     block(de ? "Bisheriger Verlauf" : "Summary so far", view.overview) +
     block(de ? "Entscheidungen" : "Decisions", view.decisions) +
     block(de ? "Aufgaben" : "Tasks", view.tasks) +
-    block(de ? "Offene Fragen" : "Open questions", view.questions) +
+    block(de ? "Aufgeworfene Fragen" : "Questions raised", view.questions) +
     `\n${de ? "KI-Entwurf aus der laufenden Mitschrift. Belege bestätigen Originalzitate, nicht automatisch die Deutung." : "AI draft from the running transcript. Evidence confirms the quotes, not necessarily the interpretation."}\n`
   );
 }
@@ -183,7 +186,9 @@ export default function LiveNotesPanel({
     [copied, setCopied] = useState(false);
   const sequence = useRef(0),
     mounted = useRef(true),
-    autoStarted = useRef<string | null>(null);
+    autoStarted = useRef<string | null>(null),
+    autoAttempts = useRef(new Map<string, number>());
+  const [autoRetry, setAutoRetry] = useState(0);
   const available = Boolean(api.getLiveNotes && api.startLiveNotes);
   const endpointValid = endpointAllowed(connection.mode, connection.endpoint);
   const modelReady = Boolean(connection.model.trim()) && endpointValid;
@@ -232,10 +237,11 @@ export default function LiveNotesPanel({
     };
   }, [poll]);
 
-  const start = useCallback(async () => {
-    if (!meetingId || !api.startLiveNotes) return;
+  const start = useCallback(async (): Promise<boolean> => {
+    if (!meetingId || !api.startLiveNotes) return false;
     setBusy(true);
     setError(null);
+    let started = false;
     try {
       const next = await api.startLiveNotes({
         meetingId,
@@ -249,6 +255,7 @@ export default function LiveNotesPanel({
         language: locale,
       });
       if (mounted.current) setStatus(next);
+      started = true;
     } catch (e) {
       if (mounted.current) setError(errorMessage(e));
     } finally {
@@ -256,6 +263,7 @@ export default function LiveNotesPanel({
     }
     // The release covers this start only.
     setCloudConsent(false);
+    return started;
   }, [
     api,
     meetingId,
@@ -279,7 +287,20 @@ export default function LiveNotesPanel({
     )
       return;
     autoStarted.current = meetingId;
-    void start();
+    void start().then((started) => {
+      // The previous meeting's summary may still be finishing its backlog: try again later,
+      // a bounded number of times, instead of giving up on this meeting's automatic start.
+      if (started || !mounted.current) return;
+      const attempts = (autoAttempts.current.get(meetingId) ?? 0) + 1;
+      autoAttempts.current.set(meetingId, attempts);
+      if (attempts >= AUTO_START_ATTEMPTS) return;
+      // Not cleared by a re-render: the retry must survive changing props.
+      setTimeout(() => {
+        if (!mounted.current) return;
+        if (autoStarted.current === meetingId) autoStarted.current = null;
+        setAutoRetry((n) => n + 1);
+      }, AUTO_START_RETRY_MS);
+    });
   }, [
     preferences.auto,
     meetingId,
@@ -289,6 +310,7 @@ export default function LiveNotesPanel({
     modelReady,
     status?.status,
     start,
+    autoRetry,
   ]);
 
   async function stop() {
@@ -602,8 +624,8 @@ export default function LiveNotesPanel({
               ? `Sobald bestätigter Text vorliegt, entsteht hier die Zusammenfassung – spätestens alle ${preferences.intervalMinutes} Minuten, früher nach längeren Redebeiträgen.`
               : `As soon as confirmed text exists the summary appears here – at least every ${preferences.intervalMinutes} minutes, sooner after long contributions.`
             : de
-              ? "Fasst das laufende Meeting fortlaufend zusammen: bisheriger Verlauf, Entscheidungen, Aufgaben und offene Fragen, jeweils mit Originalbeleg."
-              : "Summarizes the running meeting continuously: summary so far, decisions, tasks and open questions, each with original evidence."}
+              ? "Fasst das laufende Meeting fortlaufend zusammen: bisheriger Verlauf, Entscheidungen, Aufgaben und aufgeworfene Fragen, jeweils mit Originalbeleg."
+              : "Summarizes the running meeting continuously: summary so far, decisions, tasks and questions raised, each with original evidence."}
         </p>
       ) : (
         view && (
@@ -644,13 +666,15 @@ export default function LiveNotesPanel({
             </section>
             <section>
               <h3>
-                {de ? "Offene Fragen" : "Open questions"} (
+                {de ? "Aufgeworfene Fragen" : "Questions raised"} (
                 {view.questions.length})
               </h3>
               <Items
                 items={view.questions}
                 locale={locale}
-                empty={de ? "Keine offenen Fragen." : "No open questions."}
+                empty={
+                  de ? "Keine Fragen aufgeworfen." : "No questions raised."
+                }
               />
             </section>
             <details className="live-points">

@@ -714,3 +714,9 @@ Ergebnis: 160 Vitest-Fälle bestanden, dazu `tsc` und `prettier`.
 - **Modell-Download:** Wird die Modelleinrichtung erneut geöffnet, zeigt sie einen weiterlaufenden Download mit Fortschritt und „Abbrechen“ an, statt einen zweiten Download anzubieten.
 
 162 Vitest-Fälle, `tsc` und `prettier` bestanden.
+
+**Codex-Review 5686078293 auf cc67da1 bearbeitet:**
+- **Automatischer Start:** Ein fehlgeschlagener automatischer Start der Live-Zusammenfassung, etwa weil die Zusammenfassung des vorigen Meetings noch ihren Rückstand abarbeitet, wird alle 15 Sekunden erneut versucht. Nach höchstens 10 Minuten gibt er auf. Der vorige Lauf wird dafür nicht beendet. Ein Regressionstest schlug vor der Korrektur fehl.
+- **Fragen:** Die Liste heißt jetzt „Aufgeworfene Fragen“ statt „Offene Fragen“. Eine spätere Antwort im Meeting wird nicht abgeglichen, deshalb darf die Liste nicht behaupten, die Fragen seien noch offen. Ein echter Abgleich bräuchte eine Prompt- und Schemaänderung, die erst mit dem ausstehenden echten Referenztest bewertet werden kann. Prompt, Schema und gespeicherte Fenster bleiben unverändert.
+
+Lokal bestanden: 163 Vitest-Fälle, `tsc` und `prettier`.
