@@ -233,14 +233,16 @@ fn drain_track_controlled(
             start.elapsed().as_millis(),
             writer.written_samples(),
         );
+        // The store retains failed diagnostics in the live snapshot. Their
+        // manifest writes must not prevent this packet's independent PCM write.
         if info.discontinuity && diagnostics.discontinuities == 1 {
-            store.warn(&format!("{}: audio driver reported a discontinuity. Missing audio remains missing; trustworthy microphone clock gaps are represented by explicit silence, not recovered speech. Check the affected range.", diagnostics.source))?;
+            let _ = store.warn(&format!("{}: audio driver reported a discontinuity. Missing audio remains missing; trustworthy microphone clock gaps are represented by explicit silence, not recovered speech. Check the affected range.", diagnostics.source));
         }
         if info.timestamp_error && diagnostics.timestamp_errors == 1 {
-            store.warn(&format!(
+            let _ = store.warn(&format!(
                 "{}: audio device timestamps are uncertain; exact alignment cannot be confirmed.",
                 diagnostics.source
-            ))?;
+            ));
         }
         if let Some((controls, epoch, timeline)) = control.as_mut() {
             if diagnostics.source == "microphone" && !controls.changed("microphone", *epoch) {
@@ -656,6 +658,99 @@ mod tests {
             Ok(packet)
         }
     }
+
+    #[test]
+    fn unsaved_device_warnings_do_not_discard_flagged_or_following_pcm_packets() {
+        for (discontinuity, timestamp_error) in [(true, false), (false, true), (true, true)] {
+            let root = tempfile::tempdir().unwrap();
+            let store =
+                SessionStore::create(root.path(), "Synthetic diagnostic failure", "m", "s", None)
+                    .unwrap();
+            let manifest = store.folder().join("session.json");
+            let original = std::fs::read(&manifest).unwrap();
+            std::fs::create_dir(store.folder().join("session.json.bak")).unwrap();
+            let flagged = PacketInfo {
+                discontinuity,
+                timestamp_error,
+                ..info(false)
+            };
+            let packets = Packets(RefCell::new(VecDeque::from([
+                (vec![41, -42, 43], flagged),
+                (vec![51, -52, 53], info(false)),
+            ])));
+            let mut writer = PcmWriter::new(store.clone(), "system").unwrap();
+            let mut diagnostics = CaptureDiagnostics::new("system");
+            drain_track(
+                &packets,
+                &mut VecDeque::new(),
+                &mut vec![],
+                &mut writer,
+                &mut diagnostics,
+                Instant::now(),
+                &store,
+            )
+            .unwrap();
+            writer.finish().unwrap();
+            assert!(packets.0.borrow().is_empty());
+            let snapshot = store.snapshot().unwrap();
+            assert!(snapshot.capture_incomplete);
+            assert!(snapshot
+                .warnings
+                .iter()
+                .any(|warning| warning.contains("diagnostic could not be saved")));
+            assert_eq!(snapshot.parts[0].confirmed_sample_count, 6);
+            assert!(snapshot.parts[0].audio_closed);
+            let samples: Vec<i16> =
+                hound::WavReader::open(store.audio_path(&snapshot.parts[0]).unwrap())
+                    .unwrap()
+                    .samples::<i16>()
+                    .map(std::result::Result::unwrap)
+                    .collect();
+            assert_eq!(samples, vec![41, -42, 43, 51, -52, 53]);
+            assert_eq!(std::fs::read(manifest).unwrap(), original);
+        }
+    }
+
+    #[test]
+    fn diagnostic_fallback_still_propagates_a_real_pcm_file_failure() {
+        let root = tempfile::tempdir().unwrap();
+        let store =
+            SessionStore::create(root.path(), "Synthetic PCM failure", "m", "s", None).unwrap();
+        std::fs::create_dir(store.folder().join("session.json.bak")).unwrap();
+        let blocked_audio = store.folder().join("audio/system-000000000000.wav");
+        std::fs::create_dir(&blocked_audio).unwrap();
+        let packets = Packets(RefCell::new(VecDeque::from([(
+            vec![61, -62],
+            PacketInfo {
+                discontinuity: true,
+                ..info(false)
+            },
+        )])));
+        let mut writer = PcmWriter::new(store.clone(), "system").unwrap();
+        let mut diagnostics = CaptureDiagnostics::new("system");
+        assert!(drain_track(
+            &packets,
+            &mut VecDeque::new(),
+            &mut vec![],
+            &mut writer,
+            &mut diagnostics,
+            Instant::now(),
+            &store
+        )
+        .is_err());
+        let snapshot = store.snapshot().unwrap();
+        assert!(
+            snapshot.parts.is_empty(),
+            "No failed PCM write may become confirmed audio"
+        );
+        assert!(snapshot.capture_incomplete);
+        assert!(snapshot
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("discontinuity")));
+        assert!(blocked_audio.is_dir());
+    }
+
     #[test]
     /// Checks one synthetic capture wake drains all packets and converts silence-flagged bytes to silence.
     fn one_event_drains_every_packet_and_silent_flags_never_become_false_speech() {

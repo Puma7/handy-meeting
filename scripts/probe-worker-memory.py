@@ -64,6 +64,18 @@ def trend(rows, metric, warmup=120):
             'peakMiB': max(v for _, v in points) / MIB}
 
 
+def summarize_trends(phase_rows):
+    """PIDs identify a process only inside its measured phase, including the controller."""
+    result = {}
+    for phase, rows in phase_rows.items():
+        phase_result = result[phase] = {}
+        for pid in sorted({row['pid'] for row in rows}):
+            selected = [row for row in rows if row['pid'] == pid]
+            phase_result[str(pid)] = {'phase': phase, 'role': selected[0]['role'], 'backend': selected[0]['backend'],
+                **{metric: trend(selected, metric) for metric in ('privateBytes', 'workingSetBytes', 'gpuDedicatedBytes', 'gpuSharedBytes')}}
+    return result
+
+
 def owned_gpu_values(items, pids):
     result = {pid: None for pid in pids}
     for name, value, valid in items:
@@ -372,13 +384,8 @@ def main():
             run_phase(args, root, session, phase, args.seconds_per_phase, report)
             write_json(root / 'result.json', report)
         report['complete'] = True
-        report['trends'] = {}
-        for phase in ('legacy', 'rust'):
-            rows = [json.loads(line) for line in (root / (phase + '-memory.jsonl')).read_text().splitlines()]
-            for pid in sorted({row['pid'] for row in rows}):
-                selected = [row for row in rows if row['pid'] == pid]
-                report['trends'][str(pid)] = {'phase': phase, 'role': selected[0]['role'], 'backend': selected[0]['backend'],
-                    **{metric: trend(selected, metric) for metric in ('privateBytes', 'workingSetBytes', 'gpuDedicatedBytes', 'gpuSharedBytes')}}
+        report['trends'] = summarize_trends({phase: [json.loads(line) for line in
+            (root / (phase + '-memory.jsonl')).read_text().splitlines()] for phase in ('legacy', 'rust')})
         write_json(root / 'result.json', report)
         write_json(root / 'status.json', {'state': 'complete', 'atUnix': time.time()})
     except Exception as error:

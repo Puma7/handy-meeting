@@ -93,7 +93,8 @@ public sealed class PcmTimeline : IDisposable
     }
     public static (long Samples, bool HasSignal) InspectAndRepair(string path)
     {
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
+        JsonData.CheckDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!); JsonData.CheckEntry(path);
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
         Span<byte> header = stackalloc byte[44]; stream.ReadExactly(header);
         if (!header[..4].SequenceEqual("RIFF"u8) || !header.Slice(8, 8).SequenceEqual("WAVEfmt "u8) || !header.Slice(36, 4).SequenceEqual("data"u8)
             || BinaryPrimitives.ReadInt16LittleEndian(header[20..]) != 1 || BinaryPrimitives.ReadInt16LittleEndian(header[22..]) != 1
@@ -107,7 +108,20 @@ public sealed class PcmTimeline : IDisposable
                 if (BinaryPrimitives.ReadInt16LittleEndian(buffer.AsSpan(i)) != 0) { signal = true; break; }
         if (BinaryPrimitives.ReadUInt32LittleEndian(header[40..]) != dataBytes || stream.Length != dataBytes + 44)
         {
-            stream.SetLength(dataBytes + 44); WriteHeader(stream, dataBytes); stream.Flush(true);
+            // Never repair a supplied inode in place: another hardlink may belong to
+            // an unrelated recording. Copy only complete PCM samples, retain old bytes
+            // as .bak and publish the repaired directory entry atomically.
+            JsonData.WriteAtomic(path, replacement =>
+            {
+                WriteHeader(replacement, dataBytes); stream.Position = 44;
+                long remaining = dataBytes;
+                while (remaining > 0)
+                {
+                    var length = (int)Math.Min(buffer.Length, remaining);
+                    stream.ReadExactly(buffer.AsSpan(0, length)); replacement.Write(buffer, 0, length); remaining -= length;
+                }
+                stream.Dispose();
+            });
         }
         return (dataBytes / 2, signal);
     }

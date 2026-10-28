@@ -1,8 +1,17 @@
-## Meeting for Handy 1.0.4
+## Meeting for Handy 1.0.5
 
-A feature and reliability release of the independent Rust/Tauri meeting companion for Handy. It contains the unreleased 1.0.2 work and the 1.0.3 follow-ups.
+A release of the independent Rust/Tauri meeting companion for Handy. The release tag and attached manifests identify the exact application version, source commit and checked package bytes.
 
-### New in 1.0.4
+### Reliability and desktop clarity
+
+- Separate live system-audio and microphone meters stay visible below their controls. Green/yellow/red segments, digital peak values and clear silence, clipping, pause/mute and unavailable states help check incoming audio independently of the transcript. Meters do not start devices while idle or replace saved-audio progress checks.
+- Recording diagnostics preserve healthy audio capture when a warning cannot be saved. Stopping still waits for every owned audio writer and reports failures.
+- Consistent borders, aligned retention checkboxes and page focus make navigation clearer without interrupting background work or source jumps.
+- Legacy session writes and repairs preserve unrelated linked files and original backups; transcript Markdown treats supplied text literally. Original TXT, JSON and saved source values remain intact.
+- Memory and interruption reports retain the tested version, process/phase identity and actual checked scope instead of inventing causes or measurements.
+- Portable builds retry temporary SDK-download failures within a fixed limit. Hash, certificate, size, source and installer checks remain required.
+
+### Recording, exports and local controls
 
 - Pause/resume recording and mute only the app microphone. Ignored audio becomes explicit silent sections; other apps are unchanged. Depending on the platform, the operating system may still display a recording indicator.
 - Full transcript snapshots as TXT, inert Markdown or structured JSON, with original section/source identifiers and explicit section-time semantics.
@@ -11,7 +20,7 @@ A feature and reliability release of the independent Rust/Tauri meeting companio
 - Shared operation leases and additional archive-marker/path protections while retaining live rename and all original data.
 - Visible name **Meeting for Handy**; existing internal data/key/bundle/executable/package identifiers remain compatible. Installer helpers respect execution policy.
 
-### Also included since 1.0.1
+### Meeting workflow
 
 - **Meeting library:** names, VIP flags and a rebuildable local search over meeting titles and transcripts. Search hits open the highlighted source section.
 - **Retention and archive:** disabled-by-default retention rules with a reviewed preview, verified archives, restore, FLAC/Opus audio copies and permanent deletion only after typed confirmation. Interrupted moves and deletions can be continued.
@@ -47,7 +56,7 @@ A feature and reliability release of the independent Rust/Tauri meeting companio
 
 Install Handy and a compatible downloaded streaming model first. The companion detects its model metadata and reuses the existing weights in its own local inference processes. For local summaries, additionally run a local text-model service such as LM Studio and choose a text model in the app.
 
-Starting with this version, Meeting for Handy can find later releases itself (Settings → updates). Version 1.0.1 has no update check; install 1.0.4 manually once. Earlier program versions and all user data are preserved.
+Meeting for Handy can find later releases itself (Settings → updates). Version 1.0.1 has no update check; install the latest complete release manually once. Earlier program versions and all user data are preserved.
 
 ### Read before relying on a recording
 

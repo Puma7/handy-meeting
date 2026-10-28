@@ -1,6 +1,28 @@
 //! Synthetic service-state regressions; ordinary tests never open audio devices.
 use super::*;
 
+#[test]
+fn audio_level_poll_is_idle_without_capture_and_never_waits_for_app_state() {
+    let root = fixture_root("idle-meter");
+    let service = Service::new(root.clone()).unwrap();
+    assert!(service.audio_levels().unwrap().is_none());
+    let store = SessionStore::create(
+        &root.join("sessions"),
+        "Synthetic meter view",
+        "m",
+        "s",
+        None,
+    )
+    .unwrap();
+    service.lock().unwrap().view = Some(store);
+    // Browsing a saved session must not produce levels or start an idle device.
+    assert!(service.audio_levels().unwrap().is_none());
+    let held = service.lock().unwrap();
+    assert!(service.audio_levels().is_err());
+    drop(held);
+    assert!(service.audio_levels().unwrap().is_none());
+}
+
 /// Verify exclusive reservations block label, policy and import writes before worker startup;
 /// synthetic files stay unchanged until admission is released.
 #[test]
@@ -335,6 +357,7 @@ fn stop_returns_while_recognition_catches_up_and_a_poll_collects_it_later() {
     let view = service.stop().unwrap();
     assert!(started.elapsed() < std::time::Duration::from_secs(5));
     assert_eq!(view.data.status, "catching-up");
+    assert!(service.audio_levels().unwrap().is_none());
     {
         let inner = service.lock().unwrap();
         assert!(!inner.transitioning, "stop must not hold the transition");

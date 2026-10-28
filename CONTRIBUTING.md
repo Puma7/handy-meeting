@@ -16,3 +16,5 @@ Never attach private recordings, meeting transcripts, journals, model weights, A
 Report the exact app version, OS, architecture, relevant local model/runtime version, scope and reproduction steps. Separate build success, synthetic recovery, real-device capture and long-session behavior. Do not describe a draft workflow as a successful CI run.
 
 Changes are provided under the repository's MIT license. Preserve upstream notices and review licenses before adding dependencies or redistributing models. This is not an official Handy release; do not imply endorsement by Handy's maintainers.
+
+Draft PRs run source checks without installer/GUI/native-store package evidence. Mark the PR ready for review, or explicitly run both candidate workflows on the exact source ref, before approval. The [CI scope table](docs/CI.md) distinguishes omitted checks from executed checks. The required Windows verify context remains on PRs without a second branch-push run. Rust checks retain their own source-bound legacy verification.

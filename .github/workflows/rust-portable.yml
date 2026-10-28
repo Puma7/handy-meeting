@@ -1,21 +1,44 @@
 name: Rust portable desktop candidates
 on:
-  push:
-    branches: [main]
-    paths: ['Cargo.toml', 'Cargo.lock', '.gitattributes', 'rust-toolchain.toml', '.cargo/**', 'crates/**', 'apps/desktop/**', 'platform/**', 'scripts/**', 'licenses/**', 'assets/**', 'LICENSE', 'THIRD_PARTY_NOTICES.txt', '.github/workflows/rust-portable.yml']
   pull_request:
-    paths: ['Cargo.toml', 'Cargo.lock', '.gitattributes', 'rust-toolchain.toml', '.cargo/**', 'crates/**', 'apps/desktop/**', 'platform/**', 'scripts/**', 'licenses/**', 'assets/**', 'LICENSE', 'THIRD_PARTY_NOTICES.txt', '.github/workflows/rust-portable.yml']
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+    paths: ['Cargo.toml', 'Cargo.lock', '.gitattributes', 'rust-toolchain.toml', '.cargo/**', 'crates/**', 'apps/desktop/**', 'platform/**', 'src/**', 'verify.ps1', 'global.json', 'scripts/**', 'licenses/**', 'assets/**', 'LICENSE', 'THIRD_PARTY_NOTICES.txt', '.github/workflows/rust-portable.yml', '.github/workflows/rust.yml']
   workflow_dispatch:
+    inputs:
+      packages:
+        description: Build and verify Linux/Mac candidates (false only reports the plan)
+        type: boolean
+        default: true
   workflow_call:
+    inputs:
+      packages:
+        type: boolean
+        default: true
 permissions:
   contents: read
 concurrency:
   group: rust-portable-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 env:
   CARGO_TERM_COLOR: never
 jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      packages: ${{ steps.plan.outputs.packages }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - name: Select complete candidates only when requested or ready for review
+        id: plan
+        env:
+          CI_PACKAGES: ${{ inputs.packages }}
+        run: python3 scripts/ci-plan.py
   desktop:
+    needs: plan
+    if: needs.plan.outputs.packages == 'true'
     name: ${{ matrix.rid }} GUI build and package
     strategy:
       fail-fast: false
@@ -37,6 +60,8 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
         with:
           node-version: '26.7.0'
@@ -81,6 +106,7 @@ jobs:
           node scripts/rust-artifacts.mjs source-fingerprint > .build/portable-source-before.json
           python3 -m py_compile scripts/prepare-rust-portable.py scripts/rust-portable-artifacts.py
           python3 -m unittest discover -s scripts -p test_rust_portable.py
+          python3 -m unittest discover -s scripts -p test_native_download.py
           python3 -m unittest discover -s scripts -p test_worker_memory.py
           bash -n scripts/package-rust-portable.sh
           bash -n scripts/check-native-credentials.sh
@@ -93,6 +119,10 @@ jobs:
           node "$HANDYMEETING_NPM_CLI" --prefix apps/desktop ci --ignore-scripts --no-audit --no-fund
           node "$HANDYMEETING_NPM_CLI" --prefix apps/desktop test
           node "$HANDYMEETING_NPM_CLI" --prefix apps/desktop run build
+          # Keep the no-ASR feature configuration on these same target hosts;
+          # sharing the checkout/dependencies avoids a second fresh core matrix.
+          cargo +1.91.1 test -p handy-bridge -p meeting-core -p meeting-notes --all-targets --no-default-features --locked
+          cargo +1.91.1 clippy -p handy-bridge -p meeting-core -p meeting-notes --all-targets --no-default-features --locked -- -D warnings
           cargo +1.91.1 test --workspace --all-targets --locked --target '${{ matrix.target }}'
           cargo +1.91.1 clippy --workspace --all-targets --locked --target '${{ matrix.target }}' -- -D warnings
       - name: Build the complete Rust Tauri desktop executable

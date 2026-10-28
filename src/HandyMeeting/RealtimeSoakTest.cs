@@ -15,7 +15,7 @@ public static class RealtimeSoakTest
         string Scope = "Echtzeit-Einspeisung zweier synthetischer Spuren, produktive PCM-Sicherung, Streaming und WPF-Live-Ansicht; keine WASAPI-Geräteaufnahme",
         double HostPrivateGrowthLimitMiB = 128, double HostPrivateSlopeLimitMiBPerHour = 64,
         double ManagedGrowthLimitMiB = 32, double WorkerPrivateGrowthLimitMiB = 128,
-        double WorkingSetGrowthLimitMiB = 128);
+        double WorkingSetGrowthLimitMiB = 128, string? TestedAssemblyVersion = null);
     public sealed record OsMemory(long PrivateBytes, long WorkingBytes, long CpuTicks)
     {
         public static OsMemory? Read(int? id)
@@ -111,11 +111,12 @@ public static class RealtimeSoakTest
         try { await writer.WriteAsync(outside, original, new(), TimeSpan.FromSeconds(1)); }
         catch (ArgumentException) { outsideRejected = true; }
         Require(outsideRejected && !File.Exists(outside), "Fixture writer touched a file outside its owned fixture scope.");
+        ReportChecks();
         var report = new { Passed = true, ExclusiveLockSurvived = true, MissingFileReported = true, CorruptFileReported = true, AtomicReplacements = 1000, ConcurrentReads = reads,
             FixtureWriteRetries = fixtureStats.Retries, FixtureWriteHResults = fixtureStats.HResults, FixtureWriteNativeErrors = fixtureStats.NativeErrors,
             TemporaryFixtureLeaseSurvived = true, TemporaryFixtureWriteRetries = releasedStats.Retries, TemporaryFixtureHResults = releasedStats.HResults,
             ActiveFixtureLeaseDeadlineReported = true, ActiveFixtureDeadlineRetries = activeStats.Retries, ActiveFixtureHResults = activeStats.HResults,
-            UnrelatedFixtureIoFailureReported = true, OutsideFixtureScopeRejected = true, FixtureWriterOnly = true, LegacyProductionWriterValidated = false };
+            UnrelatedFixtureIoFailureReported = true, OutsideFixtureScopeRejected = true, ReportEvidenceChecksPassed = true, FixtureWriterOnly = true, LegacyProductionWriterValidated = false };
         using var reportFile = new FileStream(Path.Combine(root, "monitor-checks.json"), FileMode.CreateNew, FileAccess.Write, FileShare.Read);
         reportFile.Write(JsonSerializer.SerializeToUtf8Bytes(report, JsonData.Options)); reportFile.Flush(true);
     }
@@ -279,7 +280,8 @@ public static class RealtimeSoakTest
         var model = (await new HandyClient(handy).ModelsAsync(CancellationToken.None)).First(m => m.SupportsStreaming && m.Id.Contains("nemotron-3.5"));
         MakeFixture(root, "Dies ist die Systemspur. Am Montag besprechen wir den Projektplan. Die Aufnahme bleibt auf diesem Computer.", "system");
         MakeFixture(root, "Dies ist meine Mikrofonspur. Heute kaufen wir Bananen und Äpfel. Meine Stimme bleibt von der Systemspur getrennt.", "microphone");
-        var plan = new Plan(seconds, model.Id, ModelPaths.Resolve(model, handy), DateTimeOffset.Now);
+        var plan = new Plan(seconds, model.Id, ModelPaths.Resolve(model, handy), DateTimeOffset.Now,
+            TestedAssemblyVersion: typeof(RealtimeSoakTest).Assembly.GetName().Version?.ToString());
         JsonData.Save(Path.Combine(root, "plan.json"), plan);
         JsonData.SaveText(Path.Combine(root, "tested-binary.sha256"), Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(typeof(RealtimeSoakTest).Assembly.Location))));
         var powerRequest = SetThreadExecutionState(0x80000001); // Keep the system awake, leave display policy alone.
@@ -363,6 +365,8 @@ public static class RealtimeSoakTest
     }
     public static async Task RecoverInterruptedAsync(string root)
     {
+        Require(!File.Exists(Path.Combine(root, "interrupted-recovery.json")) && !File.Exists(Path.Combine(root, "REPORT-INTERRUPTED.md")),
+            "Ein Wiederherstellungsnachweis ist bereits vorhanden; frühere Berichte bleiben erhalten.");
         var plan = JsonData.Read<Plan>(Path.Combine(root, "plan.json"))!;
         var last = JsonData.Read<State>(Path.Combine(root, "host-state.json"))!;
         try { using var active = Process.GetProcessById(last.HostPid); Require(active.HasExited, "Eine noch laufende Testsitzung darf nicht repariert werden."); }
@@ -389,14 +393,41 @@ public static class RealtimeSoakTest
             recovered.Data.EndedAt = DateTimeOffset.Now; recovered.Save(); recovered.ExportSnapshot();
         }
         foreach (var receipt in receipts) VerifyReceipt(receipt);
-        var semanticErrors = recovered.PartsSnapshot().Where(p => p.SampleCount >= 29 * PcmTimeline.SampleRate)
-            .Where(p => p.Text?.Contains(p.Source == "system" ? "Projektplan" : "Bananen", StringComparison.OrdinalIgnoreCase) != true
+        var referenceParts = recovered.PartsSnapshot().Where(p => p.SampleCount >= 29 * PcmTimeline.SampleRate).ToList();
+        var semanticErrors = referenceParts.Where(p => p.Text?.Contains(p.Source == "system" ? "Projektplan" : "Bananen", StringComparison.OrdinalIgnoreCase) != true
                 || p.Text.Contains(p.Source == "system" ? "Bananen" : "Projektplan", StringComparison.OrdinalIgnoreCase)).Select(p => p.File).ToList();
         Require(semanticErrors.Count == 0, "Referenztexte sind unvollständig oder vermischt: " + string.Join(", ", semanticErrors.Take(10)));
         var states = File.ReadLines(Path.Combine(root, "memory.jsonl")).Select(line => JsonSerializer.Deserialize<State>(line, JsonData.Options)!).ToList();
         var trends = EvaluateMemory(states);
-        JsonData.Save(Path.Combine(root, "interrupted-recovery.json"), new { DataRecoveryPassed = true, TwoHourRealtime = false, LastObservedSeconds = last.ElapsedSeconds, RecoveredSamples = samples, ProtectedCheckpointCount = receipts.Count, ProtectedAudioAndJournalPreserved = true, AllSavedAudioMatchesReferences = true, FinalTranscriptComplete = true, Trends = trends, Session = recovered.Folder });
-        JsonData.SaveText(Path.Combine(root, "REPORT-INTERRUPTED.md"), $"# Unterbrochener Dauertest\n\nDer erste Lauf endete nach {last.ElapsedSeconds / 60:F2} Minuten durch eine vorübergehende Dateisperre beim Lesen der Statusdatei im Testwächter. Der zweistündige Dauertest wurde damit nicht erreicht. Die ursprüngliche failure.json und status.json bleiben als Fehlernachweis erhalten.\n\nDie anschließende Wiederherstellungsprüfung bestand: Alle gespeicherten PCM-Samples entsprechen ihrer jeweiligen Referenz; keine Lücken oder Überlappungen. Sämtliche vor den beiden Erkennungsabbrüchen gesicherten Audio- und Journalpräfixe blieben hashgleich erhalten. Alle vorhandenen Audioabschnitte wurden fertig transkribiert, und die Referenzbegriffe blieben den richtigen Spuren zugeordnet.\n\nWiederhergestellter Zeitumfang: Computerton {samples["system"] / 16000d:F3} Sekunden; Mikrofon {samples["microphone"] / 16000d:F3} Sekunden. Ein genauer unbestätigter Schluss lässt sich mangels abschließender Absturzquittung in diesem ungeplanten Abbruch nicht bestimmen. Die Rohdaten und Speichertrends stehen in interrupted-recovery.json und memory.jsonl.\n\nTestsitzung: `{recovered.Folder}`. Dies ist ein Teilergebnis und ersetzt keinen vollständigen Zweistundentest. Ein Prozessabbruch ist kein Stromausfall.\n");
+        JsonData.Save(Path.Combine(root, "interrupted-recovery.json"), new { DataRecoveryPassed = true, TwoHourRealtime = false, LastObservedSeconds = last.ElapsedSeconds, RecoveredSamples = samples, ProtectedCheckpointCount = receipts.Count, ProtectedAudioAndJournalPreserved = receipts.Count > 0 ? (bool?)true : null, AllSavedAudioMatchesReferences = true, FinalTranscriptComplete = true, ReferenceTermSectionsChecked = referenceParts.Count, Trends = trends, Session = recovered.Folder });
+        JsonData.SaveText(Path.Combine(root, "REPORT-INTERRUPTED.md"), RenderInterruptedReport(plan, last.ElapsedSeconds, receipts.Count, samples, recovered.Folder, referenceParts.Count));
+    }
+    private static string TestedVersion(Plan plan) => plan.TestedAssemblyVersion ?? "Version im Testplan nicht gespeichert";
+    private static string RenderInterruptedReport(Plan plan, double lastObservedSeconds, int receiptCount, Dictionary<string, long> samples, string session, int referenceSections)
+    {
+        var checkpoints = receiptCount == 0
+            ? "Es lag keine gespeicherte Abbruchquittung vor. Der Erhalt früher bestätigter Audio- und Journalpräfixe lässt sich daher nicht anhand solcher Quittungen nachweisen."
+            : $"Für {receiptCount} gespeicherte Abbruchquittung(en) blieben die darin bestätigten Audio- und Journalpräfixe hashgleich erhalten.";
+        var referenceCheck = referenceSections == 0 ? "Es gab keinen Abschnitt ab 29 Sekunden für die Referenzbegriffsprüfung; eine korrekte Begriffserkennung oder Spurzuordnung ist dadurch nicht nachgewiesen." : $"In {referenceSections} geprüften Abschnitten ab 29 Sekunden waren die Referenzbegriffe vorhanden und der richtigen Spur zugeordnet. Kürzere Abschnitte waren nicht Teil dieser Begriffsprüfung.";
+        return $"# Unterbrochener Dauertest HandyMeeting {TestedVersion(plan)}\n\nLetzter beobachteter Teststand: {lastObservedSeconds / 60:F2} Minuten; geplante Dauer: {plan.DurationSeconds / 60d:F2} Minuten. Der reguläre Testabschluss ist nicht nachgewiesen. Ungeklärte Abbruchursache: Die Ursache wird aus den Messständen und Abbruchquittungen nicht abgeleitet. Vorhandene ursprüngliche failure.json und status.json bleiben als Diagnose erhalten.\n\nDie anschließende Wiederherstellungsprüfung bestand: Alle gespeicherten PCM-Samples entsprechen ihrer jeweiligen Referenz; keine Lücken oder Überlappungen. {checkpoints} Alle vorhandenen Audioabschnitte wurden fertig transkribiert. {referenceCheck}\n\nWiederhergestellter Zeitumfang: Computerton {samples["system"] / (double)PcmTimeline.SampleRate:F3} Sekunden; Mikrofon {samples["microphone"] / (double)PcmTimeline.SampleRate:F3} Sekunden. Ein genauer unbestätigter Schluss lässt sich mangels abschließender Absturzquittung in diesem ungeplanten Abbruch nicht bestimmen. Die Rohdaten und Speichertrends stehen in interrupted-recovery.json und memory.jsonl.\n\nTestsitzung: `{session}`. Dies ist ein Teilergebnis und ersetzt keinen regulär abgeschlossenen Echtzeit-Dauertest. Ein Prozessabbruch ist kein Stromausfall.\n";
+    }
+    private static void ReportChecks()
+    {
+        var plan = new Plan(7200, "synthetic-model", "unused-fixture-model", DateTimeOffset.UnixEpoch, TestedAssemblyVersion: "9.8.7.6");
+        var receipt = new Receipt(DateTimeOffset.UnixEpoch, 120, "unused-fixture-session", 0, 0, "", []);
+        var complete = RenderReport(plan, receipt, [], [], [], [], "unused-fixture-session");
+        Require(complete.Contains("HandyMeeting 9.8.7.6", StringComparison.Ordinal) && !complete.Contains("0.2.1", StringComparison.Ordinal), "Report must identify the assembly version saved before the test.");
+        var legacy = JsonSerializer.Deserialize<Plan>("{\"DurationSeconds\":7200,\"ModelId\":\"fixture\",\"ModelPath\":\"unused\",\"PreparedAt\":\"2026-01-01T00:00:00Z\"}", JsonData.Options)!;
+        Require(RenderReport(legacy, receipt, [], [], [], [], "unused").Contains("Version im Testplan nicht gespeichert", StringComparison.Ordinal), "An old test plan must not inherit the reporting program's version.");
+        foreach (var count in new[] { 0, 1, 3 })
+        {
+            var interrupted = RenderInterruptedReport(plan, 120, count, new() { ["system"] = 16000, ["microphone"] = 32000 }, "unused", 0);
+            Require(interrupted.Contains("Ungeklärte Abbruchursache", StringComparison.Ordinal) && !interrupted.Contains("Dateisperre", StringComparison.Ordinal) && !interrupted.Contains("beiden Erkennungsabbrüchen", StringComparison.Ordinal), "An interrupted report must not invent a cause or two worker crashes.");
+            Require(interrupted.Contains("keinen Abschnitt ab 29 Sekunden", StringComparison.Ordinal) && !interrupted.Contains("waren die Referenzbegriffe vorhanden", StringComparison.Ordinal), "An interrupted report cannot claim word recognition when no sufficiently long source section was checked.");
+            Require(count == 0 ? interrupted.Contains("keine gespeicherte Abbruchquittung", StringComparison.Ordinal) : interrupted.Contains($"Für {count} gespeicherte Abbruchquittung(en)", StringComparison.Ordinal), "Interrupted reports must describe only the available receipt count.");
+        }
+        var checkedReference = RenderInterruptedReport(plan, 120, 1, new() { ["system"] = 480000, ["microphone"] = 32000 }, "unused", 1);
+        Require(checkedReference.Contains("In 1 geprüften Abschnitten ab 29 Sekunden", StringComparison.Ordinal) && checkedReference.Contains("Kürzere Abschnitte waren nicht Teil", StringComparison.Ordinal), "The report must keep checked reference sections separate from shorter completed transcripts.");
     }
     private static void VerifyPcm(string path, long start, long samples, byte[] fixture)
     {
@@ -457,7 +488,7 @@ public static class RealtimeSoakTest
     }
     private static string RenderReport(Plan plan, Receipt receipt, List<AudioPart> parts, Dictionary<string, long> tails, List<Trend> trends, List<string> concerns, string session)
     {
-        var output = new StringBuilder("# Echtzeit-Dauertest HandyMeeting 0.2.1\n\n");
+        var output = new StringBuilder($"# Echtzeit-Dauertest HandyMeeting {TestedVersion(plan)}\n\n");
         output.AppendLine($"Abgeschlossen: {DateTimeOffset.Now:dd.MM.yyyy HH:mm:ss zzz}. Tatsächliche Aufnahmelaufzeit: {TimeSpan.FromSeconds(receipt.ElapsedSeconds)}. Zwei getrennte synthetische Spuren mit lokalem Nemotron Streaming 3.5.\n");
         output.AppendLine("Produktive PCM-Sicherung, Textjournal, Streaming-Koordination und WPF-Live-Text inklusive Layout wurden verwendet. Die Testoberfläche blieb unsichtbar. WASAPI-Geräte, echte Mikrofone, Lautsprechertreiber und die Grafikdarstellung eines sichtbaren Fensters waren nicht Teil dieser Prüfung.\n");
         output.AppendLine($"{parts.Count} Audioabschnitte, {parts.Sum(p => p.SampleCount * 2):N0} PCM-Bytes. Alle gespeicherten Samples entsprechen bytegenau der jeweiligen Referenzspur. Keine Lücken oder Überlappungen.\n");

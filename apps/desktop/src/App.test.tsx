@@ -1340,3 +1340,134 @@ describe("template structure", () => {
     ).toBe(false);
   });
 });
+
+describe("workspace navigation (synthetic IPC)", () => {
+  it("keeps an explicit search source visible after resetting the previous page", async () => {
+    const consoleError = vi.spyOn(console, "error");
+    const api = fakeApi(meeting);
+    api.searchMeetings = vi.fn().mockResolvedValue({
+      items: [
+        {
+          ...meeting,
+          pinned: false,
+          audioRemoved: false,
+          sourceId: meeting.parts[0].file,
+          startMs: 0,
+          endMs: 30000,
+          excerpt: meeting.parts[0].text,
+        },
+      ],
+      total: 1,
+      offset: 0,
+      limit: 25,
+    });
+    const previousScroll = Element.prototype.scrollIntoView;
+    const scroll = vi.fn(function (this: HTMLElement) {
+      // Simulate the browser scrolling the workspace to this source, after the
+      // new detail page mounts. A later page reset would hide it again.
+      this.closest("main")!.scrollTop = 300;
+    });
+    Element.prototype.scrollIntoView = scroll;
+    try {
+      render(<App api={api} />);
+      await ready();
+      await userEvent.click(screen.getByRole("button", { name: "Historie" }));
+      const main = screen.getByRole("main");
+      main.scrollTop = 747;
+      await userEvent.click(
+        await screen.findByRole("button", { name: "Öffnen" }),
+      );
+      await screen.findByRole("heading", { level: 1, name: "Sitzungsdetails" });
+      expect(scroll).toHaveBeenCalledOnce();
+      expect(main.querySelector("[data-highlighted]")?.textContent).toContain(
+        meeting.parts[0].text,
+      );
+      expect(main.scrollTop).toBe(300);
+      expect(consoleError).not.toHaveBeenCalled();
+    } finally {
+      Element.prototype.scrollIntoView = previousScroll;
+    }
+  });
+
+  it("opens each primary page at the top of its scroll container and moves keyboard focus into the new page", async () => {
+    const user = userEvent.setup();
+    render(<App api={fakeApi(meeting)} />);
+    await ready();
+    const main = screen.getByRole("main");
+    const navigation = within(screen.getByRole("navigation"));
+    for (const name of [
+      "Einstellungen",
+      "Nachbearbeitung",
+      "Historie",
+      "Meeting",
+    ]) {
+      // JSDOM has no layout engine; set the real workspace container's retained
+      // offset directly, rather than mocking window scrolling.
+      main.scrollTop = 747;
+      main.scrollLeft = 30;
+      const link = navigation.getByRole("button", { name });
+      link.focus();
+      await user.keyboard("{Enter}");
+      const heading = within(main).getByRole("heading", { level: 1, name });
+      expect(screen.getByRole("main")).toBe(main);
+      expect(main.scrollTop).toBe(0);
+      expect(main.scrollLeft).toBe(0);
+      expect(document.activeElement).toBe(heading);
+      expect(link.getAttribute("aria-current")).toBe("page");
+      await user.tab();
+      expect(main.contains(document.activeElement)).toBe(true);
+    }
+  });
+
+  it("retains the reader position and input focus during background job updates", async () => {
+    const api = fakeApi(meeting);
+    vi.mocked(api.getAppState).mockResolvedValue({
+      ...state(meeting),
+      notesRunning: true,
+    });
+    const progress = {
+      jobId: "synthetic-navigation-job",
+      runId: "synthetic-retained-run",
+      meetingId: meeting.id,
+      status: "running" as const,
+      stage: "requesting" as const,
+      stepName: "Synthetic summary",
+      stepIndex: 1,
+      totalSteps: 3,
+      batchIndex: 1,
+      totalBatches: 1,
+      confirmedTasks: 1,
+      totalTasks: 3,
+      elapsedMs: 1000,
+      error: null,
+      cancelRequested: false,
+    };
+    vi.mocked(api.getNotesProgress).mockResolvedValue(progress);
+    render(<App api={api} />);
+    await screen.findByRole("progressbar");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Einstellungen" }),
+    );
+    const main = screen.getByRole("main");
+    const theme = within(main).getByLabelText("Darstellung");
+    theme.focus();
+    main.scrollTop = 747;
+    vi.mocked(api.getNotesProgress).mockResolvedValue({
+      ...progress,
+      confirmedTasks: 2,
+      elapsedMs: 2000,
+    });
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("progressbar") as HTMLProgressElement).value,
+      ).toBe(2),
+    );
+    expect(main.scrollTop).toBe(747);
+    expect(document.activeElement).toBe(theme);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
+      "Einstellungen",
+    );
+    expect(api.generateNotes).not.toHaveBeenCalled();
+    expect(api.cancelNotes).not.toHaveBeenCalled();
+  });
+});

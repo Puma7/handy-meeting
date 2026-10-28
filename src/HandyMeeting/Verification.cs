@@ -133,6 +133,7 @@ public static class Verification
         }
         var exported = File.ReadAllText(Path.Combine(silentSession.Folder, "transcript.txt"));
         Check(exported.Contains("UNVOLLSTÄNDIG") && exported.Contains("keine exakten Wortzeiten"), "Partial exports disclose completeness and timestamp precision");
+        SecurityVerification.Run(root, Check);
         JsonData.Save(Path.Combine(reportRoot, "tests.json"), new { passed = passed.Count, checks = passed });
     }
     private static async Task SmokeTestAsync(string root, string? outputId)

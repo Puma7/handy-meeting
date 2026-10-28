@@ -60,7 +60,8 @@ button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
-summary:focus-visible {
+summary:focus-visible,
+.page-header h1:focus-visible {
   outline: 2px solid var(--color-background-ui);
   outline-offset: 3px;
 }
@@ -609,6 +610,134 @@ main {
   display: flex;
   flex-direction: column;
   gap: 7px;
+}
+.audio-sources {
+  margin: 17px 0 14px;
+}
+.audio-source-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+}
+.audio-source {
+  min-width: 0;
+}
+.audio-source .label-icon,
+.audio-source .checkbox-label {
+  min-height: 23px;
+}
+.audio-level {
+  margin-top: 9px;
+  font-size: 11px;
+  font-weight: 400;
+}
+.microphone-field .audio-level {
+  margin-top: 2px;
+}
+.audio-level-reading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  column-gap: 7px;
+  min-height: 22px;
+}
+.audio-level-state {
+  color: var(--color-ink-2);
+}
+.audio-level-value {
+  color: var(--color-text);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.audio-level-value small {
+  font-size: 10px;
+  color: var(--color-ink-2);
+  font-weight: 400;
+}
+.audio-level-bar {
+  display: flex;
+  gap: 3px;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--color-wash);
+}
+.audio-level-segment {
+  flex: 1;
+  min-width: 0;
+  background: var(--color-line-strong);
+  transition: background-color 100ms ease-out;
+}
+.audio-level-segment.green[data-lit] {
+  background: var(--color-moss);
+}
+.audio-level-segment.yellow[data-lit] {
+  background: var(--color-warning);
+}
+.audio-level-segment.red[data-lit] {
+  background: var(--color-error);
+}
+.audio-level[data-clipped] .audio-level-state {
+  color: var(--color-error);
+  font-weight: 650;
+}
+.audio-level-scale {
+  position: relative;
+  height: 18px;
+  margin-top: 3px;
+  color: var(--color-ink-2);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+.audio-level-scale span {
+  position: absolute;
+  transform: translateX(-50%);
+}
+.audio-level-scale span:first-child {
+  left: 0;
+  transform: none;
+}
+.audio-level-scale span:nth-child(2) {
+  left: 40%;
+}
+.audio-level-scale span:nth-child(3) {
+  left: 70%;
+}
+.audio-level-scale span:nth-child(4) {
+  left: 90%;
+}
+.audio-level-scale span:last-child {
+  right: 0;
+  transform: none;
+}
+.audio-level-help {
+  color: var(--color-ink-2);
+  font-size: 10px;
+  margin-top: 6px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+@media (max-width: 600px) {
+  .audio-source-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 15px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .audio-level-segment {
+    transition: none;
+  }
 }
 .checkbox-label {
   display: flex;
@@ -1490,7 +1619,7 @@ mark {
 .speaker-options {
   margin: 12px 0;
   padding: 14px 16px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--color-line);
   border-radius: 10px;
 }
 .speaker-options summary {
@@ -1505,7 +1634,7 @@ mark {
 .speaker-options blockquote {
   margin: 8px 0;
   padding-left: 12px;
-  border-left: 3px solid var(--border);
+  border-left: 3px solid var(--color-line);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -1528,6 +1657,7 @@ mark {
 }
 .retention-rule label {
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 4px;
 }
@@ -1538,14 +1668,14 @@ mark {
 }
 .retention-preview li {
   padding: 10px 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--color-line);
   overflow-wrap: anywhere;
 }
 .retention-panel .notes-statusbar {
   margin-top: 12px;
 }
 .capture-control-panel {
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--color-line);
   padding-top: 12px;
   margin-top: 12px;
 }

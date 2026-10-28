@@ -1,8 +1,10 @@
 # Releases: version tag to downloadable packages
 
-The Rust distribution is versioned together in the workspace Cargo manifest, desktop package/lock and Tauri configuration. Existing native dependency versions and model weights are not changed by a release. **1.0.1 is public** with five verified packages. Versions 1.0.2 and 1.0.3 are in development; no completed 1.0.2 or 1.0.3 package or release is claimed by these instructions. Future releases must use a new version: update the Cargo workspace, desktop package/lock and Tauri configuration together, then tag that exact reviewed commit. Existing published tags and asset bytes are preserved.
+The Rust distribution is versioned together in the workspace Cargo manifest, desktop package/lock and Tauri configuration. Existing native dependency versions and model weights are not changed by a release. **[1.0.4 is public](https://github.com/Puma7/meeting-for-handy/releases/tag/v1.0.4)** as of 28 October 2026, with five packages and twelve checksum/source proofs (17 assets). The [audit corrections](AUDIT_FIXES_20261028.md) are subsequent unreleased source work; the synchronized 1.0.5 release candidate has no release or tag yet. Future releases must use a new version: update the Cargo workspace, desktop package/lock and Tauri configuration together, then tag that exact reviewed commit. Existing published tags and asset bytes are preserved.
 
 ## What is attached
+
+These are the current 1.0.4 asset names. A future release uses its own synchronized application version in every filename and proof; do not reuse or move the published 1.0.4 tag.
 
 | Target | Asset |
 | --- | --- |
@@ -22,7 +24,7 @@ Each has a SHA-256 sidecar and package proof. `SHA256SUMS.txt` covers all five p
 4. The workflow builds all five assets, including a real Windows install/uninstall preservation check in its disposable CI account. Only after the entire matrix passes does it assemble/upload the bundle into a **GitHub release draft**.
 5. Review the populated draft and its notes, then choose **Publish release** when ready. The `published` event verifies the already complete exact-source bundle without recompiling different binaries, and marks a final semantic version as **Latest**. Tags containing a suffix remain prereleases and are not made Latest.
 
-Creating/publishing a release directly in GitHub also triggers the workflow. Its assets appear after the complete build matrix and verification finish; the page may initially contain no packages. Creating the tag first and waiting for the populated draft avoids that gap.
+Publishing a release directly in GitHub triggers verification and promotion only. It never starts a replacement build. If the exact-source draft is incomplete, the run fails with recovery instructions and preserves every existing asset. Create the tag first and wait for its populated draft; publishing an empty page is not a build request.
 
 The manual **Run workflow** form accepts the exact existing tag and a `publish` switch. Default `false` keeps a draft. Select the tag's commit (or `main` only when it is still that exact commit). Setting `publish=true` publishes a fully verified bundle and sets Latest for a final version. This is an operator publication action, not a substitute for the manual gates.
 
@@ -48,6 +50,7 @@ The local data location remains `HandyMeeting/RustBeta` below the platform's loc
 
 ## Failure and retry behavior
 
+- Portable native SDK downloads retry transient connection/body failures and HTTP 408/429/500/502/503/504 at most three times, with one- and two-second delays. The same reviewed URL, 120-second per-attempt timeout, 256 MiB bound and fixed SHA-256 remain enforced. Certificate failures, other HTTP errors and checksum/size mismatches stop immediately. Incomplete attempts are never cached; different existing cache/SDK bytes are retained and rejected.
 - Failed/missing checks, targets, checksums, source fingerprints, native-store proofs or installer preservation proofs prevent assembly before any upload.
 - Publication uses only artifacts from the current successful reusable jobs and exact tag commit. Artifacts from a different commit/run are not substituted.
 - Existing release assets are never overwritten. A conflicting asset aborts; the old bytes are preserved.
@@ -58,9 +61,11 @@ The local data location remains `HandyMeeting/RustBeta` below the platform's loc
 - Multiple drafts for one tag stop automatic publication before any upload. Preserve them and inspect their IDs, authors, notes and assets. For an explicitly selected original draft, the maintainer can run the verified publisher with `--release-id <id>` and the retained exact-tag `verified-release-bundle`. The ID must still belong to that tag. Omit `--publish` to populate only the draft. Conflicting assets remain a hard failure; an upload failure does not justify rebuilding or replacing different bytes.
 - Release assembly tests use fake package bytes and simulated GitHub calls. They are not a real GitHub upload or real provider test. Actual pipeline results are linked in `BUILD_STATUS.md` only after execution.
 
+The development/candidate split, trigger matrix and measured duplicate runs are documented in [CI scope and resource use](CI.md).
+
 Implementation: `.github/workflows/rust-release.yml`, `scripts/release-packages.py`, `scripts/publish-rust-release.py`. The older C# publishing workflow and old release assets remain historical and are not used for Rust 1.0.
 
 References: [GitHub reusable workflows](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows), [release workflow events](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#release), [GitHub CLI release creation](https://cli.github.com/manual/gh_release_create), [NSIS distribution and license](https://nsis.sourceforge.io/Download).
 
 
-The 1.0.4 capture changes require current physical-device, interruption and endurance evidence before release. No Mac/Linux devices are available to the maintainer at this checkpoint. WSL, synthetic PCM/helper checks and virtual CI devices are not substitutes. Native file selections are confirmed through Rust-only dialogs and expire on app restart. Installer helpers do not override execution policy; disposable CI checks a stricter child-process refusal without changing account policy. Internal package/executable/data IDs remain compatible with earlier update clients.
+The physical-device, interruption and endurance limits of the 1.0.4 capture changes remain open for the public release and any follow-up. No Mac/Linux devices are available to the maintainer at this checkpoint. Publication does not turn those limits into passed tests; use the manual gates above for each new candidate. WSL, synthetic PCM/helper checks and virtual CI devices are not substitutes. Native file selections are confirmed through Rust-only dialogs and expire on app restart. Installer helpers do not override execution policy; disposable CI checks a stricter child-process refusal without changing account policy. Internal package/executable/data IDs remain compatible with earlier update clients.

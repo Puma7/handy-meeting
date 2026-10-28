@@ -16,7 +16,7 @@ on:
         default: false
         type: boolean
   pull_request:
-    paths: ['.github/workflows/rust-release.yml', 'scripts/*release*.py', 'scripts/*installer*', '.github/RELEASE_NOTES.md']
+    paths: ['.github/workflows/rust-release.yml', '.github/workflows/rust.yml', '.github/workflows/rust-portable.yml', '.github/workflows/windows.yml', 'scripts/ci-plan.py', 'scripts/*release*.py', 'scripts/*installer*', '.github/RELEASE_NOTES.md']
 permissions:
   contents: read
 concurrency:
@@ -32,6 +32,8 @@ jobs:
       already_complete: ${{ steps.existing.outputs.complete }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
         with:
           node-version: '26.7.0'
@@ -74,17 +76,30 @@ jobs:
           with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
               out.write('complete='+str(json.load(open('.build/existing-release.json'))['complete']).lower()+'\n')
           PY
+      - name: Refuse compilation on publication when the prepared bundle is missing
+        if: github.event_name == 'release'
+        env:
+          COMPLETE: ${{ steps.existing.outputs.complete }}
+        run: |
+          if [ "$COMPLETE" != true ]; then
+            echo '::error::Publication requires a complete exact-source draft. Wait for the tag build, or recover its retained verified-release-bundle with Re-run failed jobs. Publishing never starts another build or replaces assets.'
+            exit 1
+          fi
   windows:
     needs: validate
-    if: github.event_name != 'pull_request' && needs.validate.outputs.already_complete != 'true'
+    if: github.event_name != 'pull_request' && github.event_name != 'release' && needs.validate.outputs.already_complete != 'true'
     uses: ./.github/workflows/rust.yml
+    with:
+      packages: true
   portable:
     needs: validate
-    if: github.event_name != 'pull_request' && needs.validate.outputs.already_complete != 'true'
+    if: github.event_name != 'pull_request' && github.event_name != 'release' && needs.validate.outputs.already_complete != 'true'
     uses: ./.github/workflows/rust-portable.yml
+    with:
+      packages: true
   publish:
     needs: [validate, windows, portable]
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.event_name != 'release'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -92,6 +107,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
         with:
           node-version: '26.7.0'
@@ -127,7 +144,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.validate.outputs.tag }}
-          PUBLISH_RELEASE: ${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.publish) }}
+          PUBLISH_RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.publish }}
         run: |
           set -euo pipefail
           args=()
@@ -142,6 +159,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
         with:
           node-version: '26.7.0'

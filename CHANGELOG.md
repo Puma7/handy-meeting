@@ -1,6 +1,15 @@
 # Changelog
 
-## 1.0.4 — Meeting for Handy follow-up (unreleased)
+## 1.0.5 — input meters, audit fixes and efficient CI (release candidate)
+
+- Independent live system-audio/microphone meters with clear silence, clipping, stale and control states.
+- Preserve healthy capture through diagnostic failures; correct linked-file writes, Markdown exports, report provenance and private source-export boundaries.
+- Consistent borders, aligned retention controls and navigation focus; shared derived-job lifecycle.
+- Bounded native SDK download retries without weakening certificate, size or hash checks.
+- Source checks on drafts/main; complete candidates on ready PRs/manual/tag requests; publication reuses the verified draft without a second build.
+- Existing user data, older programs and all prior evidence remain retained. Physical-device/endurance/GPU/signing/upstream limits remain separate.
+
+## 1.0.4 — Meeting for Handy follow-up (released)
 
 - Recording pause/resume and separate app microphone mute with old-buffer privacy gates, explicit silent sections and retained control events.
 - Trustworthy Windows microphone discontinuities align to the monotonic/device clock; impossible jumps fail before padding.

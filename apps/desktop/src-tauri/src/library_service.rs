@@ -33,6 +33,19 @@ pub(super) struct Jobs {
     cancel: Mutex<Option<Arc<AtomicBool>>>,
     started: Mutex<Option<(String, Instant)>>,
 }
+#[derive(Clone, Copy)]
+enum JobPolicy {
+    Maintenance,
+    Search,
+}
+impl JobPolicy {
+    fn message(self, maintenance: &'static str, search: &'static str) -> &'static str {
+        match self {
+            Self::Maintenance => maintenance,
+            Self::Search => search,
+        }
+    }
+}
 impl Jobs {
     pub fn update_work(&self, id: &str, done: u64, total: u64) {
         if let Ok(mut state) = self.state.lock() {
@@ -49,17 +62,47 @@ impl Jobs {
     where
         F: FnOnce(&str, &Arc<Self>, &Arc<AtomicBool>) -> meeting_core::Result<()> + Send + 'static,
     {
+        self.start_job(kind, JobPolicy::Maintenance, None, work)
+    }
+    /// Keep admission, cancellation, clock and terminal progress identical for derived jobs.
+    /// Search errors remain redacted; a captured operation lease spans terminal publication.
+    fn start_job<F>(
+        self: &Arc<Self>,
+        kind: &str,
+        policy: JobPolicy,
+        lease: Option<crate::operations::Lease>,
+        work: F,
+    ) -> Result<String, String>
+    where
+        F: FnOnce(&str, &Arc<Self>, &Arc<AtomicBool>) -> meeting_core::Result<()> + Send + 'static,
+    {
         let id = meeting_notes::new_job_id();
         let cancel = Arc::new(AtomicBool::new(false));
         let started = Instant::now();
         {
-            let mut state = self
-                .state
-                .lock()
-                .map_err(|_| "Maintenance state unavailable")?;
+            let mut state = self.state.lock().map_err(|_| {
+                policy.message(
+                    "Maintenance state unavailable",
+                    "Search job state is unavailable",
+                )
+            })?;
             if state.as_ref().is_some_and(|p| p.status == "running") {
-                return Err("Another maintenance job is already running".into());
+                return Err(policy
+                    .message(
+                        "Another maintenance job is already running",
+                        "The search index is already being updated",
+                    )
+                    .into());
             }
+            let mut cancellation = self.cancel.lock().map_err(|_| {
+                policy.message(
+                    "Maintenance cancellation unavailable",
+                    "Search cancellation unavailable",
+                )
+            })?;
+            let mut clock = self.started.lock().map_err(|_| {
+                policy.message("Maintenance clock unavailable", "Search clock unavailable")
+            })?;
             *state = Some(Progress {
                 job_id: id.clone(),
                 kind: kind.into(),
@@ -71,30 +114,30 @@ impl Jobs {
                 error: None,
                 cancel_requested: false,
             });
-            *self
-                .cancel
-                .lock()
-                .map_err(|_| "Maintenance cancellation unavailable")? = Some(cancel.clone());
+            *cancellation = Some(cancel.clone());
+            *clock = Some((id.clone(), started));
         }
-        *self
-            .started
-            .lock()
-            .map_err(|_| "Maintenance clock unavailable")? = Some((id.clone(), started));
         let jobs = self.clone();
         let owned = id.clone();
-        let spawn=std::thread::Builder::new().name("meeting-maintenance".into()).spawn(move||{
-
-            let result=std::panic::catch_unwind(std::panic::AssertUnwindSafe(||work(&owned,&jobs,&cancel))).unwrap_or_else(|_|Err("Maintenance stopped unexpectedly. Review the retained operation log before continuing.".into()));
-            if let Ok(mut state)=jobs.state.lock(){if let Some(p)=state.as_mut().filter(|p|p.job_id==owned){p.elapsed_ms=started.elapsed().as_millis()as u64;p.status=if result.is_ok(){"complete"}else if cancel.load(Ordering::Acquire){"cancelled"}else{"failed"}.into();p.error=result.err().map(|e|e.to_string());}}
+        let spawn=std::thread::Builder::new().name(policy.message("meeting-maintenance", "meeting-search-index").into()).spawn(move||{
+            let _lease = lease;
+            let result=std::panic::catch_unwind(std::panic::AssertUnwindSafe(||work(&owned,&jobs,&cancel))).unwrap_or_else(|_|Err(policy.message("Maintenance stopped unexpectedly. Review the retained operation log before continuing.", "Search worker stopped unexpectedly; original sessions are preserved").into()));
+            if let Ok(mut state)=jobs.state.lock(){if let Some(p)=state.as_mut().filter(|p|p.job_id==owned){p.elapsed_ms=started.elapsed().as_millis()as u64;p.status=if result.is_ok(){"complete"}else if cancel.load(Ordering::Acquire){"cancelled"}else{"failed"}.into();p.error=result.err().map(|e|match policy{JobPolicy::Maintenance=>e.to_string(),JobPolicy::Search=>"Search index could not be fully updated. Original sessions are unchanged. / Der Suchindex konnte nicht vollständig aktualisiert werden. Originale bleiben erhalten.".into()});}}
         });
         if spawn.is_err() {
             if let Ok(mut state) = self.state.lock() {
                 if let Some(p) = state.as_mut().filter(|p| p.job_id == id) {
                     p.status = "failed".into();
-                    p.error = Some("Maintenance could not start".into());
+                    p.elapsed_ms = started.elapsed().as_millis() as u64;
+                    p.error = Some(policy.message("Maintenance could not start", "Search indexing could not start. Original sessions are preserved. / Indexierung konnte nicht gestartet werden; Originale bleiben erhalten.").into());
                 }
             }
-            return Err("Maintenance worker could not start".into());
+            return Err(policy
+                .message(
+                    "Maintenance worker could not start",
+                    "The local search worker could not start",
+                )
+                .into());
         }
         Ok(id)
     }
@@ -139,42 +182,7 @@ impl Jobs {
         rebuild: bool,
         lease: Option<crate::operations::Lease>,
     ) -> Result<String, String> {
-        let id = meeting_notes::new_job_id();
-        let cancel = Arc::new(AtomicBool::new(false));
-        let started = Instant::now();
-        {
-            let mut state = self
-                .state
-                .lock()
-                .map_err(|_| "Search job state is unavailable")?;
-            if state.as_ref().is_some_and(|p| p.status == "running") {
-                return Err("The search index is already being updated".into());
-            }
-            *state = Some(Progress {
-                job_id: id.clone(),
-                kind: "search-index".into(),
-                status: "running".into(),
-                confirmed_tasks: 0,
-                total_tasks: 0,
-                elapsed_ms: 0,
-                skipped: 0,
-                error: None,
-                cancel_requested: false,
-            });
-            *self
-                .cancel
-                .lock()
-                .map_err(|_| "Search cancellation unavailable")? = Some(cancel.clone());
-        }
-        *self
-            .started
-            .lock()
-            .map_err(|_| "Search clock unavailable")? = Some((id.clone(), started));
-        let jobs = self.clone();
-        let owned = id.clone();
-        let spawn = std::thread::Builder::new().name("meeting-search-index".into()).spawn(move || {
-            let _lease = lease;
-            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> meeting_core::Result<()> {
+        self.start_job("search-index", JobPolicy::Search, lease, move |id, jobs, cancel| {
                 let sessions = root.join("sessions");
                 let sessions = metadata::checked_directory(&sessions)?;
                 let total = fs::read_dir(&sessions)?.count() as u64;
@@ -217,43 +225,17 @@ impl Jobs {
                     })?;
                     number+=count;
                     if let Ok(mut state) = jobs.state.lock() {
-                        if let Some(p) = state.as_mut().filter(|p| p.job_id == owned) {
+                        if let Some(p) = state.as_mut().filter(|p| p.job_id == id) {
                             p.total_tasks = total.max(number);
                             p.confirmed_tasks = number;
-                            p.elapsed_ms = started.elapsed().as_millis() as u64;
                             p.skipped += skipped;
                         }
                     }
                 }
-                index.prune_missing_sessions(&sessions,&cancel)?;
-                if let Ok(mut state)=jobs.state.lock(){if let Some(p)=state.as_mut().filter(|p|p.job_id==owned){p.total_tasks=p.confirmed_tasks;}}
+                index.prune_missing_sessions(&sessions,cancel)?;
+                if let Ok(mut state)=jobs.state.lock(){if let Some(p)=state.as_mut().filter(|p|p.job_id==id){p.total_tasks=p.confirmed_tasks;}}
                 Ok(())
-            })).unwrap_or_else(|_|Err("Search worker stopped unexpectedly; original sessions are preserved".into()));
-            if let Ok(mut state) = jobs.state.lock() {
-                if let Some(p) = state.as_mut().filter(|p| p.job_id == owned) {
-                    p.elapsed_ms = started.elapsed().as_millis() as u64;
-                    p.status = if result.is_ok() {
-                        "complete"
-                    } else if cancel.load(Ordering::SeqCst) {
-                        "cancelled"
-                    } else {
-                        "failed"
-                    }
-                    .into();
-                    p.error=result.err().map(|_|"Search index could not be fully updated. Original sessions are unchanged. / Der Suchindex konnte nicht vollständig aktualisiert werden. Originale bleiben erhalten.".into());
-                }
-            }
-        });
-        if spawn.is_err() {
-            if let Ok(mut state) = self.state.lock() {
-                if let Some(p) = state.as_mut().filter(|p| p.job_id == id) {
-                    p.status = "failed".into();
-                    p.error=Some("Search indexing could not start. Original sessions are preserved. / Indexierung konnte nicht gestartet werden; Originale bleiben erhalten.".into());
-                }
-            }
-            return Err("The local search worker could not start".into());
-        }
-        Ok(id)
+        })
     }
 }
 fn fingerprint(folder: &Path, root: &Path, id: &str) -> meeting_core::Result<String> {
@@ -293,6 +275,82 @@ pub(super) fn update(root: &Path, data: &SessionData) -> Result<(), String> {
 #[cfg(test)]
 mod clock_tests {
     use super::*;
+    #[test]
+    fn both_job_policies_keep_admission_until_cancelled_work_finishes_and_search_errors_are_redacted(
+    ) {
+        for policy in [JobPolicy::Maintenance, JobPolicy::Search] {
+            let gate = crate::operations::Gate::default();
+            let lease = gate.try_acquire(crate::operations::Kind::Index).unwrap();
+            let jobs = Arc::new(Jobs::default());
+            let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+            let (finish_tx, finish_rx) = std::sync::mpsc::channel();
+            let id = jobs
+                .start_job("fixture", policy, Some(lease), move |id, jobs, cancel| {
+                    jobs.update_work(id, 1, 3);
+                    ready_tx.send(()).unwrap();
+                    finish_rx.recv().unwrap();
+                    assert!(cancel.load(Ordering::Acquire));
+                    Err("private synthetic transcript /outside/meeting.json".into())
+                })
+                .unwrap();
+            ready_rx
+                .recv_timeout(std::time::Duration::from_secs(2))
+                .unwrap();
+            assert!(jobs.start_work("second", |_, _, _| Ok(())).is_err());
+            assert!(!jobs.cancel("a different job"));
+            assert!(jobs.cancel(&id));
+            assert_eq!(jobs.snapshot().unwrap().status, "running");
+            assert!(jobs.snapshot().unwrap().cancel_requested);
+            assert!(gate
+                .try_acquire(crate::operations::Kind::Maintenance)
+                .is_err());
+            finish_tx.send(()).unwrap();
+            let done = finished(&jobs);
+            assert_eq!(done.status, "cancelled");
+            assert_eq!((done.confirmed_tasks, done.total_tasks), (1, 3));
+            assert!(!jobs.cancel(&id));
+            let error = done.error.unwrap();
+            match policy {
+                JobPolicy::Maintenance => assert!(error.contains("private synthetic transcript")),
+                JobPolicy::Search => {
+                    assert!(!error.contains("private synthetic transcript"));
+                    assert!(!error.contains("/outside/meeting.json"));
+                    assert!(error.contains("Original sessions are unchanged"));
+                }
+            }
+            let deadline = Instant::now() + std::time::Duration::from_secs(2);
+            loop {
+                if let Ok(released) = gate.try_acquire(crate::operations::Kind::Maintenance) {
+                    drop(released);
+                    break;
+                }
+                assert!(Instant::now() < deadline);
+                std::thread::yield_now();
+            }
+            jobs.start_work("next", |_, _, _| Ok(())).unwrap();
+            assert_eq!(finished(&jobs).status, "complete");
+        }
+    }
+    #[test]
+    fn scan_counts_unreadable_sessions_without_changing_or_publishing_their_contents() {
+        let root =
+            std::env::temp_dir().join(format!("handymeeting-skip-{}", meeting_notes::new_job_id()));
+        let session = root.join("sessions").join("a".repeat(32));
+        fs::create_dir_all(&session).unwrap();
+        let original = b"private synthetic incomplete manifest, never a public error";
+        fs::write(session.join("session.json"), original).unwrap();
+        let jobs = Arc::new(Jobs::default());
+        jobs.start_scan(root.clone(), false, None).unwrap();
+        let done = finished(&jobs);
+        assert_eq!(done.status, "complete");
+        assert_eq!(
+            (done.confirmed_tasks, done.total_tasks, done.skipped),
+            (1, 1, 1)
+        );
+        assert!(done.error.is_none());
+        assert_eq!(fs::read(session.join("session.json")).unwrap(), original);
+        fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn maintenance_clock_advances_then_freezes_and_terminal_failure_keeps_confirmed_work() {
         let jobs = Arc::new(Jobs::default());

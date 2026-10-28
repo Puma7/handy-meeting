@@ -180,17 +180,7 @@ public static class MeetingNotesService
         return result;
     }
     private static string Track(TranscriptSource source) => source.Track == "system" ? "Computerton" : "Mikrofon";
-    private static string Markdown(string value)
-    {
-        var output = new StringBuilder();
-        foreach (var c in value)
-        {
-            if (c == '<') output.Append("&lt;");
-            else if (c == '&') output.Append("&amp;");
-            else { if ("\\`*_{}[]()#+-.!|>".Contains(c)) output.Append('\\'); output.Append(c); }
-        }
-        return output.ToString();
-    }
+    private static string Markdown(string value) => MarkdownText.Escape(value);
     public static string SourceLabel(TranscriptSource source) => $"{ClockTime.Format(source.StartMs)}–{ClockTime.Format(source.EndMs)} · {Track(source)} · {source.Id}";
     private static void Export(string folder, TranscriptSnapshot snapshot, MeetingNotes notes, NotesRun run)
         => ExportSections(folder, snapshot, new NotesResult(run, snapshot, notes, folder).AllSections, run);

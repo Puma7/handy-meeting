@@ -1,15 +1,21 @@
 """Prepare only reviewed transcribe.cpp SDK files; no model or user-data access."""
 import argparse
 import hashlib
+import http.client
 import json
 import pathlib
 import re
+import ssl
 import subprocess
+import sys
 import tarfile
+import time
+import urllib.error
 import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 TARGETS = {"linux-x64": "x86_64-unknown-linux-gnu", "osx-arm64": "aarch64-apple-darwin", "osx-x64": "x86_64-apple-darwin"}
+MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
 
 
 def digest(data):
@@ -27,17 +33,42 @@ def put(file, data):
         output.write(data)
 
 
+def download(asset):
+    """Retry only transient transport failures; validate complete bytes before caching."""
+    request = urllib.request.Request("https://github.com/handy-computer/transcribe.cpp/releases/download/v0.4.1/" + asset["file"], headers={"User-Agent": "HandyMeeting-SDK-check"})
+    for attempt in range(1, 4):
+        try:
+            with urllib.request.urlopen(request, timeout=120) as response:
+                length = response.getheader("Content-Length") if hasattr(response, "getheader") and not getattr(response, "chunked", False) else None
+                expected = int(length) if length is not None else None
+                if expected is not None and (expected < 0 or expected > MAX_ARCHIVE_BYTES):
+                    raise RuntimeError("Official native archive exceeds its limit or has an invalid content length")
+                data = response.read(MAX_ARCHIVE_BYTES + 1)
+                # A bounded stdlib read can return early at EOF without raising.
+                if expected is not None and len(data) < expected:
+                    raise http.client.IncompleteRead(data, expected - len(data))
+        except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.IncompleteRead) as error:
+            if isinstance(error, urllib.error.HTTPError) and error.code not in {408, 429, 500, 502, 503, 504}:
+                raise
+            if isinstance(getattr(error, "reason", error), ssl.SSLCertVerificationError):
+                raise
+            if attempt == 3:
+                raise RuntimeError("Native SDK download failed after 3 attempts; retry the job when the network is available. Existing files are preserved.") from error
+            print(f"Native SDK transport failed ({type(error).__name__}); retry {attempt + 1}/3 in {attempt}s.", file=sys.stderr)
+            time.sleep(attempt)
+            continue
+        if len(data) > MAX_ARCHIVE_BYTES or digest(data) != asset["sha256"]:
+            raise RuntimeError("Official native archive exceeds its limit or differs from its fixed checksum")
+        return data
+    raise AssertionError("Unreachable download attempt")
+
+
 def prepare(rid):
     asset = json.loads((ROOT / "scripts/native-assets.json").read_text())[rid]
     archive = ROOT / ".build/native-download" / asset["file"]
     archive.parent.mkdir(parents=True, exist_ok=True)
     if not archive.exists():
-        request = urllib.request.Request("https://github.com/handy-computer/transcribe.cpp/releases/download/v0.4.1/" + asset["file"], headers={"User-Agent": "HandyMeeting-SDK-check"})
-        with urllib.request.urlopen(request, timeout=120) as response:
-            data = response.read(256 * 1024 * 1024 + 1)
-        if len(data) > 256 * 1024 * 1024 or digest(data) != asset["sha256"]:
-            raise RuntimeError("Official native archive exceeds its limit or differs from its fixed checksum")
-        put(archive, data)
+        put(archive, download(asset))
     if archive.is_symlink() or digest(archive.read_bytes()) != asset["sha256"]:
         raise RuntimeError("Cached native archive differs from its fixed checksum")
     sdk = ROOT / f".build/rust-native-beta2-0.4.1-{rid}"

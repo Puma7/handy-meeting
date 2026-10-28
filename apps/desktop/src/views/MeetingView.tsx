@@ -2,8 +2,6 @@ import {
   AudioLines,
   Check,
   Copy,
-  Mic,
-  Monitor,
   RefreshCw,
   Square,
   Sparkles,
@@ -15,6 +13,7 @@ import type {
   Meeting,
   AudioPart,
   TranscriptFormat,
+  DesktopApi,
 } from "../types";
 import type { MessageKey, extraDe } from "../i18n";
 import { clock } from "../domain";
@@ -23,6 +22,7 @@ import { useEffect, useState } from "react";
 import SessionWarnings from "./SessionWarnings";
 import MeetingFiles from "./MeetingFiles";
 import RecordingControls from "./RecordingControls";
+import AudioSources from "./AudioSources";
 type Props = {
   t: Record<MessageKey, string>;
   x: Record<keyof typeof extraDe, string>;
@@ -40,6 +40,7 @@ type Props = {
   onPause: (paused: boolean) => void;
   onMute: (muted: boolean) => void;
   controlsAvailable: boolean;
+  getAudioLevels?: DesktopApi["getAudioLevels"];
   savedFile: string | null;
   modelId: string;
   systemId: string;
@@ -84,6 +85,7 @@ export default function MeetingView({
   onPause,
   onMute,
   controlsAvailable,
+  getAudioLevels,
   savedFile,
   modelId,
   systemId,
@@ -184,63 +186,27 @@ export default function MeetingView({
                 </button>
               </div>
             </label>
-            <label>
-              <span className="label-icon">
-                <Monitor size={15} />
-                {t.system}
-              </span>
-              <select
-                value={systemId}
-                disabled={
-                  recording ||
-                  busy ||
-                  !devices.some((item) => item.source === "system")
-                }
-                onChange={(event) => setSystemId(event.target.value)}
-              >
-                {!devices.some((item) => item.source === "system") && (
-                  <option value="">{t.noDevices}</option>
-                )}
-                {devices
-                  .filter((item) => item.source === "system")
-                  .map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                    </option>
-                  ))}
-              </select>
-            </label>
-            <div className="microphone-field">
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={micEnabled}
-                  disabled={recording || busy}
-                  onChange={(event) => setMicEnabled(event.target.checked)}
-                />
-                <Mic size={15} />
-                {t.microphone}
-              </label>
-              <select
-                aria-label={t.sourceMicrophone}
-                value={micId}
-                disabled={!micEnabled || recording || busy}
-                onChange={(event) => setMicId(event.target.value)}
-              >
-                {!devices.some((item) => item.source === "microphone") && (
-                  <option value="">{t.noDevices}</option>
-                )}
-                {devices
-                  .filter((item) => item.source === "microphone")
-                  .map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                    </option>
-                  ))}
-              </select>
-            </div>
           </div>
         </details>
+        <AudioSources
+          t={t}
+          locale={locale}
+          devices={devices}
+          systemId={systemId}
+          micId={micId}
+          micEnabled={micEnabled}
+          recording={recording}
+          busy={busy}
+          connected={connected}
+          isStopping={isStopping}
+          activeMeetingId={app?.activeMeeting?.id ?? null}
+          displayedMeetingId={meeting?.id ?? null}
+          captureControl={app?.captureControl}
+          getAudioLevels={getAudioLevels}
+          setSystemId={setSystemId}
+          setMicId={setMicId}
+          setMicEnabled={setMicEnabled}
+        />
         <div className="record-controls full">
           <span
             className={
