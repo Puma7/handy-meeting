@@ -41,8 +41,8 @@
   },
   {
     "Path": "TEST_REPORT.md",
-    "SHA256": "3FD46D7C7D44C6105513FFCAE20DC1C0F2B6C481EB61732C8BABBD225608736E",
-    "Bytes": 179809
+    "SHA256": "56B4FEDDC2F2382478F6FA1BBE9D32F4F8B43734CD8F2D82753116DD31107B76",
+    "Bytes": 180580
   },
   {
     "Path": "DAUERTEST.md",
@@ -14131,8 +14131,8 @@
   },
   {
     "Path": "crates/meeting-core/src/windows_capture.rs",
-    "SHA256": "561A6497A0621BDE68BD71F255D3B395447365233C95A568DD15E2B55CA74DA0",
-    "Bytes": 41482
+    "SHA256": "376E5C637F5A302B7921FB01823CFEFBBA6F73098569184D67D8C6C9360D4FD3",
+    "Bytes": 41831
   },
   {
     "Path": "crates/meeting-core/tests/durability.rs",
@@ -14631,13 +14631,13 @@
   },
   {
     "Path": "apps/desktop/src-tauri/src/live_notes.rs",
-    "SHA256": "C022BAD1C3026AC517A2BB9A3D9C9B07C05775490FB4CF5E961CBE39149AA1D6",
-    "Bytes": 45127
+    "SHA256": "87C830561D618092A949D4E83C344195890C0207F77FC9A36A2FABA097FF9212",
+    "Bytes": 45313
   },
   {
     "Path": "apps/desktop/src-tauri/src/local_models.rs",
-    "SHA256": "E48908733AC9437F061AF44C0EE13988627EB8035789AF575618045B71CD26B3",
-    "Bytes": 25548
+    "SHA256": "1F7539C0C21319D928A1C68D7691850E79861BF55A1F6A40C0D0D4BE0017925F",
+    "Bytes": 26228
   },
   {
     "Path": "apps/desktop/src-tauri/src/main.rs",
@@ -14696,8 +14696,8 @@
   },
   {
     "Path": "apps/desktop/src-tauri/src/speaker_jobs.rs",
-    "SHA256": "43E001FC38563D5C198829CB3A5D0847011C62D55EBF0B2AD90224BC6C92DBC2",
-    "Bytes": 31785
+    "SHA256": "314405A028175308773615E5D27BE6C04655D6719D153B05553457E353B7B968",
+    "Bytes": 32148
   },
   {
     "Path": "apps/desktop/src-tauri/src/template_commands.rs",

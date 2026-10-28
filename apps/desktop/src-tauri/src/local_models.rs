@@ -457,6 +457,8 @@ mod tests {
     use std::net::TcpListener;
 
     #[test]
+    /// Reads only a valid bounded port setting and rejects oversized or invalid
+    /// configuration while retaining a loopback endpoint even for a remote bind setting.
     fn configured_lm_studio_port_is_loopback_only_and_bounded() {
         let root =
             std::env::temp_dir().join(format!("handy-lm-config-{}", meeting_notes::new_job_id()));
@@ -483,6 +485,8 @@ mod tests {
     }
 
     #[test]
+    /// Preserves explicit IPv4, IPv6 and localhost bind identities instead of probing a
+    /// different loopback address that may have no server listening on it.
     fn explicit_ollama_loopback_addresses_keep_their_bind_identity() {
         for (input, expected) in [
             ("127.0.0.2:2345", "http://127.0.0.2:2345/"),
@@ -495,6 +499,8 @@ mod tests {
     }
 
     #[test]
+    /// Covers URL normalization of explicit port 80, including leading zeros and wildcard
+    /// binds; all resulting requests must still target that same local HTTP service.
     fn explicit_ollama_http_default_ports_are_not_replaced_by_11434() {
         for input in [
             "127.0.0.1:80",
@@ -529,6 +535,8 @@ mod tests {
     }
 
     #[test]
+    /// Accepts valid local binds while rejecting remote hosts, credentials, non-root paths,
+    /// query data and zero ports without forwarding any of those values.
     fn ollama_bind_settings_never_contact_remote_hosts_or_forward_credentials() {
         for address in ["127.0.0.1:2345", "http://0.0.0.0:2345"] {
             assert_eq!(ollama_root_from(Some(address)), "http://127.0.0.1:2345/");

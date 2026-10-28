@@ -518,6 +518,8 @@ mod tests {
     use std::cell::RefCell;
 
     #[test]
+    /// Replays 100 synthetic packets with one-sample gaps, retaining every original sample,
+    /// silence sample and gap record while requiring one regular audio/recognition chunk.
     fn repeated_small_device_gaps_do_not_fragment_one_audio_chunk() {
         let root = tempfile::tempdir().unwrap();
         let store =
@@ -581,6 +583,8 @@ mod tests {
     }
 
     #[test]
+    /// Drains six seconds of valid synthetic packets across bounded turns without treating
+    /// cumulative work as capture failure or dropping any saved sample.
     fn valid_packets_can_be_drained_in_bounded_turns_without_stopping_capture() {
         let packets = Packets(RefCell::new(VecDeque::from_iter(
             (0..300).map(|_| (vec![23; 320], info(false))),

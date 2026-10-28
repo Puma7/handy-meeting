@@ -730,6 +730,8 @@ mod tests {
     }
 
     #[test]
+    /// Exercises both ended-track directions against one- and six-second healthy backlogs.
+    /// Only the living recognizer's work may defer notes; retained session bytes must match.
     fn ended_track_backlogs_do_not_starve_a_healthy_tracks_confirmed_text() {
         for failed_track in ["system", "microphone"] {
             for healthy_seconds in [1, 6] {

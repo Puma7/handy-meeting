@@ -143,6 +143,8 @@ mod model_check_tests {
     use super::*;
 
     #[test]
+    /// Fills all 128 evidence slots and verifies exact-identity reuse after restart, rejecting
+    /// changed weights/runtime/catalogue and malformed or contradictory retained results.
     fn a_full_check_archive_reuses_only_complete_exact_model_and_runtime_identity() {
         let root =
             std::env::temp_dir().join(format!("hm-speaker-cache-{}", meeting_notes::new_job_id()));
@@ -254,6 +256,8 @@ mod model_check_tests {
     }
 
     #[test]
+    /// Retains complete and partial proof folders at the fixed ceiling and verifies that
+    /// refusing a 129th reservation neither removes nor overwrites earlier evidence.
     fn model_check_evidence_is_bounded_without_removing_partial_or_complete_records() {
         let root = std::env::temp_dir().join(format!(
             "hm-speaker-check-cap-{}",
