@@ -250,6 +250,101 @@ export interface CredentialStatus {
   provider: string;
   message: string | null;
 }
+export type LiveTrigger =
+  | "manual"
+  | "final"
+  | "volume"
+  | "longContribution"
+  | "interval";
+export interface LiveEvidence {
+  sourceId: string;
+  quote: string;
+  track: string;
+  startMs: number;
+  endMs: number;
+}
+export interface LiveItem {
+  text: string;
+  owner: string | null;
+  due: string | null;
+  window: number;
+  tracks: string[];
+  evidence: LiveEvidence[];
+}
+export interface LiveView {
+  runId: string | null;
+  model: string;
+  mode: string;
+  endpoint: string;
+  language: string;
+  promptVersion: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+  windows: number;
+  summarizedSections: number;
+  overview: LiveItem[];
+  overviewWindow: number;
+  points: LiveItem[];
+  decisions: LiveItem[];
+  tasks: LiveItem[];
+  questions: LiveItem[];
+  rejected: number;
+  damagedRuns: number;
+}
+export interface LiveNotesStatus {
+  meetingId: string;
+  status:
+    | "off"
+    | "starting"
+    | "waiting"
+    | "updating"
+    | "finished"
+    | "stopped"
+    | "failed";
+  running: boolean;
+  error: string | null;
+  pendingChars: number;
+  intervalMs: number;
+  nextUpdateInMs: number | null;
+  lastTrigger: LiveTrigger | null;
+  view: LiveView | null;
+}
+export interface LiveNotesRequest {
+  meetingId: string;
+  endpoint: string;
+  model: string;
+  mode: "local" | "cloud";
+  cloudConsent: boolean;
+  apiKey: string;
+  useSavedKey: boolean;
+  intervalMs: number;
+  language: Locale;
+}
+export interface LocalModelProvider {
+  id: "ollama" | "lmstudio";
+  name: string;
+  endpoint: string;
+  reachable: boolean;
+  models: string[];
+  recommendedInstalled: boolean;
+}
+export interface LocalModelSetupInfo {
+  totalMemoryBytes: number | null;
+  recommendation: {
+    tier: "none" | "small" | "standard" | "large" | "unknown";
+    model: string | null;
+    lmStudioSearch: string | null;
+  };
+  providers: LocalModelProvider[];
+}
+export interface ModelPullProgress {
+  model: string;
+  status: "running" | "complete" | "failed" | "cancelled";
+  detail: string;
+  completed: number;
+  total: number;
+  error: string | null;
+}
 export interface NotesProgress {
   jobId: string;
   runId: string | null;
@@ -365,6 +460,15 @@ export interface DesktopApi {
   listTextModels(endpoint: string): Promise<string[]>;
   getNotesProgress(): Promise<NotesProgress | null>;
   cancelNotes(jobId: string): Promise<boolean>;
+  startLiveNotes?(request: LiveNotesRequest): Promise<LiveNotesStatus>;
+  stopLiveNotes?(): Promise<boolean>;
+  refreshLiveNotes?(): Promise<boolean>;
+  setLiveNotesInterval?(intervalMs: number): Promise<boolean>;
+  getLiveNotes?(meetingId: string): Promise<LiveNotesStatus>;
+  localModelSetup?(): Promise<LocalModelSetupInfo>;
+  pullOllamaModel?(model: string): Promise<ModelPullProgress>;
+  getModelPullProgress?(): Promise<ModelPullProgress | null>;
+  cancelModelPull?(): Promise<boolean>;
   notesMarkdown(meetingId: string, analysisId: string): Promise<string>;
   copyText(text: string): Promise<void>;
   openMeetingFolder(id: string): Promise<void>;
