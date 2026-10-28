@@ -41,6 +41,7 @@ public static class PortableChecks
             Check(rejected, "Cloud text processing requires explicit consent before opening transport");
             rejected = false; try { _ = NotesSettings.Protect("not-to-be-written"); } catch (PlatformNotSupportedException) { rejected = true; }
             Check(rejected, "Portable preview refuses plaintext key persistence");
+            SecurityVerification.Run(root, Check);
             await CheckAgentAsync(root); checks.Add("Agent protocol discovers capabilities, refuses text without grant and rejects cloud actions");
             JsonData.Save(Path.Combine(root, "portable-checks.json"), new { Passed = checks.Count, Checks = checks, Platform = System.Runtime.InteropServices.RuntimeInformation.OSDescription, SyntheticOnly = true, RealDevicesTested = false, CloudTrafficSent = false });
             return 0;

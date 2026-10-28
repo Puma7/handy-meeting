@@ -20,7 +20,14 @@ import AgentPanel from "./views/AgentPanel";
 import { useTemplateLibrary } from "./useTemplateLibrary";
 import { useLocalTextModels } from "./useLocalTextModels";
 import { useNotesJob } from "./useNotesJob";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { RefreshCw, X } from "lucide-react";
 import { desktopApi, errorMessage } from "./api";
 import {
@@ -176,6 +183,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     null,
   );
   const requestSequence = useRef(0),
+    mainRef = useRef<HTMLElement>(null),
+    previousPage = useRef(page),
     selectedRef = useRef<string | null>(null),
     fullMeetingRef = useRef<string | null>(null),
     liveFullRef = useRef<string | null>(null),
@@ -265,6 +274,18 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       mounted.current = false;
     };
   }, []);
+
+  useLayoutEffect(() => {
+    if (previousPage.current === page) return;
+    previousPage.current = page;
+    const main = mainRef.current;
+    if (!main) return;
+    // Reset before paint and before a search source's effect scrolls into view.
+    // Background updates must not move the reader.
+    main.scrollTop = 0;
+    main.scrollLeft = 0;
+    main.querySelector("h1")?.focus({ preventScroll: true });
+  }, [page]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -1208,10 +1229,12 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         setTheme={setTheme}
         setLocale={setLocale}
       />
-      <main>
+      <main ref={mainRef}>
         <header className="page-header">
           <div>
-            <h1>{page === "detail" ? t.meetingDetail : t[page]}</h1>
+            <h1 tabIndex={-1}>
+              {page === "detail" ? t.meetingDetail : t[page]}
+            </h1>
             <p>
               {page === "meeting"
                 ? t.preserve
@@ -1269,7 +1292,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         )}
         {page === "detail" && meeting && (
           <SpeakerLabels
-            key={meeting.id}
+            key={"speaker-labels-" + meeting.id}
             api={api}
             meeting={meeting}
             locale={locale}
@@ -1301,7 +1324,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             ? liveMeeting
             : null) && (
           <SpeakerExperiments
-            key={(page === "detail" ? meeting : liveMeeting)!.id}
+            key={
+              "speaker-experiments-" +
+              (page === "detail" ? meeting : liveMeeting)!.id
+            }
             api={api}
             locale={locale}
             meeting={page === "detail" ? meeting : liveMeeting}

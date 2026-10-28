@@ -116,7 +116,8 @@ pub(super) fn record_controlled(
             return Err("Invalid audio track".into());
         }
         let mut writer = PcmWriter::new(store.clone(), source)?;
-        store.notice("Portable audio track ranges use approximate receipt timing, not exact device or word timestamps.")?;
+        // Diagnostic failures remain visible in the live store and never gate PCM.
+        let _ = store.notice("Portable audio track ranges use approximate receipt timing, not exact device or word timestamps.");
         let epochs_result = (|| -> Result<()> {
             while !stop.load(Ordering::Acquire) {
                 while controls.suppressed(source) && !stop.load(Ordering::Acquire) {
@@ -232,9 +233,9 @@ pub(super) fn record_controlled(
                                         let target = lead.saturating_sub(pcm.len() as u64);
                                         if target.saturating_sub(writer.written_samples()) > 8000 {
                                             if epoch == 0 {
-                                                store.warn(&format!("{source}: the source started late; leading silence is estimated and can contain missing audio."))?;
+                                                let _ = store.warn(&format!("{source}: the source started late; leading silence is estimated and can contain missing audio."));
                                             } else {
-                                                store.notice(&format!("{source}: capture resumed with estimated startup silence. This silence is intentional control timing, not recovered speech."))?;
+                                                let _ = store.notice(&format!("{source}: capture resumed with estimated startup silence. This silence is intentional control timing, not recovered speech."));
                                             }
                                         }
                                         pad_estimated(&mut writer, target)?;
@@ -283,7 +284,7 @@ pub(super) fn record_controlled(
                                     && start.elapsed() > Duration::from_secs(2)
                                     && !waiting_reported
                                 {
-                                    store.notice(&format!("{source}: waiting for the first actual audio packet. Check permissions or play a test sound; no received audio has been confirmed yet."))?;
+                                    let _ = store.notice(&format!("{source}: waiting for the first actual audio packet. Check permissions or play a test sound; no received audio has been confirmed yet."));
                                     waiting_reported = true;
                                 }
                                 if received {
@@ -293,7 +294,7 @@ pub(super) fn record_controlled(
                                             as u64;
                                     if target > writer.written_samples() {
                                         if !late_reported {
-                                            store.notice(&format!("{source}: gaps without packets are represented as estimated silence; late real packets are retained and timestamps can drift."))?;
+                                            let _ = store.notice(&format!("{source}: gaps without packets are represented as estimated silence; late real packets are retained and timestamps can drift."));
                                             late_reported = true;
                                         }
                                         pad_estimated(&mut writer, target)?;
@@ -307,7 +308,7 @@ pub(super) fn record_controlled(
                         }
                     }
                     if carry.is_some() && !changed_epoch {
-                        store.warn(&format!("{source}: an incomplete final PCM byte was retained only in the helper pipe and could not form an audio sample."))?;
+                        let _ = store.warn(&format!("{source}: an incomplete final PCM byte was retained only in the helper pipe and could not form an audio sample."));
                     }
                     Ok(())
                 })();

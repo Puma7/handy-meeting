@@ -23,6 +23,25 @@ class ProbeTests(unittest.TestCase):
         items = [('pid_12_luid_a', 30, True), ('pid_12_luid_b', 10, True), ('pid_123_luid_a', 900, True), ('pid_12_luid_c', 99, False)]
         self.assertEqual(probe.owned_gpu_values(items, [12, 34]), {12: 40, 34: None})
 
+    def test_phase_reports_preserve_controller_and_reused_worker_pids(self):
+        phases = {}
+        for phase, base in [('legacy', 20), ('rust', 80)]:
+            phases[phase] = [
+                {'phase': phase, 'pid': pid, 'role': role, 'backend': backend,
+                 'elapsedSeconds': second, 'privateBytes': (base + pid) * probe.MIB}
+                for pid, role, backend in [(7, 'probe-controller', None), (12, phase + '-worker', 'GPU')]
+                for second in range(120, 140)
+            ]
+        report = probe.summarize_trends(phases)
+        self.assertEqual(set(report), {'legacy', 'rust'})
+        for phase, base in [('legacy', 20), ('rust', 80)]:
+            self.assertEqual(set(report[phase]), {'7', '12'})
+            self.assertEqual(report[phase]['7']['role'], 'probe-controller')
+            self.assertEqual(report[phase]['12']['role'], phase + '-worker')
+            self.assertEqual(report[phase]['12']['phase'], phase)
+            self.assertEqual(report[phase]['12']['privateBytes']['firstMedianMiB'], base + 12)
+            self.assertFalse(report[phase]['12']['gpuDedicatedBytes']['available'])
+
 
 if __name__ == '__main__':
     unittest.main()

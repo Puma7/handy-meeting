@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import zipfile
 import json
+import os
 import pathlib
 import tempfile
 import unittest
@@ -238,6 +239,58 @@ class ReleaseGuards(unittest.TestCase):
 
 
 class SourceExportContract(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('pwsh'), 'PowerShell required for the real source exporter')
+    def test_allowlisted_links_cannot_archive_private_outside_bytes_or_remove_earlier_proofs(self):
+        """Exercise real filesystem links with a private sentinel outside the source root."""
+        for kind in ['top-hardlink', 'nested-symlink', 'directory-link', 'allowlist-root-link']:
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory(prefix='meeting-source-link-') as temp:
+                base = pathlib.Path(temp).resolve()
+                root = base / 'source'
+                script = root / 'scripts/export-source.ps1'
+                script.parent.mkdir(parents=True)
+                shutil.copyfile(pathlib.Path(__file__).with_name(script.name), script)
+                config = root / 'apps/desktop/package.json'
+                config.parent.mkdir(parents=True)
+                config.write_text(json.dumps({'version': '0.0.0-test'}), encoding='utf-8')
+                earlier = root / '.build/source-export-earlier/retained.json'
+                earlier.parent.mkdir(parents=True)
+                earlier.write_bytes(b'earlier source evidence must remain byte-identical')
+                outside = base / 'private'
+                outside.mkdir()
+                private = b'PRIVATE-OUTSIDE-SENTINEL-never-archive-731921'
+                sentinel = outside / 'private.md'
+                sentinel.write_bytes(private)
+                if kind == 'top-hardlink':
+                    os.link(sentinel, root / 'README.md')
+                elif kind == 'nested-symlink':
+                    link = root / 'apps/desktop/private.md'
+                    try:
+                        link.symlink_to(sentinel)
+                    except OSError:
+                        # File hardlinks do not require Windows symbolic-link privileges.
+                        os.link(sentinel, link)
+                else:
+                    link = root / ('src' if kind == 'allowlist-root-link' else 'apps/desktop/private')
+                    try:
+                        link.symlink_to(outside, target_is_directory=True)
+                    except OSError:
+                        if os.name != 'nt':
+                            raise
+                        env = dict(os.environ, SOURCE_LINK_FIXTURE=str(link), SOURCE_TARGET_FIXTURE=str(outside))
+                        creation = subprocess.run([shutil.which('pwsh'), '-NoProfile', '-NonInteractive', '-Command',
+                            "$ErrorActionPreference='Stop'; New-Item -ItemType Junction -Path $env:SOURCE_LINK_FIXTURE -Target $env:SOURCE_TARGET_FIXTURE | Out-Null"],
+                            capture_output=True, text=True, timeout=30, env=env)
+                        self.assertEqual(creation.returncode, 0, creation.stdout + creation.stderr)
+                result = subprocess.run([shutil.which('pwsh'), '-NoProfile', '-NonInteractive', '-File', str(script)],
+                    cwd=root, capture_output=True, text=True, timeout=60)
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn('link', result.stderr.lower())
+                self.assertEqual(sentinel.read_bytes(), private)
+                self.assertEqual(earlier.read_bytes(), b'earlier source evidence must remain byte-identical')
+                for archive in (root / '.build').glob('*.zip'):
+                    with zipfile.ZipFile(archive) as bundle:
+                        self.assertFalse(any(private in bundle.read(name) for name in bundle.namelist()))
+
     @unittest.skipUnless(shutil.which('pwsh'), 'PowerShell required for the real source exporter')
     def test_nested_private_build_and_browser_proofs_never_enter_the_source_bundle(self):
         """Run the real exporter: retain legitimate sources and exclude private nested proofs."""

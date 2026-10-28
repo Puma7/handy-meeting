@@ -1,5 +1,5 @@
 //! Rebuildable local SQLite/FTS index. Original session files remain authoritative.
-use crate::{metadata, storage::reject_link, Result, SessionData};
+use crate::{metadata, storage::exists_no_link, Result, SessionData};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path, time::Duration};
@@ -106,15 +106,10 @@ impl LibraryIndex {
         }
         metadata::checked_directory(&folder)?;
         let path = folder.join("library.sqlite3");
-        for name in [
-            "library.sqlite3",
-            "library.sqlite3-wal",
-            "library.sqlite3-shm",
-        ] {
-            let file = folder.join(name);
-            if file.exists() {
-                reject_link(&file)?;
-            }
+        for name in INDEX_FILES {
+            // SQLite may create missing files, but must never follow a dangling
+            // database/WAL/SHM link that Path::exists would report as absent.
+            exists_no_link(&folder.join(name))?;
         }
         let db = Connection::open(path)?;
         db.busy_timeout(Duration::from_secs(3))?;
@@ -426,6 +421,55 @@ fn move_index_files(folder: &Path, aside: &Path, names: &[&str]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(any(unix, windows))]
+    #[test]
+    fn index_open_and_rebuild_reject_existing_and_dangling_database_wal_and_shm_links() {
+        for name in INDEX_FILES {
+            for dangling in [false, true] {
+                let root = tempfile::tempdir().unwrap();
+                let outside = tempfile::tempdir().unwrap();
+                let folder = root.path().join("library-index");
+                fs::create_dir(&folder).unwrap();
+                let sentinel = outside.path().join("user-file");
+                fs::write(&sentinel, b"external user sentinel").unwrap();
+                let target = if dangling {
+                    outside.path().join("must-not-be-created")
+                } else {
+                    sentinel.clone()
+                };
+                let link = folder.join(name);
+                #[cfg(unix)]
+                std::os::unix::fs::symlink(&target, &link).unwrap();
+                #[cfg(windows)]
+                std::os::windows::fs::symlink_file(&target, &link).unwrap();
+                assert!(
+                    LibraryIndex::open(root.path()).is_err(),
+                    "{name}, dangling={dangling}"
+                );
+                assert!(
+                    LibraryIndex::open_for_rebuild(root.path()).is_err(),
+                    "{name}, dangling={dangling}"
+                );
+                assert!(fs::symlink_metadata(&link)
+                    .unwrap()
+                    .file_type()
+                    .is_symlink());
+                assert_eq!(fs::read(&sentinel).unwrap(), b"external user sentinel");
+                if dangling {
+                    assert!(
+                        matches!(fs::symlink_metadata(target), Err(error) if error.kind() == std::io::ErrorKind::NotFound)
+                    );
+                }
+                assert_eq!(
+                    fs::read_dir(&folder).unwrap().count(),
+                    1,
+                    "No database or recovery files may be created before rejecting {name}"
+                );
+            }
+        }
+    }
+
     #[test]
     fn pruning_removes_only_missing_native_rows_and_cancellation_preserves_existing_index() {
         let root = tempfile::tempdir().unwrap();

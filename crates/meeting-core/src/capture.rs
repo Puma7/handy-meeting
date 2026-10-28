@@ -17,6 +17,16 @@ use std::{
 #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 use std::{sync::mpsc, thread, time::Duration};
 
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+type TrackRecorder = fn(
+    SessionStore,
+    &str,
+    Option<String>,
+    Arc<AtomicBool>,
+    mpsc::SyncSender<std::result::Result<(), String>>,
+    Arc<CaptureControls>,
+) -> Result<()>;
+
 #[cfg(windows)]
 #[path = "windows_capture.rs"]
 mod platform;
@@ -64,41 +74,62 @@ impl CaptureController {
         }
         #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
         {
-            let stop = Arc::new(AtomicBool::new(false));
-            let controls = Arc::new(CaptureControls::new(&store)?);
-            let mut controller = Self {
-                stop,
-                tracks: vec![],
-                store,
-                controls,
-            };
-            if let Err(error) = controller.start_track("system", options.output_id) {
-                controller.stop()?;
-                return Err(error);
-            }
-            if options.include_microphone {
-                // A microphone startup failure must not terminate a working system track.
-                if let Err(error) = controller.start_track("microphone", options.microphone_id) {
-                    controller.store.warn(&format!(
-                        "Microphone could not start: {error}. System audio continues."
-                    ))?;
-                } else {
-                    controller.controls.set_has_microphone(true);
-                }
-            }
-            Ok(controller)
+            Self::start_with_recorder(store, options, platform::record)
         }
     }
 
     #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    /// Keeps thread ownership/readiness identical for native and synthetic recorders.
+    fn start_with_recorder(
+        store: SessionStore,
+        options: CaptureOptions,
+        recorder: TrackRecorder,
+    ) -> Result<Self> {
+        let stop = Arc::new(AtomicBool::new(false));
+        let controls = Arc::new(CaptureControls::new(&store)?);
+        let mut controller = Self {
+            stop,
+            tracks: vec![],
+            store,
+            controls,
+        };
+        if let Err(error) = controller.start_track("system", options.output_id, recorder) {
+            if let Err(cleanup) = controller.stop() {
+                return Err(format!("{error}. Capture cleanup also failed: {cleanup}").into());
+            }
+            return Err(error);
+        }
+        if options.include_microphone {
+            // A microphone startup failure must not terminate a working system track.
+            if let Err(error) =
+                controller.start_track("microphone", options.microphone_id, recorder)
+            {
+                // Diagnostic persistence must not release this controller and stop
+                // the already healthy system writer. The store retains a UI fallback.
+                let _ = controller.store.warn(&format!(
+                    "Microphone could not start: {error}. System audio continues."
+                ));
+            } else {
+                controller.controls.set_has_microphone(true);
+            }
+        }
+        Ok(controller)
+    }
+
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
     /// Starts one owned capture thread and waits for its bounded readiness acknowledgment.
-    fn start_track(&mut self, source: &'static str, device_id: Option<String>) -> Result<()> {
+    fn start_track(
+        &mut self,
+        source: &'static str,
+        device_id: Option<String>,
+        recorder: TrackRecorder,
+    ) -> Result<()> {
         let stop = Arc::clone(&self.stop);
         let store = self.store.clone();
         let controls = Arc::clone(&self.controls);
         let (ready, result) = mpsc::sync_channel(1);
         let track = thread::Builder::new().name(format!("meeting-{source}-capture")).spawn(move || {
-            if let Err(error) = platform::record(store.clone(), source, device_id, stop, ready, controls) {
+            if let Err(error) = recorder(store.clone(), source, device_id, stop, ready, controls) {
                 let _ = store.warn(&format!("{source}: capture stopped: {error}. Saved audio is retained; check the device before recording again."));
             }
         })?;
@@ -168,14 +199,29 @@ impl CaptureController {
     /// Requests owned tracks to stop, joins their writers and marks the retained session recorded.
     pub fn stop(&mut self) -> Result<()> {
         self.stop.store(true, Ordering::Release);
+        let mut failures = vec![];
         for (_, track) in self.tracks.drain(..) {
             if track.join().is_err() {
-                self.store.warn(
-                    "A recording thread stopped unexpectedly. Confirmed audio is retained.",
-                )?;
+                if let Err(error) = self
+                    .store
+                    .warn("A recording thread stopped unexpectedly. Confirmed audio is retained.")
+                {
+                    failures.push(format!("Recording warning could not be saved: {error}"));
+                }
             }
         }
-        self.store.set_status("recorded")
+        // No diagnostic error may skip joining another owned disk writer or the
+        // final status attempt. Report every failed persistence step afterwards.
+        if let Err(error) = self.store.set_status("recorded") {
+            failures.push(format!(
+                "Recorded session status could not be saved: {error}"
+            ));
+        }
+        if failures.is_empty() {
+            Ok(())
+        } else {
+            Err(failures.join("; ").into())
+        }
     }
 }
 
@@ -203,6 +249,224 @@ pub fn list_devices() -> Result<Vec<AudioDevice>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    /// Replaces only the device backend; production readiness, ownership and PCM
+    /// journaling still run. A directory deterministically blocks manifest backup.
+    fn synthetic_recorder_with_failed_microphone(
+        store: SessionStore,
+        source: &str,
+        _: Option<String>,
+        stop: Arc<AtomicBool>,
+        ready: mpsc::SyncSender<std::result::Result<(), String>>,
+        _: Arc<CaptureControls>,
+    ) -> Result<()> {
+        if source == "microphone" {
+            ready.send(Err("Synthetic microphone startup failure".into()))?;
+            return Err("Synthetic microphone startup failure".into());
+        }
+        let mut writer = crate::PcmWriter::new(store, source)?;
+        writer.append(&[11, -12, 13, -14])?;
+        writer.checkpoint()?;
+        ready.send(Ok(()))?;
+        while !stop.load(Ordering::Acquire) {
+            writer.append(&[21, -22, 23, -24])?;
+            writer.checkpoint()?;
+            thread::sleep(Duration::from_millis(5));
+        }
+        writer.finish()
+    }
+
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn failed_microphone_warning_does_not_stop_the_healthy_system_writer() {
+        let root = tempfile::tempdir().unwrap();
+        let store =
+            SessionStore::create(root.path(), "Synthetic diagnostics", "m", "s", None).unwrap();
+        let manifest = store.folder().join("session.json");
+        let original = std::fs::read(&manifest).unwrap();
+        let backup = store.folder().join("session.json.bak");
+        std::fs::create_dir(&backup).unwrap();
+        let mut controller = CaptureController::start_with_recorder(
+            store.clone(),
+            CaptureOptions {
+                include_microphone: true,
+                ..CaptureOptions::default()
+            },
+            synthetic_recorder_with_failed_microphone,
+        )
+        .expect("Only the optional microphone failed; system ownership must survive");
+        assert!(controller.is_running());
+        let initial = controller.snapshot().unwrap().session.parts[0].confirmed_sample_count;
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while controller.controls().has_microphone {
+            assert!(std::time::Instant::now() < deadline);
+            thread::sleep(Duration::from_millis(5));
+        }
+        loop {
+            let snapshot = controller.snapshot().unwrap();
+            assert!(snapshot.running);
+            assert!(snapshot.session.capture_incomplete);
+            assert!(snapshot.session.warnings.iter().any(|warning| {
+                warning.contains("Microphone could not start")
+                    && warning.contains("System audio continues")
+            }));
+            assert!(snapshot
+                .session
+                .warnings
+                .iter()
+                .any(|warning| warning.contains("diagnostic could not be saved")));
+            if snapshot.session.parts[0].confirmed_sample_count > initial {
+                break;
+            }
+            assert!(std::time::Instant::now() < deadline);
+            thread::sleep(Duration::from_millis(5));
+        }
+        assert_eq!(std::fs::read(&manifest).unwrap(), original);
+        let error = controller.stop().unwrap_err().to_string();
+        assert!(error.contains("Recorded session status could not be saved"));
+        let data = store.snapshot().unwrap();
+        assert!(data.parts[0].audio_closed);
+        let samples: Vec<i16> = hound::WavReader::open(store.audio_path(&data.parts[0]).unwrap())
+            .unwrap()
+            .samples::<i16>()
+            .map(std::result::Result::unwrap)
+            .collect();
+        assert_eq!(&samples[..4], &[11, -12, 13, -14]);
+        assert!(samples.len() > initial as usize);
+        assert_eq!(samples.len() as u64, data.parts[0].confirmed_sample_count);
+        // Remove only this test's empty fault directory. A later successful save
+        // persists the retained warning without replacing any original journal.
+        std::fs::remove_dir(backup).unwrap();
+        controller.stop().unwrap();
+        let saved: crate::SessionData =
+            serde_json::from_slice(&std::fs::read(manifest).unwrap()).unwrap();
+        assert_eq!(saved.status, "recorded");
+        assert!(saved.capture_incomplete);
+        assert!(saved
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("Microphone could not start")));
+    }
+
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn failed_panic_warning_still_joins_other_writers_and_attempts_final_status() {
+        let root = tempfile::tempdir().unwrap();
+        let store = SessionStore::create(root.path(), "Synthetic stop diagnostics", "m", "s", None)
+            .unwrap();
+        let backup = store.folder().join("session.json.bak");
+        std::fs::create_dir(&backup).unwrap();
+        let stop = Arc::new(AtomicBool::new(false));
+        let tail_stop = Arc::clone(&stop);
+        let tail_store = store.clone();
+        let tail_joined = Arc::new(AtomicBool::new(false));
+        let tail_finished = Arc::clone(&tail_joined);
+        let (waiting, tail_waiting) = mpsc::sync_channel(1);
+        let (release, released) = mpsc::sync_channel(1);
+        let tail = thread::spawn(move || {
+            while !tail_stop.load(Ordering::Acquire) {
+                thread::sleep(Duration::from_millis(1));
+            }
+            waiting.send(()).unwrap();
+            released.recv_timeout(Duration::from_secs(10)).unwrap();
+            let mut writer = crate::PcmWriter::new(tail_store, "system").unwrap();
+            writer.append(&[31, -32, 33, -34]).unwrap();
+            writer.finish().unwrap();
+            tail_finished.store(true, Ordering::Release);
+        });
+        let mut controller = CaptureController {
+            stop,
+            tracks: vec![
+                (
+                    "microphone",
+                    thread::spawn(|| panic!("Synthetic track panic")),
+                ),
+                ("system", tail),
+            ],
+            controls: Arc::new(CaptureControls::new(&store).unwrap()),
+            store: store.clone(),
+        };
+        let (finished, stopped) = mpsc::sync_channel(1);
+        let stopping = thread::spawn(move || {
+            let result = controller.stop().map_err(|error| error.to_string());
+            finished
+                .send((
+                    result,
+                    tail_joined.load(Ordering::Acquire),
+                    controller.tracks.len(),
+                ))
+                .unwrap();
+        });
+        tail_waiting.recv_timeout(Duration::from_secs(5)).unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !store
+            .snapshot()
+            .unwrap()
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("diagnostic could not be saved"))
+        {
+            assert!(std::time::Instant::now() < deadline);
+            thread::sleep(Duration::from_millis(5));
+        }
+        let early = stopped.recv_timeout(Duration::from_millis(200)).ok();
+        // Repair the manifest fault while the second writer is deliberately
+        // blocked, so its join and the final status attempt are both observable.
+        std::fs::remove_dir(backup).unwrap();
+        release.send(()).unwrap();
+        let result = early
+            .clone()
+            .unwrap_or_else(|| stopped.recv_timeout(Duration::from_secs(5)).unwrap());
+        stopping.join().unwrap();
+        assert!(
+            early.is_none(),
+            "stop returned before its owned writer finished"
+        );
+        assert!(
+            result.1,
+            "the final PCM writer must finish before stop returns"
+        );
+        assert_eq!(result.2, 0);
+        let error = result.0.unwrap_err();
+        assert!(error.contains("Recording warning could not be saved"));
+        assert!(!error.contains("Recorded session status could not be saved"));
+        let snapshot = store.snapshot().unwrap();
+        assert_eq!(snapshot.status, "recorded");
+        assert!(snapshot.capture_incomplete);
+        assert!(snapshot.parts[0].audio_closed);
+        assert_eq!(snapshot.parts[0].confirmed_sample_count, 4);
+        let saved: crate::SessionData =
+            serde_json::from_slice(&std::fs::read(store.folder().join("session.json")).unwrap())
+                .unwrap();
+        assert_eq!(saved.status, "recorded");
+        assert!(saved
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("recording thread stopped unexpectedly")));
+    }
+
+    #[test]
+    fn unsaved_notice_remains_visible_without_claiming_incomplete_audio() {
+        let root = tempfile::tempdir().unwrap();
+        let store = SessionStore::create(root.path(), "Synthetic notice", "m", "s", None).unwrap();
+        let manifest = store.folder().join("session.json");
+        let original = std::fs::read(&manifest).unwrap();
+        std::fs::create_dir(store.folder().join("session.json.bak")).unwrap();
+        assert!(store.notice("Synthetic approximate timing notice").is_err());
+        let preview = store.preview_snapshot(16).unwrap();
+        assert!(!preview.capture_incomplete);
+        assert!(preview
+            .warnings
+            .iter()
+            .any(|warning| warning == "Synthetic approximate timing notice"));
+        assert!(preview
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("diagnostic could not be saved")));
+        assert_eq!(std::fs::read(manifest).unwrap(), original);
+    }
+
     #[test]
     /// Checks synthetic thread liveness reports one failed track while the other remains active.
     fn a_track_that_ends_early_is_reported_while_the_other_keeps_recording() {

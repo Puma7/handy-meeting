@@ -126,18 +126,19 @@ public static class Transcription
     public static string Render(SessionStore session, bool markdown)
     {
         var output = new StringBuilder();
-        output.AppendLine(markdown ? "# " + session.Data.Title.Replace('\r', ' ').Replace('\n', ' ') : session.Data.Title);
-        output.AppendLine($"{session.Data.StartedAt:dd.MM.yyyy HH:mm} · {ClockTime.Format(session.Data.DurationMs)} · Modell: {session.Data.ModelId}");
+        string Literal(string text) => markdown ? MarkdownText.Escape(text) : text;
+        output.AppendLine(markdown ? "# " + Literal(session.Data.Title.Replace('\r', ' ').Replace('\n', ' ')) : session.Data.Title);
+        output.AppendLine($"{session.Data.StartedAt:dd.MM.yyyy HH:mm} · {ClockTime.Format(session.Data.DurationMs)} · Modell: {Literal(session.Data.ModelId)}");
         output.AppendLine("Zeitangaben markieren Aufnahmeabschnitte, keine exakten Wortzeiten.");
         if (session.Data.Status != "complete") output.AppendLine("UNVOLLSTÄNDIG: Es stehen noch Transkriptionsabschnitte aus.");
-        foreach (var warning in session.Data.Warnings) output.AppendLine("HINWEIS: " + warning);
+        foreach (var warning in session.Data.Warnings) output.AppendLine("HINWEIS: " + Literal(warning));
         foreach (var part in session.Data.Parts.OrderBy(p => p.StartSample).ThenBy(p => p.Source))
         {
             if (string.IsNullOrWhiteSpace(part.Text)) continue;
             if (part.Status != "complete" && part.ModelId != session.Data.ModelId) continue;
             output.AppendLine();
             var heading = $"[{ClockTime.Format(part.StartMs)}–{ClockTime.Format(part.EndMs)}] {(part.Source == "system" ? "Computerton" : "Mikrofon")}";
-            output.AppendLine(markdown ? "## " + heading : heading); output.AppendLine(); output.AppendLine(part.Text);
+            output.AppendLine(markdown ? "## " + heading : heading); output.AppendLine(); output.AppendLine(Literal(part.Text));
         }
         return output.ToString();
     }

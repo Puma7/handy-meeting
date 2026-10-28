@@ -1,18 +1,18 @@
 [
   {
     "Path": "AGENTS.md",
-    "SHA256": "0FB1EB734D57BABBD41001DBA583EEA01030F3241A24B2D314997701240F0592",
-    "Bytes": 3633
+    "SHA256": "8AE4B0823615D8CA061FE1C4FBBAE8AFE421BC41139FBDF57AE6E1E8A56337EF",
+    "Bytes": 3788
   },
   {
     "Path": "README.md",
-    "SHA256": "B87A2B429B3087F06C368332BC05A418FA4B51C7A3CBE84A550E2F24572A5850",
-    "Bytes": 10332
+    "SHA256": "1D1527BE75C4332F8F2C926FED3DBFEA4B96D686C207218CAD7324A4F146A454",
+    "Bytes": 12172
   },
   {
     "Path": "README.de.md",
-    "SHA256": "1532DAD5CEC96B08960201960B01E49C3A402AB0C2E506592A395986B9B5C81E",
-    "Bytes": 9224
+    "SHA256": "6621E554A438C23344976F705A3307CCBFE922726382EC572CBC564ECF484A95",
+    "Bytes": 10596
   },
   {
     "Path": "CONTRIBUTING.md",
@@ -21,28 +21,28 @@
   },
   {
     "Path": "SECURITY.md",
-    "SHA256": "C58457D482C15B7BEDB3E12FDE327FEF361523E56EBC1A35389D472CAC2380AA",
-    "Bytes": 1128
+    "SHA256": "214740B8C23A6C562AD8E4609BD79AE65B7F54C153F7F1001283A699BCB718DF",
+    "Bytes": 1893
   },
   {
     "Path": "CHANGELOG.md",
-    "SHA256": "A8C948BB71ED41DF4432C4461448ABAB47B833E63D0EEF2DDF1D76E5D08634D4",
-    "Bytes": 7150
+    "SHA256": "F71DDBCEFF2FA3D69E8899890FE8050B7B36A1E28AE83A7EC465BE036190BC8C",
+    "Bytes": 11502
   },
   {
     "Path": "BUILD_STATUS.md",
-    "SHA256": "3CF9B3D37FD40EC3861125D4039C4B92D4C3835006DDB003BC6BD3E0F8797FF8",
-    "Bytes": 19287
+    "SHA256": "1D7E14335516D68E74F3CC5CADD5B50B3492CBE87D9DC27176D5E7D81879305B",
+    "Bytes": 64892
   },
   {
     "Path": "MASTERPLAN.md",
-    "SHA256": "855D92472F157854A0B0386AC0FD3015FD4EF24EF606FEFAFCAD6194824F6FB7",
-    "Bytes": 48086
+    "SHA256": "B0F3D342C70F6178295EDDFA51AB916E463E380CF7AABFBEF4E88B4E91B964A3",
+    "Bytes": 53167
   },
   {
     "Path": "TEST_REPORT.md",
-    "SHA256": "E6FF8952467BB37B8549C960D44E8F7862B289CB68A78E060B462EE3C2D66D96",
-    "Bytes": 82995
+    "SHA256": "1F96A3BE96B2F570729D7830BDEC811AD49C32C24D09C14FC7F12C4D50D37289",
+    "Bytes": 136186
   },
   {
     "Path": "DAUERTEST.md",
@@ -51,8 +51,8 @@
   },
   {
     "Path": "PORTABILITY.md",
-    "SHA256": "8DB5A3C9952998CE8AD986B60FFFB46B1F84E0FEE337C7AD8849DF2045BC9E36",
-    "Bytes": 6959
+    "SHA256": "8633E1E385F7FE26CA52F7F8B5BF5308B78646E9B2A8D79BF1C8DFF622CB0B43",
+    "Bytes": 7137
   },
   {
     "Path": "AGENT_API.md",
@@ -96,13 +96,13 @@
   },
   {
     "Path": "Cargo.toml",
-    "SHA256": "CB7D9D88315893B65D6BDA3E0FCA56B7F5CE3DEF5360F59DE5A0A3517D537709",
-    "Bytes": 612
+    "SHA256": "3EDAFC41914E273C7CDF7471CD9EE6063DBD8EC3BDD2985EBC3025FC40393CB3",
+    "Bytes": 632
   },
   {
     "Path": "Cargo.lock",
-    "SHA256": "AD629622642D3FEEF75597558F141A94D2D42E853BA5754C9A95F3DD18B6C229",
-    "Bytes": 142828
+    "SHA256": "45B85D79CB641CC99BC42ECBA03483E2F1D9F7C35B72757DFC33710D3F4B809E",
+    "Bytes": 156965
   },
   {
     "Path": "global.json",
@@ -191,8 +191,8 @@
   },
   {
     "Path": "src/HandyMeeting/HandyClient.cs",
-    "SHA256": "8C8B2CCF8BD0708DB9A8030B8E7EF9959EAFB2F2CA6F7B9E7C977569EE0EB908",
-    "Bytes": 9354
+    "SHA256": "0A2CC252CE9289C39572C2BD02D90F28AAEAFA590A7037DA1F43611203B0390B",
+    "Bytes": 9474
   },
   {
     "Path": "src/HandyMeeting/HandyMeeting.csproj",
@@ -211,8 +211,8 @@
   },
   {
     "Path": "src/HandyMeeting/MeetingNotesService.cs",
-    "SHA256": "0C910B47504D9CF2721421F9D77553F47371B9EAE19BFBCFB08EC4F69F26CA3A",
-    "Bytes": 16268
+    "SHA256": "0A2D90714A151B67D0F2A06F65589C381A15191BC5155D5EE8F9AD467A5ECF40",
+    "Bytes": 15956
   },
   {
     "Path": "src/HandyMeeting/MemoryVerification.cs",
@@ -226,8 +226,8 @@
   },
   {
     "Path": "src/HandyMeeting/Models.cs",
-    "SHA256": "FC7FBDFDAAFF6ED267A007C30168BE06F52E88A4481593636EFCBC7F49C9B057",
-    "Bytes": 10189
+    "SHA256": "B6940254A01B4FBCC60DDE2243C7114550888CB505EE6C5BBB48463B6D3F5CDC",
+    "Bytes": 13899
   },
   {
     "Path": "src/HandyMeeting/NativeStreaming.cs",
@@ -266,18 +266,23 @@
   },
   {
     "Path": "src/HandyMeeting/PcmTimeline.cs",
-    "SHA256": "E0F7FEF3342EAB51AB7AFF778987F72F6A4196D853DE0971919B7639E0512C0A",
-    "Bytes": 6250
+    "SHA256": "D4331849852004B657D65007A95F7E2CC93419F1D19AB2379F5768FD6A44B541",
+    "Bytes": 7015
   },
   {
     "Path": "src/HandyMeeting/RealtimeSoakTest.cs",
-    "SHA256": "734EBD2D0E211CB333803059BF4A47ECB43C13FAFFBBAE7FDF08C42BA732BDBB",
-    "Bytes": 42089
+    "SHA256": "496E9B023E6FEFE844F6BD6762A0847D2D21EA5894BA22B1FCDA3C06554A4B58",
+    "Bytes": 47026
+  },
+  {
+    "Path": "src/HandyMeeting/SecurityVerification.cs",
+    "SHA256": "3CB0143DEBD546C3CE4887857C9C50935FC778576E1D5B832BCE81DDD2C6A25A",
+    "Bytes": 9314
   },
   {
     "Path": "src/HandyMeeting/SessionJournal.cs",
-    "SHA256": "74EC5997E0081A38B13CACF3AE8C066B75FABD5B45AD1EE1EBDC5BC1A2D64283",
-    "Bytes": 9391
+    "SHA256": "DDD06910D43D39AFC2DF6902C8AD8C9C1743B192BD92B9EECEBA29D130122173",
+    "Bytes": 10160
   },
   {
     "Path": "src/HandyMeeting/StreamingCoordinator.cs",
@@ -316,13 +321,13 @@
   },
   {
     "Path": "src/HandyMeeting/Verification.cs",
-    "SHA256": "E6FFAC22B7961478190D47E27C2F4918DCB95185FFD6EDB24173B9413C76D943",
-    "Bytes": 14981
+    "SHA256": "C51E4B568A34FD35A0F867F4F506A933745A48FD104E767A620C45AA3618AC6B",
+    "Bytes": 15028
   },
   {
     "Path": "src/HandyMeeting.Core/HandyMeeting.Core.csproj",
-    "SHA256": "B839A606DFDA251C41A9478832FDA02FFF8F9D94D45A94B25BD724D9C3D06B04",
-    "Bytes": 1103
+    "SHA256": "1B71FC1CF502A2BCA16161D03C82CA6BD6759D7649CE9C8B0D8182B23007AB26",
+    "Bytes": 1227
   },
   {
     "Path": "src/HandyMeeting.Core/MeetingWorkspace.cs",
@@ -346,8 +351,8 @@
   },
   {
     "Path": "src/HandyMeeting.Core/PortableChecks.cs",
-    "SHA256": "D5312D9C5746756A2042B5539F7CCE6AAA737044AEF7E339C443B6C7BE67BDDE",
-    "Bytes": 7770
+    "SHA256": "2EA0193872623AE94E225D6AB4E5D374806E482513AA735C4337FE39826DF715",
+    "Bytes": 7821
   },
   {
     "Path": "src/HandyMeeting.Core/PortableText.cs",
@@ -415,9 +420,19 @@
     "Bytes": 1526
   },
   {
+    "Path": "scripts/check-gui-smoke.sh",
+    "SHA256": "187E02417F12900CAF33896B16CDCFBC8379DFDEA367BF402D0EBC354CCE7B73",
+    "Bytes": 8416
+  },
+  {
     "Path": "scripts/check-installer-reservation.ps1",
     "SHA256": "063AD44EE4C3E835363D34FC531A62221CAC3D7B1316E35A2627867DC6BAAA1F",
     "Bytes": 2788
+  },
+  {
+    "Path": "scripts/check-linux-virtual-audio.sh",
+    "SHA256": "6BB3361FBD1751991A0ED205AB9F606067F6527816139ECD2AB9022460B2CBE1",
+    "Bytes": 6006
   },
   {
     "Path": "scripts/check-native-credentials.sh",
@@ -425,19 +440,29 @@
     "Bytes": 3102
   },
   {
+    "Path": "scripts/check-start-menu-versions.ps1",
+    "SHA256": "5D29A381F5FFF7238CA37188A1880A1E2275001CC0726EA0CB589C4E99B44E14",
+    "Bytes": 2926
+  },
+  {
     "Path": "scripts/collect-rust-notices.ps1",
-    "SHA256": "B4B0BA0E61A7341E815B2FE116B78973F6E504C10BE0312125BFB852C3B85AF0",
-    "Bytes": 18987
+    "SHA256": "F1416F0834D71C7BD3E17EA35F4DA08857A75BD038AF50FF84F478E1CA2F5F25",
+    "Bytes": 19502
   },
   {
     "Path": "scripts/export-source.ps1",
-    "SHA256": "800AD1E4A49EBC24D5D62B6896844CDB524F44515038AB69D3E6F344A29F32B6",
-    "Bytes": 3761
+    "SHA256": "8D589CDE29A0245FC133883E94236F51199F7BFE351B0661E94F2E4040CD8201",
+    "Bytes": 5988
   },
   {
     "Path": "scripts/installer-tools.json",
     "SHA256": "4390EBD8D3CC3DDB0300A824A799BC998202F1A414F68D6E138DC7199D789066",
     "Bytes": 378
+  },
+  {
+    "Path": "scripts/manage-start-menu.ps1",
+    "SHA256": "458C03508504A0DDF207C2563D233F41084F5AE262BDCF3867E2A7D8A3E0CECB",
+    "Bytes": 8147
   },
   {
     "Path": "scripts/native-assets.json",
@@ -456,23 +481,23 @@
   },
   {
     "Path": "scripts/package-macos.sh",
-    "SHA256": "A3E48EE31C7CF118DBBAA363CCE9ED4A412E3E5C01E3DC092BF4C110AE5F6998",
-    "Bytes": 4111
+    "SHA256": "0187A9F052F7A4606425478A34C3A17786C3DF82B5414DC5725E214BFDC5A64D",
+    "Bytes": 4156
   },
   {
     "Path": "scripts/package-rust-installer.ps1",
-    "SHA256": "6C4DF088B2613D03E6201088C3AE90F2A57C163ADD0A8B147B0E9796E3A2B310",
-    "Bytes": 6461
+    "SHA256": "AF5B687C82F3A7F83D1A5C5AEEA1CCD51F1A85E3A1F39BD81DA15DBAC9C2342C",
+    "Bytes": 14864
   },
   {
     "Path": "scripts/package-rust-portable.sh",
-    "SHA256": "044C41AC6B889E9B7C2A2212D3AC54CE5D4713B5BFFEF451116298DA80B527B3",
-    "Bytes": 6095
+    "SHA256": "F96698D293ECDCAEFEF154EAF63F6B9C42141D33083BA711482E1E87327BA087",
+    "Bytes": 5323
   },
   {
     "Path": "scripts/package-rust-windows.ps1",
-    "SHA256": "C054ACC5886505DB8E003FF07D8DD181E4158358069FEFF0F544099BE2D6D8C5",
-    "Bytes": 7465
+    "SHA256": "23CBF664732E3FCA7DA9BD37F1108002BBD44929533D4C1CDF8238DB7694F092",
+    "Bytes": 7480
   },
   {
     "Path": "scripts/package-windows.ps1",
@@ -501,13 +526,13 @@
   },
   {
     "Path": "scripts/probe-worker-memory.py",
-    "SHA256": "BE60289C8F016EA7E52973B8268737922F609BE5F96941E8426305EC5B8DC920",
-    "Bytes": 20056
+    "SHA256": "5D48B0F8523F20248D1EC3704BB9E330A6AF6E0D9C0C7C7E0BFF860FE7E8FB13",
+    "Bytes": 20291
   },
   {
     "Path": "scripts/publish-rust-release.py",
-    "SHA256": "5F5294C60FE3D39B0329F9347DEEF4477E1C8FEDE233334A086136E405F5CF05",
-    "Bytes": 11627
+    "SHA256": "5408CBD9079451E189D47CD8004FA3FF0C14D687FB1B1FB5EBBE7237A9D27703",
+    "Bytes": 11893
   },
   {
     "Path": "scripts/release-packages.py",
@@ -516,18 +541,18 @@
   },
   {
     "Path": "scripts/rust-artifacts.mjs",
-    "SHA256": "ED10A314E977452351834530B8561E11D406586D8EDB907C4E1FC3C4552EF8B6",
-    "Bytes": 20494
+    "SHA256": "B8BCBD4B5C37BE97CE440C62BDBDA7C37DA36F467DA75821A91DD2BD3106638E",
+    "Bytes": 20757
   },
   {
     "Path": "scripts/rust-portable-artifacts.py",
-    "SHA256": "32047E7307EDC1791149CA34464C097175AE9EAE506795B0CA33A85B32951D5B",
-    "Bytes": 16395
+    "SHA256": "3C6EE5A219CD3F8150EB1324536C37FD0F9B5B9CEF18342E99461066712F3CB4",
+    "Bytes": 19632
   },
   {
     "Path": "scripts/test_release_packages.py",
-    "SHA256": "D130F9AC2599B75BC882C71349EE96B1CD9317FBB6544A0C07F52D253F2B5E39",
-    "Bytes": 16319
+    "SHA256": "CAC36B68F2BCBF615AC9DF5207A4256F6AAEED9E0B2E279B8986984FC78171F5",
+    "Bytes": 26850
   },
   {
     "Path": "scripts/test_release_publisher.py",
@@ -536,13 +561,13 @@
   },
   {
     "Path": "scripts/test_rust_portable.py",
-    "SHA256": "2BD18997EEA890838354E8D797AA9854F9BEC265EB686ADB63A0B9D30B6CCDA1",
-    "Bytes": 11439
+    "SHA256": "E0C4313804754C68E87B4A2B2367974719594BFC7DC0B718D12E44DF40ED6DCD",
+    "Bytes": 22478
   },
   {
     "Path": "scripts/test_worker_memory.py",
-    "SHA256": "B75AF7D22015488E75B2F6BAB12B05ED56C7D6A1681EDA0D683468FAEFFEA0A6",
-    "Bytes": 1375
+    "SHA256": "5C7F2FA1F497BDFDE1CB16B713946CE8DC0B77B32AF426A3A4C5E949B9887CFE",
+    "Bytes": 2518
   },
   {
     "Path": "scripts/windows-installer-files.py",
@@ -551,13 +576,28 @@
   },
   {
     "Path": "scripts/windows-installer.nsi",
-    "SHA256": "68267BCC0735A0EB376D7D4CFB917006BB878311EAE851C9A39DB2DEA2374253",
-    "Bytes": 5703
+    "SHA256": "DF7154928B3AF86269987C0937CEE09C7F875CA227536D17330F89E26EC92BF4",
+    "Bytes": 6476
   },
   {
     "Path": "platform/macos/HandyMeetingCapture.swift",
-    "SHA256": "F1C945C0DDD376AB4BE90423827DE552FC4DCD12C390D686EC84A412AF531098",
-    "Bytes": 7003
+    "SHA256": "3C566C3075F043DD7C772A1F6856250718C286D35524F23861B330DD610F2D9E",
+    "Bytes": 11184
+  },
+  {
+    "Path": "assets/screenshots/analysis-dark.png",
+    "SHA256": "8BFE208FEA850F816049269957C8DDC424A59E810FCFA6573AD54EE077BFE096",
+    "Bytes": 63219
+  },
+  {
+    "Path": "assets/screenshots/analysis-light.png",
+    "SHA256": "9316DBA754D5070B8684A80D8420BC669C113498EA1FA840F3609516CC29676C",
+    "Bytes": 55638
+  },
+  {
+    "Path": "assets/screenshots/transcript-light.png",
+    "SHA256": "1130220C85A62FB9E3DBE318CB4F2B851DE614D4CDBFF28F00590F3FA6418C7C",
+    "Bytes": 58108
   },
   {
     "Path": "assets/favicon.ico",
@@ -578,46 +618,6 @@
     "Path": "assets/handymeeting.svg",
     "SHA256": "BECFE0ED6E19B519451C71D3A50E9374C53115EBCD116528DFB14212625B7C2F",
     "Bytes": 443
-  },
-  {
-    "Path": "assets/screenshots/analysis-dark.png",
-    "SHA256": "8BFE208FEA850F816049269957C8DDC424A59E810FCFA6573AD54EE077BFE096",
-    "Bytes": 63219
-  },
-  {
-    "Path": "assets/screenshots/analysis-light.png",
-    "SHA256": "9316DBA754D5070B8684A80D8420BC669C113498EA1FA840F3609516CC29676C",
-    "Bytes": 55638
-  },
-  {
-    "Path": "assets/screenshots/transcript-light.png",
-    "SHA256": "1130220C85A62FB9E3DBE318CB4F2B851DE614D4CDBFF28F00590F3FA6418C7C",
-    "Bytes": 58108
-  },
-  {
-    "Path": ".github/CODEOWNERS",
-    "SHA256": "B0E1B4877FE0C0E739844CFBC22CF2C8017AB695356648FD3CCDD4A53E0CD953",
-    "Bytes": 9
-  },
-  {
-    "Path": ".github/pull_request_template.md",
-    "SHA256": "16E9E5183122D7F86C424E197E9E9FA3C0B907FE10AFC5D242C3D1BF4464E0FD",
-    "Bytes": 439
-  },
-  {
-    "Path": ".github/RELEASE_NOTES_PORTABLE.md",
-    "SHA256": "509B490C705B3C422ACAE5EDCB9E584F01E324B7F0A4323182E0546F83E9BE7D",
-    "Bytes": 2128
-  },
-  {
-    "Path": ".github/RELEASE_NOTES_WINDOWS.md",
-    "SHA256": "514C5811760CFA32967926FDB9B962A4BE1669FB660AF45D52A9989693A71194",
-    "Bytes": 1464
-  },
-  {
-    "Path": ".github/RELEASE_NOTES.md",
-    "SHA256": "4168ED3A05F0CF8DA6464D3071C13C7D50B400C51D74948FFE33987DE1B641F8",
-    "Bytes": 3925
   },
   {
     "Path": ".github/ISSUE_TEMPLATE/bug_report.yml",
@@ -646,8 +646,8 @@
   },
   {
     "Path": ".github/workflows/rust-portable.yml",
-    "SHA256": "09814A1F50C5505B2AAD0FB1474DA755D118E284DDBE11DF7C09AF989855B8B3",
-    "Bytes": 7925
+    "SHA256": "ED2E28DCD92E0320FEE0116F667BD81A9B092F0BDE73B114F662E4BC4804F000",
+    "Bytes": 9407
   },
   {
     "Path": ".github/workflows/rust-release.yml",
@@ -656,8 +656,8 @@
   },
   {
     "Path": ".github/workflows/rust.yml",
-    "SHA256": "27C9B6BE0F538B3E9C8A291656762559357B45248FA5B0B491CDDCDDB6C83E7F",
-    "Bytes": 10189
+    "SHA256": "97472C516A9AE37E2E5DC2A7AEC7E0F932ED09B3DFCCA86345AFBFC3E007BBF6",
+    "Bytes": 11536
   },
   {
     "Path": ".github/workflows/windows.yml",
@@ -665,19 +665,29 @@
     "Bytes": 1023
   },
   {
-    "Path": "licenses/Avalonia-MIT.txt",
-    "SHA256": "213814D306090074D234D760239FF0F67EB9B8D20EEFB4D5631BB39DBE0B769B",
-    "Bytes": 1096
+    "Path": ".github/CODEOWNERS",
+    "SHA256": "B0E1B4877FE0C0E739844CFBC22CF2C8017AB695356648FD3CCDD4A53E0CD953",
+    "Bytes": 9
   },
   {
-    "Path": "licenses/Inter-OFL.txt",
-    "SHA256": "262481E844521B326F5ECD053E59B98C8B2DA78C8EE1BDBB6E8174305E54935A",
-    "Bytes": 4380
+    "Path": ".github/pull_request_template.md",
+    "SHA256": "16E9E5183122D7F86C424E197E9E9FA3C0B907FE10AFC5D242C3D1BF4464E0FD",
+    "Bytes": 439
   },
   {
-    "Path": "licenses/nuget-packages.json",
-    "SHA256": "8B7909E21AC74134FB8BB7FD29F8DE5CB4977EFA0CE82E2631F9AB06DADE7959",
-    "Bytes": 5912
+    "Path": ".github/RELEASE_NOTES_PORTABLE.md",
+    "SHA256": "509B490C705B3C422ACAE5EDCB9E584F01E324B7F0A4323182E0546F83E9BE7D",
+    "Bytes": 2128
+  },
+  {
+    "Path": ".github/RELEASE_NOTES_WINDOWS.md",
+    "SHA256": "514C5811760CFA32967926FDB9B962A4BE1669FB660AF45D52A9989693A71194",
+    "Bytes": 1464
+  },
+  {
+    "Path": ".github/RELEASE_NOTES.md",
+    "SHA256": "9E1FAB339839ABC8981B7ADBCBA395CD740861657E0FBB089AD247E077345A22",
+    "Bytes": 6497
   },
   {
     "Path": "licenses/frontend/_tauri-apps_api-2.11.0-LICENSE_APACHE-2.0.txt",
@@ -711,8 +721,8 @@
   },
   {
     "Path": "licenses/frontend/manifest.json",
-    "SHA256": "944554C6A0E2D32212B131DAED1A3CB809BD2AC128CA31EDD5F0FD58F6080F11",
-    "Bytes": 3812
+    "SHA256": "025BFFD6D41429E33E00B5665B215C9EA48AA8EBA0DDF5EC21C7954A81EDE16D",
+    "Bytes": 3813
   },
   {
     "Path": "licenses/frontend/react-18.3.1-LICENSE.txt",
@@ -981,8 +991,8 @@
   },
   {
     "Path": "licenses/rust/aarch64-apple-darwin/ADDITIONAL_NOTICES.txt",
-    "SHA256": "E7F704209B0B980FB7D9D4ED2E1211211496B02F84AFC7649B79E56A6D0A233C",
-    "Bytes": 1214
+    "SHA256": "259F14FF16C1F5222519F16FBB1805283D85E385C0FD20B4DA359149B9791AF1",
+    "Bytes": 1219
   },
   {
     "Path": "licenses/rust/aarch64-apple-darwin/adler2-2.0.1-LICENSE-0BSD.txt",
@@ -1665,6 +1675,26 @@
     "Bytes": 1054
   },
   {
+    "Path": "licenses/rust/aarch64-apple-darwin/fallible-iterator-0.3.0-LICENSE-APACHE.txt",
+    "SHA256": "C6596EB7BE8581C18BE736C846FB9173B69ECCF6EF94C5135893EC56BD92BA08",
+    "Bytes": 11358
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/fallible-iterator-0.3.0-LICENSE-MIT.txt",
+    "SHA256": "0816E154B159BA255C563F7C8C7DF5BBB8CC5FC96F5AB8CF9F4743B4F41FE7EB",
+    "Bytes": 1078
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/fallible-streaming-iterator-0.1.9-LICENSE-APACHE.txt",
+    "SHA256": "C6596EB7BE8581C18BE736C846FB9173B69ECCF6EF94C5135893EC56BD92BA08",
+    "Bytes": 11358
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/fallible-streaming-iterator-0.1.9-LICENSE-MIT.txt",
+    "SHA256": "8DCEC5569A9BE5B0E086C80FAED6F1AEFA670AF0EC29CECC2F714303096887E0",
+    "Bytes": 1086
+  },
+  {
     "Path": "licenses/rust/aarch64-apple-darwin/fastrand-2.3.0-LICENSE-APACHE.txt",
     "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
     "Bytes": 10847
@@ -1903,6 +1933,16 @@
     "Path": "licenses/rust/aarch64-apple-darwin/hashbrown-0.17.1-LICENSE-MIT.txt",
     "SHA256": "FF8F68CB076CAF8CEFE7A6430D4AC086CE6AF2CA8CE2C4E5A2004D4552EF52A2",
     "Bytes": 1060
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/hashlink-0.12.2-LICENSE-APACHE.txt",
+    "SHA256": "C144680885B29E4719E2A51F0AAB5439A1E02D980692B5AAF086CAE12727F28B",
+    "Bytes": 10849
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/hashlink-0.12.2-LICENSE-MIT.txt",
+    "SHA256": "E915669A595B11A200873DF8286561881B0E04932F6412A585DB6297BA0BC97C",
+    "Bytes": 1133
   },
   {
     "Path": "licenses/rust/aarch64-apple-darwin/heck-0.5.0-LICENSE-APACHE.txt",
@@ -2210,6 +2250,11 @@
     "Bytes": 1066
   },
   {
+    "Path": "licenses/rust/aarch64-apple-darwin/libsqlite3-sys-0.39.1-LICENSE.txt",
+    "SHA256": "C10C1F27337546471E5F7E4E97FDD398B35B9D4E126115DCD22DE8D8E65ABF6F",
+    "Bytes": 1067
+  },
+  {
     "Path": "licenses/rust/aarch64-apple-darwin/litemap-0.8.1-LICENSE.txt",
     "SHA256": "F367C1B8E1AA262435251E442901DA4607B4650E0E63A026F5044473ECFB90F2",
     "Bytes": 2195
@@ -2251,8 +2296,8 @@
   },
   {
     "Path": "licenses/rust/aarch64-apple-darwin/manifest.json",
-    "SHA256": "59972CECE0C4287966FD3F5C1A16A92FCDF9C02C1C358F5CCBADE6030178DD68",
-    "Bytes": 266339
+    "SHA256": "563C6C98A52B08C4941B2E8C394E4637E6855F4EC501707B3EB76CC67DF30298",
+    "Bytes": 280342
   },
   {
     "Path": "licenses/rust/aarch64-apple-darwin/markup5ever-0.38.0-LICENSE-APACHE.txt",
@@ -2328,6 +2373,11 @@
     "Path": "licenses/rust/aarch64-apple-darwin/new_debug_unreachable-1.0.6-LICENSE-MIT.txt",
     "SHA256": "F7715D38A3FA1B4AC97C5729740752505A39CB92EE83AB5B102AEB5EAA7CDEA4",
     "Bytes": 1057
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/nix-0.31.3-LICENSE.txt",
+    "SHA256": "66E3EE1FA7F909AD3C612D556F2A0CDABCD809AD6E66F3B0605015AC64841B70",
+    "Bytes": 1097
   },
   {
     "Path": "licenses/rust/aarch64-apple-darwin/num-conv-0.2.0-LICENSE-Apache.txt",
@@ -2528,6 +2578,16 @@
     "Path": "licenses/rust/aarch64-apple-darwin/pin-utils-0.1.0-LICENSE-MIT.txt",
     "SHA256": "28802412D2BFBAFE432B305634413B41A984D30FBA0DF41D30AA2C8A2077C5B1",
     "Bytes": 1065
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/pkg-config-0.3.32-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/pkg-config-0.3.32-LICENSE-MIT.txt",
+    "SHA256": "378F5840B258E2779C39418F3F2D7B2BA96F1C7917DD6BE0713F88305DBDA397",
+    "Bytes": 1057
   },
   {
     "Path": "licenses/rust/aarch64-apple-darwin/plist-1.10.3-LICENCE.txt",
@@ -2750,6 +2810,11 @@
     "Bytes": 1063
   },
   {
+    "Path": "licenses/rust/aarch64-apple-darwin/rfd-0.16.1-LICENSE.txt",
+    "SHA256": "65FC947F4BAC882A2CD104EF73C246B1B037059DF9F2B3A58B7F77F0B9E56071",
+    "Bytes": 1079
+  },
+  {
     "Path": "licenses/rust/aarch64-apple-darwin/ring-0.17.14-LICENSE-BoringSSL.txt",
     "SHA256": "005FC765DDC5115DA796CCA915BAA9557ABAE13FF35E0A47C47AFFC56F6C414D",
     "Bytes": 14870
@@ -2763,6 +2828,11 @@
     "Path": "licenses/rust/aarch64-apple-darwin/ring-0.17.14-LICENSE.txt",
     "SHA256": "B3D734001A94EFFF3579978D953391AA7115F877657D25EB54037A43875D078A",
     "Bytes": 499
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/rusqlite-0.41.0-LICENSE.txt",
+    "SHA256": "C10C1F27337546471E5F7E4E97FDD398B35B9D4E126115DCD22DE8D8E65ABF6F",
+    "Bytes": 1067
   },
   {
     "Path": "licenses/rust/aarch64-apple-darwin/rustc_version-0.4.1-LICENSE-APACHE.txt",
@@ -3270,6 +3340,41 @@
     "Bytes": 1090
   },
   {
+    "Path": "licenses/rust/aarch64-apple-darwin/tauri-plugin-2.6.3-LICENSE_MIT.txt",
+    "SHA256": "9DD42EA92CFF2EDE5CD477CBFCCE051B2D0115C0AC7F368EE88CB545055DFF1D",
+    "Bytes": 1090
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/tauri-plugin-dialog-2.7.1-LICENSE_APACHE-2.0.txt",
+    "SHA256": "0CEC06E0E55FBC3DC5CEE4FCA9B607F66CB8F4E4DBCF3B3C013594DD156732E9",
+    "Bytes": 10173
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/tauri-plugin-dialog-2.7.1-LICENSE_MIT.txt",
+    "SHA256": "89FF9689DCF9DD53968785D05A26F7898BB169DBFCADA8D032B3E68CF0D55607",
+    "Bytes": 1089
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/tauri-plugin-dialog-2.7.1-LICENSE.spdx.txt",
+    "SHA256": "EB8A6C84630461B352BADCAB1DBE5D0168C56D377358B2B8C86B51003272D5EF",
+    "Bytes": 888
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/tauri-plugin-fs-2.5.2-LICENSE_APACHE-2.0.txt",
+    "SHA256": "0CEC06E0E55FBC3DC5CEE4FCA9B607F66CB8F4E4DBCF3B3C013594DD156732E9",
+    "Bytes": 10173
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/tauri-plugin-fs-2.5.2-LICENSE_MIT.txt",
+    "SHA256": "89FF9689DCF9DD53968785D05A26F7898BB169DBFCADA8D032B3E68CF0D55607",
+    "Bytes": 1089
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/tauri-plugin-fs-2.5.2-LICENSE.spdx.txt",
+    "SHA256": "EB8A6C84630461B352BADCAB1DBE5D0168C56D377358B2B8C86B51003272D5EF",
+    "Bytes": 888
+  },
+  {
     "Path": "licenses/rust/aarch64-apple-darwin/tauri-runtime-2.11.3-LICENSE_APACHE-2.0.txt",
     "SHA256": "0D542E0C8804E39AA7F37EB00DA5A762149DC682D7829451287E11B938E94594",
     "Bytes": 10174
@@ -3455,6 +3560,16 @@
     "Bytes": 1062
   },
   {
+    "Path": "licenses/rust/aarch64-apple-darwin/toml_datetime-1.1.2_spec-1.1.0-LICENSE-APACHE.txt",
+    "SHA256": "249FDB6694467DD615B259F7DDDE07BE3F8AE5A72CECEBB0E24F6629AF4215FE",
+    "Bytes": 11349
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/toml_datetime-1.1.2_spec-1.1.0-LICENSE-MIT.txt",
+    "SHA256": "6EFB0476A1CC085077ED49357026D8C173BF33017278EF440F222FB9CBCB66E6",
+    "Bytes": 1062
+  },
+  {
     "Path": "licenses/rust/aarch64-apple-darwin/toml_parser-1.0.9_spec-1.1.0-LICENSE-APACHE.txt",
     "SHA256": "C6596EB7BE8581C18BE736C846FB9173B69ECCF6EF94C5135893EC56BD92BA08",
     "Bytes": 11358
@@ -3481,6 +3596,16 @@
   },
   {
     "Path": "licenses/rust/aarch64-apple-darwin/toml-0.9.12_spec-1.1.0-LICENSE-MIT.txt",
+    "SHA256": "6EFB0476A1CC085077ED49357026D8C173BF33017278EF440F222FB9CBCB66E6",
+    "Bytes": 1062
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/toml-1.0.6_spec-1.1.0-LICENSE-APACHE.txt",
+    "SHA256": "C6596EB7BE8581C18BE736C846FB9173B69ECCF6EF94C5135893EC56BD92BA08",
+    "Bytes": 11358
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/toml-1.0.6_spec-1.1.0-LICENSE-MIT.txt",
     "SHA256": "6EFB0476A1CC085077ED49357026D8C173BF33017278EF440F222FB9CBCB66E6",
     "Bytes": 1062
   },
@@ -3548,6 +3673,16 @@
     "Path": "licenses/rust/aarch64-apple-darwin/try-lock-0.2.5-LICENSE.txt",
     "SHA256": "C816A0749CDC6BF062A5111C159723DE51B2BFAC66A1DAC2655ABD9E6B1583EB",
     "Bytes": 1096
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/typed-path-0.13.0-LICENSE-APACHE.txt",
+    "SHA256": "62C7A1E35F56406896D7AA7CA52D0CC0D272AC022B5D2796E7D6905DB8A3636A",
+    "Bytes": 9723
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/typed-path-0.13.0-LICENSE-MIT.txt",
+    "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
+    "Bytes": 1023
   },
   {
     "Path": "licenses/rust/aarch64-apple-darwin/typeid-1.0.3-LICENSE-APACHE.txt",
@@ -3725,6 +3860,16 @@
     "Bytes": 1157
   },
   {
+    "Path": "licenses/rust/aarch64-apple-darwin/vcpkg-0.2.15-LICENSE-APACHE.txt",
+    "SHA256": "60C93A31F490375AADF64098B75F10715010379541021E00261045D7800611D3",
+    "Bytes": 11050
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/vcpkg-0.2.15-LICENSE-MIT.txt",
+    "SHA256": "016D20F335060A70E79D9FCF8DFAA6201114D65D592211F4BDFB8AE9CA2BC1DC",
+    "Bytes": 1082
+  },
+  {
     "Path": "licenses/rust/aarch64-apple-darwin/version_check-0.9.5-LICENSE-APACHE.txt",
     "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
     "Bytes": 10847
@@ -3850,9 +3995,19 @@
     "Bytes": 2195
   },
   {
+    "Path": "licenses/rust/aarch64-apple-darwin/zip-9.1.2-LICENSE.txt",
+    "SHA256": "58545FED1565E42D687AECEC6897D35C6D37CCB71479A137C0DEB2203E125C79",
+    "Bytes": 1085
+  },
+  {
+    "Path": "licenses/rust/aarch64-apple-darwin/zlib-rs-0.6.8-LICENSE.txt",
+    "SHA256": "E72111C52B7D96EBE25348DEE19F0744F444D3C95AE6B1ECB6CCAECC5BCE05BA",
+    "Bytes": 856
+  },
+  {
     "Path": "licenses/rust/x86_64-apple-darwin/ADDITIONAL_NOTICES.txt",
-    "SHA256": "479F82E63AEA0CD09AE7F1BB8F88F238D00768D127B3BF402AF0401B7270382A",
-    "Bytes": 1213
+    "SHA256": "764F3F9C41F77CF12F30E8F3604CFB59552383454F7B427B3D3B1E3D52B29D39",
+    "Bytes": 1218
   },
   {
     "Path": "licenses/rust/x86_64-apple-darwin/adler2-2.0.1-LICENSE-0BSD.txt",
@@ -4545,6 +4700,26 @@
     "Bytes": 1054
   },
   {
+    "Path": "licenses/rust/x86_64-apple-darwin/fallible-iterator-0.3.0-LICENSE-APACHE.txt",
+    "SHA256": "C6596EB7BE8581C18BE736C846FB9173B69ECCF6EF94C5135893EC56BD92BA08",
+    "Bytes": 11358
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/fallible-iterator-0.3.0-LICENSE-MIT.txt",
+    "SHA256": "0816E154B159BA255C563F7C8C7DF5BBB8CC5FC96F5AB8CF9F4743B4F41FE7EB",
+    "Bytes": 1078
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/fallible-streaming-iterator-0.1.9-LICENSE-APACHE.txt",
+    "SHA256": "C6596EB7BE8581C18BE736C846FB9173B69ECCF6EF94C5135893EC56BD92BA08",
+    "Bytes": 11358
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/fallible-streaming-iterator-0.1.9-LICENSE-MIT.txt",
+    "SHA256": "8DCEC5569A9BE5B0E086C80FAED6F1AEFA670AF0EC29CECC2F714303096887E0",
+    "Bytes": 1086
+  },
+  {
     "Path": "licenses/rust/x86_64-apple-darwin/fastrand-2.3.0-LICENSE-APACHE.txt",
     "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
     "Bytes": 10847
@@ -4783,6 +4958,16 @@
     "Path": "licenses/rust/x86_64-apple-darwin/hashbrown-0.17.1-LICENSE-MIT.txt",
     "SHA256": "FF8F68CB076CAF8CEFE7A6430D4AC086CE6AF2CA8CE2C4E5A2004D4552EF52A2",
     "Bytes": 1060
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/hashlink-0.12.2-LICENSE-APACHE.txt",
+    "SHA256": "C144680885B29E4719E2A51F0AAB5439A1E02D980692B5AAF086CAE12727F28B",
+    "Bytes": 10849
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/hashlink-0.12.2-LICENSE-MIT.txt",
+    "SHA256": "E915669A595B11A200873DF8286561881B0E04932F6412A585DB6297BA0BC97C",
+    "Bytes": 1133
   },
   {
     "Path": "licenses/rust/x86_64-apple-darwin/heck-0.5.0-LICENSE-APACHE.txt",
@@ -5090,6 +5275,11 @@
     "Bytes": 1066
   },
   {
+    "Path": "licenses/rust/x86_64-apple-darwin/libsqlite3-sys-0.39.1-LICENSE.txt",
+    "SHA256": "C10C1F27337546471E5F7E4E97FDD398B35B9D4E126115DCD22DE8D8E65ABF6F",
+    "Bytes": 1067
+  },
+  {
     "Path": "licenses/rust/x86_64-apple-darwin/litemap-0.8.1-LICENSE.txt",
     "SHA256": "F367C1B8E1AA262435251E442901DA4607B4650E0E63A026F5044473ECFB90F2",
     "Bytes": 2195
@@ -5131,8 +5321,8 @@
   },
   {
     "Path": "licenses/rust/x86_64-apple-darwin/manifest.json",
-    "SHA256": "8168A53A23382A14F45B407B55356379E31853712A8FC91ED19D438C5482EC06",
-    "Bytes": 267219
+    "SHA256": "E86BA0BC073A2088AC8770256E03B225B31DB8A8226A05DFEF29BF278D3DC3AD",
+    "Bytes": 281222
   },
   {
     "Path": "licenses/rust/x86_64-apple-darwin/markup5ever-0.38.0-LICENSE-APACHE.txt",
@@ -5208,6 +5398,11 @@
     "Path": "licenses/rust/x86_64-apple-darwin/new_debug_unreachable-1.0.6-LICENSE-MIT.txt",
     "SHA256": "F7715D38A3FA1B4AC97C5729740752505A39CB92EE83AB5B102AEB5EAA7CDEA4",
     "Bytes": 1057
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/nix-0.31.3-LICENSE.txt",
+    "SHA256": "66E3EE1FA7F909AD3C612D556F2A0CDABCD809AD6E66F3B0605015AC64841B70",
+    "Bytes": 1097
   },
   {
     "Path": "licenses/rust/x86_64-apple-darwin/num-conv-0.2.0-LICENSE-Apache.txt",
@@ -5408,6 +5603,16 @@
     "Path": "licenses/rust/x86_64-apple-darwin/pin-utils-0.1.0-LICENSE-MIT.txt",
     "SHA256": "28802412D2BFBAFE432B305634413B41A984D30FBA0DF41D30AA2C8A2077C5B1",
     "Bytes": 1065
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/pkg-config-0.3.32-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/pkg-config-0.3.32-LICENSE-MIT.txt",
+    "SHA256": "378F5840B258E2779C39418F3F2D7B2BA96F1C7917DD6BE0713F88305DBDA397",
+    "Bytes": 1057
   },
   {
     "Path": "licenses/rust/x86_64-apple-darwin/plist-1.10.3-LICENCE.txt",
@@ -5630,6 +5835,11 @@
     "Bytes": 1063
   },
   {
+    "Path": "licenses/rust/x86_64-apple-darwin/rfd-0.16.1-LICENSE.txt",
+    "SHA256": "65FC947F4BAC882A2CD104EF73C246B1B037059DF9F2B3A58B7F77F0B9E56071",
+    "Bytes": 1079
+  },
+  {
     "Path": "licenses/rust/x86_64-apple-darwin/ring-0.17.14-LICENSE-BoringSSL.txt",
     "SHA256": "005FC765DDC5115DA796CCA915BAA9557ABAE13FF35E0A47C47AFFC56F6C414D",
     "Bytes": 14870
@@ -5643,6 +5853,11 @@
     "Path": "licenses/rust/x86_64-apple-darwin/ring-0.17.14-LICENSE.txt",
     "SHA256": "B3D734001A94EFFF3579978D953391AA7115F877657D25EB54037A43875D078A",
     "Bytes": 499
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/rusqlite-0.41.0-LICENSE.txt",
+    "SHA256": "C10C1F27337546471E5F7E4E97FDD398B35B9D4E126115DCD22DE8D8E65ABF6F",
+    "Bytes": 1067
   },
   {
     "Path": "licenses/rust/x86_64-apple-darwin/rustc_version-0.4.1-LICENSE-APACHE.txt",
@@ -6150,6 +6365,41 @@
     "Bytes": 1090
   },
   {
+    "Path": "licenses/rust/x86_64-apple-darwin/tauri-plugin-2.6.3-LICENSE_MIT.txt",
+    "SHA256": "9DD42EA92CFF2EDE5CD477CBFCCE051B2D0115C0AC7F368EE88CB545055DFF1D",
+    "Bytes": 1090
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/tauri-plugin-dialog-2.7.1-LICENSE_APACHE-2.0.txt",
+    "SHA256": "0CEC06E0E55FBC3DC5CEE4FCA9B607F66CB8F4E4DBCF3B3C013594DD156732E9",
+    "Bytes": 10173
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/tauri-plugin-dialog-2.7.1-LICENSE_MIT.txt",
+    "SHA256": "89FF9689DCF9DD53968785D05A26F7898BB169DBFCADA8D032B3E68CF0D55607",
+    "Bytes": 1089
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/tauri-plugin-dialog-2.7.1-LICENSE.spdx.txt",
+    "SHA256": "EB8A6C84630461B352BADCAB1DBE5D0168C56D377358B2B8C86B51003272D5EF",
+    "Bytes": 888
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/tauri-plugin-fs-2.5.2-LICENSE_APACHE-2.0.txt",
+    "SHA256": "0CEC06E0E55FBC3DC5CEE4FCA9B607F66CB8F4E4DBCF3B3C013594DD156732E9",
+    "Bytes": 10173
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/tauri-plugin-fs-2.5.2-LICENSE_MIT.txt",
+    "SHA256": "89FF9689DCF9DD53968785D05A26F7898BB169DBFCADA8D032B3E68CF0D55607",
+    "Bytes": 1089
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/tauri-plugin-fs-2.5.2-LICENSE.spdx.txt",
+    "SHA256": "EB8A6C84630461B352BADCAB1DBE5D0168C56D377358B2B8C86B51003272D5EF",
+    "Bytes": 888
+  },
+  {
     "Path": "licenses/rust/x86_64-apple-darwin/tauri-runtime-2.11.3-LICENSE_APACHE-2.0.txt",
     "SHA256": "0D542E0C8804E39AA7F37EB00DA5A762149DC682D7829451287E11B938E94594",
     "Bytes": 10174
@@ -6335,6 +6585,16 @@
     "Bytes": 1062
   },
   {
+    "Path": "licenses/rust/x86_64-apple-darwin/toml_datetime-1.1.2_spec-1.1.0-LICENSE-APACHE.txt",
+    "SHA256": "249FDB6694467DD615B259F7DDDE07BE3F8AE5A72CECEBB0E24F6629AF4215FE",
+    "Bytes": 11349
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/toml_datetime-1.1.2_spec-1.1.0-LICENSE-MIT.txt",
+    "SHA256": "6EFB0476A1CC085077ED49357026D8C173BF33017278EF440F222FB9CBCB66E6",
+    "Bytes": 1062
+  },
+  {
     "Path": "licenses/rust/x86_64-apple-darwin/toml_parser-1.0.9_spec-1.1.0-LICENSE-APACHE.txt",
     "SHA256": "C6596EB7BE8581C18BE736C846FB9173B69ECCF6EF94C5135893EC56BD92BA08",
     "Bytes": 11358
@@ -6361,6 +6621,16 @@
   },
   {
     "Path": "licenses/rust/x86_64-apple-darwin/toml-0.9.12_spec-1.1.0-LICENSE-MIT.txt",
+    "SHA256": "6EFB0476A1CC085077ED49357026D8C173BF33017278EF440F222FB9CBCB66E6",
+    "Bytes": 1062
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/toml-1.0.6_spec-1.1.0-LICENSE-APACHE.txt",
+    "SHA256": "C6596EB7BE8581C18BE736C846FB9173B69ECCF6EF94C5135893EC56BD92BA08",
+    "Bytes": 11358
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/toml-1.0.6_spec-1.1.0-LICENSE-MIT.txt",
     "SHA256": "6EFB0476A1CC085077ED49357026D8C173BF33017278EF440F222FB9CBCB66E6",
     "Bytes": 1062
   },
@@ -6428,6 +6698,16 @@
     "Path": "licenses/rust/x86_64-apple-darwin/try-lock-0.2.5-LICENSE.txt",
     "SHA256": "C816A0749CDC6BF062A5111C159723DE51B2BFAC66A1DAC2655ABD9E6B1583EB",
     "Bytes": 1096
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/typed-path-0.13.0-LICENSE-APACHE.txt",
+    "SHA256": "62C7A1E35F56406896D7AA7CA52D0CC0D272AC022B5D2796E7D6905DB8A3636A",
+    "Bytes": 9723
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/typed-path-0.13.0-LICENSE-MIT.txt",
+    "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
+    "Bytes": 1023
   },
   {
     "Path": "licenses/rust/x86_64-apple-darwin/typeid-1.0.3-LICENSE-APACHE.txt",
@@ -6605,6 +6885,16 @@
     "Bytes": 1157
   },
   {
+    "Path": "licenses/rust/x86_64-apple-darwin/vcpkg-0.2.15-LICENSE-APACHE.txt",
+    "SHA256": "60C93A31F490375AADF64098B75F10715010379541021E00261045D7800611D3",
+    "Bytes": 11050
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/vcpkg-0.2.15-LICENSE-MIT.txt",
+    "SHA256": "016D20F335060A70E79D9FCF8DFAA6201114D65D592211F4BDFB8AE9CA2BC1DC",
+    "Bytes": 1082
+  },
+  {
     "Path": "licenses/rust/x86_64-apple-darwin/version_check-0.9.5-LICENSE-APACHE.txt",
     "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
     "Bytes": 10847
@@ -6730,9 +7020,19 @@
     "Bytes": 2195
   },
   {
+    "Path": "licenses/rust/x86_64-apple-darwin/zip-9.1.2-LICENSE.txt",
+    "SHA256": "58545FED1565E42D687AECEC6897D35C6D37CCB71479A137C0DEB2203E125C79",
+    "Bytes": 1085
+  },
+  {
+    "Path": "licenses/rust/x86_64-apple-darwin/zlib-rs-0.6.8-LICENSE.txt",
+    "SHA256": "E72111C52B7D96EBE25348DEE19F0744F444D3C95AE6B1ECB6CCAECC5BCE05BA",
+    "Bytes": 856
+  },
+  {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/ADDITIONAL_NOTICES.txt",
-    "SHA256": "55775B4945E864778147202128F38E9D9B123D72AC4EE475D16D275BA9F0E48E",
-    "Bytes": 1216
+    "SHA256": "967E7F60FC2E370B83C213C68A97E9F08B241273CC066E4415EB13B5F3582C74",
+    "Bytes": 1221
   },
   {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/adler2-2.0.1-LICENSE-0BSD.txt",
@@ -7330,6 +7630,26 @@
     "Bytes": 1338
   },
   {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/fallible-iterator-0.3.0-LICENSE-APACHE.txt",
+    "SHA256": "C6596EB7BE8581C18BE736C846FB9173B69ECCF6EF94C5135893EC56BD92BA08",
+    "Bytes": 11358
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/fallible-iterator-0.3.0-LICENSE-MIT.txt",
+    "SHA256": "0816E154B159BA255C563F7C8C7DF5BBB8CC5FC96F5AB8CF9F4743B4F41FE7EB",
+    "Bytes": 1078
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/fallible-streaming-iterator-0.1.9-LICENSE-APACHE.txt",
+    "SHA256": "C6596EB7BE8581C18BE736C846FB9173B69ECCF6EF94C5135893EC56BD92BA08",
+    "Bytes": 11358
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/fallible-streaming-iterator-0.1.9-LICENSE-MIT.txt",
+    "SHA256": "8DCEC5569A9BE5B0E086C80FAED6F1AEFA670AF0EC29CECC2F714303096887E0",
+    "Bytes": 1086
+  },
+  {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/fastrand-2.3.0-LICENSE-APACHE.txt",
     "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
     "Bytes": 10847
@@ -7538,6 +7858,16 @@
     "Path": "licenses/rust/x86_64-pc-windows-msvc/hashbrown-0.17.1-LICENSE-MIT.txt",
     "SHA256": "FF8F68CB076CAF8CEFE7A6430D4AC086CE6AF2CA8CE2C4E5A2004D4552EF52A2",
     "Bytes": 1060
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/hashlink-0.12.2-LICENSE-APACHE.txt",
+    "SHA256": "C144680885B29E4719E2A51F0AAB5439A1E02D980692B5AAF086CAE12727F28B",
+    "Bytes": 10849
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/hashlink-0.12.2-LICENSE-MIT.txt",
+    "SHA256": "E915669A595B11A200873DF8286561881B0E04932F6412A585DB6297BA0BC97C",
+    "Bytes": 1133
   },
   {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/heck-0.5.0-LICENSE-APACHE.txt",
@@ -7855,6 +8185,11 @@
     "Bytes": 1066
   },
   {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/libsqlite3-sys-0.39.1-LICENSE.txt",
+    "SHA256": "C10C1F27337546471E5F7E4E97FDD398B35B9D4E126115DCD22DE8D8E65ABF6F",
+    "Bytes": 1067
+  },
+  {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/litemap-0.8.1-LICENSE.txt",
     "SHA256": "F367C1B8E1AA262435251E442901DA4607B4650E0E63A026F5044473ECFB90F2",
     "Bytes": 2195
@@ -7896,8 +8231,8 @@
   },
   {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/manifest.json",
-    "SHA256": "3769C2A8A7F94DC7CFD856C165ED16658259CA868ECBC3D820A0D4640AF1B759",
-    "Bytes": 270154
+    "SHA256": "7551E562D133D46BBCEF8ACFA733FE87293A42A023931BD145173309976C301F",
+    "Bytes": 286325
   },
   {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/markup5ever-0.38.0-LICENSE-APACHE.txt",
@@ -8093,6 +8428,16 @@
     "Path": "licenses/rust/x86_64-pc-windows-msvc/pin-utils-0.1.0-LICENSE-MIT.txt",
     "SHA256": "28802412D2BFBAFE432B305634413B41A984D30FBA0DF41D30AA2C8A2077C5B1",
     "Bytes": 1065
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/pkg-config-0.3.32-LICENSE-APACHE.txt",
+    "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
+    "Bytes": 10847
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/pkg-config-0.3.32-LICENSE-MIT.txt",
+    "SHA256": "378F5840B258E2779C39418F3F2D7B2BA96F1C7917DD6BE0713F88305DBDA397",
+    "Bytes": 1057
   },
   {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/plist-1.10.3-LICENCE.txt",
@@ -8305,6 +8650,11 @@
     "Bytes": 1063
   },
   {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/rfd-0.16.1-LICENSE.txt",
+    "SHA256": "65FC947F4BAC882A2CD104EF73C246B1B037059DF9F2B3A58B7F77F0B9E56071",
+    "Bytes": 1079
+  },
+  {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/ring-0.17.14-LICENSE-BoringSSL.txt",
     "SHA256": "005FC765DDC5115DA796CCA915BAA9557ABAE13FF35E0A47C47AFFC56F6C414D",
     "Bytes": 14870
@@ -8318,6 +8668,11 @@
     "Path": "licenses/rust/x86_64-pc-windows-msvc/ring-0.17.14-LICENSE.txt",
     "SHA256": "B3D734001A94EFFF3579978D953391AA7115F877657D25EB54037A43875D078A",
     "Bytes": 499
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/rusqlite-0.41.0-LICENSE.txt",
+    "SHA256": "C10C1F27337546471E5F7E4E97FDD398B35B9D4E126115DCD22DE8D8E65ABF6F",
+    "Bytes": 1067
   },
   {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/rustc_version-0.4.1-LICENSE-APACHE.txt",
@@ -8785,6 +9140,41 @@
     "Bytes": 1090
   },
   {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/tauri-plugin-2.6.3-LICENSE_MIT.txt",
+    "SHA256": "9DD42EA92CFF2EDE5CD477CBFCCE051B2D0115C0AC7F368EE88CB545055DFF1D",
+    "Bytes": 1090
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/tauri-plugin-dialog-2.7.1-LICENSE_APACHE-2.0.txt",
+    "SHA256": "0CEC06E0E55FBC3DC5CEE4FCA9B607F66CB8F4E4DBCF3B3C013594DD156732E9",
+    "Bytes": 10173
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/tauri-plugin-dialog-2.7.1-LICENSE_MIT.txt",
+    "SHA256": "89FF9689DCF9DD53968785D05A26F7898BB169DBFCADA8D032B3E68CF0D55607",
+    "Bytes": 1089
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/tauri-plugin-dialog-2.7.1-LICENSE.spdx.txt",
+    "SHA256": "EB8A6C84630461B352BADCAB1DBE5D0168C56D377358B2B8C86B51003272D5EF",
+    "Bytes": 888
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/tauri-plugin-fs-2.5.2-LICENSE_APACHE-2.0.txt",
+    "SHA256": "0CEC06E0E55FBC3DC5CEE4FCA9B607F66CB8F4E4DBCF3B3C013594DD156732E9",
+    "Bytes": 10173
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/tauri-plugin-fs-2.5.2-LICENSE_MIT.txt",
+    "SHA256": "89FF9689DCF9DD53968785D05A26F7898BB169DBFCADA8D032B3E68CF0D55607",
+    "Bytes": 1089
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/tauri-plugin-fs-2.5.2-LICENSE.spdx.txt",
+    "SHA256": "EB8A6C84630461B352BADCAB1DBE5D0168C56D377358B2B8C86B51003272D5EF",
+    "Bytes": 888
+  },
+  {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/tauri-runtime-2.11.3-LICENSE_APACHE-2.0.txt",
     "SHA256": "0D542E0C8804E39AA7F37EB00DA5A762149DC682D7829451287E11B938E94594",
     "Bytes": 10174
@@ -8970,6 +9360,16 @@
     "Bytes": 1062
   },
   {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/toml_datetime-1.1.2_spec-1.1.0-LICENSE-APACHE.txt",
+    "SHA256": "249FDB6694467DD615B259F7DDDE07BE3F8AE5A72CECEBB0E24F6629AF4215FE",
+    "Bytes": 11349
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/toml_datetime-1.1.2_spec-1.1.0-LICENSE-MIT.txt",
+    "SHA256": "6EFB0476A1CC085077ED49357026D8C173BF33017278EF440F222FB9CBCB66E6",
+    "Bytes": 1062
+  },
+  {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/toml_parser-1.0.9_spec-1.1.0-LICENSE-APACHE.txt",
     "SHA256": "C6596EB7BE8581C18BE736C846FB9173B69ECCF6EF94C5135893EC56BD92BA08",
     "Bytes": 11358
@@ -8996,6 +9396,16 @@
   },
   {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/toml-0.9.12_spec-1.1.0-LICENSE-MIT.txt",
+    "SHA256": "6EFB0476A1CC085077ED49357026D8C173BF33017278EF440F222FB9CBCB66E6",
+    "Bytes": 1062
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/toml-1.0.6_spec-1.1.0-LICENSE-APACHE.txt",
+    "SHA256": "C6596EB7BE8581C18BE736C846FB9173B69ECCF6EF94C5135893EC56BD92BA08",
+    "Bytes": 11358
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/toml-1.0.6_spec-1.1.0-LICENSE-MIT.txt",
     "SHA256": "6EFB0476A1CC085077ED49357026D8C173BF33017278EF440F222FB9CBCB66E6",
     "Bytes": 1062
   },
@@ -9063,6 +9473,16 @@
     "Path": "licenses/rust/x86_64-pc-windows-msvc/try-lock-0.2.5-LICENSE.txt",
     "SHA256": "C816A0749CDC6BF062A5111C159723DE51B2BFAC66A1DAC2655ABD9E6B1583EB",
     "Bytes": 1096
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/typed-path-0.13.0-LICENSE-APACHE.txt",
+    "SHA256": "62C7A1E35F56406896D7AA7CA52D0CC0D272AC022B5D2796E7D6905DB8A3636A",
+    "Bytes": 9723
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/typed-path-0.13.0-LICENSE-MIT.txt",
+    "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
+    "Bytes": 1023
   },
   {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/typeid-1.0.3-LICENSE-APACHE.txt",
@@ -9240,6 +9660,16 @@
     "Bytes": 1157
   },
   {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/vcpkg-0.2.15-LICENSE-APACHE.txt",
+    "SHA256": "60C93A31F490375AADF64098B75F10715010379541021E00261045D7800611D3",
+    "Bytes": 11050
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/vcpkg-0.2.15-LICENSE-MIT.txt",
+    "SHA256": "016D20F335060A70E79D9FCF8DFAA6201114D65D592211F4BDFB8AE9CA2BC1DC",
+    "Bytes": 1082
+  },
+  {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/version_check-0.9.5-LICENSE-APACHE.txt",
     "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
     "Bytes": 10847
@@ -9351,6 +9781,16 @@
   },
   {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/windows_x86_64_msvc-0.52.6-license-mit.txt",
+    "SHA256": "C2CFCCB812FE482101A8F04597DFC5A9991A6B2748266C47AC91B6A5AAE15383",
+    "Bytes": 1141
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/windows_x86_64_msvc-0.53.1-license-apache-2.0.txt",
+    "SHA256": "C16F8DCF1A368B83BE78D826EA23DE4079FE1B4469A0AB9EE20563F37FF3D44B",
+    "Bytes": 11351
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/windows_x86_64_msvc-0.53.1-license-mit.txt",
     "SHA256": "C2CFCCB812FE482101A8F04597DFC5A9991A6B2748266C47AC91B6A5AAE15383",
     "Bytes": 1141
   },
@@ -9565,6 +10005,16 @@
     "Bytes": 1141
   },
   {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/windows-sys-0.60.2-license-apache-2.0.txt",
+    "SHA256": "C16F8DCF1A368B83BE78D826EA23DE4079FE1B4469A0AB9EE20563F37FF3D44B",
+    "Bytes": 11351
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/windows-sys-0.60.2-license-mit.txt",
+    "SHA256": "C2CFCCB812FE482101A8F04597DFC5A9991A6B2748266C47AC91B6A5AAE15383",
+    "Bytes": 1141
+  },
+  {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/windows-sys-0.61.2-license-apache-2.0.txt",
     "SHA256": "C16F8DCF1A368B83BE78D826EA23DE4079FE1B4469A0AB9EE20563F37FF3D44B",
     "Bytes": 11351
@@ -9581,6 +10031,16 @@
   },
   {
     "Path": "licenses/rust/x86_64-pc-windows-msvc/windows-targets-0.52.6-license-mit.txt",
+    "SHA256": "C2CFCCB812FE482101A8F04597DFC5A9991A6B2748266C47AC91B6A5AAE15383",
+    "Bytes": 1141
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/windows-targets-0.53.5-license-apache-2.0.txt",
+    "SHA256": "C16F8DCF1A368B83BE78D826EA23DE4079FE1B4469A0AB9EE20563F37FF3D44B",
+    "Bytes": 11351
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/windows-targets-0.53.5-license-mit.txt",
     "SHA256": "C2CFCCB812FE482101A8F04597DFC5A9991A6B2748266C47AC91B6A5AAE15383",
     "Bytes": 1141
   },
@@ -9690,9 +10150,19 @@
     "Bytes": 2195
   },
   {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/zip-9.1.2-LICENSE.txt",
+    "SHA256": "58545FED1565E42D687AECEC6897D35C6D37CCB71479A137C0DEB2203E125C79",
+    "Bytes": 1085
+  },
+  {
+    "Path": "licenses/rust/x86_64-pc-windows-msvc/zlib-rs-0.6.8-LICENSE.txt",
+    "SHA256": "E72111C52B7D96EBE25348DEE19F0744F444D3C95AE6B1ECB6CCAECC5BCE05BA",
+    "Bytes": 856
+  },
+  {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/ADDITIONAL_NOTICES.txt",
-    "SHA256": "6585307B26F1B12A52B69C0AE384CC87D8C89D7684FE3C39BA0877406FAB8B07",
-    "Bytes": 1218
+    "SHA256": "D9DF6F8FF9947EE77BF82D4B71DF6B2DBC09DBB4C37D3876D0192FFA243349A9",
+    "Bytes": 1223
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/adler2-2.0.1-LICENSE-0BSD.txt",
@@ -10625,6 +11095,26 @@
     "Bytes": 1023
   },
   {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/fallible-iterator-0.3.0-LICENSE-APACHE.txt",
+    "SHA256": "C6596EB7BE8581C18BE736C846FB9173B69ECCF6EF94C5135893EC56BD92BA08",
+    "Bytes": 11358
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/fallible-iterator-0.3.0-LICENSE-MIT.txt",
+    "SHA256": "0816E154B159BA255C563F7C8C7DF5BBB8CC5FC96F5AB8CF9F4743B4F41FE7EB",
+    "Bytes": 1078
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/fallible-streaming-iterator-0.1.9-LICENSE-APACHE.txt",
+    "SHA256": "C6596EB7BE8581C18BE736C846FB9173B69ECCF6EF94C5135893EC56BD92BA08",
+    "Bytes": 11358
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/fallible-streaming-iterator-0.1.9-LICENSE-MIT.txt",
+    "SHA256": "8DCEC5569A9BE5B0E086C80FAED6F1AEFA670AF0EC29CECC2F714303096887E0",
+    "Bytes": 1086
+  },
+  {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/fastrand-2.3.0-LICENSE-APACHE.txt",
     "SHA256": "A60EEA817514531668D7E00765731449FE14D059D3249E0BC93B36DE45F759F2",
     "Bytes": 10847
@@ -10993,6 +11483,16 @@
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/hashbrown-0.17.1-LICENSE-MIT.txt",
     "SHA256": "FF8F68CB076CAF8CEFE7A6430D4AC086CE6AF2CA8CE2C4E5A2004D4552EF52A2",
     "Bytes": 1060
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/hashlink-0.12.2-LICENSE-APACHE.txt",
+    "SHA256": "C144680885B29E4719E2A51F0AAB5439A1E02D980692B5AAF086CAE12727F28B",
+    "Bytes": 10849
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/hashlink-0.12.2-LICENSE-MIT.txt",
+    "SHA256": "E915669A595B11A200873DF8286561881B0E04932F6412A585DB6297BA0BC97C",
+    "Bytes": 1133
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/heck-0.4.1-LICENSE-APACHE.txt",
@@ -11395,6 +11895,11 @@
     "Bytes": 736
   },
   {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/libsqlite3-sys-0.39.1-LICENSE.txt",
+    "SHA256": "C10C1F27337546471E5F7E4E97FDD398B35B9D4E126115DCD22DE8D8E65ABF6F",
+    "Bytes": 1067
+  },
+  {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/linux-raw-sys-0.11.0-COPYRIGHT.txt",
     "SHA256": "3290AE0FBC9DDB77D2239121D710F0BB9D31B3B4744E6D97FE01E652B4C1870B",
     "Bytes": 881
@@ -11456,8 +11961,8 @@
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/manifest.json",
-    "SHA256": "25F31D9D92D07945042F9D47664B005EBAC8513DB99D0FC26DEB5C1D534CC3AE",
-    "Bytes": 333447
+    "SHA256": "6EEEB447763132F9EAA489657DD00F003C01B7C53017D1C335959E73BF0ADB59",
+    "Bytes": 345991
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/markup5ever-0.38.0-LICENSE-APACHE.txt",
@@ -12050,6 +12555,11 @@
     "Bytes": 1063
   },
   {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/rfd-0.16.1-LICENSE.txt",
+    "SHA256": "65FC947F4BAC882A2CD104EF73C246B1B037059DF9F2B3A58B7F77F0B9E56071",
+    "Bytes": 1079
+  },
+  {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/ring-0.17.14-LICENSE-BoringSSL.txt",
     "SHA256": "005FC765DDC5115DA796CCA915BAA9557ABAE13FF35E0A47C47AFFC56F6C414D",
     "Bytes": 14870
@@ -12063,6 +12573,11 @@
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/ring-0.17.14-LICENSE.txt",
     "SHA256": "B3D734001A94EFFF3579978D953391AA7115F877657D25EB54037A43875D078A",
     "Bytes": 499
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/rusqlite-0.41.0-LICENSE.txt",
+    "SHA256": "C10C1F27337546471E5F7E4E97FDD398B35B9D4E126115DCD22DE8D8E65ABF6F",
+    "Bytes": 1067
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/rustc_version-0.4.1-LICENSE-APACHE.txt",
@@ -12615,6 +13130,41 @@
     "Bytes": 1090
   },
   {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/tauri-plugin-2.6.3-LICENSE_MIT.txt",
+    "SHA256": "9DD42EA92CFF2EDE5CD477CBFCCE051B2D0115C0AC7F368EE88CB545055DFF1D",
+    "Bytes": 1090
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/tauri-plugin-dialog-2.7.1-LICENSE_APACHE-2.0.txt",
+    "SHA256": "0CEC06E0E55FBC3DC5CEE4FCA9B607F66CB8F4E4DBCF3B3C013594DD156732E9",
+    "Bytes": 10173
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/tauri-plugin-dialog-2.7.1-LICENSE_MIT.txt",
+    "SHA256": "89FF9689DCF9DD53968785D05A26F7898BB169DBFCADA8D032B3E68CF0D55607",
+    "Bytes": 1089
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/tauri-plugin-dialog-2.7.1-LICENSE.spdx.txt",
+    "SHA256": "EB8A6C84630461B352BADCAB1DBE5D0168C56D377358B2B8C86B51003272D5EF",
+    "Bytes": 888
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/tauri-plugin-fs-2.5.2-LICENSE_APACHE-2.0.txt",
+    "SHA256": "0CEC06E0E55FBC3DC5CEE4FCA9B607F66CB8F4E4DBCF3B3C013594DD156732E9",
+    "Bytes": 10173
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/tauri-plugin-fs-2.5.2-LICENSE_MIT.txt",
+    "SHA256": "89FF9689DCF9DD53968785D05A26F7898BB169DBFCADA8D032B3E68CF0D55607",
+    "Bytes": 1089
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/tauri-plugin-fs-2.5.2-LICENSE.spdx.txt",
+    "SHA256": "EB8A6C84630461B352BADCAB1DBE5D0168C56D377358B2B8C86B51003272D5EF",
+    "Bytes": 888
+  },
+  {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/tauri-runtime-2.11.3-LICENSE_APACHE-2.0.txt",
     "SHA256": "0D542E0C8804E39AA7F37EB00DA5A762149DC682D7829451287E11B938E94594",
     "Bytes": 10174
@@ -12810,6 +13360,16 @@
     "Bytes": 1062
   },
   {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/toml_datetime-1.1.2_spec-1.1.0-LICENSE-APACHE.txt",
+    "SHA256": "249FDB6694467DD615B259F7DDDE07BE3F8AE5A72CECEBB0E24F6629AF4215FE",
+    "Bytes": 11349
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/toml_datetime-1.1.2_spec-1.1.0-LICENSE-MIT.txt",
+    "SHA256": "6EFB0476A1CC085077ED49357026D8C173BF33017278EF440F222FB9CBCB66E6",
+    "Bytes": 1062
+  },
+  {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/toml_edit-0.19.15-LICENSE-APACHE.txt",
     "SHA256": "C6596EB7BE8581C18BE736C846FB9173B69ECCF6EF94C5135893EC56BD92BA08",
     "Bytes": 11358
@@ -12880,6 +13440,16 @@
     "Bytes": 1062
   },
   {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/toml-1.0.6_spec-1.1.0-LICENSE-APACHE.txt",
+    "SHA256": "C6596EB7BE8581C18BE736C846FB9173B69ECCF6EF94C5135893EC56BD92BA08",
+    "Bytes": 11358
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/toml-1.0.6_spec-1.1.0-LICENSE-MIT.txt",
+    "SHA256": "6EFB0476A1CC085077ED49357026D8C173BF33017278EF440F222FB9CBCB66E6",
+    "Bytes": 1062
+  },
+  {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/tower-0.5.3-LICENSE.txt",
     "SHA256": "4249C8E6C5EBB85F97C77E6457C6FAFC1066406EB8F1EF61E796FBDC5FF18482",
     "Bytes": 1062
@@ -12943,6 +13513,16 @@
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/try-lock-0.2.5-LICENSE.txt",
     "SHA256": "C816A0749CDC6BF062A5111C159723DE51B2BFAC66A1DAC2655ABD9E6B1583EB",
     "Bytes": 1096
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/typed-path-0.13.0-LICENSE-APACHE.txt",
+    "SHA256": "62C7A1E35F56406896D7AA7CA52D0CC0D272AC022B5D2796E7D6905DB8A3636A",
+    "Bytes": 9723
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/typed-path-0.13.0-LICENSE-MIT.txt",
+    "SHA256": "23F18E03DC49DF91622FE2A76176497404E46CED8A715D9D2B67A7446571CCA3",
+    "Bytes": 1023
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/typeid-1.0.3-LICENSE-APACHE.txt",
@@ -13118,6 +13698,16 @@
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/uuid-1.18.1-LICENSE-MIT.txt",
     "SHA256": "436BC5A105D8E57DCD8778730F3754F7BF39C14D2F530E4CDE4BD2D17A83EC3D",
     "Bytes": 1157
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/vcpkg-0.2.15-LICENSE-APACHE.txt",
+    "SHA256": "60C93A31F490375AADF64098B75F10715010379541021E00261045D7800611D3",
+    "Bytes": 11050
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/vcpkg-0.2.15-LICENSE-MIT.txt",
+    "SHA256": "016D20F335060A70E79D9FCF8DFAA6201114D65D592211F4BDFB8AE9CA2BC1DC",
+    "Bytes": 1082
   },
   {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/version_check-0.9.5-LICENSE-APACHE.txt",
@@ -13315,6 +13905,16 @@
     "Bytes": 2195
   },
   {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/zip-9.1.2-LICENSE.txt",
+    "SHA256": "58545FED1565E42D687AECEC6897D35C6D37CCB71479A137C0DEB2203E125C79",
+    "Bytes": 1085
+  },
+  {
+    "Path": "licenses/rust/x86_64-unknown-linux-gnu/zlib-rs-0.6.8-LICENSE.txt",
+    "SHA256": "E72111C52B7D96EBE25348DEE19F0744F444D3C95AE6B1ECB6CCAECC5BCE05BA",
+    "Bytes": 856
+  },
+  {
     "Path": "licenses/rust/x86_64-unknown-linux-gnu/zvariant_derive-5.15.1-LICENSE.txt",
     "SHA256": "260E4FF3FC493695880C90774283EB1E3D018F898FABE655BBD52DD2CBD2FCAD",
     "Bytes": 1080
@@ -13330,9 +13930,19 @@
     "Bytes": 1080
   },
   {
-    "Path": "crates/handy-bridge/Cargo.toml",
-    "SHA256": "1EBA05E0F62B20116392B892BDEEC584CEE5F3A89A833EBB277043AE34A60338",
-    "Bytes": 803
+    "Path": "licenses/Avalonia-MIT.txt",
+    "SHA256": "213814D306090074D234D760239FF0F67EB9B8D20EEFB4D5631BB39DBE0B769B",
+    "Bytes": 1096
+  },
+  {
+    "Path": "licenses/Inter-OFL.txt",
+    "SHA256": "262481E844521B326F5ECD053E59B98C8B2DA78C8EE1BDBB6E8174305E54935A",
+    "Bytes": 4380
+  },
+  {
+    "Path": "licenses/nuget-packages.json",
+    "SHA256": "8B7909E21AC74134FB8BB7FD29F8DE5CB4977EFA0CE82E2631F9AB06DADE7959",
+    "Bytes": 5912
   },
   {
     "Path": "crates/handy-bridge/examples/inspect.rs",
@@ -13346,28 +13956,28 @@
   },
   {
     "Path": "crates/handy-bridge/src/discovery.rs",
-    "SHA256": "2269A78DE6D2CE04A06FE3D931E2BDCA9C307235A386D998FBA0ABD714BD7807",
-    "Bytes": 1975
+    "SHA256": "7AD197A9A8597CFF0A7F558975EB07E9DAEDB5C1D11AFAE4D8673CA8E5B4A8EA",
+    "Bytes": 13946
   },
   {
     "Path": "crates/handy-bridge/src/identity.rs",
-    "SHA256": "14A14B34388CD2CB2C7FC8C9E4010792AD62EDACC1DB99BC4761671B5F7693AA",
-    "Bytes": 11237
+    "SHA256": "32955DCB4CFA6D6EB9B52D9C3C6E3F9A6BE5C1142DD421BFE306CC55B92E2F1C",
+    "Bytes": 11683
   },
   {
     "Path": "crates/handy-bridge/src/lib.rs",
-    "SHA256": "6BF53EC995FDD2F28A7755C923523373AD28F6BB2B5EE74131C94EDBBD1C4B3D",
-    "Bytes": 8624
+    "SHA256": "5F837504A91379784B1E02CF11F383C14582187156D9CC8CC596EF2125D4FED5",
+    "Bytes": 8798
   },
   {
     "Path": "crates/handy-bridge/src/native.rs",
-    "SHA256": "E1D7566DAFC25B190962F05DA3659DA6389BBB02011C116B04231A7DAD8EC816",
-    "Bytes": 4072
+    "SHA256": "0134F41C8023782376C13BE4EC2D983AFF8CF82C37EBD6A45B8BD77229072031",
+    "Bytes": 8028
   },
   {
     "Path": "crates/handy-bridge/src/paths.rs",
-    "SHA256": "398F979713AEBC7D3249FC5A8F195F641BB2AB230E886F4AD6D40A429F93990F",
-    "Bytes": 8511
+    "SHA256": "0747167D3C3B1C8456327DB6E8622EAFA28B62FF6B9E45A1A103C2E3A0B42387",
+    "Bytes": 8763
   },
   {
     "Path": "crates/handy-bridge/src/process.rs",
@@ -13385,44 +13995,104 @@
     "Bytes": 9275
   },
   {
-    "Path": "crates/meeting-core/Cargo.toml",
-    "SHA256": "0C4AB03FFD834983A9127A2274E42F6C7843B03B0E95FABC430E09C7E82B1259",
-    "Bytes": 524
+    "Path": "crates/handy-bridge/Cargo.toml",
+    "SHA256": "1EBA05E0F62B20116392B892BDEEC584CEE5F3A89A833EBB277043AE34A60338",
+    "Bytes": 803
+  },
+  {
+    "Path": "crates/meeting-core/examples/audio_codec_check.rs",
+    "SHA256": "177B68A9D175285816A68479803A00248BF22296773DA6A2CA686D18F4087449",
+    "Bytes": 3461
   },
   {
     "Path": "crates/meeting-core/examples/device_capture.rs",
-    "SHA256": "16866B60131C9237B601F8FF69A4B1E40D341293036149BA04460297FC567CED",
-    "Bytes": 12171
+    "SHA256": "F0F070BE953F0DD05AD64C10AB815309412429D60E99FB2CAC6FAC05274E535C",
+    "Bytes": 12820
+  },
+  {
+    "Path": "crates/meeting-core/examples/library_benchmark.rs",
+    "SHA256": "FB2B09AD879CD4607B8D93479C58ACB34D4823A89AE1598ABCCBD0012DB9865D",
+    "Bytes": 3825
   },
   {
     "Path": "crates/meeting-core/examples/synthetic_capture.rs",
-    "SHA256": "CECA823BE35C071A6ABB76D8B06E463D15D743CA7C676948A20D631D38C3FEE2",
-    "Bytes": 2152
+    "SHA256": "5066CE9A8D60E6423C6D02D7232500244D840FE87CD3E3976B0CACA7286B8DB4",
+    "Bytes": 2199
+  },
+  {
+    "Path": "crates/meeting-core/src/archive/audio.rs",
+    "SHA256": "69F1CF43A02A4897A32AD317F1B3120D84AB53BEF46A36EFB8A0B7E14132A9F3",
+    "Bytes": 12359
+  },
+  {
+    "Path": "crates/meeting-core/src/archive/deletion.rs",
+    "SHA256": "97398949AB9416D66F7E454AE548EB07EF4F8FC8816D6BF4D5E7A4F198CDE1DB",
+    "Bytes": 24670
+  },
+  {
+    "Path": "crates/meeting-core/src/archive/restore.rs",
+    "SHA256": "1227DE0EBAC4ECC9C2D5B88EF14EC4E962A2FA4D45CDF7D13E8B01B873CD7C39",
+    "Bytes": 15823
+  },
+  {
+    "Path": "crates/meeting-core/src/archive/tests.rs",
+    "SHA256": "8E6441341AC973075EE1C427C76AFE903F4C461FFC650ECEE5A61489F88B843D",
+    "Bytes": 65016
+  },
+  {
+    "Path": "crates/meeting-core/src/archive.rs",
+    "SHA256": "D78E5EB6FF00BD9D99BF4640CF0D27C2FFC3E1D0EF8ADAC377E3535F46876B05",
+    "Bytes": 32887
+  },
+  {
+    "Path": "crates/meeting-core/src/audio_codec.rs",
+    "SHA256": "F6B97491E7F4DB7892CBC52E1515B25328A94202602D99E280FF52E636C0DCBA",
+    "Bytes": 16010
+  },
+  {
+    "Path": "crates/meeting-core/src/capture_controls.rs",
+    "SHA256": "460B6D37183DB7A7A0333FA40E3CF02484F8EDD2C1624A5D1C91437344CFADE2",
+    "Bytes": 19730
   },
   {
     "Path": "crates/meeting-core/src/capture.rs",
-    "SHA256": "63F959F518C3C2EBD0273ECDB412F1D0FE5AC1C36B0BB8F2DB5015B391D96374",
-    "Bytes": 4673
+    "SHA256": "871D065E0D6F80463E8648FD1540839E9C9A6FC2C30F9E3CDD32E81D3208AE72",
+    "Bytes": 20524
   },
   {
     "Path": "crates/meeting-core/src/lib.rs",
-    "SHA256": "47423AC507B4F7CD4EC01BEC34F1E017D838027877C4EE78C2C089CF3EE2FD67",
-    "Bytes": 564
+    "SHA256": "7AC611C9814244647A7D41A43C6CFC42CE96E6BACB1CDD66F13ECACBDA9EFEC5",
+    "Bytes": 885
+  },
+  {
+    "Path": "crates/meeting-core/src/library.rs",
+    "SHA256": "5E181D5001F071DC5F9B3BD11CCE39B988C0FD5FC09A65975BEEB6BCBB932E87",
+    "Bytes": 39884
   },
   {
     "Path": "crates/meeting-core/src/linux_capture.rs",
-    "SHA256": "FD870F7923BD481691BFDF03B143B981F375FAD80C90FE71C77CA50A9AAE6742",
-    "Bytes": 4859
+    "SHA256": "554F55A38B8DA6A7415A3D9EF8984B9F7EEE014CA405A9D2398E01BBE6CC3057",
+    "Bytes": 6485
+  },
+  {
+    "Path": "crates/meeting-core/src/live_text.rs",
+    "SHA256": "3429A8B7DF18A18B2FC89DF73120B44D62952A1FAF35F64A1E9B1AA21F34B9B2",
+    "Bytes": 15904
   },
   {
     "Path": "crates/meeting-core/src/macos_capture.rs",
-    "SHA256": "1565D4E8A4222E71996176B05F0C38A659455AB5A42C824265E51F750CFD5EC8",
-    "Bytes": 1869
+    "SHA256": "95E7A60D15B0820CC561472A6AF32AF9271C1B0E380B4A65C0232DFB60BDD429",
+    "Bytes": 7681
+  },
+  {
+    "Path": "crates/meeting-core/src/metadata.rs",
+    "SHA256": "0FF406D1D13BF35C9CFBEA335B671E0CEE5299E72B0BD0B60C9BA2ACFBBF307D",
+    "Bytes": 9810
   },
   {
     "Path": "crates/meeting-core/src/model.rs",
-    "SHA256": "0E1F77F44C2D70601E9272EF27BF44718868074B961EF6D09BF8AD3C35FBF0DF",
-    "Bytes": 4484
+    "SHA256": "D401BCC5AB4DC9E1CAB665677BE52245A58B98F367C37703B7F1E19EF94F2312",
+    "Bytes": 5090
   },
   {
     "Path": "crates/meeting-core/src/pcm.rs",
@@ -13431,28 +14101,38 @@
   },
   {
     "Path": "crates/meeting-core/src/portable_capture.rs",
-    "SHA256": "E33DECFC28902DF3D809887A2CFA2404388B741980E753EA79BE8A738B13AD1E",
-    "Bytes": 25611
+    "SHA256": "D51C1B71DCE9C6AC38D8BEDC9A0F44C28228E7165CF48EF576100132634D21E9",
+    "Bytes": 36879
+  },
+  {
+    "Path": "crates/meeting-core/src/retention.rs",
+    "SHA256": "833A73AB33C6E38252135CCB74FDCF974B663C2944C11A8CFBE8DDC76EF5A4DE",
+    "Bytes": 22268
+  },
+  {
+    "Path": "crates/meeting-core/src/speakers.rs",
+    "SHA256": "5165911D13CF2AFC319B1CAF52413A18660D91A2031CE29487C6B6C9E6A7D446",
+    "Bytes": 7785
   },
   {
     "Path": "crates/meeting-core/src/storage.rs",
-    "SHA256": "43707294A4BCF175A80EA1EA1B9E484CB09FE4E909EBD5890801334F1EC9DDA8",
-    "Bytes": 33278
+    "SHA256": "639E59D11A92E678D5B3DD298F4DAA99FA292F4964DB6817294274C7D0323A9D",
+    "Bytes": 57623
   },
   {
     "Path": "crates/meeting-core/src/windows_capture.rs",
-    "SHA256": "7BAAF4D2011693E994DEA80B1A9B8875AC03971D5A39ED48A86404D7AFE0ACA0",
-    "Bytes": 20115
+    "SHA256": "A636077383805BED31AA3DCCFC740634CAF6D8C2FCCED6DC9E4FF05667F818D6",
+    "Bytes": 37280
   },
   {
     "Path": "crates/meeting-core/tests/durability.rs",
-    "SHA256": "3E4C696C5B756C4362C0F8AC8380497F7522DD4D2804A040FECC902BE9BD7C89",
-    "Bytes": 22301
+    "SHA256": "656AD9AE4AE2FF6D5105FF0B8450F50D61CFFE8EE2226416CD90CB1ED80F27C6",
+    "Bytes": 40709
   },
   {
-    "Path": "crates/meeting-notes/Cargo.toml",
-    "SHA256": "F969F1F1D112988E840B149EF4300AE04D38028AC7A0C8AC84D7A26517C4D10D",
-    "Bytes": 654
+    "Path": "crates/meeting-core/Cargo.toml",
+    "SHA256": "15BA96EDF14F494428F05E2436E9E9FD89E884D4E5F2B581708CEF1CDFA68B6E",
+    "Bytes": 686
   },
   {
     "Path": "crates/meeting-notes/examples/local_reference.rs",
@@ -13466,23 +14146,33 @@
   },
   {
     "Path": "crates/meeting-notes/src/lib.rs",
-    "SHA256": "C7B7A6AF7BB59D3FEF0EE5E47F97D88C0108DF7D881B012E3BC5603FDF1C4382",
-    "Bytes": 4609
+    "SHA256": "167ECA54768837623001CD11602A4EA477B28685826D36F570641AB7A8A639C3",
+    "Bytes": 9456
+  },
+  {
+    "Path": "crates/meeting-notes/src/listing.rs",
+    "SHA256": "8556E04262EC10230EB7020E7F9C799D99984CA242E4A1202432052281E740E2",
+    "Bytes": 12980
   },
   {
     "Path": "crates/meeting-notes/src/markdown.rs",
-    "SHA256": "AC6646FC4FE0DAACAB25B77C6A9A61FF60A52CD1E756E9EAB56B326B5AF14EB3",
-    "Bytes": 6266
+    "SHA256": "240ACB9CF2F46BCF466AF32E2C05D2560EA7A5C6FA7E35D9DB5473406B541165",
+    "Bytes": 6493
   },
   {
     "Path": "crates/meeting-notes/src/models.rs",
-    "SHA256": "1DA9A761412E9F43EB472B287E4A28AD434EB09CCBBD8B392111F8CB5BBF8761",
-    "Bytes": 3089
+    "SHA256": "E93A9FC04F1772DA4DDFEC3150F9C1E8413E69445BAA9F06BDB891E5608C68AE",
+    "Bytes": 5285
+  },
+  {
+    "Path": "crates/meeting-notes/src/name_candidates.rs",
+    "SHA256": "3B5DA1DB98A15FBA3791D02C400815AB43143C3B1AF77141DF1C1B3899A50DFC",
+    "Bytes": 2025
   },
   {
     "Path": "crates/meeting-notes/src/service.rs",
-    "SHA256": "6764A78C42D2D217DDE444A8105AD5B5088E2717A7545F23CD77E029D25E297D",
-    "Bytes": 14728
+    "SHA256": "C9A35CD087B796F7CAB8F93C5CB5D43E27233608AD925D1047ADD84C33B9F73E",
+    "Bytes": 21483
   },
   {
     "Path": "crates/meeting-notes/src/templates.rs",
@@ -13491,18 +14181,453 @@
   },
   {
     "Path": "crates/meeting-notes/src/transport.rs",
-    "SHA256": "C767F5226EFA131813C25A159541AAF038C63A332354F7656817ABD92C8BC12B",
-    "Bytes": 11185
+    "SHA256": "1A6827526F142821B571AD2072EB4E04A6DBD25FA0B0150D986FAB9F7D0522DA",
+    "Bytes": 17832
   },
   {
     "Path": "crates/meeting-notes/src/validation.rs",
-    "SHA256": "17F87614337AF2FEA29FF14309F0BAEBC6F73AF19792BCF5B3A9A07005C1961A",
-    "Bytes": 2684
+    "SHA256": "1DD589341109B3EE093F5F6A73F453754DEECE62B7ACCFEE602E05B63DEDE3E6",
+    "Bytes": 5504
   },
   {
     "Path": "crates/meeting-notes/tests/transport_resume.rs",
-    "SHA256": "51B754CB91AF8D5C258C3E449EF9B26A9608418BF2997865B37229B3887F5895",
-    "Bytes": 28033
+    "SHA256": "0199BE3A48A7F701D8885CFC67CC43E5FEB82C5D654AA5ED9E2C29E906EC5CB3",
+    "Bytes": 45799
+  },
+  {
+    "Path": "crates/meeting-notes/Cargo.toml",
+    "SHA256": "F969F1F1D112988E840B149EF4300AE04D38028AC7A0C8AC84D7A26517C4D10D",
+    "Bytes": 654
+  },
+  {
+    "Path": "apps/desktop/public/handymeeting.svg",
+    "SHA256": "BECFE0ED6E19B519451C71D3A50E9374C53115EBCD116528DFB14212625B7C2F",
+    "Bytes": 443
+  },
+  {
+    "Path": "apps/desktop/src/views/AgentPanel.tsx",
+    "SHA256": "EEFE6FB1ED6632B8496D7A68380747ECA9081F9AD5A165C7F560CA873B94AD63",
+    "Bytes": 3891
+  },
+  {
+    "Path": "apps/desktop/src/views/ArchivePanel.tsx",
+    "SHA256": "0F3CDC801180837CB60D8449C10D06FD32548CBF5EB085D5BCE7B73D4CB0995C",
+    "Bytes": 13002
+  },
+  {
+    "Path": "apps/desktop/src/views/AudioCopiesPanel.tsx",
+    "SHA256": "A8092C8600123B4D3EC5E905B1583FF6A7D7E4C134D801BFBEC1AAA88E2D4B05",
+    "Bytes": 6006
+  },
+  {
+    "Path": "apps/desktop/src/views/CredentialPanel.tsx",
+    "SHA256": "599B9B89608A74AF9CF79151DBDA4BACAC86477E65C7804569A0A43C6385CA31",
+    "Bytes": 5313
+  },
+  {
+    "Path": "apps/desktop/src/views/HistoryList.tsx",
+    "SHA256": "58787A7CCE64C3A602EC336E1BF5791D6215A75BD0C38733F26B0EBCBDBE5D3F",
+    "Bytes": 1971
+  },
+  {
+    "Path": "apps/desktop/src/views/HistorySearch.tsx",
+    "SHA256": "77DEC3B60061DD720C72AC48EB471C29EB3FB5AB9B7197883CF187886518BA22",
+    "Bytes": 6524
+  },
+  {
+    "Path": "apps/desktop/src/views/LibraryStatus.tsx",
+    "SHA256": "E4C370E9D2D063A43432985F6E7219F0881CE6343FCC100097939E3044A6F345",
+    "Bytes": 3812
+  },
+  {
+    "Path": "apps/desktop/src/views/MaintenanceStatus.tsx",
+    "SHA256": "71F7A4B0A45B2F57D87E4A6B4EB2A95B0B28EDD38071015D9E2B9403DA57BD6A",
+    "Bytes": 4294
+  },
+  {
+    "Path": "apps/desktop/src/views/MeetingDetail.tsx",
+    "SHA256": "99E93E1767D52F8B096E5BD259B07124477BBAC5A7C25143E4DBD24FE0BF2438",
+    "Bytes": 2864
+  },
+  {
+    "Path": "apps/desktop/src/views/MeetingFiles.tsx",
+    "SHA256": "36E79EDA9366F9EC3495D781BD3AEA032CA916013172E33F6A872CBC7DCBF75E",
+    "Bytes": 1832
+  },
+  {
+    "Path": "apps/desktop/src/views/MeetingLabels.tsx",
+    "SHA256": "E08AEFB752B51780E27353C9DCE93044FA5E3BD83D532971DEDE49BC9C4FF865",
+    "Bytes": 3797
+  },
+  {
+    "Path": "apps/desktop/src/views/MeetingView.tsx",
+    "SHA256": "46F9E7080BB9B3ABA6DD31182A409969EFE8DF9AD55DB0D858792FB0CD43566D",
+    "Bytes": 12590
+  },
+  {
+    "Path": "apps/desktop/src/views/NotesProgressPanel.tsx",
+    "SHA256": "A3F1ADF97FA9981EE43BF6F926B52D26A1CAF0F89F40000C50E56AAA41D27339",
+    "Bytes": 7242
+  },
+  {
+    "Path": "apps/desktop/src/views/NotesView.tsx",
+    "SHA256": "6B2E87221BDC526A97F764A02E40B9C0F38850042FD128D71385CE3BF23C0A2A",
+    "Bytes": 25212
+  },
+  {
+    "Path": "apps/desktop/src/views/RecordingControls.tsx",
+    "SHA256": "5203B47DBDB086A1EBA67739043E354F4BCF92D8385A287A20B3907E530F9A5B",
+    "Bytes": 3242
+  },
+  {
+    "Path": "apps/desktop/src/views/ResumeAnalysisDialog.tsx",
+    "SHA256": "DF4898AEC591E801C6C2B4D79E55FE500F1606EE0E3DEF4465D8726F64C8944B",
+    "Bytes": 2350
+  },
+  {
+    "Path": "apps/desktop/src/views/RetentionPanel.tsx",
+    "SHA256": "05C027DF388952CB81E4FE2840AA6C0EE2517995D568BA5FAC8205564FFBB1F0",
+    "Bytes": 25846
+  },
+  {
+    "Path": "apps/desktop/src/views/SessionWarnings.tsx",
+    "SHA256": "80D6FAEA3C1BF98CA018D623088F624CF8C2588B02635174D8963AE0B6F035D7",
+    "Bytes": 1091
+  },
+  {
+    "Path": "apps/desktop/src/views/SettingsView.tsx",
+    "SHA256": "2F3378E86261E67D42977077597F287D47463FFE06C433849067940298D0C240",
+    "Bytes": 6318
+  },
+  {
+    "Path": "apps/desktop/src/views/Sidebar.tsx",
+    "SHA256": "A0427E7432F0C8DE681DCA653F2970B4A49BFE3E0385E3828FEF4399F794C1BC",
+    "Bytes": 2926
+  },
+  {
+    "Path": "apps/desktop/src/views/SourceDialog.tsx",
+    "SHA256": "C9064AC76CBAE63F1787BB5306880F83998FCE8C443ADC177246095DFEB4CF31",
+    "Bytes": 2890
+  },
+  {
+    "Path": "apps/desktop/src/views/SpeakerExperiments.tsx",
+    "SHA256": "E8468EC439545F968003C7978304C11E957CBFDDCA29EE937D48CC728CB64E5B",
+    "Bytes": 11605
+  },
+  {
+    "Path": "apps/desktop/src/views/SpeakerLabels.tsx",
+    "SHA256": "13BBB9E0C1491A8D58140A729B79F5E7EA074539DB24FD9B47CE79EEFFD43B6E",
+    "Bytes": 11334
+  },
+  {
+    "Path": "apps/desktop/src/views/TemplateDialog.tsx",
+    "SHA256": "8BB192691AC11DC4DAD9EFA1EE8E8C31AF3A06F35DA90B65A1E86B7D62D13FDE",
+    "Bytes": 2810
+  },
+  {
+    "Path": "apps/desktop/src/views/TranscriptBody.tsx",
+    "SHA256": "CC90A9430BD6776E9259F3B6D4C6A151DA44950C46A961D6C03BCF973BBB5D5A",
+    "Bytes": 2661
+  },
+  {
+    "Path": "apps/desktop/src/views/UpdatePanel.tsx",
+    "SHA256": "2D3A45BFD32C0C4EFD013DE649F62C549D5660FA963A27D8A4D9FA1021085707",
+    "Bytes": 11376
+  },
+  {
+    "Path": "apps/desktop/src/AccessControls.test.tsx",
+    "SHA256": "437E149D6D319D6D263AC34F694C0121194A9C7CCED7AEBBA47964B21D85796B",
+    "Bytes": 8084
+  },
+  {
+    "Path": "apps/desktop/src/AnalysisRecovery.test.tsx",
+    "SHA256": "69AE40F855595ED683B5E138ED39DCE27AE1A81599CCAC158C7711FB07C44869",
+    "Bytes": 10399
+  },
+  {
+    "Path": "apps/desktop/src/AnalysisStatusBar.test.tsx",
+    "SHA256": "082043AEE65DAC98B55F75C40F8CE078BB17C4F16A395E9B520F05A8C1BA0D0A",
+    "Bytes": 7527
+  },
+  {
+    "Path": "apps/desktop/src/api.ts",
+    "SHA256": "2C257EF0A79F257218EEFEB7EC91460D6B993A3772477288D13486287E30B4C2",
+    "Bytes": 6959
+  },
+  {
+    "Path": "apps/desktop/src/App.test.tsx",
+    "SHA256": "3BBFFA2FBD1A27BF830985518DAB8FA01752D7E0D12B73A0A45F8C2C19802383",
+    "Bytes": 52041
+  },
+  {
+    "Path": "apps/desktop/src/App.tsx",
+    "SHA256": "44CEAB0DFA8AFF751B9CDD2E73CB88D915B51AFDE666D407D90E28D42C04695F",
+    "Bytes": 69647
+  },
+  {
+    "Path": "apps/desktop/src/ArchivePanel.test.tsx",
+    "SHA256": "DC5A31982DCB32D60B358E5927A2247FAF6B0B8068AAA7B6B8BE8D4785FCF042",
+    "Bytes": 8757
+  },
+  {
+    "Path": "apps/desktop/src/Beta2.test.tsx",
+    "SHA256": "566DC20AEAD7728E79172F246455D8C617958AA964BF21A47B04830A6534BAAA",
+    "Bytes": 24534
+  },
+  {
+    "Path": "apps/desktop/src/domain.ts",
+    "SHA256": "BEEBCC95D271D7EC522C07B16C1BC8DBA5685BD2F1A0315F224FF9C9CDBBB142",
+    "Bytes": 6397
+  },
+  {
+    "Path": "apps/desktop/src/FeatureParity.test.tsx",
+    "SHA256": "F0EB3247396C38608F868C9463FDCAFB601DAB20250CD083C8FD88148CC5E0A0",
+    "Bytes": 16688
+  },
+  {
+    "Path": "apps/desktop/src/handy-theme.css",
+    "SHA256": "D324894E4ADA8E587129B9CFE5619F78537B872FCD72E7738340EE4856B90605",
+    "Bytes": 9613
+  },
+  {
+    "Path": "apps/desktop/src/i18n.ts",
+    "SHA256": "9D866CDA7E251C9D8E98E375E8851AB5835D2643A57EE90B759102FEA2907CBB",
+    "Bytes": 33574
+  },
+  {
+    "Path": "apps/desktop/src/jobPolling.ts",
+    "SHA256": "E221CD80E7642C6EA4081B0B554BFA849BD136E004A1A69A691FD886AB81C725",
+    "Bytes": 1642
+  },
+  {
+    "Path": "apps/desktop/src/Layout.test.tsx",
+    "SHA256": "D87E00B26B892880C960D32A74F356F1D0EACB5E3504A40E55C3834ADFDA3C3E",
+    "Bytes": 3141
+  },
+  {
+    "Path": "apps/desktop/src/LibraryAndSpeakers.test.tsx",
+    "SHA256": "D37E109B26EB9031EEF22ACD7AF26BD9029C1314DD61BB0F1620782788814D46",
+    "Bytes": 8395
+  },
+  {
+    "Path": "apps/desktop/src/main.tsx",
+    "SHA256": "B8C1E566187EA5D53BF9B4C2F4CD8FC8193B4958AFA219E57D39B76153F4FB20",
+    "Bytes": 237
+  },
+  {
+    "Path": "apps/desktop/src/MeetingWorkflow.test.tsx",
+    "SHA256": "BAD1C7283DCD78CD25C6243986B7AF2471ED1D9B98E57B1967C1B260C8589568",
+    "Bytes": 10710
+  },
+  {
+    "Path": "apps/desktop/src/OptionalJobs.test.tsx",
+    "SHA256": "8942261D6BBEAA5EC3F17E88D063363F33D9E2D67138D0818ED7975BD1A2A1C9",
+    "Bytes": 16197
+  },
+  {
+    "Path": "apps/desktop/src/RecordingControls.test.tsx",
+    "SHA256": "2B598A58F122F772705FA2936C430B7352EF401965894AD0E021E06BBE06BC1D",
+    "Bytes": 7873
+  },
+  {
+    "Path": "apps/desktop/src/RetentionPanel.test.tsx",
+    "SHA256": "8324C39600A3C2946C43DDBFC16C33625B6F6D516D506CF3EA05DFF8540D0147",
+    "Bytes": 23514
+  },
+  {
+    "Path": "apps/desktop/src/speaker-name-template.json",
+    "SHA256": "1E222ED8D48070FB4420A2C401E41DFE5FC2DC527A64844164F84448C22F814E",
+    "Bytes": 1029
+  },
+  {
+    "Path": "apps/desktop/src/speaker-proposals.ts",
+    "SHA256": "8EA913E0E69A4DDEC37E6FEEB92537B1A89B218747727449D730119ABCB1DDD0",
+    "Bytes": 1763
+  },
+  {
+    "Path": "apps/desktop/src/styles.css",
+    "SHA256": "B2483E9069143F86BE7BEEB73359A821722721163F20B35A1D124FB65978708A",
+    "Bytes": 29188
+  },
+  {
+    "Path": "apps/desktop/src/test-services.ts",
+    "SHA256": "2516C8829ED3B3994A16B13071180C8811E09C56F065666A4B4B0F428D66610F",
+    "Bytes": 1707
+  },
+  {
+    "Path": "apps/desktop/src/test-setup.ts",
+    "SHA256": "B998908F0CFC83503AAAB1E7975B602A53D72EEA865F084DA329289C021DB9F4",
+    "Bytes": 809
+  },
+  {
+    "Path": "apps/desktop/src/types.ts",
+    "SHA256": "CAE697EDC82E2110AA852729615A9F5C4FDD42CF4388B64B2D58B6AE451F4D58",
+    "Bytes": 14896
+  },
+  {
+    "Path": "apps/desktop/src/useLocalTextModels.ts",
+    "SHA256": "42211C0B7F3494BA86F00C4D942D9C2E38383677BEBF7FF2E96E5DDE568958AD",
+    "Bytes": 2249
+  },
+  {
+    "Path": "apps/desktop/src/useNotesJob.ts",
+    "SHA256": "E96BC827EDD15AE3D57DBF85F2FD388C4021AB3C74E0C62E37AAEADDDD7831EE",
+    "Bytes": 8632
+  },
+  {
+    "Path": "apps/desktop/src/useTemplateLibrary.ts",
+    "SHA256": "0668D10452B45C95CF041C552072268F625900F167B2DB9D56225E2400E2E9F9",
+    "Bytes": 5235
+  },
+  {
+    "Path": "apps/desktop/src-tauri/capabilities/default.json",
+    "SHA256": "C8AEF5212F6CDD77A3F4DC0EFCF621D6B5FC976544BC755517D1D5766BA6B37D",
+    "Bytes": 207
+  },
+  {
+    "Path": "apps/desktop/src-tauri/src/agent.rs",
+    "SHA256": "B5C0E1352A03BC87F82E1C156ACC404AD9EB63CE7B2CF00906747DA4E02DAAC0",
+    "Bytes": 42794
+  },
+  {
+    "Path": "apps/desktop/src-tauri/src/app_commands.rs",
+    "SHA256": "CAA9021BDBAB740DE514BF3C447242AF59157B8A8DC8A7F8E3597B2B77B55188",
+    "Bytes": 9110
+  },
+  {
+    "Path": "apps/desktop/src-tauri/src/asr.rs",
+    "SHA256": "F4793976D0C4AEE2060F3C34753C88AD476C205E89D8EA64C1C7B0B3ED6B458F",
+    "Bytes": 50506
+  },
+  {
+    "Path": "apps/desktop/src-tauri/src/cli.rs",
+    "SHA256": "881B172CA10418F5DB757932F6EEAE90D4B110A28486BCD9E66443E387127217",
+    "Bytes": 9764
+  },
+  {
+    "Path": "apps/desktop/src-tauri/src/credential_commands.rs",
+    "SHA256": "54A644A9A16342AD40AC88C5016D740E41F1620B6EAE941D31595202B3337A88",
+    "Bytes": 766
+  },
+  {
+    "Path": "apps/desktop/src-tauri/src/credential_service.rs",
+    "SHA256": "B32725FEF074895C7074FEAC568E30B88328767C3A890105415AC17D8F316327",
+    "Bytes": 17819
+  },
+  {
+    "Path": "apps/desktop/src-tauri/src/lib.rs",
+    "SHA256": "D2F3B4009916591896B4410D6BD927F19D64ED2B8B02C88C827FC9B06B3E5405",
+    "Bytes": 44837
+  },
+  {
+    "Path": "apps/desktop/src-tauri/src/library_commands.rs",
+    "SHA256": "A351FA3F50B1451DD8D8B8D32D9466B9D1ACF6340D0F9D46CD41C40CDEAC7E4D",
+    "Bytes": 2919
+  },
+  {
+    "Path": "apps/desktop/src-tauri/src/library_service.rs",
+    "SHA256": "621F5E23D01B14AF7EE5D7A84D5EF8AD710B375CEC333233FF1BE2BD697D2749",
+    "Bytes": 18992
+  },
+  {
+    "Path": "apps/desktop/src-tauri/src/main.rs",
+    "SHA256": "1161BBBAAA548791B492F55DA3106D4EEE0A7CF2E10A4DEE98973FF588FA9BDD",
+    "Bytes": 383
+  },
+  {
+    "Path": "apps/desktop/src-tauri/src/meeting_files.rs",
+    "SHA256": "8F3D361EFE9915E5E91C130B8D33B11E3521EA625481E0A9C2F87959388F8541",
+    "Bytes": 35573
+  },
+  {
+    "Path": "apps/desktop/src-tauri/src/name_reference.rs",
+    "SHA256": "77B6C7F51F5FD8851542A05E2DC575429ED1DA42B35370F7319F5D9AFB884A68",
+    "Bytes": 3195
+  },
+  {
+    "Path": "apps/desktop/src-tauri/src/notes_commands.rs",
+    "SHA256": "985D5D0DC2E992B60F5E473F70DE0464013ECBC00DC498C0ABFE04D9D3E0D844",
+    "Bytes": 2043
+  },
+  {
+    "Path": "apps/desktop/src-tauri/src/notes_service.rs",
+    "SHA256": "8A9EA9B5438DDF436349600723BCE91A3EB19C0FD2A653DDA121D6F944C88C2A",
+    "Bytes": 22207
+  },
+  {
+    "Path": "apps/desktop/src-tauri/src/operations.rs",
+    "SHA256": "0945CA53502F2B690C859392AB3A2AA1CE730452601E08E6384A41B8367764AB",
+    "Bytes": 4929
+  },
+  {
+    "Path": "apps/desktop/src-tauri/src/path_selection.rs",
+    "SHA256": "362CBE9FB64F481BDDC78B3D1C1B2CC35EBBBFB2FFCFEC8A3E23DAFF4A36744B",
+    "Bytes": 19322
+  },
+  {
+    "Path": "apps/desktop/src-tauri/src/retention_commands.rs",
+    "SHA256": "BB12E61785137D262817EA48F5DCB6AB6D15511F9F530FCD904F4292F9AA40DC",
+    "Bytes": 24174
+  },
+  {
+    "Path": "apps/desktop/src-tauri/src/service_tests.rs",
+    "SHA256": "D63B387DF1B40EF2C743DF465F75C03CC072CE133C2AEB386266F52177BB216D",
+    "Bytes": 21418
+  },
+  {
+    "Path": "apps/desktop/src-tauri/src/session_service.rs",
+    "SHA256": "FA54B7C1982A7AE688032289FA6636A6465AF69D426ED8F4AD2490E6E67ED1C0",
+    "Bytes": 6360
+  },
+  {
+    "Path": "apps/desktop/src-tauri/src/speaker_commands.rs",
+    "SHA256": "AB4E607D1838C153E96C20C2A89E3058C0805BE1CCA53A5E0DF33C5E04CF12DA",
+    "Bytes": 3409
+  },
+  {
+    "Path": "apps/desktop/src-tauri/src/speaker_jobs.rs",
+    "SHA256": "FD288BB040CE4459D32612D760C141480B2E16E8061A82A06B57F36474C338A6",
+    "Bytes": 19937
+  },
+  {
+    "Path": "apps/desktop/src-tauri/src/template_commands.rs",
+    "SHA256": "0B70625C7362C3237A9D297C905332029C43428A61ED6F9C31989384C688C512",
+    "Bytes": 1204
+  },
+  {
+    "Path": "apps/desktop/src-tauri/src/update_commands.rs",
+    "SHA256": "9DB7096BE05ECAB9D5A47796466A89580FAA5618E7AB40983AD91AC945C67E52",
+    "Bytes": 5701
+  },
+  {
+    "Path": "apps/desktop/src-tauri/src/updater.rs",
+    "SHA256": "3DA3D4FDC7C590EE9385ADA2945F038AE1A3AEF1A8E1E033A1AE8C382FD93D9F",
+    "Bytes": 29190
+  },
+  {
+    "Path": "apps/desktop/src-tauri/tests/agent_protocol.rs",
+    "SHA256": "4163331BBAC8418C80C7F552B425CD7E04455088AAC75A102BB8F484FD7B2153",
+    "Bytes": 4321
+  },
+  {
+    "Path": "apps/desktop/src-tauri/tests/release_checks.rs",
+    "SHA256": "426AE1EB72966522FE190FB91F123BB61BAB85EA0CBCA86B33AF3CC5E0C9B398",
+    "Bytes": 2838
+  },
+  {
+    "Path": "apps/desktop/src-tauri/build.rs",
+    "SHA256": "487059EAF8A947B80F20A9AACAC038A5047B2AD69D2401B827376C67D6FE847F",
+    "Bytes": 39
+  },
+  {
+    "Path": "apps/desktop/src-tauri/Cargo.toml",
+    "SHA256": "8EB6F000F78F711DA53AF6C8827021A2131B6F630A32046B96D59CFAB5F58B06",
+    "Bytes": 1271
+  },
+  {
+    "Path": "apps/desktop/src-tauri/tauri.conf.json",
+    "SHA256": "DB9C3736EC4B8279582929EE480D217C6FA28CA91F69FCCCEFAD0846507B2BF7",
+    "Bytes": 1104
   },
   {
     "Path": "apps/desktop/.gitignore",
@@ -13516,18 +14641,18 @@
   },
   {
     "Path": "apps/desktop/index.html",
-    "SHA256": "420C04A59351514F3E297E3CB4E85A5FB6D6375FC222F2D8E03785EA8289236D",
-    "Bytes": 398
+    "SHA256": "5DAB9493B244DD11414511815E926874CBE6380B6FFAF5BA5A236E0E26E7AEC3",
+    "Bytes": 403
   },
   {
     "Path": "apps/desktop/package-lock.json",
-    "SHA256": "7CACE197146ABA6B4818AC21A1630FEE4325731BAD61DA706CE3599864FD2C59",
-    "Bytes": 100388
+    "SHA256": "450A9E3C9399B16F3095F1E0A9A36DEB45596C3D1E7CA8732A2CD2BAEB30E97B",
+    "Bytes": 103344
   },
   {
     "Path": "apps/desktop/package.json",
-    "SHA256": "EE5287C7CA72A357EDAA777FDA949C788698C3BC675C3D1B44315CB72F7F6841",
-    "Bytes": 737
+    "SHA256": "DC6F0AD37993C8FAA27AEEE2FD6275FADEC19BED776B088FAFD407AD5D5F06F4",
+    "Bytes": 767
   },
   {
     "Path": "apps/desktop/README.md",
@@ -13545,244 +14670,34 @@
     "Bytes": 366
   },
   {
-    "Path": "apps/desktop/public/handymeeting.svg",
-    "SHA256": "BECFE0ED6E19B519451C71D3A50E9374C53115EBCD116528DFB14212625B7C2F",
-    "Bytes": 443
+    "Path": "docs/1.0.2-audio-codec-reference.json",
+    "SHA256": "BC2932FF1EC4098A517776616425CC128BDCBA47DBAE91ACD36578CBD27A073C",
+    "Bytes": 2459
   },
   {
-    "Path": "apps/desktop/src/AccessControls.test.tsx",
-    "SHA256": "437E149D6D319D6D263AC34F694C0121194A9C7CCED7AEBBA47964B21D85796B",
-    "Bytes": 8084
+    "Path": "docs/1.0.2-local-name-reference.json",
+    "SHA256": "CE9797346F993B88340DE9D5C6DFD33FC73CA187FFCF40071CAD9F435FC7F986",
+    "Bytes": 611
   },
   {
-    "Path": "apps/desktop/src/AnalysisRecovery.test.tsx",
-    "SHA256": "8288CAB9BFC2D852937733A401E9CD1752632682E898BA291B04FB786B14654F",
-    "Bytes": 7744
+    "Path": "docs/1.0.2-search-benchmark.json",
+    "SHA256": "F9AA5C230624683C4A4721E49A90BE4AA159A90321A43CD1C30EFE4D99990CDF",
+    "Bytes": 488
   },
   {
-    "Path": "apps/desktop/src/api.ts",
-    "SHA256": "9A359871940DE530996AF560153C43764634C4882476A95D643B09D3BBE0ADDC",
-    "Bytes": 2853
+    "Path": "docs/1.0.2-USER-GUIDE.md",
+    "SHA256": "3FA65535FB3A064C058EE21574EA8E0CE6C8F67446B6956B792471C73BE3C250",
+    "Bytes": 6930
   },
   {
-    "Path": "apps/desktop/src/App.test.tsx",
-    "SHA256": "18C0E7D772DA6BB23BE052DB2B25326D947DF867C8EDEADA8FD1F7C3FA9C30E1",
-    "Bytes": 24374
+    "Path": "docs/1.0.2-windows-short-capture.json",
+    "SHA256": "0606855F686196586D02F91F74BF180DA258AD4264CED90893D4E068E8533CA4",
+    "Bytes": 581
   },
   {
-    "Path": "apps/desktop/src/App.tsx",
-    "SHA256": "5104687E50EDB23A6E083F785E50745BD5E84022196F8710BBAEACE418CABE5F",
-    "Bytes": 53418
-  },
-  {
-    "Path": "apps/desktop/src/Beta2.test.tsx",
-    "SHA256": "A376AAD593E825726E422388B0BAABC701E89A0DEE9F496EA9E38D291A6CA6C7",
-    "Bytes": 22511
-  },
-  {
-    "Path": "apps/desktop/src/domain.ts",
-    "SHA256": "BEEBCC95D271D7EC522C07B16C1BC8DBA5685BD2F1A0315F224FF9C9CDBBB142",
-    "Bytes": 6397
-  },
-  {
-    "Path": "apps/desktop/src/FeatureParity.test.tsx",
-    "SHA256": "672C8381E7899953FA366185018222B871D474B3339F39A05463A76B738B38AA",
-    "Bytes": 16405
-  },
-  {
-    "Path": "apps/desktop/src/handy-theme.css",
-    "SHA256": "D324894E4ADA8E587129B9CFE5619F78537B872FCD72E7738340EE4856B90605",
-    "Bytes": 9613
-  },
-  {
-    "Path": "apps/desktop/src/i18n.ts",
-    "SHA256": "8BA1BF458F312178DC4C5CF198A852A211F6F5E23843AE6C913013DF43770873",
-    "Bytes": 30749
-  },
-  {
-    "Path": "apps/desktop/src/main.tsx",
-    "SHA256": "B8C1E566187EA5D53BF9B4C2F4CD8FC8193B4958AFA219E57D39B76153F4FB20",
-    "Bytes": 237
-  },
-  {
-    "Path": "apps/desktop/src/MeetingWorkflow.test.tsx",
-    "SHA256": "5173B31A9D458025189CA59902708DBC84C7FF97445CA6FCE6B5C995E4B67DCE",
-    "Bytes": 7364
-  },
-  {
-    "Path": "apps/desktop/src/styles.css",
-    "SHA256": "5080F8AF1A822823C62D6F755883B997663FD86601ADED1D42751636DE131E3D",
-    "Bytes": 23917
-  },
-  {
-    "Path": "apps/desktop/src/test-services.ts",
-    "SHA256": "8907EAE3086565346900772826A863C4F423BE23ABDBE58FC04AA659050FB663",
-    "Bytes": 1669
-  },
-  {
-    "Path": "apps/desktop/src/test-setup.ts",
-    "SHA256": "13E812FD5DCAD2B2E4B54BBDFE600FB27EB9B3B004A1EBFE5C57377832DCB84C",
-    "Bytes": 686
-  },
-  {
-    "Path": "apps/desktop/src/types.ts",
-    "SHA256": "E473DC1F5B3D8A02353C01AED4456C61DC0E97B51FD6C2FBCC8F9E56E0E8C7F3",
-    "Bytes": 5796
-  },
-  {
-    "Path": "apps/desktop/src/useLocalTextModels.ts",
-    "SHA256": "42211C0B7F3494BA86F00C4D942D9C2E38383677BEBF7FF2E96E5DDE568958AD",
-    "Bytes": 2249
-  },
-  {
-    "Path": "apps/desktop/src/useNotesJob.ts",
-    "SHA256": "EEF63D2163F09E7A5AA0F2EE0EDD7AB005A71F506DFFD35A71A2EAF7B15506A4",
-    "Bytes": 8433
-  },
-  {
-    "Path": "apps/desktop/src/useTemplateLibrary.ts",
-    "SHA256": "0668D10452B45C95CF041C552072268F625900F167B2DB9D56225E2400E2E9F9",
-    "Bytes": 5235
-  },
-  {
-    "Path": "apps/desktop/src/views/AgentPanel.tsx",
-    "SHA256": "EEFE6FB1ED6632B8496D7A68380747ECA9081F9AD5A165C7F560CA873B94AD63",
-    "Bytes": 3891
-  },
-  {
-    "Path": "apps/desktop/src/views/CredentialPanel.tsx",
-    "SHA256": "599B9B89608A74AF9CF79151DBDA4BACAC86477E65C7804569A0A43C6385CA31",
-    "Bytes": 5313
-  },
-  {
-    "Path": "apps/desktop/src/views/MeetingDetail.tsx",
-    "SHA256": "F22F1053E8D053739D071859D28516923A66DFB0D802C41B9F0D468E19583896",
-    "Bytes": 2455
-  },
-  {
-    "Path": "apps/desktop/src/views/MeetingFiles.tsx",
-    "SHA256": "85BB35E1AAE0EE53737D64216C98ABA4309DE280FD74A321E265D9DF960CD212",
-    "Bytes": 1036
-  },
-  {
-    "Path": "apps/desktop/src/views/MeetingView.tsx",
-    "SHA256": "0649D724DCBAA8BD05A65B205F57D443F6387B806035B1490004ECACD5245297",
-    "Bytes": 10992
-  },
-  {
-    "Path": "apps/desktop/src/views/NotesProgressPanel.tsx",
-    "SHA256": "1A1C6695205F29E172DF9F17F34AFB6F9C1F2125B007B06B1FAD93C3C04E65F2",
-    "Bytes": 5004
-  },
-  {
-    "Path": "apps/desktop/src/views/NotesView.tsx",
-    "SHA256": "E9241C92ECA2C00D38E2402E9EE637A2C11F739A8201A1FE4D235752A032D0EF",
-    "Bytes": 24112
-  },
-  {
-    "Path": "apps/desktop/src/views/ResumeAnalysisDialog.tsx",
-    "SHA256": "DF4898AEC591E801C6C2B4D79E55FE500F1606EE0E3DEF4465D8726F64C8944B",
-    "Bytes": 2350
-  },
-  {
-    "Path": "apps/desktop/src/views/SessionWarnings.tsx",
-    "SHA256": "80D6FAEA3C1BF98CA018D623088F624CF8C2588B02635174D8963AE0B6F035D7",
-    "Bytes": 1091
-  },
-  {
-    "Path": "apps/desktop/src/views/Sidebar.tsx",
-    "SHA256": "41DB1370D7C73D6D045643117D340B5202B70553E2CEB08CB49C57B71230F93E",
-    "Bytes": 2777
-  },
-  {
-    "Path": "apps/desktop/src/views/SourceDialog.tsx",
-    "SHA256": "C9064AC76CBAE63F1787BB5306880F83998FCE8C443ADC177246095DFEB4CF31",
-    "Bytes": 2890
-  },
-  {
-    "Path": "apps/desktop/src/views/TemplateDialog.tsx",
-    "SHA256": "8BB192691AC11DC4DAD9EFA1EE8E8C31AF3A06F35DA90B65A1E86B7D62D13FDE",
-    "Bytes": 2810
-  },
-  {
-    "Path": "apps/desktop/src/views/TranscriptBody.tsx",
-    "SHA256": "0D1DA6C04BE503B168A3A4F501E8A7FFFC98495B59A00D0424EB43C7E125A279",
-    "Bytes": 1258
-  },
-  {
-    "Path": "apps/desktop/src-tauri/build.rs",
-    "SHA256": "487059EAF8A947B80F20A9AACAC038A5047B2AD69D2401B827376C67D6FE847F",
-    "Bytes": 39
-  },
-  {
-    "Path": "apps/desktop/src-tauri/Cargo.toml",
-    "SHA256": "BC5F8B05158B6E749272251F4BCC21CEBDDD5983D6A395D945CB0B4B2E0B113E",
-    "Bytes": 1019
-  },
-  {
-    "Path": "apps/desktop/src-tauri/tauri.conf.json",
-    "SHA256": "D4827D0C6580C5828037C486E31FA3F3F26B54059EED2D3415BABA9C34076172",
-    "Bytes": 1051
-  },
-  {
-    "Path": "apps/desktop/src-tauri/capabilities/default.json",
-    "SHA256": "C8AEF5212F6CDD77A3F4DC0EFCF621D6B5FC976544BC755517D1D5766BA6B37D",
-    "Bytes": 207
-  },
-  {
-    "Path": "apps/desktop/src-tauri/src/agent.rs",
-    "SHA256": "F552B24C3CF9349291E13210F79864CA2AA280D8191A16E63EC5BE8C2C47527D",
-    "Bytes": 37522
-  },
-  {
-    "Path": "apps/desktop/src-tauri/src/asr.rs",
-    "SHA256": "B74779ADCABC1246EF9CA0C4437B3BC15A13F4EAD6141E5E96D3C97F80A1648E",
-    "Bytes": 38708
-  },
-  {
-    "Path": "apps/desktop/src-tauri/src/credential_commands.rs",
-    "SHA256": "54A644A9A16342AD40AC88C5016D740E41F1620B6EAE941D31595202B3337A88",
-    "Bytes": 766
-  },
-  {
-    "Path": "apps/desktop/src-tauri/src/credential_service.rs",
-    "SHA256": "B32725FEF074895C7074FEAC568E30B88328767C3A890105415AC17D8F316327",
-    "Bytes": 17819
-  },
-  {
-    "Path": "apps/desktop/src-tauri/src/lib.rs",
-    "SHA256": "5C945CDA99B9C85EAF86DE3B501B54C157BE0AE09D3D0168EB15678101BBB9A2",
-    "Bytes": 54016
-  },
-  {
-    "Path": "apps/desktop/src-tauri/src/main.rs",
-    "SHA256": "1161BBBAAA548791B492F55DA3106D4EEE0A7CF2E10A4DEE98973FF588FA9BDD",
-    "Bytes": 383
-  },
-  {
-    "Path": "apps/desktop/src-tauri/src/meeting_files.rs",
-    "SHA256": "E819F9A8AD6F4AE859FC746D1C0D0086F3461D2362DF256F49A099CBF6CE23A2",
-    "Bytes": 14985
-  },
-  {
-    "Path": "apps/desktop/src-tauri/src/notes_commands.rs",
-    "SHA256": "C78026F8BFC1AB9E0954FC2A4C8526D2D77A414ED8923489C9DB4AA5C0168BCB",
-    "Bytes": 2049
-  },
-  {
-    "Path": "apps/desktop/src-tauri/src/notes_service.rs",
-    "SHA256": "D214D04479C0C8CCB38584667A1C931040BFF4703E0F17209000EA7A519AE6FE",
-    "Bytes": 18624
-  },
-  {
-    "Path": "apps/desktop/src-tauri/src/template_commands.rs",
-    "SHA256": "0B70625C7362C3237A9D297C905332029C43428A61ED6F9C31989384C688C512",
-    "Bytes": 1204
-  },
-  {
-    "Path": "apps/desktop/src-tauri/tests/agent_protocol.rs",
-    "SHA256": "4163331BBAC8418C80C7F552B425CD7E04455088AAC75A102BB8F484FD7B2153",
-    "Bytes": 4321
+    "Path": "docs/AUDIT_FIXES_20261028.md",
+    "SHA256": "51E580A5CF3192AAAC987BC0854EBC6173827E121FC758AC0E594C8E8D7082D6",
+    "Bytes": 6676
   },
   {
     "Path": "docs/HANDY_COMPATIBILITY.md",
@@ -13796,8 +14711,8 @@
   },
   {
     "Path": "docs/MEETING_FILES.md",
-    "SHA256": "D429A284C5DD78D03FEC84B422CBC4FBE15F3A2389AA2D1D94937EA5BB2D467D",
-    "Bytes": 4180
+    "SHA256": "ED3DFB1DDA97EB00B4AFCE7721BD7B30EBC01A883929C4B03053E74B7A875F0E",
+    "Bytes": 4822
   },
   {
     "Path": "docs/NATIVE_VALIDATION.md",
@@ -13805,9 +14720,14 @@
     "Bytes": 6059
   },
   {
+    "Path": "docs/OPTIONAL_FEATURE_ROADMAP.md",
+    "SHA256": "BD1E4E78CA42FBC69DE2C50D30199D9043C670EEBB0E0BE630DAC4FA7545C96D",
+    "Bytes": 6271
+  },
+  {
     "Path": "docs/RELEASING.md",
-    "SHA256": "989C617B9669269FD64CBBFA639B04E54833215AAB5973E8351A58E0CE9513B1",
-    "Bytes": 9221
+    "SHA256": "438947C57CC6A49B7D9BF19E59D23FAA082CFA0854D9C2011D0754657F9A94BB",
+    "Bytes": 9979
   },
   {
     "Path": "docs/RUST_AGENT_PROTOCOL.md",
@@ -13841,18 +14761,33 @@
   },
   {
     "Path": "docs/RUST_PORTABLE.md",
-    "SHA256": "EFDF5E9E5CA0ED997356D0164A66345B2948CBAB5DACFC01643F36BC19393A92",
-    "Bytes": 7619
+    "SHA256": "797AA25BBFB3747889E5FA13EA086CDBF8321BB29017718EDEA36EBB87BB0B10",
+    "Bytes": 9614
   },
   {
     "Path": "docs/RUST_STORAGE.md",
-    "SHA256": "24C11B5638BFA345C1C4CF7CCD280C83E4C98FB4355FFB160F31B0D0A659ABAB",
-    "Bytes": 6016
+    "SHA256": "46F3463EF415DFA5EB290A5A45430EBEA7BCC0D59BD5467B983AB312608F08D1",
+    "Bytes": 6532
   },
   {
     "Path": "docs/rust-1.0.1-dependency-audit.json",
     "SHA256": "A1D4AF4336AC95E375C44264B36302F6CD44C4929B779856ED3A0100945D58B1",
     "Bytes": 1761
+  },
+  {
+    "Path": "docs/rust-1.0.2-dependency-audit.json",
+    "SHA256": "2DED5556BF9918D592CDEDA1C6C0B34E2C0CA6E8B56FF166B5FB39BA3B0974C6",
+    "Bytes": 24227
+  },
+  {
+    "Path": "docs/rust-1.0.3-dependency-audit.json",
+    "SHA256": "097D6C18B1C768275925C56CDAF003360C6B2D2324037B756847D2E8F7807F44",
+    "Bytes": 16055
+  },
+  {
+    "Path": "docs/rust-1.0.4-dependency-audit.json",
+    "SHA256": "BDF783F3068AF26F9393A51960EC1B13E7FFCDD88E317FB7A9D8A9E70D212F59",
+    "Bytes": 23928
   },
   {
     "Path": "docs/rust-beta-dependency-audit.json",

@@ -5,6 +5,21 @@ using System.Text.Json.Serialization;
 
 namespace HandyMeeting;
 
+internal static class MarkdownText
+{
+    internal static string Escape(string value)
+    {
+        var output = new System.Text.StringBuilder();
+        foreach (var c in value)
+        {
+            if (c == '<') output.Append("&lt;");
+            else if (c == '&') output.Append("&amp;");
+            else { if ("\\`*_{}[]()#+-.!|>".Contains(c)) output.Append('\\'); output.Append(c); }
+        }
+        return output.ToString();
+    }
+}
+
 public static class JsonData
 {
     public static readonly JsonSerializerOptions Options = new() { WriteIndented = true, PropertyNameCaseInsensitive = true };
@@ -15,13 +30,49 @@ public static class JsonData
     }
     public static void Save<T>(string path, T value) => WriteAtomic(path, JsonSerializer.SerializeToUtf8Bytes(value, Options));
     public static void SaveText(string path, string text) => WriteAtomic(path, System.Text.Encoding.UTF8.GetBytes(text));
-    private static void WriteAtomic(string path, byte[] bytes)
+    // Configured OS/application roots may themselves be redirected. Below that explicit
+    // authority, imported directory entries must remain ordinary files/directories.
+    internal static void CheckDirectory(string path)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var temporary = path + ".tmp";
-        using (var output = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
-        { output.Write(bytes); output.Flush(true); }
-        if (File.Exists(path)) File.Replace(temporary, path, path + ".bak", true);
+        DirectoryInfo? current = new DirectoryInfo(Path.GetFullPath(path));
+        var roots = new[] { AppStorage.Root, Path.GetTempPath(), Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) }
+            .Where(p => !string.IsNullOrEmpty(p)).Select(p => Path.TrimEndingDirectorySeparator(Path.GetFullPath(p))).ToArray();
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        while (current is not null)
+        {
+            var trustedRoot = roots.Any(p => string.Equals(p, Path.TrimEndingDirectorySeparator(current.FullName), comparison));
+            CheckEntry(current.FullName, true, trustedRoot);
+            if (trustedRoot) break;
+            current = current.Parent;
+        }
+    }
+    internal static bool CheckEntry(string path, bool directory = false, bool trustedRoot = false)
+    {
+        FileSystemInfo info = directory ? new DirectoryInfo(path) : new FileInfo(path);
+        if (!trustedRoot && info.LinkTarget is not null) throw new InvalidDataException("Verknüpfte Sitzungsdateien oder Unterordner sind nicht erlaubt. Bitte eine eigenständige lokale Kopie öffnen.");
+        FileAttributes attributes;
+        try { attributes = File.GetAttributes(path); }
+        catch (FileNotFoundException) { return false; }
+        catch (DirectoryNotFoundException) { return false; }
+        if (!trustedRoot && (attributes & FileAttributes.ReparsePoint) != 0) throw new InvalidDataException("Verknüpfte Sitzungsdateien oder Unterordner sind nicht erlaubt. Bitte eine eigenständige lokale Kopie öffnen.");
+        if (((attributes & FileAttributes.Directory) != 0) != directory) throw new InvalidDataException("Der Speicherpfad besitzt einen unerwarteten Dateityp. Vorhandene Dateien bleiben erhalten.");
+        return true;
+    }
+    private static void WriteAtomic(string path, byte[] bytes) => WriteAtomic(path, output => output.Write(bytes));
+    internal static void WriteAtomic(string path, Action<FileStream> write)
+    {
+        path = Path.GetFullPath(path);
+        var folder = Path.GetDirectoryName(path)!;
+        CheckDirectory(folder); CheckEntry(path); CheckEntry(path + ".bak");
+        Directory.CreateDirectory(folder);
+        CheckDirectory(folder);
+        var temporary = Path.Combine(folder, "." + Path.GetFileName(path) + "." + Guid.NewGuid().ToString("N") + ".pending");
+        using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
+        { write(output); output.Flush(true); }
+        // Failed placement retains our complete pending bytes. Never open, delete or
+        // truncate an unrelated pre-existing .tmp entry supplied with an imported session.
+        CheckDirectory(folder); CheckEntry(path + ".bak");
+        if (CheckEntry(path)) File.Replace(temporary, path, path + ".bak", true);
         else File.Move(temporary, path);
     }
 }
@@ -139,7 +190,11 @@ public sealed partial class SessionStore
     }
     public static SessionStore Open(string manifest)
     {
-        var folder = Path.GetDirectoryName(Path.GetFullPath(manifest))!;
+        manifest = Path.GetFullPath(manifest);
+        var folder = Path.GetDirectoryName(manifest)!;
+        JsonData.CheckDirectory(folder);
+        foreach (var name in new[] { manifest, manifest + ".bak", Path.Combine(folder, "session.lock"), Path.Combine(folder, "transcript-journal.jsonl") }) JsonData.CheckEntry(name);
+        JsonData.CheckDirectory(Path.Combine(folder, "audio"));
         using var lease = new FileStream(Path.Combine(folder, "session.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
         SessionData data;
         var usedBackup = false;
@@ -159,6 +214,7 @@ public sealed partial class SessionStore
         {
             foreach (var path in Directory.EnumerateFiles(audioFolder, "*.wav"))
             {
+                JsonData.CheckEntry(path);
                 var name = Path.GetFileName(path);
                 var match = System.Text.RegularExpressions.Regex.Match(name, @"^(system|microphone)-(\d{12,})\.wav$");
                 if (!match.Success || !long.TryParse(match.Groups[2].Value, out var start)) continue;

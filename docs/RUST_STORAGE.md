@@ -16,7 +16,9 @@ During ASR restart, a fresh native stream reconstructs its context from the star
 
 The Windows backend uses the existing MIT-licensed `wasapi` 0.26.0 crate. System audio uses the selected render endpoint in loopback capture mode; the optional microphone has its own capture thread and durable writer. OS audio conversion provides 16-kHz mono PCM. No ASR inference runs on those threads. Buffers and accepted packets are bounded. An oversized driver packet or write error stops the affected capture visibly and retains saved audio. A microphone startup failure does not stop a healthy system-audio track.
 
-Digital silence on the system track is padded against a monotonic clock. Track starts and missing intervals have approximate recording timing; these are not exact word timestamps. Device disconnection/discontinuity is reported; automatic device substitution is not implemented. Microphone mute controls and non-Windows Rust capture adapters remain migration work. The previous portable preview remains available for those targets.
+Digital silence on the system track is padded against a monotonic clock. Track starts and missing intervals have approximate recording timing; these are not exact word timestamps. Device disconnection/discontinuity is reported; automatic device substitution is not implemented. Current Rust implements pause/microphone mute with privacy epochs and Linux/macOS capture adapters. Implementation and automated checks do not establish physical-device or endurance readiness; the retained C# portable preview has separate behavior and evidence.
+
+Capture diagnostics do not own the recording lifetime. A warning that cannot be saved remains visible in the opened session, while writable PCM continues. Such a warning is not crash-durable until storage recovers. Stopping attempts every owned writer join and final status save before returning collected diagnostic failures. Real PCM-write errors still stop the affected track and retain confirmed data.
 
 ## Evidence
 

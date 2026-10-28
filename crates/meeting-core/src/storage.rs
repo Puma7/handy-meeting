@@ -665,12 +665,32 @@ impl SessionStore {
     }
 
     pub fn warn(&self, warning: &str) -> Result<()> {
-        self.update_manifest(|data| warn_data(data, warning))
+        self.diagnostic(warning, true)
     }
 
     /// An inference/UI warning does not imply that the audio capture was incomplete.
     pub fn notice(&self, warning: &str) -> Result<()> {
-        self.update_manifest(|data| note_data(data, warning))
+        self.diagnostic(warning, false)
+    }
+
+    /// A diagnostic's failed manifest write remains an error, but its warning stays
+    /// visible to the current session. Audio writers use their independent journal.
+    fn diagnostic(&self, warning: &str, capture_incomplete: bool) -> Result<()> {
+        let apply = |data: &mut SessionData| {
+            if capture_incomplete {
+                warn_data(data, warning);
+            } else {
+                note_data(data, warning);
+            }
+        };
+        let result = self.update_manifest(apply);
+        if let Err(error) = &result {
+            if let Ok(mut guard) = self.inner.lock() {
+                apply(&mut guard.data);
+                note_data(&mut guard.data, &format!("A session diagnostic could not be saved: {error}. It remains visible while this session is open; check storage before closing. Saved audio and text journals are retained."));
+            }
+        }
+        result
     }
 
     pub fn transcript_text(&self) -> Result<String> {

@@ -20,6 +20,7 @@ public sealed class TextCheckpoint
 public sealed partial class SessionStore
 {
     private DateTime lastManifestSave = DateTime.MinValue;
+    private bool journalPreparedForAppend;
     public string JournalPath => Path.Combine(Folder, "transcript-journal.jsonl");
     public IDisposable AcquireLease() => new FileStream(Path.Combine(Folder, "session.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
     public List<AudioPart> PartsSnapshot() { lock (gate) return Data.Parts.Select(p => p.Copy()).ToList(); }
@@ -89,6 +90,19 @@ public sealed partial class SessionStore
         lock (gate)
         {
             var part = Data.Parts.First(p => p.File == audio.File);
+            JsonData.CheckDirectory(Folder); JsonData.CheckEntry(JournalPath);
+            if (!journalPreparedForAppend)
+            {
+                if (File.Exists(JournalPath))
+                    JsonData.WriteAtomic(JournalPath, replacement =>
+                    {
+                        using var original = new FileStream(JournalPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                        original.CopyTo(replacement, 32_000);
+                    });
+                // One private directory entry per writer object, before the first append.
+                // Existing journal bytes (including a torn tail) survive exactly in .bak.
+                journalPreparedForAppend = true;
+            }
             if (!string.IsNullOrEmpty(part.Text) && part.ModelId != modelId)
             {
                 var archive = Path.Combine(Folder, "text-history", $"{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss-fffffff}-{Guid.NewGuid():N}.json");
