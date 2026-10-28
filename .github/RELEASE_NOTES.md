@@ -20,6 +20,14 @@ A release of the independent Rust/Tauri meeting companion for Handy. The release
 - Version folders of 1.0.5 and earlier are removed through their own uninstallers after the new version is in place. Recordings, transcripts and settings in `%LOCALAPPDATA%\HandyMeeting` stay untouched.
 - Windows does not allow installers to pin apps to the taskbar; right-click the running app and choose *Pin to taskbar*.
 
+### Calmer desktop
+
+- **Layout:** full window width, one scrollbar per page and a search field in the transcript.
+- **Export:** Markdown is the default format.
+- **Explanations:** recording controls, FFmpeg and retention rules explain themselves on hover instead of in long paragraphs.
+- **Audio notices:** audio-driver notices are short and collapsed; level meters fall smoothly.
+- **Local text models:** if no local text model answers, the analysis page shows the detected Ollama or LM Studio servers right away.
+
 ### Reliability and desktop clarity
 
 - Separate live system-audio and microphone meters stay visible below their controls. Green/yellow/red segments, digital peak values and clear silence, clipping, pause/mute and unavailable states help check incoming audio independently of the transcript. Meters do not start devices while idle or replace saved-audio progress checks.

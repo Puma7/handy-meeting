@@ -1,5 +1,5 @@
-import { AudioLines } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { AudioLines, Search } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { clock, trackName } from "../domain";
 import type { AudioPart, Locale } from "../types";
 import type { MessageKey } from "../i18n";
@@ -17,6 +17,15 @@ export default function TranscriptBody({
   /** Confirmed speaker labels by source ID; shown beside, never inside, the original text. */
   speakers?: Record<string, string>;
 }) {
+  const de = locale === "de";
+  const [query, setQuery] = useState("");
+  const needle = query.trim().toLocaleLowerCase();
+  // Search filters the displayed sections only; the transcript itself is never changed.
+  const shown = needle
+    ? parts.filter((part) =>
+        (part.text ?? "").toLocaleLowerCase().includes(needle),
+      )
+    : parts;
   const scrolledFile = useRef<string | null>(null);
   useEffect(() => {
     if (!selectedFile) {
@@ -33,56 +42,104 @@ export default function TranscriptBody({
     }
   }, [selectedFile, parts]);
   return (
-    <div
-      className="transcript-content"
-      role="region"
-      aria-label={t.live}
-      tabIndex={0}
-      aria-live="polite"
-    >
-      {parts.length ? (
-        parts.map((part, index) => (
-          <article
-            className="transcript-part"
-            id={
-              part.file
-                ? "transcript-part-" + encodeURIComponent(part.file)
-                : undefined
-            }
-            data-highlighted={
-              (Boolean(selectedFile) && part.file === selectedFile) || undefined
-            }
-            key={part.file ?? part.source + part.startSample + index}
-          >
-            <div className="part-meta">
-              <span>
-                {clock(part.startSample / 16)}–
-                {clock((part.startSample + part.sampleCount) / 16)}
-              </span>
-              <span>{trackName(part.source, locale)}</span>
-              {part.file && speakers[part.file] && (
-                <span
-                  className="speaker-label"
-                  title={
-                    locale === "de"
-                      ? "Von dir bestätigte Sprecherzuordnung"
-                      : "Speaker label you confirmed"
-                  }
-                >
-                  {speakers[part.file]}
-                </span>
-              )}
-              {part.status !== "complete" && <span>{t.pending}</span>}
-            </div>
-            <p>{part.text}</p>
-          </article>
-        ))
-      ) : (
-        <div className="empty">
-          <AudioLines size={30} />
-          <p>{t.emptyTranscript}</p>
+    <>
+      {parts.length > 0 && (
+        <div className="transcript-search">
+          <label>
+            <Search size={14} aria-hidden="true" />
+            <input
+              type="search"
+              value={query}
+              placeholder={de ? "Im Transkript suchen" : "Search transcript"}
+              aria-label={de ? "Im Transkript suchen" : "Search transcript"}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+          {needle && (
+            <span role="status" className="muted">
+              {de
+                ? `${shown.length} von ${parts.length} Abschnitten`
+                : `${shown.length} of ${parts.length} sections`}
+            </span>
+          )}
         </div>
       )}
-    </div>
+      <div
+        className="transcript-content"
+        role="region"
+        aria-label={t.live}
+        tabIndex={0}
+        aria-live={needle ? "off" : "polite"}
+      >
+        {shown.length ? (
+          shown.map((part, index) => (
+            <article
+              className="transcript-part"
+              id={
+                part.file
+                  ? "transcript-part-" + encodeURIComponent(part.file)
+                  : undefined
+              }
+              data-highlighted={
+                (Boolean(selectedFile) && part.file === selectedFile) ||
+                undefined
+              }
+              key={part.file ?? part.source + part.startSample + index}
+            >
+              <div className="part-meta">
+                <span title={t.sourceTimes}>
+                  {clock(part.startSample / 16)}–
+                  {clock((part.startSample + part.sampleCount) / 16)}
+                </span>
+                <span>{trackName(part.source, locale)}</span>
+                {part.file && speakers[part.file] && (
+                  <span
+                    className="speaker-label"
+                    title={
+                      de
+                        ? "Von dir bestätigte Sprecherzuordnung"
+                        : "Speaker label you confirmed"
+                    }
+                  >
+                    {speakers[part.file]}
+                  </span>
+                )}
+                {part.status !== "complete" && <span>{t.pending}</span>}
+              </div>
+              <p>{highlight(part.text ?? "", needle)}</p>
+            </article>
+          ))
+        ) : needle ? (
+          <p className="muted">
+            {de
+              ? "Kein Abschnitt enthält diesen Text."
+              : "No section contains this text."}
+          </p>
+        ) : (
+          <div className="empty">
+            <AudioLines size={30} />
+            <p>{t.emptyTranscript}</p>
+          </div>
+        )}
+      </div>
+    </>
   );
+}
+/** Marks case-insensitive matches; the text is rendered literally, never as markup. */
+function highlight(text: string, needle: string): ReactNode {
+  if (!needle) return text;
+  const lower = text.toLocaleLowerCase();
+  const pieces: ReactNode[] = [];
+  let from = 0;
+  for (
+    let at = lower.indexOf(needle);
+    at >= 0;
+    at = lower.indexOf(needle, from)
+  ) {
+    if (at > from) pieces.push(text.slice(from, at));
+    pieces.push(<mark key={at}>{text.slice(at, at + needle.length)}</mark>);
+    from = at + needle.length;
+  }
+  if (from < text.length) pieces.push(text.slice(from));
+  return pieces;
 }

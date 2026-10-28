@@ -149,6 +149,15 @@ export default function NotesView({
   useEffect(() => {
     if (notesBusy || result) setSetupOpen(false);
   }, [notesBusy, result?.id]);
+  // No model at the configured local endpoint: show the Ollama/LM Studio detection at once
+  // instead of expecting the user to know ports. Nothing is changed until "Use" is clicked.
+  const noLocalModel =
+    mode === "local" &&
+    !manualModel &&
+    (Boolean(modelsError) || (modelsLoaded && !localModels.length));
+  useEffect(() => {
+    if (noLocalModel) setLocalSetupOpen(true);
+  }, [noLocalModel]);
   const templateLocked =
     notesBusy || libraryInvalid || libraryPending || !connected;
   const builtIn = template.id === "speaker-name-candidates-v1";
@@ -336,6 +345,7 @@ export default function NotesView({
             {mode === "local" && (
               <details
                 className="connection-settings"
+                open={localSetupOpen}
                 onToggle={(event) =>
                   setLocalSetupOpen(event.currentTarget.open)
                 }

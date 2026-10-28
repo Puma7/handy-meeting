@@ -324,7 +324,11 @@ it("recommends a model from memory, applies a running Ollama model and downloads
   expect(
     await screen.findByText(/Arbeitsspeicher: 16 GB · Empfehlung: gemma4:e4b/),
   ).toBeTruthy();
-  expect(screen.getByText(/„Gemma 4 E4B“ laden/)).toBeTruthy();
+  expect(
+    screen.getByText(
+      /„Gemma 4 E4B“ herunterladen und unter „Developer“ den lokalen Server starten/,
+    ),
+  ).toBeTruthy();
   await userEvent.click(
     screen.getByRole("button", { name: "Verwenden: llama3.2:latest" }),
   );
@@ -537,4 +541,50 @@ it("never sends a key typed for another route to a local model chosen from the p
     apiKey: "",
     useSavedKey: false,
   });
+});
+
+it("shows the detected local servers on the analysis page when the configured endpoint has no model", async () => {
+  // 1.0.5 feedback: LM Studio/Ollama were installed but the analysis page only showed an
+  // error at the default port; the detection was hidden behind a collapsed section.
+  const meeting: Meeting = {
+    id: "d".repeat(32),
+    title: "Synthetic analysis",
+    startedAt: "2026-10-28T10:00:00Z",
+    durationMs: 5000,
+    status: "complete",
+    modelId: "synthetic",
+    warnings: [],
+    parts: [],
+  };
+  const api = {
+    ...testServices(),
+    getAppState: vi.fn(async () => ({
+      version: "synthetic",
+      handy: null,
+      recording: false,
+      activeMeeting: null,
+    })),
+    listDevices: vi.fn().mockResolvedValue([]),
+    listMeetings: vi.fn().mockResolvedValue([]),
+    getMeeting: vi.fn().mockResolvedValue(meeting),
+    listAnalyses: vi.fn().mockResolvedValue({ analyses: [], skipped: [] }),
+    getNotesProgress: vi.fn().mockResolvedValue(null),
+    listTextModels: vi
+      .fn()
+      .mockRejectedValue("Synthetic: no local server at 127.0.0.1:1234"),
+    refreshHandy: vi.fn().mockResolvedValue({
+      executable: "native-choice",
+      version: "synthetic",
+      models: [],
+    }),
+    localModelSetup: vi.fn().mockResolvedValue(ollamaReady),
+  } as unknown as DesktopApi;
+  render(<App api={api} />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Nachbearbeitung" }),
+  );
+  expect(
+    await screen.findByRole("button", { name: "Verwenden: gemma4:e4b" }),
+  ).toBeTruthy();
+  expect(api.localModelSetup).toHaveBeenCalled();
 });

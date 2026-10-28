@@ -240,10 +240,19 @@ export default function LocalModelSetup({
                 {provider.id === "lmstudio" && !provider.reachable && (
                   <p className="muted">
                     {de
-                      ? `LM Studio öffnen, das Modell „${info.recommendation.lmStudioSearch ?? "Gemma 4 E4B"}“ laden und den lokalen Server starten.`
-                      : `Open LM Studio, download "${info.recommendation.lmStudioSearch ?? "Gemma 4 E4B"}" and start the local server.`}
+                      ? `LM Studio öffnen, das Modell „${info.recommendation.lmStudioSearch ?? "Gemma 4 E4B"}“ herunterladen und unter „Developer“ den lokalen Server starten (Port 1234). Ein geöffnetes LM Studio allein ist noch nicht erreichbar.`
+                      : `Open LM Studio, download "${info.recommendation.lmStudioSearch ?? "Gemma 4 E4B"}" and start the local server under "Developer" (port 1234). An open LM Studio window alone is not reachable yet.`}
                   </p>
                 )}
+                {provider.id === "lmstudio" &&
+                  provider.reachable &&
+                  !provider.models.length && (
+                    <p className="muted">
+                      {de
+                        ? `LM Studio läuft, bietet aber noch kein Modell an. Das Modell „${info.recommendation.lmStudioSearch ?? "Gemma 4 E4B"}“ in LM Studio herunterladen und laden, dann erneut prüfen.`
+                        : `LM Studio is running but offers no model yet. Download and load "${info.recommendation.lmStudioSearch ?? "Gemma 4 E4B"}" in LM Studio, then check again.`}
+                    </p>
+                  )}
               </div>
             ),
         )}

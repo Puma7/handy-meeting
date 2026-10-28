@@ -666,3 +666,20 @@ Lokal geprüft:
 - Sprachdialog und Abschlussseite waren nur im Silent-Modus nicht prüfbar.
 
 Dieselben Abläufe prüft `package-rust-installer.ps1 -RunChecks` jetzt auf echtem Windows in der PR-CI. Die Release-Prüfung verlangt die neuen Nachweise `reinstallRepaired`, `startMenuShortcutChecked`, `legacyVersionsMigrated` und `runningProgramPreserved`.
+
+**Oberfläche nach dem 1.0.5-Durchgang des Maintainers:** Umgesetzt sind volle Fensterbreite, Transkript ohne eigenen Scrollbereich, Suche im Transkript, Markdown als Standardexport, Tooltips statt Dauertexten bei Pause/Stummschaltung, FFmpeg und Aufbewahrungsregeln, Abschnittszeit-Hinweis als Tooltip, eingeklappte Audiohinweise, langsam abfallende Pegelanzeige, kein dauerhafter Suchindex-Balken, Abstände in den Einstellungen, ein leerer Archivzustand und eine automatisch geöffnete Ollama-/LM-Studio-Erkennung in der Nachbearbeitung.
+
+Dabei gefunden und behoben: Die seit 1.0.5 geänderte Treibermeldung wurde nicht mehr übersetzt und erschien doppelt auf Englisch. Der Regressionstest schlug vor der Korrektur fehl.
+
+Neue Vitest-Fälle:
+- Treibermeldung
+- Transkriptsuche (wörtliche Darstellung, keine Änderung am Transkript)
+- Pegelabfall
+- ausgeblendeter fertiger Suchindex
+- Markdown-Standard
+- Tooltips
+- Erkennung auf der Nachbearbeitungsseite
+
+Alle 159 Vitest-Fälle, `tsc`, `prettier` und der Produktions-Build bestanden. Das Layout wurde mit synthetischen Daten in Chromium bei 1600×900 angesehen: ein Scrollbalken, die Live-Zusammenfassung bleibt beim Scrollen sichtbar, die Suche markiert Treffer.
+
+Nicht geprüft: echte Geräte, echte Ollama-/LM-Studio-Server. Offene Fragen aus dem Durchgang, etwa ob FFmpeg mitgeliefert werden soll, sind nicht entschieden.

@@ -343,7 +343,6 @@ export default function MeetingView({
             <div className="section-heading">
               <div>
                 <h2>{meeting?.title ?? t.live}</h2>
-                <p>{t.sourceTimes}</p>
               </div>
               <div className="detail-actions">
                 <button

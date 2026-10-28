@@ -215,7 +215,6 @@ label {
 }
 main {
   margin-left: 204px;
-  max-width: 1220px;
   width: calc(100% - 204px);
   padding: 35px 42px 48px;
 }
@@ -568,6 +567,10 @@ main {
   margin-top: 6px;
   font-size: 11px;
 }
+.session-warnings > summary {
+  font-size: 12px;
+  color: var(--color-text);
+}
 .session-warnings summary,
 .progress-explanation summary {
   cursor: pointer;
@@ -798,14 +801,36 @@ main {
   color: var(--color-ink-2);
   margin-top: 5px;
 }
+/* The transcript flows with the page: one scrollbar per view. */
 .transcript-content {
-  margin-top: 17px;
+  margin-top: 12px;
   border-top: 1px solid var(--color-line);
-  max-height: clamp(200px, 52vh, 680px);
-  overflow-y: auto;
-  overflow-x: hidden;
-  scrollbar-gutter: stable;
-  padding-right: 10px;
+  overflow-wrap: anywhere;
+}
+.transcript-search {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+  font-size: 12px;
+}
+.transcript-search label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 240px;
+  max-width: 420px;
+}
+.transcript-search input {
+  flex: 1;
+  min-width: 0;
+}
+.transcript-part mark {
+  background: var(--color-moss-wash);
+  color: inherit;
+  border-radius: 2px;
 }
 .transcript-part {
   padding: 20px 0;
@@ -1384,6 +1409,16 @@ mark {
 .legacy-panel {
   max-width: 780px;
 }
+/* Separate stacked settings panels and adjacent action buttons. */
+.legacy-panel + .legacy-panel,
+.update-panel + .legacy-panel {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--color-line);
+}
+.legacy-panel > button + button {
+  margin-left: 10px;
+}
 .legacy-panel > p {
   margin: 10px 0 17px;
 }
@@ -1686,9 +1721,6 @@ mark {
 }
 .capture-control-panel p {
   margin: 10px 0 0;
-}
-.capture-control-help {
-  font-size: 0.86rem;
 }
 .transcript-format {
   display: grid;

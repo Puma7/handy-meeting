@@ -358,6 +358,32 @@ export default function RetentionPanel({
    * Renders a nullable opt-in rule with its numeric input bounds, editing only the policy
    * draft.
    */
+  // Hover explanations for each rule; the visible label stays short.
+  const ruleHelp: Record<Rule, string> = de
+    ? {
+        convertAfterDays:
+          "Die Aufräumvorschau schlägt nach dieser Zahl von Tagen eine zusätzliche, kleinere Audiokopie (FLAC oder Opus) vor. Das Original bleibt erhalten. Benötigt FFmpeg.",
+        audioArchiveAfterDays:
+          "Die Aufräumvorschau schlägt nach dieser Zahl von Tagen vor, nur die Audiodateien verlustfrei zu archivieren. Transkript und Auswertungen bleiben in der Historie.",
+        archiveAfterDays:
+          "Die Aufräumvorschau schlägt nach dieser Zahl von Tagen vor, das ganze Meeting verlustfrei zu archivieren. Archive lassen sich wiederherstellen.",
+        maxVisibleMeetings:
+          "Liegen mehr Meetings in der Historie, schlägt die Aufräumvorschau die ältesten zum Archivieren vor.",
+        deleteArchivesAfterDays:
+          "Die Aufräumvorschau schlägt endgültiges Löschen eines Archivs erst nach dieser Zahl von Tagen vor. Gelöscht wird nur nach ausdrücklicher Bestätigung.",
+      }
+    : {
+        convertAfterDays:
+          "After this many days, the retention preview proposes an additional smaller audio copy (FLAC or Opus). The original is kept. Requires FFmpeg.",
+        audioArchiveAfterDays:
+          "After this many days, the retention preview proposes archiving only the audio files without loss. Transcript and analyses stay in history.",
+        archiveAfterDays:
+          "After this many days, the retention preview proposes archiving the whole meeting without loss. Archives can be restored.",
+        maxVisibleMeetings:
+          "When history holds more meetings, the retention preview proposes archiving the oldest ones.",
+        deleteArchivesAfterDays:
+          "The retention preview proposes permanent deletion of an archive only after this many days. Nothing is deleted without explicit confirmation.",
+      };
   function rule(key: Rule, label: string, initial: number) {
     if (!draft) return null;
     const number = draft[key];
@@ -367,7 +393,7 @@ export default function RetentionPanel({
         : draft.untouchedDays;
     return (
       <div className="retention-rule">
-        <label>
+        <label title={ruleHelp[key]}>
           <input
             type="checkbox"
             checked={number !== null}
@@ -494,6 +520,11 @@ export default function RetentionPanel({
           <button
             className="secondary"
             disabled={busy || running || !api.chooseFfmpegExecutable}
+            title={
+              de
+                ? "Die ausgewählte Programmdatei wird geprüft. Wähle und bestätige sie nach jedem App-Neustart sowie nach einem Austausch erneut, bevor du sie verwendest. Der gespeicherte Pfad allein ist keine neue Freigabe. Abbrechen lässt die bisherige Wahl unverändert."
+                : "The selected program is checked. Choose and confirm it again after each app restart or replacement before using it. The saved path alone does not grant renewed permission. Cancelling preserves the previous selection."
+            }
             onClick={() => void chooseFfmpeg()}
           >
             {de
@@ -503,20 +534,15 @@ export default function RetentionPanel({
           <button
             className="secondary"
             disabled={busy || running || !draft.ffmpegExecutable}
+            title={
+              de
+                ? "Das Entfernen ändert nur die Programmauswahl. Programmdatei und Aufnahmen bleiben erhalten. Übernimm die Änderung mit „Regeln speichern“, bevor du eine neue Vorschau erstellst."
+                : "Clearing changes only the program selection. The program file and recordings are retained. Apply the change with Save rules before creating a new preview."
+            }
             onClick={clearFfmpeg}
           >
             {de ? "FFmpeg-Auswahl entfernen" : "Clear FFmpeg selection"}
           </button>
-          <p className="muted">
-            {de
-              ? "Das Entfernen ändert nur die Programmauswahl. Programmdatei und Aufnahmen bleiben erhalten. Übernimm die Änderung mit „Regeln speichern“, bevor du eine neue Vorschau erstellst."
-              : "Clearing changes only the program selection. The program file and recordings are retained. Apply the change with Save rules before creating a new preview."}
-          </p>
-          <p className="muted">
-            {de
-              ? "Die ausgewählte Programmdatei wird geprüft. Wähle und bestätige sie nach jedem App-Neustart sowie nach einem Austausch erneut, bevor du sie verwendest. Der gespeicherte Pfad allein ist keine neue Freigabe. Abbrechen lässt die bisherige Wahl unverändert."
-              : "The selected program is checked. Choose and confirm it again after each app restart or replacement before using it. The saved path alone does not grant renewed permission. Cancelling preserves the previous selection."}
-          </p>
           <button
             className="secondary"
             disabled={busy || running || !changed}

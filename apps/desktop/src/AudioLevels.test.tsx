@@ -121,6 +121,33 @@ it("lights green, yellow and red from real peak values and adds an explicit clip
   expect(screen.getByText("In dieser App stumm")).toBeTruthy();
 });
 
+it("lets the bar fall gradually after a short pause instead of dropping to zero", () => {
+  vi.useFakeTimers();
+  try {
+    const props = { label: "Microphone", locale: "en" as const };
+    const view = render(<AudioLevelMeter {...props} level={active(-12)} />);
+    const lit = () => view.container.querySelectorAll("[data-lit]").length;
+    const loud = lit();
+    // A breath 100 ms later: the measured value is shown, the bar only falls about 2.4 dB.
+    vi.advanceTimersByTime(100);
+    view.rerender(
+      <AudioLevelMeter {...props} level={{ ...active(-96), rmsDbfs: -96 }} />,
+    );
+    expect(screen.getByRole("meter").getAttribute("aria-valuenow")).toBe("-96");
+    expect(lit()).toBeGreaterThanOrEqual(loud - 1);
+    expect(screen.queryByText("Silence")).toBeNull();
+    // Lasting silence is shown as silence after the bar has fallen.
+    vi.advanceTimersByTime(5000);
+    view.rerender(
+      <AudioLevelMeter {...props} level={{ ...active(-96), rmsDbfs: -96 }} />,
+    );
+    expect(lit()).toBe(0);
+    expect(screen.getByText("Silence")).toBeTruthy();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 it("distinguishes measured silence from missing samples and still indicates a very quiet signal", () => {
   const props = { label: "Microphone", locale: "en" as const };
   const view = render(

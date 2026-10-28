@@ -7,6 +7,17 @@
 - Every live statement passes the same literal source check as post-meeting analysis; the audio track ("microphone" or "computer audio") is derived from its evidence, never invented. Live files are created once, re-verified when read and never overwritten or deleted.
 - Local models first; a cloud or company endpoint needs a text release for every start and never starts automatically. Optional automatic start with every recording (local only).
 - **Windows installer:** one folder `Meeting for Handy` without a version number; running setup again repairs or updates it once the app is closed (1.0.5 refused a second run). Start menu entry created natively, so Windows search finds the app even under the default Restricted PowerShell policy (1.0.5 left no entry there). Optional desktop shortcut and "Start Meeting for Handy" on the finish page, English/German language choice, a multi-size setup and app icon (1.0.5 had a single 256 px image) and "Meeting for Handy" as copyright holder. Former version folders are removed through their own uninstallers; recordings and settings stay. The updater also accepts a future `MeetingForHandy-` setup name.
+- **Calmer desktop after the 1.0.5 walkthrough:**
+  - Pages use the full window width, and the transcript scrolls with the page instead of in a second scrollbar.
+  - New search field inside the transcript.
+  - Markdown is the default export.
+  - Pause/mute and FFmpeg explanations, plus new retention-rule explanations, are hover tooltips; the "selected tracks are recorded" line is gone.
+  - The section-time hint is a tooltip on each time.
+  - Audio-driver notices are collapsed and translated again (the 1.0.5 wording was shown twice in English).
+  - Level meters fall smoothly instead of flashing to zero on a breath.
+  - A finished search-index update no longer stays in the footer.
+  - Settings buttons have spacing, and an empty archive says why it is empty.
+  - When no model answers at the configured local endpoint, the analysis page opens the Ollama/LM Studio detection by itself, including a hint to start the LM Studio server.
 - **Local model setup:** detects Ollama and LM Studio on this computer, suggests `gemma4:e2b` or `gemma4:e4b` from installed memory and can ask a running Ollama to download the suggested model. The last local endpoint and model are remembered.
 
 ## 1.0.5 — input meters, audit fixes and efficient CI (release candidate)

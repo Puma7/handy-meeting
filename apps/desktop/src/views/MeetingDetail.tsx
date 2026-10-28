@@ -54,7 +54,6 @@ export default function MeetingDetail({
         <div>
           <h2>{meeting.title}</h2>
           <p>{meetingLabel(meeting, locale)}</p>
-          <p>{t.sourceTimes}</p>
         </div>
         <div className="detail-actions">
           <button

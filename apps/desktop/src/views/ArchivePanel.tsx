@@ -260,26 +260,33 @@ export default function ArchivePanel({
             })}
           </ul>
           {!page.items.length && (
-            <p>
-              {de
-                ? "Keine Archive auf dieser Seite."
-                : "No archives on this page."}
+            <p className="muted">
+              {offset
+                ? de
+                  ? "Keine Archive auf dieser Seite."
+                  : "No archives on this page."
+                : de
+                  ? "Noch keine Archive. Archive entstehen erst, wenn eine Aufbewahrungsregel ein Meeting archiviert."
+                  : "No archives yet. Archives are created only when a retention rule archives a meeting."}
             </p>
           )}
-          <div className="search-pages">
-            <button
-              disabled={!offset || busy || running}
-              onClick={() => setOffset((n) => Math.max(0, n - 25))}
-            >
-              {de ? "Zurück" : "Previous"}
-            </button>
-            <button
-              disabled={!page.more || busy || running}
-              onClick={() => setOffset((n) => n + 25)}
-            >
-              {de ? "Weiter" : "Next"}
-            </button>
-          </div>
+          {/* Paging only when there is more than one page. */}
+          {(offset > 0 || page.more) && (
+            <div className="search-pages">
+              <button
+                disabled={!offset || busy || running}
+                onClick={() => setOffset((n) => Math.max(0, n - 25))}
+              >
+                {de ? "Zurück" : "Previous"}
+              </button>
+              <button
+                disabled={!page.more || busy || running}
+                onClick={() => setOffset((n) => n + 25)}
+              >
+                {de ? "Weiter" : "Next"}
+              </button>
+            </div>
+          )}
         </>
       )}
       {selected && (

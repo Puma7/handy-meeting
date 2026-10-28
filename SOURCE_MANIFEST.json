@@ -26,8 +26,8 @@
   },
   {
     "Path": "CHANGELOG.md",
-    "SHA256": "F06D0786691FF68B1C20DB3D46AA465FBD61887E48B80EEDF88F0E361DDC4077",
-    "Bytes": 14654
+    "SHA256": "ACC659205193B1CA0C36CAA3E3168415AA05AE7AC674EC1CFA573F60EE539EA5",
+    "Bytes": 15594
   },
   {
     "Path": "BUILD_STATUS.md",
@@ -41,8 +41,8 @@
   },
   {
     "Path": "TEST_REPORT.md",
-    "SHA256": "EC2E41DC00A1ABA3AB3A1863FF841D1B976B0DBCCEF01A58D289A24703EE4737",
-    "Bytes": 156875
+    "SHA256": "03C6A88358C359B13D512F33D90574385975573A16DCDBEB12A31C7D177EB2ED",
+    "Bytes": 158258
   },
   {
     "Path": "DAUERTEST.md",
@@ -691,8 +691,8 @@
   },
   {
     "Path": ".github/RELEASE_NOTES.md",
-    "SHA256": "03E400CB775595501974B6A80723AF8523723743F8384DCAC9B7FC42FB9351E6",
-    "Bytes": 9832
+    "SHA256": "31A042903B2A47B4AC89DBB70C90F9BADA87B9E5F4B5B8694FFB4F3B469A0374",
+    "Bytes": 10348
   },
   {
     "Path": "licenses/frontend/_tauri-apps_api-2.11.0-LICENSE_APACHE-2.0.txt",
@@ -14226,8 +14226,8 @@
   },
   {
     "Path": "apps/desktop/src/views/ArchivePanel.tsx",
-    "SHA256": "0F3CDC801180837CB60D8449C10D06FD32548CBF5EB085D5BCE7B73D4CB0995C",
-    "Bytes": 13002
+    "SHA256": "30C2E780666D79D843D72A9F085893BB100971CCB3AC5F056DD01587C00E1B99",
+    "Bytes": 13443
   },
   {
     "Path": "apps/desktop/src/views/AudioCopiesPanel.tsx",
@@ -14236,8 +14236,8 @@
   },
   {
     "Path": "apps/desktop/src/views/AudioLevelMeter.tsx",
-    "SHA256": "9B011CC8389B0D6568BBF1B37D0A5C30B931443824A1C9DAAB98662A0C14F25D",
-    "Bytes": 3803
+    "SHA256": "B0248E73FBFC1227EC592C7AD4E6A602C8DDE704E629E5909DE5935FA07CB24A",
+    "Bytes": 4496
   },
   {
     "Path": "apps/desktop/src/views/AudioSources.tsx",
@@ -14261,8 +14261,8 @@
   },
   {
     "Path": "apps/desktop/src/views/LibraryStatus.tsx",
-    "SHA256": "E4C370E9D2D063A43432985F6E7219F0881CE6343FCC100097939E3044A6F345",
-    "Bytes": 3812
+    "SHA256": "FF9BB385381C5ADA97A3219CF4F746AB3092FA1AB77CFA919BCBB5894A482828",
+    "Bytes": 3795
   },
   {
     "Path": "apps/desktop/src/views/MaintenanceStatus.tsx",
@@ -14271,13 +14271,13 @@
   },
   {
     "Path": "apps/desktop/src/views/MeetingDetail.tsx",
-    "SHA256": "99E93E1767D52F8B096E5BD259B07124477BBAC5A7C25143E4DBD24FE0BF2438",
-    "Bytes": 2864
+    "SHA256": "4EE90E919A67D086200ADF0C0960117A897708F9052E0DD4207A4742637F8AA6",
+    "Bytes": 2831
   },
   {
     "Path": "apps/desktop/src/views/MeetingFiles.tsx",
-    "SHA256": "36E79EDA9366F9EC3495D781BD3AEA032CA916013172E33F6A872CBC7DCBF75E",
-    "Bytes": 1832
+    "SHA256": "599ED2CE7D504ECE7E7F601FBF91A6779EA55410765CE7A1F5EEA47FAD44ABD0",
+    "Bytes": 1831
   },
   {
     "Path": "apps/desktop/src/views/MeetingLabels.tsx",
@@ -14286,8 +14286,8 @@
   },
   {
     "Path": "apps/desktop/src/views/MeetingView.tsx",
-    "SHA256": "62E9AA3862AF2ACBE4219104350D0AF7C92F119B2FE2E10F8B41D829F5DE24E9",
-    "Bytes": 11952
+    "SHA256": "90B5C9329ED8EE12008DF4F71EA2B39DA75E723EE13FCC8FBFF85D0ADB9A5341",
+    "Bytes": 11913
   },
   {
     "Path": "apps/desktop/src/views/NotesProgressPanel.tsx",
@@ -14296,13 +14296,13 @@
   },
   {
     "Path": "apps/desktop/src/views/NotesView.tsx",
-    "SHA256": "CC3366A40223C4E385CFDFAE1D1BD64E6938A16800A6BEA01E8CA6B947D4455C",
-    "Bytes": 26480
+    "SHA256": "7D6383D29BB0F241D52D04D3FC6670CADB9F0F4A929584A000E2939FE473867C",
+    "Bytes": 26928
   },
   {
     "Path": "apps/desktop/src/views/RecordingControls.tsx",
-    "SHA256": "5203B47DBDB086A1EBA67739043E354F4BCF92D8385A287A20B3907E530F9A5B",
-    "Bytes": 3242
+    "SHA256": "07484004E98C3653638D0FD517EBAEE85AF8D0ECB316D98BC1A3DD83624F11C3",
+    "Bytes": 3099
   },
   {
     "Path": "apps/desktop/src/views/ResumeAnalysisDialog.tsx",
@@ -14311,13 +14311,13 @@
   },
   {
     "Path": "apps/desktop/src/views/RetentionPanel.tsx",
-    "SHA256": "05C027DF388952CB81E4FE2840AA6C0EE2517995D568BA5FAC8205564FFBB1F0",
-    "Bytes": 25846
+    "SHA256": "B825B40C21955C8C0EB1A02E5CB8EFBA3FB505A1C1B5C2A43731BBC137604F29",
+    "Bytes": 27785
   },
   {
     "Path": "apps/desktop/src/views/SessionWarnings.tsx",
-    "SHA256": "80D6FAEA3C1BF98CA018D623088F624CF8C2588B02635174D8963AE0B6F035D7",
-    "Bytes": 1091
+    "SHA256": "556DFEFD420F988F0FED1EFF7AE6870B616602542B31DFB9145491496A2E04ED",
+    "Bytes": 1283
   },
   {
     "Path": "apps/desktop/src/views/SettingsView.tsx",
@@ -14351,8 +14351,8 @@
   },
   {
     "Path": "apps/desktop/src/views/TranscriptBody.tsx",
-    "SHA256": "CC90A9430BD6776E9259F3B6D4C6A151DA44950C46A961D6C03BCF973BBB5D5A",
-    "Bytes": 2661
+    "SHA256": "26B5C7557F25AA2C5E540E0E8B3CCFAF4659FB61F17CAFC52BC7C9D635124AF2",
+    "Bytes": 4787
   },
   {
     "Path": "apps/desktop/src/views/UpdatePanel.tsx",
@@ -14366,8 +14366,8 @@
   },
   {
     "Path": "apps/desktop/src/views/LocalModelSetup.tsx",
-    "SHA256": "A743DF8664200DFB8116355DC340F21BDDF787FD6BF166C34A4A310978210F66",
-    "Bytes": 9799
+    "SHA256": "AA81D11E4FAEE73C0A05920FF031BFBA11E5C482E82BCC3D4BB0028E7BE2992D",
+    "Bytes": 10624
   },
   {
     "Path": "apps/desktop/src/AccessControls.test.tsx",
@@ -14406,8 +14406,8 @@
   },
   {
     "Path": "apps/desktop/src/AudioLevels.test.tsx",
-    "SHA256": "D4EEC7EFB824CB0C87BD3CEE40EF22E04351A8A140D4397918CFA4A41EFB82AB",
-    "Bytes": 19012
+    "SHA256": "548D70497C8445E6C43C20AA40E8E970AA14EDD783DD00CFC8653CE16A702025",
+    "Bytes": 20128
   },
   {
     "Path": "apps/desktop/src/Beta2.test.tsx",
@@ -14416,8 +14416,8 @@
   },
   {
     "Path": "apps/desktop/src/domain.ts",
-    "SHA256": "BEEBCC95D271D7EC522C07B16C1BC8DBA5685BD2F1A0315F224FF9C9CDBBB142",
-    "Bytes": 6397
+    "SHA256": "88630C185686578AEACBEF45FFB8A272BD8DEB4DF7FD034351464338C60A8C9D",
+    "Bytes": 6556
   },
   {
     "Path": "apps/desktop/src/FeatureParity.test.tsx",
@@ -14456,18 +14456,18 @@
   },
   {
     "Path": "apps/desktop/src/MeetingWorkflow.test.tsx",
-    "SHA256": "BAD1C7283DCD78CD25C6243986B7AF2471ED1D9B98E57B1967C1B260C8589568",
-    "Bytes": 10710
+    "SHA256": "1E62F38DC5CB796AACA6C01D31595F69422646566EABB7D9A7D88B4B7F885A64",
+    "Bytes": 12956
   },
   {
     "Path": "apps/desktop/src/OptionalJobs.test.tsx",
-    "SHA256": "8942261D6BBEAA5EC3F17E88D063363F33D9E2D67138D0818ED7975BD1A2A1C9",
-    "Bytes": 16197
+    "SHA256": "BCE1064FAA65425FBDDE03D04EFFA3468BE5C6D22B462BA9133F3208413D11A1",
+    "Bytes": 17292
   },
   {
     "Path": "apps/desktop/src/RecordingControls.test.tsx",
-    "SHA256": "2B598A58F122F772705FA2936C430B7352EF401965894AD0E021E06BBE06BC1D",
-    "Bytes": 7873
+    "SHA256": "3CF8D947F76EFB6D17917D85C515B493D77ABD2808E1EFEC8DCA7FF91605AA9D",
+    "Bytes": 8114
   },
   {
     "Path": "apps/desktop/src/RetentionPanel.test.tsx",
@@ -14486,8 +14486,8 @@
   },
   {
     "Path": "apps/desktop/src/styles.css",
-    "SHA256": "B29AC5AEE55F197301A46A0961D89B36B53F93FFAB7B5F9362E65B3038806DB5",
-    "Bytes": 35414
+    "SHA256": "4E5208635405B50528BD8C5D36C9E03DD127EA70777B0CBBC573C8C4BE4155F0",
+    "Bytes": 36094
   },
   {
     "Path": "apps/desktop/src/test-services.ts",
@@ -14526,8 +14526,8 @@
   },
   {
     "Path": "apps/desktop/src/LiveNotes.test.tsx",
-    "SHA256": "A2847874AE9148B34AF6039A83A512CB42E0C86066FF03692C793BD3532E7A4D",
-    "Bytes": 16157
+    "SHA256": "4BA3BDBE1B2221B42147856F962B0174A550D42BA2DD94C422FEF63BFA3BB1A7",
+    "Bytes": 17849
   },
   {
     "Path": "apps/desktop/src-tauri/capabilities/default.json",
