@@ -2,8 +2,8 @@
 
 ## 1.0.6 — live summary and easy local text models (in development)
 
-- **Live summary while recording:** a side panel summarizes the running meeting – summary so far, decisions, tasks, open questions and important points – so the meeting can be recapped at any moment. Updates run every 1–15 minutes, earlier after a long contribution of one audio track or a lot of new speech, on request and once more after catch-up.
-- Compact and complete at the same time: newly confirmed text is summarized in append-only windows and a rolling overview of at most eight points is rebuilt from the verified statements, so no point is lost and requests stay small for local models.
+- **Live summary while recording:** a side panel summarizes the running meeting – summary so far, decisions, tasks, open questions and important points – so the meeting can be recapped at any moment. Updates run every 1–15 minutes once at least 200 new characters are confirmed, earlier after a long contribution of one audio track or a lot of new speech, on request and once more after catch-up; less new text waits for the next trigger or "Update now".
+- Compact summaries: newly confirmed text is summarized in append-only windows, and a rolling overview of at most eight points is rebuilt from the verified statements in batches, so requests stay small for local models. Every verified statement stays in the detailed lists; the overview is a summary and can leave points out.
 - Every live statement passes the same literal source check as post-meeting analysis; the audio track ("microphone" or "computer audio") is derived from its evidence, never invented. Live files are created once, re-verified when read and never overwritten or deleted.
 - Local models first; a cloud or company endpoint needs a text release for every start and never starts automatically. Optional automatic start with every recording (local only).
 - **Local model setup:** detects Ollama and LM Studio on this computer, suggests `gemma4:e2b` or `gemma4:e4b` from installed memory and can ask a running Ollama to download the suggested model. The last local endpoint and model are remembered.

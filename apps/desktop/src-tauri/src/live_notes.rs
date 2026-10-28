@@ -188,23 +188,29 @@ impl Service {
     /// instead of reopening (and re-verifying) the session on every poll. Only without such a
     /// snapshot is the session opened once, without replacing the store the user is viewing.
     fn live_snapshot(&self, id: &str, finished: Option<&SessionData>) -> AppResult<Snapshot> {
-        {
+        // Only the store handles are taken under the application lock; the snapshot itself
+        // is read afterwards, so a large meeting never blocks the audio-level poll.
+        let (active_store, view_store) = {
             let inner = self.lock()?;
-            if let Some(active) = inner.active.as_ref() {
-                if let Ok(data) = active.store.snapshot() {
-                    if data.id == id {
-                        return Ok(Snapshot { data, active: true });
-                    }
+            (
+                inner.active.as_ref().map(|a| a.store.clone()),
+                inner.view.clone(),
+            )
+        };
+        if let Some(store) = active_store {
+            if let Ok(data) = store.snapshot() {
+                if data.id == id {
+                    return Ok(Snapshot { data, active: true });
                 }
             }
-            if let Some(store) = inner.view.as_ref() {
-                if let Ok(data) = store.snapshot() {
-                    if data.id == id {
-                        return Ok(Snapshot {
-                            data,
-                            active: false,
-                        });
-                    }
+        }
+        if let Some(store) = view_store {
+            if let Ok(data) = store.snapshot() {
+                if data.id == id {
+                    return Ok(Snapshot {
+                        data,
+                        active: false,
+                    });
                 }
             }
         }

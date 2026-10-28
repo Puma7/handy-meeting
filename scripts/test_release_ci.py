@@ -37,10 +37,20 @@ def pr_paths(text):
     if inline:
         patterns = ast.literal_eval(inline.group(1))
     else:
-        block = re.search(r'^    paths:\n((?:      - .*\n?)+)', section, re.M)
+        # The whole block up to the next key at the same or a lower level: blank and comment
+        # lines are skipped, entries are read, and anything else fails closed.
+        block = re.search(r'^    paths:\n(.*?)(?=^ {0,4}\S|\Z)', section, re.M | re.S)
         if not block:
             raise ValueError('No readable pull_request paths filter')
-        patterns = [block_entry(line[len('      - '):]) for line in block.group(1).splitlines()]
+        patterns = []
+        for line in block.group(1).splitlines():
+            if not line.strip() or line.strip().startswith('#'):
+                continue
+            if not line.startswith('      - '):
+                raise ValueError('Unreadable pull_request paths line: ' + line)
+            patterns.append(block_entry(line[len('      - '):]))
+        if not patterns:
+            raise ValueError('Empty pull_request paths filter')
     for pattern in patterns:
         path_matches('', pattern)
     return patterns
@@ -151,6 +161,11 @@ class WorkflowBoundaries(unittest.TestCase):
         # A double-quoted exclusion must not be skipped silently.
         with self.assertRaises(ValueError):
             pr_paths(with_entry('      - "!platform/macos/**"\n'))
+        # A blank or comment line must not hide a later entry from validation.
+        with self.assertRaises(ValueError):
+            pr_paths(with_entry("\n      # later entries\n      - '!platform/macos/**'\n"))
+        separated = with_entry("\n      - 'docs/**'\n")
+        self.assertIn('docs/**', pr_paths(separated))
         for unreadable in ('platform/macos/**', "'platform/**' # note", '"platform/**'):
             with self.subTest(entry=unreadable), self.assertRaises(ValueError):
                 pr_paths(with_entry('      - ' + unreadable + '\n'))
