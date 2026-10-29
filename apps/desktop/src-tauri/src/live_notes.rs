@@ -185,19 +185,23 @@ pub(crate) struct Snapshot {
 }
 impl Snapshot {
     /// A living recognizer owns the compute budget while its track has over five seconds
-    /// unprocessed. Ended workers and archived meetings never defer confirmed-text analysis.
+    /// unprocessed. Completed same-model parts, ended workers and archived meetings never
+    /// defer confirmed-text analysis, including after a resume with older progress counters.
     fn recognition_needs_priority(&self) -> bool {
         if !self.active {
             return false;
         }
         let mut tracks = [0_u64; 2];
         for part in &self.data.parts {
-            let processed = if part.model_id.as_deref() == Some(self.data.model_id.as_str()) {
-                part.processed_samples
-            } else {
+            let same_model = part.model_id.as_deref() == Some(self.data.model_id.as_str());
+            let pending = if same_model && part.status == "complete" {
                 0
+            } else if same_model {
+                part.confirmed_sample_count
+                    .saturating_sub(part.processed_samples)
+            } else {
+                part.confirmed_sample_count
             };
-            let pending = part.confirmed_sample_count.saturating_sub(processed);
             let index = usize::from(part.source == "microphone");
             if self.recognizing_tracks[index] {
                 tracks[index] = tracks[index].saturating_add(pending);
@@ -727,6 +731,49 @@ mod tests {
             recognizing_tracks: [false; 2],
         }
         .recognition_needs_priority());
+    }
+
+    #[test]
+    /// Resumed sessions may retain completed text with an older progress counter. Only the
+    /// unfinished same-track audio should defer summaries; another model still needs work.
+    fn completed_resumed_parts_do_not_defer_live_notes_for_their_pending_track() {
+        for source in ["system", "microphone"] {
+            for pending_seconds in [1, 6] {
+                let data: SessionData = serde_json::from_value(serde_json::json!({
+                    "schemaVersion":2,"id":"a".repeat(32),"title":"Synthetic resumed backlog",
+                    "startedAt":"2026-10-29T00:00:00Z","status":"catching-up","modelId":"synthetic",
+                    "parts":[
+                        {"file":format!("{source}-000000000000.wav"),"source":source,"startSample":0,
+                         "sampleCount":160000,"confirmedSampleCount":160000,"audioClosed":true,
+                         "processedSamples":0,"modelId":"synthetic","status":"complete","text":"Confirmed original text."},
+                        {"file":format!("{source}-000000160000.wav"),"source":source,"startSample":160000,
+                         "sampleCount":pending_seconds*16000,"confirmedSampleCount":pending_seconds*16000,
+                         "audioClosed":true,"processedSamples":0,"modelId":"synthetic","status":"pending"}
+                    ]
+                })).unwrap();
+                let before = serde_json::to_vec(&data).unwrap();
+                let mut snapshot = Snapshot {
+                    data,
+                    active: true,
+                    recognizing_tracks: [true; 2],
+                };
+                assert_eq!(
+                    live_texts(&snapshot.data).0[0].text,
+                    "Confirmed original text."
+                );
+                assert_eq!(
+                    snapshot.recognition_needs_priority(),
+                    pending_seconds > 5,
+                    "{source}: only the unfinished {pending_seconds}s should count"
+                );
+                assert_eq!(serde_json::to_vec(&snapshot.data).unwrap(), before);
+                snapshot.data.parts[0].model_id = Some("another-model".into());
+                assert!(
+                    snapshot.recognition_needs_priority(),
+                    "other-model audio still needs recognition"
+                );
+            }
+        }
     }
 
     #[test]

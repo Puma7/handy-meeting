@@ -38,10 +38,11 @@ export default function AudioCopiesPanel({
     try {
       const next = await api.listAudioCopies(offset);
       if (current !== generation.current) return;
-      setCopies(next.slice(0, 25));
+      const visible = next.slice(0, 25);
+      setCopies(visible);
       setMore(next.length > 25);
       setSelected((old) =>
-        old && next.some((copy) => copy.runId === old.runId) ? old : null,
+        old && visible.some((copy) => copy.runId === old.runId) ? old : null,
       );
       setError(null);
     } catch (e) {

@@ -14,7 +14,13 @@ import TextModelSettings from "./views/TextModelSettings";
 import { testServices } from "./test-services";
 import { de } from "./i18n";
 import { hydrateLiveTranscript, mergeLiveTranscript } from "./live-transcript";
-import type { AppState, AudioPart, DesktopApi, Meeting } from "./types";
+import type {
+  AppState,
+  AudioPart,
+  DesktopApi,
+  HandyModel,
+  Meeting,
+} from "./types";
 
 // Synthetic IPC and text only; no device, user recording, model or provider is opened.
 const parts: AudioPart[] = Array.from({ length: 50 }, (_, i) => ({
@@ -333,6 +339,77 @@ it("refreshes catch-up text outside the recent preview and rejects late foreign 
   expect(
     hydrateLiveTranscript(merged, oldTextWithSameAudioSequence)!.parts[0].text,
   ).toBe("Später erkannter Anfang");
+});
+
+it("clears an audio-copy confirmation when its row becomes the previous page's hidden lookahead", async () => {
+  const copies = Array.from({ length: 26 }, (_, i) => ({
+    runId: `copy-${i}`,
+    meetingId: meeting.id,
+    title: `Copy ${i}`,
+    codec: "flac" as const,
+    createdAt: meeting.startedAt,
+    sections: 1,
+  }));
+  const start = vi.fn(async () => "synthetic-job");
+  const list = vi.fn(async (offset: number) =>
+    copies.slice(offset, offset + 26),
+  );
+  render(
+    <AudioCopiesPanel
+      api={
+        {
+          listAudioCopies: list,
+          transcribeAudioCopy: start,
+        } as unknown as DesktopApi
+      }
+      locale="en"
+      models={
+        [
+          {
+            id: "synthetic",
+            name: "Synthetic model",
+            isDownloaded: true,
+            supportsStreaming: true,
+          },
+        ] as HandyModel[]
+      }
+      job={null}
+    />,
+  );
+  await screen.findByText("Copy 24");
+  fireEvent.click(screen.getByRole("button", { name: "Next" }));
+  await screen.findByText("Copy 25");
+  fireEvent.click(
+    screen.getByRole("button", { name: "Prepare new transcription" }),
+  );
+  fireEvent.change(screen.getByLabelText("Model for the new transcription"), {
+    target: { value: "synthetic" },
+  });
+  fireEvent.click(screen.getByRole("checkbox"));
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "Start new local transcription",
+      }) as HTMLButtonElement
+    ).disabled,
+  ).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+  await screen.findByText("Copy 0");
+  expect(screen.queryByRole("heading", { name: "Copy 25" })).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: "Start new local transcription" }),
+  ).toBeNull();
+  expect(start).not.toHaveBeenCalled();
+  fireEvent.click(
+    screen.getAllByRole("button", { name: "Prepare new transcription" })[0],
+  );
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "Start new local transcription",
+      }) as HTMLButtonElement
+    ).disabled,
+  ).toBe(true);
 });
 
 it.each([25, 26])(

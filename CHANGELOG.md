@@ -4,6 +4,7 @@
 
 - Windows microphone clock gaps retain their exact gap evidence without creating a separate audio/recognition job for every tiny gap. Capture returns to stop/pause controls between bounded drain turns instead of treating cumulative processed audio as an invalid backlog.
 - Live text-model requests wait while speech recognition has more than five seconds of confirmed audio pending. Already running model requests are not cancelled by this scheduler.
+- Resumed live summaries ignore completed same-model audio even if an older progress counter remains; unfinished and other-model audio still receive recognition priority. Audio-copy confirmations are cleared when paging hides the selected row, including lookahead records.
 - The live transcript retains earlier sections, periodically refreshes catch-up text outside the recent status preview, and highlights literal Unicode searches without shifting matches.
 - A compact running view keeps both level meters and pause/mute/stop controls visible. Narrow windows offer a direct transcript/summary switch. Rename controls and export actions align, and compact-audio pagination uses lookahead.
 - Settings and post-processing share one connection/model form. Detection reads LM Studio's configured server port and a local-only Ollama host; local/cloud drafts are kept separately and transient credentials are cleared on switching. Templates and optional speaker tools have a clearer grouping; local speaker jobs require an explicit capability check.
