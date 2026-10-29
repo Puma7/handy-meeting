@@ -231,6 +231,33 @@ describe("audio devices follow connected and removed hardware (synthetic IPC)", 
     await waitFor(() => expect(microphoneSelect().value).toBe(headset.id));
   });
 
+  it("keeps a microphone the user picked even when it was the automatic choice", async () => {
+    let devices = [output, builtIn, alternate, headset];
+    const api = fakeApi(
+      () => devices,
+      () => state(),
+    );
+    render(<App api={api} />);
+    await screen.findByRole("option", { name: headset.name });
+    await userEvent.click(
+      screen.getByLabelText("Mikrofon zusätzlich aufnehmen"),
+    );
+    await userEvent.selectOptions(microphoneSelect(), headset.id);
+    devices = [output, builtIn, alternate];
+    fireEvent.focus(window);
+    await waitFor(() => expect(microphoneSelect().value).toBe(builtIn.id));
+    // The user tries another microphone and then picks the automatic one again.
+    await userEvent.selectOptions(microphoneSelect(), alternate.id);
+    await userEvent.selectOptions(microphoneSelect(), builtIn.id);
+    devices = [output, builtIn, alternate, headset];
+    fireEvent.focus(window);
+    await screen.findByRole("option", { name: headset.name });
+    await waitFor(() =>
+      expect(screen.queryByText(/ist nicht mehr verfügbar/)).toBeNull(),
+    );
+    expect(microphoneSelect().value).toBe(builtIn.id);
+  });
+
   it("reports a removed microphone, chooses another one and takes it back on reconnect", async () => {
     let devices = [output, builtIn, headset];
     const api = fakeApi(
@@ -272,12 +299,8 @@ describe("audio devices follow connected and removed hardware (synthetic IPC)", 
     );
     await userEvent.selectOptions(microphoneSelect(), headset.id);
     recording = true;
-    await waitFor(
-      () =>
-        expect(
-          screen.getAllByText("Audioaufnahme läuft").length,
-        ).toBeGreaterThan(0),
-      { timeout: 5000 },
+    await waitFor(() =>
+      expect(document.querySelector(".state.recording")).not.toBeNull(),
     );
     devices = [output, builtIn];
     fireEvent.focus(window);
@@ -314,10 +337,9 @@ describe("audio devices follow connected and removed hardware (synthetic IPC)", 
     );
     await userEvent.selectOptions(microphoneSelect(), headset.id);
     recording = true;
+    // The capture indicator, not the meeting status label, proves the recording state.
     await waitFor(() =>
-      expect(screen.getAllByText("Audioaufnahme läuft").length).toBeGreaterThan(
-        0,
-      ),
+      expect(document.querySelector(".state.recording")).not.toBeNull(),
     );
     devices = [output, builtIn];
     fireEvent.focus(window);
@@ -345,12 +367,8 @@ describe("audio devices follow connected and removed hardware (synthetic IPC)", 
       screen.getByLabelText("Mikrofon zusätzlich aufnehmen"),
     );
     recording = true;
-    await waitFor(
-      () =>
-        expect(
-          screen.getAllByText("Audioaufnahme läuft").length,
-        ).toBeGreaterThan(0),
-      { timeout: 5000 },
+    await waitFor(() =>
+      expect(document.querySelector(".state.recording")).not.toBeNull(),
     );
     hasMicrophone = false;
     expect(
@@ -378,9 +396,7 @@ describe("audio devices follow connected and removed hardware (synthetic IPC)", 
     await userEvent.selectOptions(microphoneSelect(), headset.id);
     recording = true;
     await waitFor(() =>
-      expect(screen.getAllByText("Audioaufnahme läuft").length).toBeGreaterThan(
-        0,
-      ),
+      expect(document.querySelector(".state.recording")).not.toBeNull(),
     );
     // The capture reports the stop while the device is still listed ...
     hasMicrophone = false;

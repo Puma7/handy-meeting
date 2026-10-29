@@ -12,11 +12,15 @@ export interface DeviceLoss {
   duringRecording: boolean;
   /** The native capture confirmed that this track stopped recording. */
   confirmed?: boolean;
+  /** The recording (meeting ID) during which the device was lost. */
+  meetingId?: string | null;
   /** Name and ID of the device chosen instead, when not recording. */
   replacement?: string;
   replacementId?: string;
   /** The notice was closed; the record still restores the device when it returns. */
   dismissed?: boolean;
+  /** The user chose a device for this source since; the lost one no longer takes over. */
+  userChose?: boolean;
 }
 
 /** Interval of the automatic device-list refresh while the window is visible. */

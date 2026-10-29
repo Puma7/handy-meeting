@@ -379,8 +379,15 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     deviceLossesRef.current = next;
     setDeviceLosses(next);
   }, []);
-  const selectionRef = useRef({ systemId, micId, micEnabled, recording });
-  selectionRef.current = { systemId, micId, micEnabled, recording };
+  const meetingId = app?.activeMeeting?.id ?? null;
+  const selectionRef = useRef({
+    systemId,
+    micId,
+    micEnabled,
+    recording,
+    meetingId,
+  });
+  selectionRef.current = { systemId, micId, micEnabled, recording, meetingId };
   /**
    * Merges a completed result only into its still-selected meeting and removes the
    * corresponding resumable placeholder.
@@ -630,13 +637,16 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       // original record, so the first device still returns.
       const standIns = new Set(
         losses
-          .filter((loss) => loss.replacementId)
+          .filter((loss) => loss.replacementId && !loss.userChose)
           .map((loss) => `${loss.source}:${loss.replacementId}`),
       );
       // The device selected in place of a lost one. A recording keeps its selection, so a
       // loss from a recording stands in for itself until an automatic choice replaces it.
+      // After the user's own choice nothing stands in: the lost device no longer returns.
       const standing = (loss: DeviceLoss) =>
-        loss.replacementId ?? (loss.duringRecording ? loss.id : "");
+        loss.userChose
+          ? null
+          : (loss.replacementId ?? (loss.duringRecording ? loss.id : ""));
       if (!current.recording) {
         for (const source of ["system", "microphone"] as const) {
           if (listed(source, chosen[source])) continue;
@@ -690,6 +700,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
           {
             ...item,
             duringRecording: current.recording,
+            meetingId: current.recording ? current.meetingId : undefined,
             replacement: replacement?.name,
             replacementId: replacement?.id,
           },
@@ -702,6 +713,24 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         updateDeviceLosses(losses);
       setSystemId(chosen.system);
       setMicId(chosen.microphone);
+    },
+    [updateDeviceLosses],
+  );
+  /**
+   * A device the user picks wins over a later returning one, even when it is the device
+   * that was chosen automatically before.
+   */
+  const chooseDevice = useCallback(
+    (source: DeviceSource, id: string) => {
+      if (source === "system") setSystemId(id);
+      else setMicId(id);
+      const losses = deviceLossesRef.current;
+      if (losses.some((loss) => loss.source === source && !loss.userChose))
+        updateDeviceLosses(
+          losses.map((loss) =>
+            loss.source === source ? { ...loss, userChose: true } : loss,
+          ),
+        );
     },
     [updateDeviceLosses],
   );
@@ -738,8 +767,15 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
   const micCapturing = useRef(false),
     wasRecording = useRef(false);
   useEffect(() => {
-    // A new recording starts with its own devices; earlier notices no longer apply.
-    if (recording && !wasRecording.current) updateDeviceLosses([]);
+    // A new recording starts with its own devices; earlier notices no longer apply. A loss
+    // of this recording may already be recorded before this effect runs, so it stays.
+    if (recording && !wasRecording.current)
+      updateDeviceLosses(
+        deviceLossesRef.current.filter(
+          (loss) =>
+            loss.duringRecording && loss.meetingId === app?.activeMeeting?.id,
+        ),
+      );
     wasRecording.current = recording;
     // The native microphone track ended while the recording continues: the device was
     // removed or failed, even before the next device list shows it.
@@ -770,6 +806,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
           earlier?.name ??
           "",
         duringRecording: true,
+        meetingId: selectionRef.current.meetingId,
         confirmed: true,
       },
     ]);
@@ -1928,8 +1965,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             locale={locale}
             setTitle={setTitle}
             setModelId={setModelId}
-            setSystemId={setSystemId}
-            setMicId={setMicId}
+            setSystemId={(id) => chooseDevice("system", id)}
+            setMicId={(id) => chooseDevice("microphone", id)}
             setMicEnabled={setMicEnabled}
             start={start}
             stop={stop}
