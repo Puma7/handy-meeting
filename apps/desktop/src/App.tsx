@@ -651,6 +651,18 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         }
       }
       for (const item of lost) {
+        // The native capture usually reports the stop first; a later list change must not
+        // weaken that confirmation or reopen a closed notice.
+        if (
+          current.recording &&
+          losses.some(
+            (loss) =>
+              loss.source === item.source &&
+              loss.duringRecording &&
+              loss.confirmed,
+          )
+        )
+          continue;
         const replacement = current.recording
           ? undefined
           : items.find(

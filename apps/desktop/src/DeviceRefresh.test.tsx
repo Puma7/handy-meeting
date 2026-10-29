@@ -296,6 +296,47 @@ describe("audio devices follow connected and removed hardware (synthetic IPC)", 
     ).toBeTruthy();
   });
 
+  it("keeps a confirmed microphone stop when the device list notices the loss later", async () => {
+    let devices = [output, builtIn, headset];
+    let recording = false;
+    let hasMicrophone = true;
+    const api = fakeApi(
+      () => devices,
+      () => state(recording, hasMicrophone),
+    );
+    render(<App api={api} />);
+    await screen.findByRole("option", { name: headset.name });
+    await userEvent.click(
+      screen.getByLabelText("Mikrofon zusätzlich aufnehmen"),
+    );
+    await userEvent.selectOptions(microphoneSelect(), headset.id);
+    recording = true;
+    await waitFor(() =>
+      expect(screen.getAllByText("Audioaufnahme läuft").length).toBeGreaterThan(
+        0,
+      ),
+    );
+    // The capture reports the stop while the device is still listed ...
+    hasMicrophone = false;
+    await screen.findByText(
+      /„Synthetic headset“ ist während der Aufnahme verschwunden. Diese Spur nimmt nicht mehr auf/,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Hinweis schließen" }),
+    );
+    // ... and the later list change neither weakens nor reopens that notice.
+    const queried = vi.mocked(api.listDevices).mock.calls.length;
+    devices = [output, builtIn];
+    fireEvent.focus(window);
+    await waitFor(() =>
+      expect(vi.mocked(api.listDevices).mock.calls.length).toBeGreaterThan(
+        queried,
+      ),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByText(/Synthetic headset/)).toBeNull();
+  });
+
   it("ignores an older device list that arrives after a newer one", async () => {
     let devices = [output, builtIn, headset];
     let release: (items: AudioDevice[]) => void = () => undefined;
