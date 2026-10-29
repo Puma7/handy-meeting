@@ -720,17 +720,33 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
   );
   /**
    * A device the user picks wins over a later returning one, even when it is the device
-   * that was chosen automatically before.
+   * that was chosen automatically before. The notice then names the picked device.
    */
   const chooseDevice = useCallback(
     (source: DeviceSource, id: string) => {
       if (source === "system") setSystemId(id);
       else setMicId(id);
       const losses = deviceLossesRef.current;
-      if (losses.some((loss) => loss.source === source && !loss.userChose))
+      const name = devicesRef.current.find(
+        (d) => d.source === source && d.id === id,
+      )?.name;
+      if (
+        losses.some(
+          (loss) =>
+            loss.source === source &&
+            (!loss.userChose || loss.replacementId !== id),
+        )
+      )
         updateDeviceLosses(
           losses.map((loss) =>
-            loss.source === source ? { ...loss, userChose: true } : loss,
+            loss.source === source
+              ? {
+                  ...loss,
+                  userChose: true,
+                  replacement: name,
+                  replacementId: id,
+                }
+              : loss,
           ),
         );
     },
