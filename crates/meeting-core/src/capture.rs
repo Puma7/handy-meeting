@@ -63,9 +63,80 @@ pub struct CaptureController {
     tracks: Vec<(&'static str, JoinHandle<()>)>,
     store: SessionStore,
     controls: Arc<CaptureControls>,
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    microphone_id: Option<String>,
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    recorder: TrackRecorder,
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    reconnect_attempts: u8,
 }
 
 impl CaptureController {
+    /// True only for an ended, explicitly selected microphone in this still-running capture.
+    pub fn can_reconnect_microphone(&self) -> bool {
+        #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+        {
+            self.is_running()
+                && self.microphone_id.is_some()
+                && self.reconnect_attempts < 32
+                && !self
+                    .tracks
+                    .iter()
+                    .any(|(source, track)| *source == "microphone" && !track.is_finished())
+        }
+        #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+        {
+            false
+        }
+    }
+    /// Explicitly reconnects the originally selected microphone, leaving system capture owned.
+    pub fn reconnect_microphone(&mut self) -> Result<()> {
+        #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+        {
+            Err("Microphone reconnect is unavailable on this platform".into())
+        }
+        #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+        {
+            if self.stop.load(Ordering::Acquire) || !self.is_running() {
+                return Err("No capture is running; start a new recording".into());
+            }
+            let id = self.microphone_id.clone().ok_or("No explicitly selected microphone belongs to this recording; start a new recording with the desired device")?;
+            if self
+                .tracks
+                .iter()
+                .any(|(source, track)| *source == "microphone" && !track.is_finished())
+            {
+                return Err(
+                    "The microphone is still running or starting; a second track was not opened"
+                        .into(),
+                );
+            }
+            if self.reconnect_attempts >= 32 {
+                return Err("Microphone reconnect limit reached; stop and check the device before a new recording".into());
+            }
+            self.reconnect_attempts += 1;
+            if let Some(index) = self
+                .tracks
+                .iter()
+                .position(|(source, _)| *source == "microphone")
+            {
+                let (_, track) = self.tracks.remove(index);
+                let _ = track.join();
+            }
+            self.controls.set_has_microphone(false);
+            let result = self.start_track("microphone", Some(id), self.recorder);
+            if result.is_ok() {
+                self.controls.set_has_microphone(true);
+            }
+            // Never erase the interruption flag or stop/reopen the healthy system track.
+            let _ = self.store.notice(if result.is_ok() {
+                "Microphone reconnected to its original device. Missing audio is not recovered; pause and app-mute remain in effect."
+            } else {
+                "Microphone reconnect failed. Saved audio and the system track remain available; check the original device and retry."
+            });
+            result
+        }
+    }
     /// Starts independent system/microphone writers; a microphone startup failure leaves system capture running.
     pub fn start(store: SessionStore, options: CaptureOptions) -> Result<Self> {
         #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
@@ -94,6 +165,13 @@ impl CaptureController {
             tracks: vec![],
             store,
             controls,
+            microphone_id: options
+                .include_microphone
+                .then(|| options.microphone_id.clone())
+                .flatten()
+                .filter(|id| !id.is_empty()),
+            recorder,
+            reconnect_attempts: 0,
         };
         if let Err(error) = controller.start_track("system", options.output_id, recorder) {
             if let Err(cleanup) = controller.stop() {
@@ -140,7 +218,13 @@ impl CaptureController {
         match result.recv_timeout(Duration::from_secs(timeout)) {
             Ok(Ok(())) => Ok(()),
             Ok(Err(error)) => Err(error.into()),
-            Err(_) => Err("Audio device did not become ready in time".into()),
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                Err("Audio device did not become ready in time".into())
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => Err(
+                "Audio capture ended before readiness; check the retained capture diagnostic"
+                    .into(),
+            ),
         }
     }
 
@@ -161,7 +245,8 @@ impl CaptureController {
     /// Returns pause/mute state and derives microphone availability from its live capture thread.
     pub fn controls(&self) -> CaptureControlSnapshot {
         let mut snapshot = self.controls.snapshot();
-        snapshot.has_microphone = !self.stop.load(Ordering::Acquire)
+        snapshot.has_microphone = snapshot.has_microphone
+            && !self.stop.load(Ordering::Acquire)
             && self
                 .tracks
                 .iter()
@@ -273,6 +358,113 @@ pub fn list_devices() -> Result<Vec<AudioDevice>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    fn reconnect_fixture(
+        store: SessionStore,
+        source: &str,
+        id: Option<String>,
+        stop: Arc<AtomicBool>,
+        ready: mpsc::SyncSender<std::result::Result<(), String>>,
+        controls: Arc<CaptureControls>,
+    ) -> Result<()> {
+        let mut writer = crate::PcmWriter::for_capture(store.clone(), source)?;
+        let before = writer.written_samples();
+        let target = controls.elapsed_samples();
+        writer.pad_to(target)?;
+        if source == "microphone" {
+            assert_eq!(id.as_deref(), Some("original-mic"));
+            if before > 0 && target > before {
+                controls.record_microphone_gap(before, target - before)?;
+            }
+            let marker = store.folder().join("synthetic-first-mic");
+            if std::fs::OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .open(marker)
+                .is_ok()
+            {
+                writer.append(&[71, -72, 73])?;
+                writer.finish()?;
+                ready.send(Ok(()))?;
+                return Err("Synthetic device interruption".into());
+            }
+        }
+        ready.send(Ok(()))?;
+        while !stop.load(Ordering::Acquire) {
+            controls.write(source, controls.epoch(source), &mut writer, &[81, -82, 83])?;
+            writer.checkpoint()?;
+            thread::sleep(Duration::from_millis(5));
+        }
+        writer.finish()
+    }
+
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn reconnect_preserves_original_audio_system_progress_and_privacy_gates() {
+        let root = tempfile::tempdir().unwrap();
+        let store = SessionStore::create(root.path(), "Synthetic reconnect", "m", "s", Some("mic"))
+            .unwrap();
+        let mut controller = CaptureController::start_with_recorder(
+            store.clone(),
+            CaptureOptions {
+                include_microphone: true,
+                microphone_id: Some("original-mic".into()),
+                ..Default::default()
+            },
+            reconnect_fixture,
+        )
+        .unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !controller.stopped_tracks().contains(&"microphone") {
+            assert!(std::time::Instant::now() < deadline);
+            thread::sleep(Duration::from_millis(5));
+        }
+        let original = store
+            .snapshot()
+            .unwrap()
+            .parts
+            .into_iter()
+            .find(|p| p.source == "microphone")
+            .unwrap();
+        let path = store.audio_path(&original).unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        controller.set_paused(true).unwrap();
+        controller.controls.set_microphone_muted(true).unwrap();
+        thread::sleep(Duration::from_millis(30));
+        controller.reconnect_microphone().unwrap();
+        assert!(controller.controls().has_microphone);
+        assert!(controller.controls().paused);
+        assert!(controller.controls().microphone_muted);
+        assert!(
+            controller.reconnect_microphone().is_err(),
+            "No second live microphone may start"
+        );
+        thread::sleep(Duration::from_millis(30));
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        controller.set_paused(false).unwrap();
+        thread::sleep(Duration::from_millis(30));
+        controller.stop().unwrap();
+        let snapshot = store.snapshot().unwrap();
+        assert!(
+            snapshot.capture_incomplete,
+            "Recovery must not erase the real interruption"
+        );
+        let log = read_capture_control_events(store.folder())
+            .unwrap()
+            .unwrap();
+        assert!(log.events.iter().any(|e| e.kind == "device-gap"));
+        assert!(
+            snapshot
+                .parts
+                .iter()
+                .filter(|p| p.source == "system")
+                .map(|p| p.confirmed_sample_count)
+                .sum::<u64>()
+                > 3
+        );
+        assert_eq!(std::fs::read(path).unwrap(), bytes);
+    }
 
     #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
     /// Replaces only the device backend; production readiness, ownership and PCM
@@ -414,6 +606,12 @@ mod tests {
                 ("system", tail),
             ],
             controls: Arc::new(CaptureControls::new(&store).unwrap()),
+            #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+            microphone_id: None,
+            #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+            recorder: platform::record,
+            #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+            reconnect_attempts: 0,
             store: store.clone(),
         };
         let (finished, stopped) = mpsc::sync_channel(1);
@@ -514,6 +712,12 @@ mod tests {
             stop,
             tracks: vec![("system", system), ("microphone", microphone)],
             controls: Arc::new(CaptureControls::new(&store).unwrap()),
+            #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+            microphone_id: None,
+            #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+            recorder: platform::record,
+            #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+            reconnect_attempts: 0,
             store,
         };
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);

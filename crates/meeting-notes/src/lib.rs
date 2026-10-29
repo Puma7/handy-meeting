@@ -1,5 +1,6 @@
 //! Source-linked text analysis, separated into data, validation, transport and orchestration.
 mod control;
+pub mod diagnostics;
 mod listing;
 pub mod live;
 mod markdown;
@@ -26,7 +27,7 @@ pub use service::{
 pub use templates::{validate_library, TemplateLibrary, TemplateStore};
 pub use transport::{credential_account, local_json_lines, local_model_ids, TextClient};
 pub use validation::{validate_answer, validate_template, MAX_ITEMS_PER_ANSWER};
-pub const PROMPT_VERSION: &str = "handymeeting-rust-notes-2";
+pub const PROMPT_VERSION: &str = "handymeeting-rust-notes-3";
 
 #[cfg(test)]
 mod tests {
@@ -158,15 +159,22 @@ mod tests {
     #[test]
     fn excess_statements_and_evidence_are_discarded_and_counted() {
         let mut items: Vec<_> = (0..23)
-            .map(|i| item(&format!("Aussage {i}"), "null", "null", &valid_evidence()))
+            .map(|i| {
+                item(
+                    &format!("Aussage {}", char::from(b'a' + i)),
+                    "null",
+                    "null",
+                    &valid_evidence(),
+                )
+            })
             .collect();
         let seven = vec![valid_evidence(); 7].join(",");
         items.insert(3, item("Zu viele Belege", "null", "null", &seven));
         items.push(item("Ohne Beleg", "null", "null", ""));
         let checked = validate_answer(&answer(&items), &sources(), &Kind::Summary, "t").unwrap();
         assert_eq!(checked.items.len(), MAX_ITEMS_PER_ANSWER);
-        assert_eq!(checked.items[0].text, "Aussage 0");
-        assert_eq!(checked.items[19].text, "Aussage 19");
+        assert_eq!(checked.items[0].text, "Aussage a");
+        assert_eq!(checked.items[19].text, "Aussage t");
         assert_eq!(
             checked.rejected,
             Rejections::from([

@@ -119,6 +119,7 @@ struct AppView {
     active_meeting: Option<MeetingView>,
     recording: bool,
     capture_control: Option<meeting_core::CaptureControlSnapshot>,
+    microphone_reconnect_available: bool,
     error: Option<String>,
     data_directory: String,
     notes_running: bool,
@@ -142,6 +143,7 @@ struct Inner {
     legacy: HashMap<String, PathBuf>,
     error: Option<String>,
     transitioning: bool,
+    reconnecting_microphone: bool,
 }
 struct Service {
     agent: agent::Controller,
@@ -289,7 +291,8 @@ impl Service {
         } else {
             None
         };
-        let recording = inner.active.as_ref().is_some_and(|a| a.capture.is_some());
+        let recording = inner.reconnecting_microphone
+            || inner.active.as_ref().is_some_and(|a| a.capture.is_some());
         let capture_control = inner
             .active
             .as_ref()
@@ -322,6 +325,13 @@ impl Service {
             active_meeting,
             recording,
             capture_control,
+            microphone_reconnect_available: inner.active.as_ref().is_some_and(|active| {
+                active.owner.is_none()
+                    && active
+                        .capture
+                        .as_ref()
+                        .is_some_and(CaptureController::can_reconnect_microphone)
+            }),
             error,
             data_directory: self.root.to_string_lossy().into_owned(),
             notes_running: self.notes_jobs.running(),
@@ -456,6 +466,56 @@ impl Service {
                     .map_err(|error| error.to_string())?;
             }
         }
+        self.state()
+    }
+
+    /// Reopens only the originally selected mic under the recording transition guard.
+    /// Device initialization runs outside the state lock; ordinary failure restores the
+    /// controller with its system track and operation lease still owned.
+    fn reconnect_microphone(&self, meeting_id: &str) -> AppResult<AppView> {
+        let _transition = self.try_transition()?;
+        let mut capture = {
+            let mut inner = self.lock()?;
+            let active = inner
+                .active
+                .as_mut()
+                .ok_or("Es läuft keine Aufnahme. / No recording is active.")?;
+            if active
+                .store
+                .preview_snapshot(0)
+                .map_err(|_| "Sitzung nicht lesbar")?
+                .id
+                != meeting_id
+            {
+                return Err(
+                    "Diese Aufnahme ist nicht mehr aktiv. / This recording is no longer active."
+                        .into(),
+                );
+            }
+            if active.owner.is_some() {
+                return Err("Zuerst die Agenten-Aufnahmesteuerung widerrufen. / Revoke agent recording control first.".into());
+            }
+            let capture = active
+                .capture
+                .take()
+                .ok_or("Audioaufnahme ist beendet. / Audio capture has ended.")?;
+            inner.transitioning = true;
+            inner.reconnecting_microphone = true;
+            capture
+        };
+        let result = capture.reconnect_microphone().map_err(|_| "Mikrofon konnte nicht verbunden werden. Das ursprünglich gewählte Gerät prüfen und erneut versuchen. Computerton und gesicherte Daten bleiben erhalten. / Could not reconnect the original microphone. Check the device and retry; system audio and saved data are retained.".to_string());
+        {
+            let mut inner = self.lock()?;
+            // The transition guard excludes stop/start/revoke until ownership is restored.
+            inner
+                .active
+                .as_mut()
+                .ok_or("Recording ownership unavailable")?
+                .capture = Some(capture);
+            inner.transitioning = false;
+            inner.reconnecting_microphone = false;
+        }
+        result?;
         self.state()
     }
     /// Serialize recording start, check supplied agent approval and transfer admission to Active.
@@ -968,7 +1028,7 @@ pub fn run() {
         if std::env::args().skip(1).eq(["--agent", "serve"]) { agent::start_stdio(Arc::clone(&service)).map_err(std::io::Error::other)?; }
         tauri::async_runtime::spawn_blocking(move|| {let _=service.refresh(None);});
         Ok(())
-    }).invoke_handler(tauri::generate_handler![path_selection::choose_handy_executable,path_selection::choose_ffmpeg_executable,path_selection::choose_legacy_manifest,app_commands::get_app_state,app_commands::get_audio_levels,retention_commands::list_audio_copies,retention_commands::transcribe_audio_copy,retention_commands::compact_archive,retention_commands::list_archives,retention_commands::list_unfinished_deletions,retention_commands::resume_permanent_deletion,retention_commands::restore_archive,retention_commands::apply_retention,retention_commands::get_retention_policy,retention_commands::save_retention_policy,retention_commands::preview_retention,retention_commands::get_retention_plan,retention_commands::get_maintenance_progress,retention_commands::cancel_maintenance,library_commands::edit_meeting_metadata,library_commands::search_meetings,library_commands::rebuild_search_index,library_commands::get_library_progress,library_commands::cancel_library_job,speaker_commands::archive_speaker_model_checks,speaker_commands::check_speaker_model,speaker_commands::get_speaker_labels,speaker_commands::save_speaker_labels,speaker_commands::start_speaker_experiment,speaker_commands::get_speaker_progress,speaker_commands::get_speaker_sections,speaker_commands::cancel_speaker_experiment,update_commands::check_for_update,update_commands::download_update,update_commands::get_update_progress,update_commands::cancel_update,update_commands::install_update,update_commands::open_release_page,app_commands::refresh_handy,app_commands::list_devices,app_commands::start_meeting,app_commands::stop_meeting,app_commands::set_capture_paused,app_commands::set_microphone_muted,app_commands::agent_decide_recording,app_commands::agent_revoke,app_commands::list_meetings,app_commands::get_meeting,app_commands::resume_meeting,app_commands::import_legacy,app_commands::copy_text,app_commands::open_meeting_folder,app_commands::export_transcript,app_commands::generate_notes,app_commands::list_analyses,notes_commands::list_unfinished_analyses,notes_commands::list_text_models,notes_commands::get_notes_progress,notes_commands::cancel_notes,notes_commands::notes_markdown,live_commands::start_live_notes,live_commands::stop_live_notes,live_commands::refresh_live_notes,live_commands::set_live_notes_interval,live_commands::get_live_notes,live_commands::local_model_setup,live_commands::pull_ollama_model,live_commands::get_model_pull_progress,live_commands::cancel_model_pull,template_commands::list_templates,template_commands::save_templates,template_commands::import_templates,credential_commands::credential_status,credential_commands::save_credential,credential_commands::remove_credential])
+    }).invoke_handler(tauri::generate_handler![path_selection::choose_handy_executable,path_selection::choose_ffmpeg_executable,path_selection::choose_legacy_manifest,app_commands::get_app_state,app_commands::get_audio_levels,retention_commands::list_audio_copies,retention_commands::transcribe_audio_copy,retention_commands::compact_archive,retention_commands::list_archives,retention_commands::list_unfinished_deletions,retention_commands::resume_permanent_deletion,retention_commands::restore_archive,retention_commands::apply_retention,retention_commands::get_retention_policy,retention_commands::save_retention_policy,retention_commands::preview_retention,retention_commands::get_retention_plan,retention_commands::get_maintenance_progress,retention_commands::cancel_maintenance,library_commands::edit_meeting_metadata,library_commands::search_meetings,library_commands::rebuild_search_index,library_commands::get_library_progress,library_commands::cancel_library_job,speaker_commands::archive_speaker_model_checks,speaker_commands::check_speaker_model,speaker_commands::get_speaker_labels,speaker_commands::save_speaker_labels,speaker_commands::start_speaker_experiment,speaker_commands::get_speaker_progress,speaker_commands::get_speaker_sections,speaker_commands::cancel_speaker_experiment,update_commands::check_for_update,update_commands::download_update,update_commands::get_update_progress,update_commands::cancel_update,update_commands::install_update,update_commands::open_release_page,app_commands::refresh_handy,app_commands::list_devices,app_commands::start_meeting,app_commands::stop_meeting,app_commands::set_capture_paused,app_commands::set_microphone_muted,app_commands::reconnect_microphone,app_commands::agent_decide_recording,app_commands::agent_revoke,app_commands::list_meetings,app_commands::get_meeting,app_commands::resume_meeting,app_commands::import_legacy,app_commands::copy_text,app_commands::open_meeting_folder,app_commands::export_transcript,app_commands::generate_notes,app_commands::list_analyses,notes_commands::list_unfinished_analyses,notes_commands::list_text_models,notes_commands::get_notes_progress,notes_commands::cancel_notes,notes_commands::notes_markdown,live_commands::start_live_notes,live_commands::stop_live_notes,live_commands::refresh_live_notes,live_commands::set_live_notes_interval,live_commands::get_live_notes,live_commands::local_model_setup,live_commands::pull_ollama_model,live_commands::get_model_pull_progress,live_commands::cancel_model_pull,template_commands::list_templates,template_commands::save_templates,template_commands::import_templates,credential_commands::credential_status,credential_commands::save_credential,credential_commands::remove_credential])
     .on_window_event(|window,event|{if let tauri::WindowEvent::CloseRequested{api,..}=event{let service=window.state::<Arc<Service>>();let blocked=service.lock().is_ok_and(|inner|inner.transitioning||inner.active.as_ref().is_some_and(|a|a.capture.is_some()));if blocked{api.prevent_close();if let Ok(mut inner)=service.lock(){inner.error=Some(if inner.transitioning { "Ein Vorgang läuft noch. Bitte warten, bis Audioabschluss und Verarbeitung beendet sind.".into() } else { "Bitte zuerst „Meeting beenden“ wählen. Audio wird gesichert und offene Abschnitte werden verarbeitet.".into() });}let _=window.emit("recording-close-blocked",());}}})
     .run(tauri::generate_context!()).expect("HandyMeeting konnte nicht gestartet werden.");
 }

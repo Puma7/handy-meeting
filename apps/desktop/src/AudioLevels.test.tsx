@@ -83,6 +83,38 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
 });
+
+it("offers explicit same-device reconnect only for the bound failed track", () => {
+  const props = sourceProps();
+  const retry = vi.fn();
+  const view = render(
+    <AudioSources
+      {...props}
+      canReconnectMicrophone
+      onReconnectMicrophone={retry}
+      captureControl={{
+        paused: true,
+        microphoneMuted: true,
+        hasMicrophone: false,
+      }}
+    />,
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Mikrofon erneut verbinden" }),
+  );
+  expect(retry).toHaveBeenCalledTimes(1);
+  view.rerender(
+    <AudioSources
+      {...props}
+      canReconnectMicrophone
+      onReconnectMicrophone={retry}
+      displayedMeetingId="older"
+    />,
+  );
+  expect(
+    screen.queryByRole("button", { name: "Mikrofon erneut verbinden" }),
+  ).toBeNull();
+});
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();

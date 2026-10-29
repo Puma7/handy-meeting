@@ -112,7 +112,11 @@ export function liveNotesText(
   const block = (heading: string, items: LiveItem[]) =>
     items.length ? `\n${heading}\n${items.map(line).join("\n")}\n` : "";
   return (
-    `${de ? "Live-Zusammenfassung" : "Live summary"} · ${title} · ${de ? "Stand" : "as of"} ${time(view.updatedAt, locale)}\n` +
+    `${de ? "Live-Zusammenfassung" : "Live summary"} · ${title} · ${de ? "Einzelergebnisse vom" : "Individual notes as of"} ${time(view.updatedAt, locale)}\n` +
+    `${de ? "Kurzfassung" : "Overview"}: ${view.overviewWindow} ${de ? "von" : "of"} ${view.windows} ${de ? "Textfenstern" : "text windows"}${view.overviewUpdatedAt ? ` · ${time(view.overviewUpdatedAt, locale)}` : ""}\n` +
+    (overviewPending(view)
+      ? `${de ? "Kurzfassung ist noch nicht vollständig. Neuere Einzelergebnisse stehen unten." : "The overview is incomplete. Newer individual notes are included below."}\n`
+      : "") +
     block(de ? "Bisheriger Verlauf" : "Summary so far", view.overview) +
     // Accepted points also count when the overview failed or is not up to date yet.
     block(
@@ -124,6 +128,11 @@ export function liveNotesText(
     block(de ? "Aufgeworfene Fragen" : "Questions raised", view.questions) +
     `\n${de ? "KI-Entwurf aus der laufenden Mitschrift. Belege bestätigen Originalzitate, nicht automatisch die Deutung." : "AI draft from the running transcript. Evidence confirms the quotes, not necessarily the interpretation."}\n`
   );
+}
+
+/** Older stored replies still expose coverage, even without the newer explicit pending flag. */
+function overviewPending(view: LiveView): boolean {
+  return view.overviewPending ?? view.overviewWindow < view.windows;
 }
 
 function Items({
@@ -399,6 +408,7 @@ export default function LiveNotesPanel({
   if (!available || headless) return null;
   const view = status?.view ?? null;
   const running = status?.running ?? false;
+  const staleOverview = view !== null && overviewPending(view);
   const hasContent = Boolean(
     view &&
       (view.overview.length ||
@@ -427,6 +437,11 @@ export default function LiveNotesPanel({
       case "updating":
         return de ? "Aktualisiert …" : "Updating …";
       case "finished":
+      case "partial":
+        if (staleOverview)
+          return de
+            ? "Einzelergebnisse gespeichert; Kurzfassung ist noch nicht vollständig."
+            : "Individual notes saved; the overview is not yet complete.";
         return de
           ? "Abgeschlossen: das ganze Meeting ist zusammengefasst."
           : "Finished: the whole meeting is summarized.";
@@ -617,7 +632,13 @@ export default function LiveNotesPanel({
             onClick={() => void start()}
           >
             <Play size={14} />
-            {de ? "Live-Zusammenfassung starten" : "Start live summary"}
+            {staleOverview
+              ? de
+                ? "Auswertung erneuern"
+                : "Retry summary"
+              : de
+                ? "Live-Zusammenfassung starten"
+                : "Start live summary"}
           </button>
         )}
         <label className="live-interval">
@@ -652,11 +673,42 @@ export default function LiveNotesPanel({
           {error ?? status?.error}
         </p>
       )}
+      {view?.lastRequest && view.lastRequest.request.result !== "stored" && (
+        <p className="notice warning" role="status">
+          {de
+            ? "Der letzte Modellversuch wurde nicht gespeichert: "
+            : "The last model attempt was not saved: "}
+          {view.lastRequest.request.result === "incomplete"
+            ? de
+              ? "Antwort unvollständig. "
+              : "Incomplete response. "
+            : view.lastRequest.request.result === "persistence"
+              ? de
+                ? "Ergebnis konnte nicht gespeichert werden. "
+                : "Result could not be saved. "
+              : view.lastRequest.request.result === "validation"
+                ? de
+                  ? "Antwort oder Quellenprüfung fehlgeschlagen. "
+                  : "Response or evidence validation failed. "
+                : view.lastRequest.request.result === "cancelled"
+                  ? de
+                    ? "Abgebrochen. "
+                    : "Cancelled. "
+                  : de
+                    ? "Verbindung oder Dienstantwort fehlgeschlagen. "
+                    : "Connection or service response failed. "}
+          {view.lastRequest.request.httpStatus &&
+            `HTTP ${view.lastRequest.request.httpStatus}. `}
+          {de
+            ? "Vorhandene Einzelergebnisse und Kurzfassungen bleiben erhalten."
+            : "Existing notes and overviews are retained."}
+        </p>
+      )}
       {view && view.damagedRuns > 0 && (
         <p className="notice warning" role="status">
           {de
-            ? `${view.damagedRuns} gespeicherte Live-Zusammenfassung(en) konnten nicht geprüft werden. Sie bleiben unverändert erhalten.`
-            : `${view.damagedRuns} saved live summary run(s) failed verification. They are kept unchanged.`}
+            ? `${view.damagedRuns} gespeicherte Live-Zusammenfassung(en) sind nicht prüfbar oder einem anderen Meeting zugeordnet. Sie bleiben unverändert erhalten.`
+            : `${view.damagedRuns} saved live summary run(s) failed verification or belong to another meeting. They are kept unchanged.`}
         </p>
       )}
 
@@ -675,6 +727,20 @@ export default function LiveNotesPanel({
           <div className="live-sections">
             <section>
               <h3>{de ? "Bisheriger Verlauf" : "Summary so far"}</h3>
+              {staleOverview && (
+                <p className="notice warning" role="status">
+                  {de
+                    ? "Kurzfassung ist noch nicht vollständig. Neuere Einzelergebnisse stehen in den Listen darunter. Frühere Fassungen bleiben erhalten."
+                    : "The overview is incomplete. Newer individual notes are in the lists below. Earlier versions are preserved."}
+                </p>
+              )}
+              <p className="muted">
+                {de ? "Kurzfassung" : "Overview"}: {view.overviewWindow}{" "}
+                {de ? "von" : "of"} {view.windows}{" "}
+                {de ? "Textfenstern" : "text windows"}
+                {view.overviewUpdatedAt &&
+                  ` · ${de ? "Stand" : "as of"}: ${time(view.overviewUpdatedAt, locale)}`}
+              </p>
               <Items
                 items={view.overview}
                 locale={locale}

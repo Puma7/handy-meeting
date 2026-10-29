@@ -197,6 +197,7 @@ fn active_or_stale_control_and_unapproved_import_requests_never_touch_devices() 
     assert!(service
         .set_capture_control("stale", Some(false), None)
         .is_err());
+    assert!(service.reconnect_microphone("stale").is_err());
     let path = root.join("session.json");
     fs::write(&path, b"synthetic manifest; deliberately never parsed").unwrap();
     let error = service
@@ -228,6 +229,12 @@ fn active_or_stale_control_and_unapproved_import_requests_never_touch_devices() 
     assert!(service
         .set_capture_control("other-meeting", Some(false), None)
         .is_err());
+    assert!(service.reconnect_microphone("other-meeting").is_err());
+    assert!(service
+        .reconnect_microphone(&id)
+        .err()
+        .unwrap()
+        .contains("Agenten"));
     let error = service
         .set_capture_control(&id, None, Some(false))
         .err()

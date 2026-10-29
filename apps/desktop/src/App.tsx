@@ -1954,6 +1954,19 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
               api.setCapturePaused && api.setMicrophoneMuted,
             )}
             getAudioLevels={api.getAudioLevels}
+            onReconnectMicrophone={
+              api.reconnectMicrophone
+                ? () => {
+                    const id = app?.activeMeeting?.id;
+                    if (!id) return;
+                    void action(async () => {
+                      const state = await api.reconnectMicrophone!(id);
+                      requestSequence.current++;
+                      setApp(state);
+                    });
+                  }
+                : undefined
+            }
             onPause={(paused) => {
               const id = app?.activeMeeting?.id;
               if (!id || !api.setCapturePaused) return;

@@ -82,6 +82,53 @@ function fixture(recording = true) {
 }
 beforeEach(() => localStorage.clear());
 
+it("binds microphone reconnect to the active meeting and waits for native acknowledgement", async () => {
+  const f = fixture();
+  const state = {
+    ...f.state(),
+    microphoneReconnectAvailable: true,
+    captureControl: {
+      paused: true,
+      microphoneMuted: true,
+      hasMicrophone: false,
+    },
+  };
+  f.setState(state);
+  let acknowledge!: (value: AppState) => void;
+  f.api.reconnectMicrophone = vi.fn(
+    () =>
+      new Promise<AppState>((resolve) => {
+        acknowledge = resolve;
+      }),
+  );
+  render(<App api={f.api} />);
+  const retry = await screen.findByRole("button", {
+    name: "Mikrofon erneut verbinden",
+  });
+  await userEvent.click(retry);
+  expect(f.api.reconnectMicrophone).toHaveBeenCalledWith(original.id);
+  expect((retry as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.getAllByText("Unmodified original.").length).toBeGreaterThan(0);
+  const next = {
+    ...state,
+    microphoneReconnectAvailable: false,
+    captureControl: { ...state.captureControl, hasMicrophone: true },
+  };
+  f.setState(next);
+  await act(async () => acknowledge(next));
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("button", { name: "Mikrofon erneut verbinden" }),
+    ).toBeNull(),
+  );
+  expect(
+    screen.getByRole("button", { name: "Aufnahme fortsetzen" }),
+  ).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "App-Mikrofon einschalten" }),
+  ).toBeTruthy();
+});
+
 it("waits for native pause acknowledgement, binds it to the current session and retains transcript text", async () => {
   const f = fixture();
   let acknowledge!: (value: AppState) => void;

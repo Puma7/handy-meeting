@@ -1,6 +1,6 @@
 # Meeting for Handy user guide
 
-This guide describes the released [1.0.6 controls](https://github.com/Puma7/meeting-for-handy/releases/tag/v1.0.6) and marks the later [PR #31 follow-up](https://github.com/Puma7/meeting-for-handy/pull/31) as unreleased; the filename is retained for existing links. AI notes and speaker results remain reviewable drafts with original section references. Installation checks do not establish recording reliability on every device. See the [English](../README.md) or [German README](../README.de.md) for packages, prerequisites and the first meeting.
+This guide describes the released [1.0.7 controls](https://github.com/Puma7/meeting-for-handy/releases/tag/v1.0.7). The microphone reconnection and live-overview recovery below are newer, unreleased source changes. AI notes and speaker results remain reviewable drafts with original section references. Installation checks do not establish recording reliability on every device. See the [English](../README.md) or [German README](../README.de.md) for packages, prerequisites and the first meeting.
 
 ## Recording controls and transcript files
 
@@ -10,9 +10,17 @@ Use **Save transcript** to choose a complete TXT, Markdown or JSON snapshot of t
 
 <a id="live-input-levels-unreleased-development"></a>
 
-## Audio devices (unreleased)
+## Audio devices
 
-While the app window is visible, connected or removed devices appear automatically within a few seconds; the refresh button next to **System audio** reads the list at once. If a selected device disappears, a notice names the device chosen instead. During a recording, a red warning names the track whose device left the list, and says the track stopped once the microphone capture confirms it; audio saved so far is kept. End the recording and start a new one once the device is back.
+While the app window is visible, connected or removed devices appear automatically within a few seconds; the refresh button next to **System audio** reads the list at once. If a selected device disappears, a notice names the device chosen instead. During a recording, a red warning names the track whose device left the list, and says the track stopped once the microphone capture confirms it; audio saved so far is kept. The released 1.0.7 app requires ending the recording and starting a new one once the device is back.
+
+## Microphone reconnection and overview recovery (unreleased)
+
+If the microphone track has actually ended while system audio still records, **Reconnect microphone** retries only the originally selected device. Device-list refresh alone does not reconnect capture. No replacement microphone is selected during recording. The action waits for native acknowledgement; pause and app mute remain in effect. Previously closed audio is verified and retained, and missing microphone time is recorded as silence with a gap event. Missing speech is never recovered. If the device or saved audio cannot be verified, the retry fails while the system track stays owned. Agent-owned recordings require revoking agent control first. A maximum of 32 explicit retries per recording bounds diagnostic generations. Ordinary recording startup still refuses to reuse an existing audio track.
+
+The rolling overview now has its own coverage and update time. Newer individual notes do not make an older overview complete. **Retry summary** resumes the matching saved run after a failure, or begins a separate run when the model or prompt identity changed; earlier windows and overview versions stay on disk. Copied notes include overview coverage and the incomplete warning. A long recognition backlog produces a visible waiting notice after two minutes; it does not terminate audio capture. Stop live notes and retry later if necessary. Cloud processing continues to require a fresh explicit text release.
+
+Bounded local diagnostic files distinguish connection, HTTP, incomplete response, validation and persistence failures without saving prompts, replies, transcript text, keys or endpoint paths. New number and nonbinding-task checks are conservative filters, not proof that a model interpretation is correct; always inspect original quotes. Older saved analyses remain readable under their original evidence contract.
 
 ## Live input levels
 
@@ -42,7 +50,7 @@ Opening **Evaluate this meeting** opens setup. Choose a local text model and exp
 
 Neutral voice IDs are scoped to one section and track. They may change between sections and do not identify people. No automatic cross-section voice matching or precise word alignment is established. Model/language quality and a positive compatible-model result must be evaluated separately; weights are never downloaded automatically.
 
-### Speaker-check recovery in PR #31 (unreleased)
+### Speaker-check recovery (since 1.0.7)
 
 The follow-up groups the optional speaker tools and makes model-capability checks available in Settings before the first recording. Completed proofs can be reused only for the same freshly verified model and native runtime. If the active proof folder is full or contains conflicting results, **Archive check records** preserves the existing complete and partial proofs together in a separate local archive. Click it explicitly, then run the model check again. Every file stays on disk; recordings and analysis results are unchanged. Recording, analysis and another model check block this action. A temporary lock failure leaves the retry action available. Linked or unexpected records stop archival and remain unchanged. No proof is removed automatically.
 

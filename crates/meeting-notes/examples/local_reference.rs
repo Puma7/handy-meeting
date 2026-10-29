@@ -86,11 +86,12 @@ fn reference_run(
 }
 
 fn main() -> Result<()> {
-    let folder = PathBuf::from(
-        std::env::args()
-            .nth(1)
-            .context("Output directory required")?,
-    );
+    let mut args = std::env::args().skip(1);
+    let folder = PathBuf::from(args.next().context("Output directory required")?);
+    let endpoint = args
+        .next()
+        .unwrap_or_else(|| "http://127.0.0.1:1234/v1/".into());
+    let model = args.next().unwrap_or_else(|| "google/gemma-4-e4b".into());
     ensure!(
         !folder.exists(),
         "Preserve prior reference runs; choose a new output directory."
@@ -111,8 +112,8 @@ fn main() -> Result<()> {
         }]
     };
     let connection = || Connection {
-        endpoint: "http://127.0.0.1:1234/v1/".into(),
-        model: "google/gemma-4-e4b".into(),
+        endpoint: endpoint.clone(),
+        model: model.clone(),
         mode: "local".into(),
         cloud_consent: false,
         api_key: String::new(),
@@ -137,7 +138,7 @@ fn main() -> Result<()> {
         negative.sections[1].items.is_empty() && negative.sections[2].items.is_empty(),
         "Nonbinding proposals must not become decisions or tasks."
     );
-    let report = serde_json::json!({"success":true,"syntheticText":true,"actualLocalModel":true,"model":"google/gemma-4-e4b","mode":"local","promptVersion":meeting_notes::PROMPT_VERSION,"elapsedSeconds":start.elapsed().as_secs_f64(),"positiveDecisions":positive.sections[1].items.len(),"positiveTasks":positive.sections[2].items.len(),"owner":"Anna","due":"Freitag","negativeDecisions":negative.sections[1].items.len(),"negativeTasks":negative.sections[2].items.len(),"resumedFromDurableCheckpoint":true,"confirmedStepsReused":2,"processCrashTested":false,"cloudTested":false});
+    let report = serde_json::json!({"success":true,"syntheticText":true,"actualLocalModel":true,"model":model,"mode":"local","promptVersion":meeting_notes::PROMPT_VERSION,"elapsedSeconds":start.elapsed().as_secs_f64(),"positiveDecisions":positive.sections[1].items.len(),"positiveTasks":positive.sections[2].items.len(),"owner":"Anna","due":"Freitag","negativeDecisions":negative.sections[1].items.len(),"negativeTasks":negative.sections[2].items.len(),"resumedFromDurableCheckpoint":true,"confirmedStepsReused":2,"processCrashTested":false,"cloudTested":false});
     fs::write(
         folder.join("reference.json"),
         serde_json::to_vec_pretty(&report)?,

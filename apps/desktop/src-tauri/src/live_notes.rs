@@ -48,7 +48,7 @@ pub(crate) struct LiveNotesRequest {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct LiveNotesStatus {
     meeting_id: String,
-    /// off | starting | waiting | updating | finished | stopped | failed
+    /// off | starting | waiting | updating | finished | partial | stopped | failed
     status: String,
     running: bool,
     waiting_for_transcript: bool,
@@ -522,6 +522,7 @@ impl Worker {
         // A failed update or the rest of a captured backlog, taken by the next round.
         let mut carry: Option<Trigger> = None;
         let mut finished_state: Option<SessionData> = None;
+        let mut deferred_since: Option<Instant> = None;
         self.set(|s| s.status = "waiting".into());
         while !self.control.is_cancelled() {
             let snapshot = match self
@@ -551,10 +552,17 @@ impl Worker {
             let defer = snapshot.recognition_needs_priority();
             self.set(|s| s.waiting_for_transcript = defer);
             if defer {
+                let since = deferred_since.get_or_insert_with(Instant::now);
+                if since.elapsed() >= Duration::from_secs(120) {
+                    self.set(|s| s.error = Some("Die Live-Auswertung wartet seit mehr als zwei Minuten auf die Erkennung. Aufnahme und gespeicherte Daten bleiben erhalten. Erkennungsfortschritt prüfen; die Live-Auswertung kann beendet und später erneuert werden. / Live notes have waited over two minutes for recognition. Recording and saved data are retained; check recognition progress or stop and retry live notes later.".into()));
+                }
                 // Keep manual requests queued, but never busy-spin on them while ASR
                 // catches up. No new model request competes with the recording worker.
                 self.wait_with_manual(false);
                 continue;
+            }
+            if deferred_since.take().is_some() {
+                self.set(|s| s.error = None);
             }
             let backing_off = retry_at.is_some_and(|at| Instant::now() < at);
             let manual = self.manual.swap(false, Ordering::AcqRel);
@@ -582,7 +590,12 @@ impl Worker {
             if finished && trigger.is_none() && !overview_open {
                 self.publish(&runner);
                 self.set(|s| {
-                    s.status = "finished".into();
+                    s.status = if runner.overview_due() {
+                        "partial"
+                    } else {
+                        "finished"
+                    }
+                    .into();
                     s.pending_chars = 0;
                 });
                 return;
@@ -612,7 +625,10 @@ impl Worker {
                             let view = runner.view();
                             self.set(|s| {
                                 s.status = "waiting".into();
-                                s.error = outcome.overview_error.clone();
+                                s.error = outcome
+                                    .overview_error
+                                    .clone()
+                                    .or(outcome.diagnostic_warning.clone());
                                 // An overview-only retry does not postpone the next text update.
                                 if summarized {
                                     s.last_update = Instant::now();
@@ -682,7 +698,7 @@ mod tests {
             worker: None,
         };
         assert!(job.status().waiting_for_transcript);
-        for status in ["stopped", "finished", "failed"] {
+        for status in ["stopped", "finished", "partial", "failed"] {
             shared.lock().unwrap().status = status.into();
             let view = job.status();
             assert!(!view.running);
