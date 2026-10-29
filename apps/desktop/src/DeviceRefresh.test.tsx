@@ -485,6 +485,48 @@ describe("audio devices follow connected and removed hardware (synthetic IPC)", 
     expect(screen.queryByText(/Synthetic headset/)).toBeNull();
   });
 
+  it("takes the only microphone back after a recording, also when none was left meanwhile", async () => {
+    let devices = [output, headset];
+    let recording = false;
+    const api = fakeApi(
+      () => devices,
+      () => state(recording),
+    );
+    render(<App api={api} />);
+    await screen.findByRole("option", { name: headset.name });
+    await userEvent.click(
+      screen.getByLabelText("Mikrofon zusätzlich aufnehmen"),
+    );
+    await userEvent.selectOptions(microphoneSelect(), headset.id);
+    recording = true;
+    await waitFor(() =>
+      expect(document.querySelector(".state.recording")).not.toBeNull(),
+    );
+    devices = [output];
+    fireEvent.focus(window);
+    await screen.findByText(/aus der Geräteliste verschwunden/);
+    // The recording ends while no microphone is connected ...
+    recording = false;
+    await waitFor(() =>
+      expect(document.querySelector(".state.recording")).toBeNull(),
+    );
+    const calls = vi.mocked(api.listDevices).mock.calls.length;
+    fireEvent.focus(window);
+    await waitFor(() =>
+      expect(vi.mocked(api.listDevices).mock.calls.length).toBeGreaterThan(
+        calls,
+      ),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    // ... then another one stands in automatically until the headset is back.
+    devices = [output, builtIn];
+    fireEvent.focus(window);
+    await waitFor(() => expect(microphoneSelect().value).toBe(builtIn.id));
+    devices = [output, builtIn, headset];
+    fireEvent.focus(window);
+    await waitFor(() => expect(microphoneSelect().value).toBe(headset.id));
+  });
+
   it("ignores an older device list that arrives after a newer one", async () => {
     let devices = [output, builtIn, headset];
     let release: (items: AudioDevice[]) => void = () => undefined;

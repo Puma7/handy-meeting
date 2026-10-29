@@ -654,13 +654,14 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
           if (listed(source, chosen[source])) continue;
           const automatic = fallback(source);
           // A later automatic choice is not the user's: the lost device still returns, and
-          // its notice names the device now selected.
+          // its notice names the device now selected. Without any device the record stands
+          // for the empty selection, so the next device that appears stands in too.
           losses = losses.map((loss) =>
             loss.source === source && standing(loss) === chosen[source]
               ? {
                   ...loss,
                   replacement: automatic?.name,
-                  replacementId: automatic?.id,
+                  replacementId: automatic?.id ?? "",
                 }
               : loss,
           );

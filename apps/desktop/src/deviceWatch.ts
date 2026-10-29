@@ -14,7 +14,7 @@ export interface DeviceLoss {
   confirmed?: boolean;
   /** The recording (meeting ID) during which the device was lost. */
   meetingId?: string | null;
-  /** Name and ID of the device chosen instead, when not recording. */
+  /** Name and ID of the device chosen instead, when not recording; an empty ID: none was left. */
   replacement?: string;
   replacementId?: string;
   /** The notice was closed; the record still restores the device when it returns. */
