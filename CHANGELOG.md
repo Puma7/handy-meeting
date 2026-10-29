@@ -13,6 +13,8 @@
 - A recognition track that has ended no longer blocks live summaries of confirmed text from the other track; pending audio remains available for later recognition.
 - Completed speaker-capability proofs can be reused after restart only for the same freshly verified model and native runtime identity; incomplete or conflicting records never enable a model.
 - Full transcript publications use the same per-section freshness rules as bounded previews, preserving newer recognition independently of audio-journal sequencing.
+- Full or conflicting speaker-check archives offer an explicit preserving archive action, guarded across app instances. Existing proof files remain intact, the active 128-record bound stays fixed, and temporary failures retain a direct retry action.
+- Current release/help documentation identifies the published 1.0.6 separately from the unreleased PR-31 follow-up.
 - This source follow-up does not change the published 1.0.6 assets or authorize a new release. The real local text-model reference run and longer combined capture/recognition/model/GPU evidence remain open; see TEST_REPORT.md.
 
 ## 1.0.6 — live summary and easy local text models (in development)

@@ -16,7 +16,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-const MAX_MODEL_CHECK_FOLDERS: usize = 128;
+const MAX_MODEL_CHECK_FOLDERS: usize = crate::speaker_check_archive::MAX_RECORDS;
 
 /// Reads a completed capability result only for the freshly rehashed full model/runtime
 /// identity. Partial or mismatched evidence never grants model capability.
@@ -45,9 +45,7 @@ fn cached_model_check(
         .collect::<std::io::Result<Vec<_>>>()
         .map_err(|_| "Model check evidence unavailable")?;
     if entries.len() > MAX_MODEL_CHECK_FOLDERS {
-        return Err(
-            "Model check archive exceeds its fixed bound; existing evidence is retained".into(),
-        );
+        return Err(format!("{} Das Prüfarchiv ist voll. Vorhandene Nachweise bleiben erhalten. / The check archive is full; all records are retained.", crate::speaker_check_archive::ARCHIVE_REQUIRED));
     }
     let mut found = None;
     for entry in entries {
@@ -74,7 +72,7 @@ fn cached_model_check(
             continue;
         }
         if found.is_some_and(|previous| previous != result.supported) {
-            return Err("Conflicting speaker capability evidence; all records are retained".into());
+            return Err(format!("{} Widersprüchliche Prüfnachweise bleiben erhalten. Bitte archivieren und erneut prüfen. / Conflicting check records are retained. Archive them, then check again.", crate::speaker_check_archive::ARCHIVE_REQUIRED));
         }
         found = Some(result.supported);
     }
@@ -93,7 +91,7 @@ fn reserve_model_check_folder(root: &Path) -> AppResult<std::path::PathBuf> {
         .try_fold(0_usize, |count, entry| entry.map(|_| count + 1))
         .map_err(|_| "Model check evidence could not be counted")?;
     if used >= MAX_MODEL_CHECK_FOLDERS {
-        return Err("128 Sprecher-Prüfnachweise sind bereits vorhanden und bleiben erhalten. Weitere Modellprüfungen sind gesperrt; das lokale Prüfarchiv muss vor weiteren Prüfungen ausdrücklich überprüft werden. / 128 speaker-check records are retained. Further model checks are blocked until the local check archive is explicitly reviewed.".into());
+        return Err(format!("{} 128 Sprecher-Prüfnachweise bleiben erhalten. Bitte die Nachweise archivieren und danach erneut prüfen. / 128 speaker-check records are retained. Archive the check records, then run the model check again.", crate::speaker_check_archive::ARCHIVE_REQUIRED));
     }
     let folder = checks.join(meeting_notes::new_job_id());
     std::fs::create_dir(&folder).map_err(|_| "Could not reserve model check")?;
@@ -104,6 +102,7 @@ fn reserve_model_check_folder(root: &Path) -> AppResult<std::path::PathBuf> {
 /// Exclusive admission avoids loading another model while capture or analysis is running.
 pub(crate) fn check_model(service: &Service, model_id: &str) -> AppResult<bool> {
     let _lease = service.reserve_operation(crate::operations::Kind::Selection)?;
+    let _proof_lock = crate::speaker_check_archive::lock_checks(&service.root)?;
     let (bridge, catalog, _) = service.refresh(None)?;
     let model = catalog.model(model_id).map_err(|e| e.to_string())?;
     let resolved = bridge

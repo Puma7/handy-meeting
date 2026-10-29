@@ -1,6 +1,14 @@
 use crate::{blocking, AppResult, Service};
 use std::sync::Arc;
 use tauri::State;
+/// Explicitly archives generated capability proofs without deleting or replacing any file.
+#[tauri::command]
+pub(crate) async fn archive_speaker_model_checks(
+    service: State<'_, Arc<Service>>,
+) -> AppResult<bool> {
+    let service = Arc::clone(&service);
+    blocking(move || crate::speaker_check_archive::archive(&service)).await
+}
 #[tauri::command]
 /// Checks model capability off the UI thread under native operation admission.
 /// The check receives a separate evidence directory, without any meeting audio.

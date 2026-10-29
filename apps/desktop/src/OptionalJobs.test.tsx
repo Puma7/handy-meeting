@@ -92,6 +92,147 @@ const meeting: Meeting = {
     },
   ],
 };
+
+it("recovers a full speaker-check archive only through an explicit preserving action", async () => {
+  const check = vi
+    .fn()
+    .mockRejectedValueOnce(
+      "[SPEAKER_CHECK_ARCHIVE_REQUIRED] Proof archive is full.",
+    )
+    .mockResolvedValue(true);
+  const archive = vi.fn().mockResolvedValue(true);
+  const checked = vi.fn();
+  const api = {
+    startSpeakerExperiment: vi.fn(),
+    checkSpeakerModel: check,
+    archiveSpeakerModelChecks: archive,
+  } as unknown as DesktopApi;
+  render(
+    <SpeakerExperiments
+      api={api}
+      locale="en"
+      setupOnly
+      selectedModelId="installed"
+      models={[
+        {
+          id: "installed",
+          name: "Installed",
+          isDownloaded: true,
+          supportsStreaming: false,
+        },
+      ]}
+      onModelChecked={checked}
+    />,
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "Check speaker support" }),
+  );
+  const action = await screen.findByRole("button", {
+    name: "Archive check records",
+  });
+  expect(archive).not.toHaveBeenCalled();
+  expect(screen.getByRole("alert").textContent).not.toContain(
+    "SPEAKER_CHECK_ARCHIVE_REQUIRED",
+  );
+  await userEvent.click(action);
+  await screen.findByText(
+    "Check records archived and retained. Run the model check again.",
+  );
+  expect(archive).toHaveBeenCalledTimes(1);
+  await userEvent.click(
+    screen.getByRole("button", { name: "Check speaker support" }),
+  );
+  await waitFor(() => expect(checked).toHaveBeenCalledWith("installed", true));
+  expect(check).toHaveBeenCalledTimes(2);
+});
+
+it.each(["recording", "checkingBlocked"] as const)(
+  "blocks check-proof archival during %s",
+  async (gate) => {
+    const archive = vi.fn().mockResolvedValue(true);
+    const api = {
+      startSpeakerExperiment: vi.fn(),
+      checkSpeakerModel: vi
+        .fn()
+        .mockRejectedValue(
+          "[SPEAKER_CHECK_ARCHIVE_REQUIRED] Retained records need review.",
+        ),
+      archiveSpeakerModelChecks: archive,
+    } as unknown as DesktopApi;
+    const props = {
+      api,
+      locale: "en" as const,
+      setupOnly: true,
+      selectedModelId: "installed",
+      models: [
+        {
+          id: "installed",
+          name: "Installed",
+          isDownloaded: true,
+          supportsStreaming: false,
+        },
+      ],
+    };
+    const view = render(<SpeakerExperiments {...props} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Check speaker support" }),
+    );
+    await screen.findByRole("button", { name: "Archive check records" });
+    view.rerender(<SpeakerExperiments {...props} {...{ [gate]: true }} />);
+    const action = screen.getByRole("button", {
+      name: "Archive check records",
+    }) as HTMLButtonElement;
+    expect(action.disabled).toBe(true);
+    await userEvent.click(action);
+    expect(archive).not.toHaveBeenCalled();
+  },
+);
+
+it("keeps the archive retry available after another instance temporarily owns the proof lock", async () => {
+  const archive = vi
+    .fn()
+    .mockRejectedValueOnce("Another model check is running; please wait.")
+    .mockResolvedValue(true);
+  const api = {
+    startSpeakerExperiment: vi.fn(),
+    checkSpeakerModel: vi
+      .fn()
+      .mockRejectedValue(
+        "[SPEAKER_CHECK_ARCHIVE_REQUIRED] Records need review.",
+      ),
+    archiveSpeakerModelChecks: archive,
+  } as unknown as DesktopApi;
+  render(
+    <SpeakerExperiments
+      api={api}
+      locale="en"
+      setupOnly
+      selectedModelId="installed"
+      models={[
+        {
+          id: "installed",
+          name: "Installed",
+          isDownloaded: true,
+          supportsStreaming: false,
+        },
+      ]}
+    />,
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "Check speaker support" }),
+  );
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Archive check records" }),
+  );
+  await screen.findByText("Another model check is running; please wait.");
+  await userEvent.click(
+    screen.getByRole("button", { name: "Archive check records" }),
+  );
+  await screen.findByText(
+    "Check records archived and retained. Run the model check again.",
+  );
+  expect(archive).toHaveBeenCalledTimes(2);
+});
 it("never checks or installs updates merely by opening settings and blocks installation during active work", async () => {
   const check = vi.fn(),
     download = vi.fn(),

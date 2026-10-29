@@ -53,6 +53,7 @@ export const desktopApi: DesktopApi = {
   startSpeakerExperiment: (meetingId, modelId, mode) =>
     jobInvoke("start_speaker_experiment", { meetingId, modelId, mode }),
   checkSpeakerModel: (modelId) => jobInvoke("check_speaker_model", { modelId }),
+  archiveSpeakerModelChecks: () => jobInvoke("archive_speaker_model_checks"),
   getSpeakerProgress: () => desktopInvoke("get_speaker_progress"),
   cancelSpeakerExperiment: (jobId) =>
     desktopInvoke("cancel_speaker_experiment", { jobId }),

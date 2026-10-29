@@ -54,8 +54,11 @@ export default function SpeakerExperiments({
     // A transient polling failure clears on the next successful poll; action errors stay.
     [pollError, setPollError] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
-    [hidden, setHidden] = useState<string | null>(null);
-  const error = actionError ?? pollError;
+    [hidden, setHidden] = useState<string | null>(null),
+    [archiveNotice, setArchiveNotice] = useState<string | null>(null),
+    [archiveNeeded, setArchiveNeeded] = useState(false);
+  const archivePrefix = "[SPEAKER_CHECK_ARCHIVE_REQUIRED]";
+  const error = (actionError ?? pollError)?.replace(archivePrefix, "").trim();
   const model = selectedModelId ?? localModel;
   const setModel = onSelectedModelChange ?? setLocalModel;
   useEffect(() => {
@@ -113,8 +116,10 @@ export default function SpeakerExperiments({
     setBusy(true);
     onCheckingChange?.(true);
     setError(null);
+    setArchiveNotice(null);
     try {
       const found = await api.checkSpeakerModel(model);
+      setArchiveNeeded(false);
       onModelChecked?.(model, found);
       if (!found)
         setError(
@@ -123,7 +128,42 @@ export default function SpeakerExperiments({
             : "This model does not support local speaker separation. Choose a model with diarization support. Manual labels remain available.",
         );
     } catch (error) {
-      setError(errorMessage(error));
+      const message = errorMessage(error);
+      if (message.startsWith(archivePrefix)) setArchiveNeeded(true);
+      setError(message);
+    } finally {
+      setBusy(false);
+      onCheckingChange?.(false);
+    }
+  }
+  /** Archives generated proofs only after the user asks; every record is retained and
+   * native admission prevents overlap with capture, analysis or another model check. */
+  async function archiveChecks() {
+    if (
+      !api.archiveSpeakerModelChecks ||
+      busy ||
+      running ||
+      recording ||
+      checkingBlocked
+    )
+      return;
+    setBusy(true);
+    onCheckingChange?.(true);
+    try {
+      const moved = await api.archiveSpeakerModelChecks();
+      setArchiveNeeded(false);
+      setError(null);
+      setArchiveNotice(
+        moved
+          ? de
+            ? "Prüfnachweise archiviert und erhalten. Bitte die Modellprüfung erneut starten."
+            : "Check records archived and retained. Run the model check again."
+          : de
+            ? "Keine Prüfnachweise zu archivieren. Bitte die Modellprüfung erneut starten."
+            : "No check records to archive. Run the model check again.",
+      );
+    } catch (failure) {
+      setError(errorMessage(failure));
     } finally {
       setBusy(false);
       onCheckingChange?.(false);
@@ -308,6 +348,23 @@ export default function SpeakerExperiments({
         </p>
       )}
       {setupOnly && error && <p role="alert">{error}</p>}
+      {archiveNeeded && api.archiveSpeakerModelChecks && (
+        <div>
+          <p className="muted">
+            {de
+              ? "Die bisherigen Prüfnachweise benötigen Aufmerksamkeit. Du kannst sie zusammen archivieren und eine neue Prüfung beginnen. Alle Dateien bleiben erhalten; Aufnahmen und Auswertungen werden nicht verändert."
+              : "The existing check records need attention. You can archive them together and start a new check. Every file is retained; recordings and analyses are unchanged."}
+          </p>
+          <button
+            className="secondary"
+            disabled={busy || running || recording || checkingBlocked}
+            onClick={() => void archiveChecks()}
+          >
+            {de ? "Prüfnachweise archivieren" : "Archive check records"}
+          </button>
+        </div>
+      )}
+      {archiveNotice && <p role="status">{archiveNotice}</p>}
       {!setupOnly && meeting && (
         <>
           <div>

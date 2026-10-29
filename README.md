@@ -28,7 +28,7 @@ An independent **Rust + Tauri companion for [Handy](https://github.com/cjpais/Ha
 | Mac · Apple Silicon / M-series | Apple Silicon DMG | macOS 15+; recording permissions |
 | Mac · Intel | Intel DMG | macOS 15+; recording permissions |
 
-**Release status (28 October 2026):** the current public release is **[1.0.4](https://github.com/Puma7/meeting-for-handy/releases/tag/v1.0.4)**, with all 17 assets: five packages and twelve checksum/source proofs, including `RELEASE_MANIFEST.json`. Recordings are always preserved; from 1.0.6 Windows uses one program folder (see below).
+**Release status (29 October 2026):** the current public release is **[1.0.6](https://github.com/Puma7/meeting-for-handy/releases/tag/v1.0.6)**, with all 17 assets: five packages and twelve checksum/source proofs, including `RELEASE_MANIFEST.json`. Recordings are always preserved; from 1.0.6 Windows uses one program folder (see below).
 
 **Future releases:** a matching version tag automatically starts the full Windows/Linux/Mac build matrix. Successful checks produce all five packages and their proofs in a release draft. Publish the populated draft to make the downloads public; publishing verifies the populated draft without starting another build. Draft PRs and ordinary main updates run source checks; full candidates run for ready PRs, explicit manual requests and release tags. [Release procedure](docs/RELEASING.md).
 
@@ -102,14 +102,14 @@ Recording pause/resume and independent app microphone mute keep the meeting time
 
 The visible name is **Meeting for Handy**. Existing data/key/bundle identifiers, executable filenames and the `HandyMeeting-<version>-...` download prefix stay compatible with earlier installations and updater clients. From 1.0.6 the Windows setup installs into one folder, `%LOCALAPPDATA%\Programs\Meeting for Handy`, and adds **Meeting for Handy** to the Start menu, so Windows search finds it. You can also add a desktop shortcut and choose English or German in the installer. Running a newer or the same setup again updates or repairs that folder once the app is closed. Version folders from 1.0.5 and earlier (`Programs\HandyMeeting\<version>`) are removed through their own uninstallers once the old app is closed; a folder whose app is still running stays and can be removed later in Windows Settings > Apps. Recordings and settings are kept; they live separately in `%LOCALAPPDATA%\HandyMeeting`. Windows does not let installers pin apps to the taskbar: right-click the running app and choose *Pin to taskbar*.
 
-## Development toward 1.0.6 (unreleased)
+## Live summary in 1.0.6
 
 A **live summary** panel beside the transcript summarizes a running meeting: summary so far, decisions, tasks, questions raised and important points, each with its source identifier, verbatim quote, time and audio track. It updates at a chosen interval and earlier when a long contribution on one audio track is followed by a reply on the other, works best with a small local text model, and can be copied to read out at any time. A **local model setup** finds Ollama or LM Studio, suggests Gemma 4 E2B/E4B from installed memory and can download the suggestion through Ollama. Design and limits: [1.0.6 plan](docs/1.0.6-LIVE-SUMMARY-PLAN.md).
 
-## Development toward 1.0.5 (unreleased)
+## Audit corrections and current follow-up
 
-The [28 October audit corrections](docs/AUDIT_FIXES_20261028.md) cover capture diagnostics, navigation and layout, legacy file preservation and safe exports, report provenance, source-export containment and background-job handling. These source changes are separate from the public 1.0.4 download. The source is prepared as release candidate 1.0.5; it has not been tagged or released. Current checks and remaining limits belong in [TEST_REPORT.md](TEST_REPORT.md).
+The [28 October audit corrections](docs/AUDIT_FIXES_20261028.md) cover capture diagnostics, navigation and layout, legacy file preservation and safe exports, report provenance, source-export containment and background-job handling. These earlier corrections are included in 1.0.6. The further recording-backlog, transcript, local-model and workflow corrections in [PR #31](https://github.com/Puma7/meeting-for-handy/pull/31) remain unreleased. Current checks and remaining limits belong in [TEST_REPORT.md](TEST_REPORT.md).
 
-The development source also adds separate live meters directly below the system-audio and microphone controls. Green/yellow/red segments and digital peak values show incoming effective audio; clipping, silence, pause/mute and unavailable or old measurements have distinct states. The meters remain visible with recording setup collapsed. See [live input levels](docs/1.0.2-USER-GUIDE.md#live-input-levels-unreleased-development) for interpretation and limits.
+The released app also provides separate live meters directly below the system-audio and microphone controls. Green/yellow/red segments and digital peak values show incoming effective audio; clipping, silence, pause/mute and unavailable or old measurements have distinct states. The meters remain visible with recording setup collapsed. See [live input levels](docs/1.0.2-USER-GUIDE.md#live-input-levels) for interpretation and limits.
 
 General audio/video import, broader re-transcription variants, individual result-tab exports, reliable speaker statistics, mindmaps, generated overview images and outgoing integrations remain [optional roadmap work](docs/OPTIONAL_FEATURE_ROADMAP.md). The roadmap distinguishes existing controls from proposed additions.

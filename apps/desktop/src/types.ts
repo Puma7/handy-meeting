@@ -465,6 +465,8 @@ export interface DesktopApi {
   cancelNotes(jobId: string): Promise<boolean>;
   startLiveNotes?(request: LiveNotesRequest): Promise<LiveNotesStatus>;
   checkSpeakerModel?(modelId: string): Promise<boolean>;
+  /** Explicitly moves generated check proofs into a retained archive, without deletion. */
+  archiveSpeakerModelChecks?(): Promise<boolean>;
   stopLiveNotes?(): Promise<boolean>;
   refreshLiveNotes?(): Promise<boolean>;
   setLiveNotesInterval?(intervalMs: number): Promise<boolean>;
