@@ -373,7 +373,9 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
   latestRuntime.current = { app, busy, isStopping, connected };
   const devicesRef = useRef<AudioDevice[]>([]),
     deviceLossesRef = useRef<DeviceLoss[]>([]),
-    deviceRequest = useRef(0);
+    deviceRequest = useRef(0),
+    // The device IDs a pending start sent to the capture, until the recording is reported.
+    startDevices = useRef<Record<DeviceSource, string | null> | null>(null);
   /** Keeps the rendered device notices and the reconciliation input identical. */
   const updateDeviceLosses = useCallback((next: DeviceLoss[]) => {
     deviceLossesRef.current = next;
@@ -769,13 +771,34 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
   useEffect(() => {
     // A new recording starts with its own devices; earlier notices no longer apply. A loss
     // of this recording may already be recorded before this effect runs, so it stays.
-    if (recording && !wasRecording.current)
-      updateDeviceLosses(
-        deviceLossesRef.current.filter(
-          (loss) =>
-            loss.duringRecording && loss.meetingId === app?.activeMeeting?.id,
-        ),
+    if (recording && !wasRecording.current) {
+      const id = app?.activeMeeting?.id ?? null,
+        started = startDevices.current;
+      startDevices.current = null;
+      const kept = deviceLossesRef.current.flatMap((loss) =>
+        loss.duringRecording && loss.meetingId === id
+          ? [loss]
+          : // A device lost while the start was pending still went to the capture: the
+            // recording keeps it, like a loss during the recording.
+            !loss.duringRecording && started?.[loss.source] === loss.id
+            ? [
+                {
+                  ...loss,
+                  duringRecording: true,
+                  meetingId: id,
+                  replacement: undefined,
+                  replacementId: undefined,
+                },
+              ]
+            : [],
       );
+      updateDeviceLosses(kept);
+      for (const loss of kept) {
+        if (started?.[loss.source] !== loss.id) continue;
+        if (loss.source === "system") setSystemId(loss.id);
+        else setMicId(loss.id);
+      }
+    }
     wasRecording.current = recording;
     // The native microphone track ended while the recording continues: the device was
     // removed or failed, even before the next device list shows it.
@@ -1212,12 +1235,23 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         throw new Error(catalogueFailure.current);
       if (pendingNativeChoice.current !== null) throw new Error(t.busy);
       if (modelRefreshInFlight.current) throw new Error(t.busy);
-      const item = await api.startMeeting({
-        title: title.trim() || defaultMeetingTitle(locale),
-        modelId,
-        systemDeviceId: systemId,
-        microphoneDeviceId: micEnabled ? micId : null,
-      });
+      const selected = {
+        system: systemId,
+        microphone: micEnabled ? micId : null,
+      };
+      startDevices.current = selected;
+      let item: Meeting;
+      try {
+        item = await api.startMeeting({
+          title: title.trim() || defaultMeetingTitle(locale),
+          modelId,
+          systemDeviceId: selected.system,
+          microphoneDeviceId: selected.microphone,
+        });
+      } catch (failure) {
+        if (startDevices.current === selected) startDevices.current = null;
+        throw failure;
+      }
       selectedRef.current = item.id;
       fullMeetingRef.current = null;
       liveFullRef.current = null;

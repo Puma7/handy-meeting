@@ -323,6 +323,60 @@ describe("audio devices follow connected and removed hardware (synthetic IPC)", 
     expect(confirmed.textContent).toContain("Der Computerton läuft weiter");
   });
 
+  it("keeps the notice for a microphone lost while the recording was starting", async () => {
+    let devices = [output, builtIn, headset];
+    let recording = false;
+    let started: (meeting: Meeting) => void = () => undefined;
+    const api = fakeApi(
+      () => devices,
+      () => state(recording, false),
+    );
+    vi.mocked(api.startMeeting).mockImplementationOnce(
+      () => new Promise((resolve) => (started = resolve)),
+    );
+    render(<App api={api} />);
+    await screen.findByRole("option", { name: headset.name });
+    await userEvent.click(
+      screen.getByLabelText("Mikrofon zusätzlich aufnehmen"),
+    );
+    await userEvent.selectOptions(microphoneSelect(), headset.id);
+    await waitFor(() =>
+      expect(
+        (
+          screen.getByRole("button", {
+            name: "Aufnahme starten",
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(false),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Aufnahme starten" }));
+    await waitFor(() =>
+      expect(api.startMeeting).toHaveBeenCalledWith(
+        expect.objectContaining({ microphoneDeviceId: headset.id }),
+      ),
+    );
+    // The headset leaves the list before the capture reports the recording ...
+    devices = [output, builtIn];
+    fireEvent.focus(window);
+    await screen.findByText(
+      /Das Mikrofon „Synthetic headset“ ist nicht mehr verfügbar/,
+    );
+    // ... which then runs without its microphone track from the first snapshot on.
+    recording = true;
+    started(live);
+    const notice = await screen.findByText(
+      /Das Mikrofon „Synthetic headset“ ist während der Aufnahme aus der Geräteliste verschwunden/,
+    );
+    expect(notice.closest("[role=alert]")).toBeTruthy();
+    expect(screen.queryByText(/Ausgewählt ist jetzt/)).toBeNull();
+    // After the recording the built-in microphone stands in until the headset is back.
+    recording = false;
+    await waitFor(() => expect(microphoneSelect().value).toBe(builtIn.id));
+    devices = [output, builtIn, headset];
+    fireEvent.focus(window);
+    await waitFor(() => expect(microphoneSelect().value).toBe(headset.id));
+  });
+
   it("takes a microphone lost during a recording back after the recording ended", async () => {
     let devices = [output, builtIn, headset];
     let recording = false;
