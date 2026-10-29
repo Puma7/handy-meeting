@@ -140,6 +140,8 @@ label {
   position: fixed;
   top: 0;
   bottom: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   background: var(--color-background);
 }
 .brand {
@@ -283,6 +285,30 @@ label {
   overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
+}
+/* Short windows keep every sidebar control reachable: a compact card, and scrolling. */
+@media (max-height: 720px) {
+  .brand {
+    padding-bottom: 16px;
+  }
+  .sidebar-bottom {
+    padding-top: 16px;
+  }
+  .sidebar-recording {
+    margin-bottom: 12px;
+  }
+  .sidebar-recording-facts {
+    gap: 2px;
+    margin-top: 6px;
+  }
+  /* The static note about Handy gives way to the recording while one runs. */
+  .sidebar-recording ~ .privacy-mark {
+    display: none;
+  }
+  .sidebar-recording-text {
+    margin-top: 6px;
+    -webkit-line-clamp: 1;
+  }
 }
 .appearance-row {
   display: flex;
