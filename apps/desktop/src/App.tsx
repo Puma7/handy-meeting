@@ -625,16 +625,25 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         microphone: current.micEnabled ? current.micId : null,
       });
       const chosen = { system: current.systemId, microphone: current.micId };
-      if (!current.recording) {
-        for (const source of ["system", "microphone"] as const) {
-          if (!listed(source, chosen[source]))
-            chosen[source] = fallback(source)?.id ?? "";
-        }
-      }
       let losses = deviceLossesRef.current;
       if (!current.recording) {
+        for (const source of ["system", "microphone"] as const) {
+          if (listed(source, chosen[source])) continue;
+          const automatic = fallback(source)?.id ?? "";
+          // A later automatic choice is not the user's: the lost device still returns.
+          losses = losses.map((loss) =>
+            loss.source === source &&
+            !loss.duringRecording &&
+            (loss.replacementId ?? "") === chosen[source]
+              ? { ...loss, replacementId: automatic }
+              : loss,
+          );
+          chosen[source] = automatic;
+        }
+      }
+      if (!current.recording) {
         // A device that is back takes over again unless another one was chosen meanwhile.
-        for (const loss of deviceLossesRef.current) {
+        for (const loss of losses) {
           if (loss.duringRecording || !listed(loss.source, loss.id)) continue;
           if (chosen[loss.source] === (loss.replacementId ?? ""))
             chosen[loss.source] = loss.id;
@@ -657,7 +666,11 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
           },
         ];
       }
-      if (losses !== deviceLossesRef.current) updateDeviceLosses(losses);
+      if (
+        losses.length !== deviceLossesRef.current.length ||
+        losses.some((loss, index) => loss !== deviceLossesRef.current[index])
+      )
+        updateDeviceLosses(losses);
       setSystemId(chosen.system);
       setMicId(chosen.microphone);
     },
@@ -709,24 +722,26 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       !isStopping &&
       !app?.transitioning;
     micCapturing.current = capturing;
-    if (
-      !ended ||
-      deviceLossesRef.current.some(
-        (loss) => loss.source === "microphone" && loss.duringRecording,
-      )
-    )
-      return;
+    if (!ended) return;
+    // This confirms the stop, so it replaces an earlier list-based or closed notice.
     const id = selectionRef.current.micId;
+    const earlier = deviceLossesRef.current.find(
+      (loss) => loss.source === "microphone" && loss.duringRecording,
+    );
     updateDeviceLosses([
       ...deviceLossesRef.current.filter((loss) => loss.source !== "microphone"),
       {
         source: "microphone",
         id,
+        // After the device left the list, only the earlier record still knows its name.
         name:
           devicesRef.current.find(
             (d) => d.source === "microphone" && d.id === id,
-          )?.name ?? "",
+          )?.name ??
+          earlier?.name ??
+          "",
         duringRecording: true,
+        confirmed: true,
       },
     ]);
   }, [

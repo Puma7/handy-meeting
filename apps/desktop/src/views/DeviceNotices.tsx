@@ -26,10 +26,16 @@ function message(loss: DeviceLoss, locale: Locale) {
     : de
       ? `${kind} „${loss.name}“`
       : `${kind} “${loss.name}”`;
-  if (loss.duringRecording) {
+  if (loss.duringRecording && loss.confirmed) {
     return de
       ? `${prefix} ist während der Aufnahme verschwunden. Diese Spur nimmt nicht mehr auf; bereits gespeicherter Ton bleibt erhalten.${microphone ? " Der Computerton läuft weiter." : ""} Gerät wieder anschließen, die Aufnahme beenden und eine neue starten.`
       : `${prefix} disappeared during the recording. This track no longer records; audio saved so far is kept.${microphone ? " System audio keeps recording." : ""} Reconnect the device, end the recording and start a new one.`;
+  }
+  if (loss.duringRecording) {
+    // Only the device list changed; the capture has not confirmed a stop (yet).
+    return de
+      ? `${prefix} ist während der Aufnahme aus der Geräteliste verschwunden. Diese Spur nimmt dann meist nicht mehr auf; bereits gespeicherter Ton bleibt erhalten. Den Pegel prüfen und bei Bedarf das Gerät wieder anschließen, die Aufnahme beenden und eine neue starten.`
+      : `${prefix} left the device list during the recording. This track usually stops recording then; audio saved so far is kept. Check its level and, if needed, reconnect the device, end the recording and start a new one.`;
   }
   if (loss.replacement) {
     return de

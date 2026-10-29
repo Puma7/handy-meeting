@@ -170,6 +170,33 @@ describe("audio devices follow connected and removed hardware (synthetic IPC)", 
     expect(microphoneSelect().value).toBe(alternate.id);
   });
 
+  it("takes the only microphone back after another one was picked automatically", async () => {
+    let devices = [output, headset];
+    const api = fakeApi(
+      () => devices,
+      () => state(),
+    );
+    render(<App api={api} />);
+    await screen.findByRole("option", { name: headset.name });
+    await userEvent.click(
+      screen.getByLabelText("Mikrofon zusätzlich aufnehmen"),
+    );
+    devices = [output];
+    fireEvent.focus(window);
+    await screen.findByText(/kein anderes Gerät dieser Art/);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Hinweis schließen" }),
+    );
+    // A new microphone is selected automatically, not by the user ...
+    devices = [output, builtIn];
+    fireEvent.focus(window);
+    await waitFor(() => expect(microphoneSelect().value).toBe(builtIn.id));
+    // ... so the headset takes over again when it returns.
+    devices = [output, builtIn, headset];
+    fireEvent.focus(window);
+    await waitFor(() => expect(microphoneSelect().value).toBe(headset.id));
+  });
+
   it("reports a removed microphone, chooses another one and takes it back on reconnect", async () => {
     let devices = [output, builtIn, headset];
     const api = fakeApi(
@@ -199,9 +226,10 @@ describe("audio devices follow connected and removed hardware (synthetic IPC)", 
   it("warns when the recording microphone disappears and keeps the recording's choice", async () => {
     let devices = [output, builtIn, headset];
     let recording = false;
+    let hasMicrophone = true;
     const api = fakeApi(
       () => devices,
-      () => state(recording),
+      () => state(recording, hasMicrophone),
     );
     render(<App api={api} />);
     await screen.findByRole("option", { name: headset.name });
@@ -219,14 +247,23 @@ describe("audio devices follow connected and removed hardware (synthetic IPC)", 
     );
     devices = [output, builtIn];
     fireEvent.focus(window);
-    const alert = await screen.findByText(
-      /Das Mikrofon „Synthetic headset“ ist während der Aufnahme verschwunden/,
+    // The list alone does not prove that the track stopped; the wording says so.
+    const listed = await screen.findByText(
+      /Das Mikrofon „Synthetic headset“ ist während der Aufnahme aus der Geräteliste verschwunden/,
     );
-    expect(alert.closest("[role=alert]")).toBeTruthy();
-    expect(alert.textContent).toContain(
+    expect(listed.closest("[role=alert]")).toBeTruthy();
+    expect(listed.textContent).toContain(
       "bereits gespeicherter Ton bleibt erhalten",
     );
-    expect(alert.textContent).toContain("Der Computerton läuft weiter");
+    // A closed notice does not hide the later native confirmation, which keeps the name.
+    await userEvent.click(
+      screen.getByRole("button", { name: "Hinweis schließen" }),
+    );
+    hasMicrophone = false;
+    const confirmed = await screen.findByText(
+      /Das Mikrofon „Synthetic headset“ ist während der Aufnahme verschwunden. Diese Spur nimmt nicht mehr auf/,
+    );
+    expect(confirmed.textContent).toContain("Der Computerton läuft weiter");
   });
 
   it("warns when the native microphone track ends during a recording", async () => {

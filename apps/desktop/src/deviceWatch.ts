@@ -8,8 +8,10 @@ export interface DeviceLoss {
   source: DeviceSource;
   id: string;
   name: string;
-  /** The device belonged to a running recording; its track no longer records. */
+  /** The device belonged to a running recording and left the device list. */
   duringRecording: boolean;
+  /** The native capture confirmed that this track stopped recording. */
+  confirmed?: boolean;
   /** Name and ID of the device chosen instead, when not recording. */
   replacement?: string;
   replacementId?: string;
