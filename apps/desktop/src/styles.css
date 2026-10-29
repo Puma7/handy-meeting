@@ -2033,6 +2033,11 @@ mark {
   margin-top: 10px;
   font-size: 12px;
 }
+.live-memory-note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
 .live-controls {
   display: flex;
   flex-wrap: wrap;
