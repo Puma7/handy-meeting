@@ -37,26 +37,29 @@ jobs:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
         with:
           node-version: '26.7.0'
-      - name: Validate version and exact tag commit
+      # The release tag is the only version source: every job writes it into the version
+      # files right after checkout (scripts/set-version.py), so nothing is bumped by hand.
+      - name: Take the version from the release tag and check the exact tag commit
         id: identity
         env:
           REQUESTED_TAG: ${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          import json, os, pathlib, re, subprocess, tomllib
-          version = json.load(open('apps/desktop/package.json'))['version']
-          assert version == json.load(open('apps/desktop/src-tauri/tauri.conf.json'))['version']
-          assert version == tomllib.load(open('Cargo.toml', 'rb'))['workspace']['package']['version']
-          assert re.fullmatch(r'\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?', version)
-          tag = 'v' + version
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            version=$(python3 scripts/set-version.py --check)
+          else
+            version=$(python3 scripts/set-version.py "$REQUESTED_TAG")
+          fi
+          python3 - "$version" <<'PY'
+          import json, os, subprocess, sys
+          tag = 'v' + sys.argv[1]
           if os.environ['GITHUB_EVENT_NAME'] != 'pull_request':
-              assert os.environ['REQUESTED_TAG'] == tag, 'Tag must match all application versions'
+              assert os.environ['REQUESTED_TAG'] == tag, 'Release tags look like v1.2.3 or v1.2.3-beta.1'
               commit = json.loads(subprocess.check_output(['gh','api','repos/'+os.environ['GITHUB_REPOSITORY']+'/commits/'+tag]))['sha']
               assert commit == os.environ['GITHUB_SHA'], 'Select the exact tag commit; artifacts from another source are refused'
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
-              output.write('tag='+tag+'\nversion='+version+'\n')
+              output.write('tag='+tag+'\nversion='+sys.argv[1]+'\n')
           PY
       - name: Verify package, installer and publication boundaries using synthetic data
         run: python3 -m unittest discover -s scripts -p 'test_release*.py'
@@ -91,12 +94,14 @@ jobs:
     uses: ./.github/workflows/rust.yml
     with:
       packages: true
+      version: ${{ needs.validate.outputs.version }}
   portable:
     needs: validate
     if: github.event_name != 'pull_request' && github.event_name != 'release' && needs.validate.outputs.already_complete != 'true'
     uses: ./.github/workflows/rust-portable.yml
     with:
       packages: true
+      version: ${{ needs.validate.outputs.version }}
   publish:
     needs: [validate, windows, portable]
     if: github.event_name != 'pull_request' && github.event_name != 'release'
@@ -112,6 +117,10 @@ jobs:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
         with:
           node-version: '26.7.0'
+      - name: Use the version of the release tag
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: python3 scripts/set-version.py "$VERSION"
       - name: Download only this successful run's platform artifacts
         env:
           GH_TOKEN: ${{ github.token }}
@@ -164,6 +173,10 @@ jobs:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
         with:
           node-version: '26.7.0'
+      - name: Use the version of the release tag
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: python3 scripts/set-version.py "$VERSION"
       - name: Publish the already verified complete release
         env:
           GH_TOKEN: ${{ github.token }}

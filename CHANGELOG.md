@@ -1,6 +1,17 @@
 # Changelog
 
-## Unreleased — follow-up to the 1.0.6 walkthrough
+From 1.0.8 on, the changes of every version are listed automatically in its [GitHub release](https://github.com/Puma7/meeting-for-handy/releases): creating the release generates the notes from the merged pull requests. This file keeps the history up to 1.0.7 and the plans that are not tied to a release.
+
+## Planned for 2.0
+
+- Remove the C# prototype (0.4/0.5): `src/`, `verify.ps1`, `build.ps1`, `setup-native.ps1`, `global.json`, `NuGet.config`, `System.Numerics.Tensors.*`, the NuGet/Avalonia/Inter license files and `docs/legacy/`. The repository then contains only the Rust project.
+
+## Unreleased
+
+- **Releases need one step:** creating a GitHub release with a new tag sets the version everywhere (`scripts/set-version.py`), builds and checks all five packages, attaches them and lists the merged changes. 1.0.7 failed because its tag did not match the version in the files; that check is replaced by taking the version from the tag.
+- **Tidier repository:** removed stale launchers, status files, the source manifest, the C# prototype download workflows and outdated plans; measurement records moved to `docs/evidence/`, C# prototype documents to `docs/legacy/`. Shorter README, README.de and release guide.
+
+## 1.0.7 — recording backlog and simpler workflows (29 October 2026)
 
 - Windows microphone clock gaps retain their exact gap evidence without creating a separate audio/recognition job for every tiny gap. Capture returns to stop/pause controls between bounded drain turns instead of treating cumulative processed audio as an invalid backlog.
 - Live text-model requests wait while speech recognition has more than five seconds of confirmed audio pending. Already running model requests are not cancelled by this scheduler.
@@ -16,10 +27,8 @@
 - Completed speaker-capability proofs can be reused after restart only for the same freshly verified model and native runtime identity; incomplete or conflicting records never enable a model.
 - Full transcript publications use the same per-section freshness rules as bounded previews, preserving newer recognition independently of audio-journal sequencing.
 - Full or conflicting speaker-check archives offer an explicit preserving archive action, guarded across app instances. Existing proof files remain intact, the active 128-record bound stays fixed, and temporary failures retain a direct retry action.
-- Current release/help documentation identifies the published 1.0.6 separately from the unreleased PR-31 follow-up.
-- This source follow-up does not change the published 1.0.6 assets or authorize a new release. The real local text-model reference run and longer combined capture/recognition/model/GPU evidence remain open; see TEST_REPORT.md.
 
-## 1.0.6 — live summary and easy local text models (in development)
+## 1.0.6 — live summary and easy local text models (28 October 2026)
 
 - **Live summary while recording:** a side panel summarizes the running meeting – summary so far, decisions, tasks, questions raised and important points – so the meeting can be recapped at any moment. Updates run every 1–15 minutes once at least 200 new characters are confirmed, earlier when a long contribution of one audio track (90 seconds or more) is followed by a reply on the other track, or after a lot of new speech, on request and once more after catch-up; less new text waits for the next trigger or "Update now".
 - Compact summaries: newly confirmed text is summarized in append-only windows, and a rolling overview of at most eight points is rebuilt from the verified statements in batches, so requests stay small for local models. Every verified statement stays in the detailed lists; the overview is a summary and can leave points out.
@@ -39,7 +48,7 @@
   - When no model answers at the configured local endpoint, the analysis page opens the Ollama/LM Studio detection by itself, including a hint to start the LM Studio server.
 - **Local model setup:** detects Ollama and LM Studio on this computer, suggests `gemma4:e2b` or `gemma4:e4b` from installed memory and can ask a running Ollama to download the suggested model. The last local endpoint and model are remembered.
 
-## 1.0.5 — input meters, audit fixes and efficient CI (release candidate)
+## 1.0.5 — input meters, audit fixes and efficient CI (28 October 2026)
 
 - Independent live system-audio/microphone meters with clear silence, clipping, stale and control states.
 - Preserve healthy capture through diagnostic failures; correct linked-file writes, Markdown exports, report provenance and private source-export boundaries.
@@ -48,7 +57,7 @@
 - Source checks on drafts/main; complete candidates on ready PRs/manual/tag requests; publication reuses the verified draft without a second build.
 - Existing user data, older programs and all prior evidence remain retained. Physical-device/endurance/GPU/signing/upstream limits remain separate.
 
-## 1.0.4 — Meeting for Handy follow-up (released)
+## 1.0.4 — Meeting for Handy follow-up (28 October 2026)
 
 - Recording pause/resume and separate app microphone mute with old-buffer privacy gates, explicit silent sections and retained control events.
 - Trustworthy Windows microphone discontinuities align to the monotonic/device clock; impossible jumps fail before padding.
@@ -57,7 +66,7 @@
 - Separate capture, archive, UI, session and command modules; malformed restored audio markers cannot escape their session.
 - Meeting for Handy display branding across UI and new packages, with earlier data/update compatibility. Installer helpers preserve execution policy.
 
-## 1.0.3 — recording reliability, recovery and platform follow-ups (in development)
+## 1.0.3 — recording reliability, recovery and platform follow-ups (28 October 2026)
 
 - Stop a meeting without waiting for the recognition backlog; the session shows "catching up" and completes in the background. A track that stops while the other continues is reported on its own (#17, #20).
 - When recognition continues on CPU after a GPU failure and decodes a section differently, keep the result as an explicitly marked new text version instead of leaving the section pending forever; earlier text stays in the journal (#20).
@@ -71,7 +80,7 @@
 - `localhost` reaches a local text-model server on IPv4 or IPv6 loopback without system DNS or proxies. Linux: versioned Handy AppImages in `~/Applications` are found, and the DEB adds `/usr/bin/handymeeting`. macOS: choose a real microphone. CI gains a virtual PulseAudio capture check and a GUI launch smoke check (#24).
 - Start only Handy- and FFmpeg-named programs chosen through the app, and add a locked `cargo audit` CI gate (#25).
 
-## 1.0.2 — library, retention and update controls (in development)
+## 1.0.2 — library, retention and update controls (not released separately; part of 1.0.3)
 
 - Show analysis stage, confirmed steps and elapsed time while a meeting is processed; failed or rejected steps stay resumable without repeating confirmed work.
 - Add meeting names, VIP flags and a rebuildable local search index for history, with search hits that open the highlighted source section.
@@ -80,7 +89,7 @@
 - Check official releases on request; Windows downloads the installer with size and SHA-256 checks and installs only after confirmation, while Linux and macOS link to the release page. Installation waits for recordings and background jobs.
 - Keep a single stable Start menu link owned by the installer; user-changed links are preserved.
 
-## 1.0.1 — installer and recovery fixes
+## 1.0.1 — installer and recovery fixes (27 October 2026)
 
 - Fix first-time Windows setup when the default parent folders do not exist; retain exclusive destination reservation and existing user files. Native regression checks cover missing nested parents, occupied directories and parent paths blocked by files. Full CI installation now starts with a fresh nested path.
 - Split the long combined template workflow test into independent preservation cases, retaining the existing five-second per-case timeout.
@@ -88,9 +97,7 @@
 - Require the fresh-parent installation check before accepting a Windows Setup package.
 - Bring the three reviewed recovery/package-proof fixes from PR #9 into the next version; they were not included in public 1.0.0.
 
-## 1.0.0 — initial public release
-
-
+## 1.0.0 — initial public release (26 October 2026)
 
 - Present the Rust/Tauri application with bilingual guides and screenshots rendered from synthetic demonstration data.
 - Build Windows Setup EXE and ZIP, Ubuntu/Debian DEB, and separate Apple Silicon/Intel DMGs from the same checked source.
@@ -134,7 +141,7 @@
 - Read-only legacy session access, original-quote analysis, editable templates, local-first transport and explicit per-run cloud text consent.
 - Windows hardware/long-session validation, portable Rust capture adapters and complete legacy feature parity remain release gates. Existing prototypes and recordings are preserved.
 
-## 0.5.0-preview.1 — portable development
+## 0.5.0-preview.1 — portable development (C# prototype)
 
 - Shared platform-neutral C# core for durable PCM, transcript journals, streaming coordination and source-linked notes.
 - Avalonia desktop preview with Ubuntu/Debian capture adapters and macOS capture-helper source.
@@ -142,14 +149,14 @@
 - Synthetic persistence, process-abort, local inference and headless UI checks. Real-device portable validation remains outstanding.
 - Portable API keys are session-only; full keychain integration and UI parity are unfinished.
 
-## 0.4.1 — Windows prototype
+## 0.4.1 — Windows prototype (C#)
 
 - Clearer analysis instructions and output-style explanations, with a visible edit action.
 - Original logo, application icon and favicon assets.
 - Local JSON-RPC-over-stdio agent interface with explicit transcript access, capability descriptions and local-only analysis.
 - Independent Windows verification and native streaming regression checks.
 
-## 0.4.0
+## 0.4.0 (C# prototype)
 
 - Full-transcript copying beyond the bounded live excerpt.
 - Named templates, custom ordered tabs and immutable per-run instruction snapshots.

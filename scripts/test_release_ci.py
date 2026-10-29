@@ -248,6 +248,21 @@ class WorkflowBoundaries(unittest.TestCase):
         self.assertIn('run: ./verify.ps1', text)
         self.assertIn('./verify.ps1', job(workflow('rust.yml'), 'windows'))
 
+    def test_every_release_job_takes_the_version_from_the_tag(self):
+        # 1.0.7: the tag was created without bumping the files, and the build refused it.
+        text = workflow('rust-release.yml')
+        self.assertIn('scripts/set-version.py "$REQUESTED_TAG"', job(text, 'validate'))
+        self.assertNotIn('Tag must match all application versions', text)
+        for name in ('windows', 'portable'):
+            self.assertIn('version: ${{ needs.validate.outputs.version }}', job(text, name))
+        for name in ('publish', 'publish_existing'):
+            body = job(text, name)
+            self.assertLess(body.index('scripts/set-version.py'), body.index('source-fingerprint'), name)
+        for name, job_name in (('rust.yml', 'windows'), ('rust-portable.yml', 'desktop')):
+            body = job(workflow(name), job_name)
+            self.assertIn('if: inputs.version', body)
+            self.assertLess(body.index('set-version.py'), body.index('Install pinned Rust tooling'), name)
+
     def test_release_artifact_retention_and_current_run_binding_remain(self):
         text = workflow('rust-release.yml')
         self.assertIn('cancel-in-progress: false', text)

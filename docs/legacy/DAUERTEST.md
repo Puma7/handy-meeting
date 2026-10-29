@@ -19,7 +19,7 @@ Am **25.10.2026 von 12:12:33 bis 14:12:52 Uhr (Europe/Berlin)** wurde der vollst
 | Fehlender unbestätigter Schluss | In diesem Lauf 0 Samples auf beiden Spuren |
 | Nachverarbeitung nach dem Gesamtabbruch | Rund 9,4 Sekunden |
 
-Zusätzlich zum ursprünglichen Testprogramm prüfte ein unabhängiger Python-Auswerter WAV-Format, Dateilängen, Zeitabdeckung, alle Samples, Quellenbegriffe und geschützte Hash-Präfixe. Der Prüfsummenabgleich bestätigte die unveränderte Testlaufzeit. Nachweis: [independent-verification.json](.build/soak-2h-20261025-r2/independent-verification.json).
+Zusätzlich zum ursprünglichen Testprogramm prüfte ein unabhängiger Python-Auswerter WAV-Format, Dateilängen, Zeitabdeckung, alle Samples, Quellenbegriffe und geschützte Hash-Präfixe. Der Prüfsummenabgleich bestätigte die unveränderte Testlaufzeit. Nachweis: [independent-verification.json](../../.build/soak-2h-20261025-r2/independent-verification.json).
 
 Null verlorene Samples in diesem Lauf sind keine allgemeine Verlustgarantie. In der kurzen Vorprüfung fehlten 44 Millisekunden je Spur am noch nicht bestätigten Ende. Ein Prozessabbruch lässt Betriebssystem- und Datenträgercaches bestehen; ein Stromausfall oder Datenträgerdefekt wurde nicht nachgestellt.
 
@@ -45,7 +45,7 @@ Aufnahmeprozess und CPU-Phase blieben unter den vorab gesetzten Wachstumsgrenzen
 
 Als nächster gezielter Nachweis bietet sich eine längere ununterbrochene GPU-Messung mit dichterer Abtastung und Untersuchung der nativen Pufferlebensdauer an. Der aktuelle Lauf enthält absichtlich drei Erkennungsprozesse: ungefähr 20 Minuten GPU, 60 Minuten GPU und 40 Minuten CPU.
 
-[Speicherverlauf als PNG](.build/soak-2h-20261025-r2/memory-overview.png) · [SVG](.build/soak-2h-20261025-r2/memory-overview.svg) · [Messwerte als CSV](.build/soak-2h-20261025-r2/memory.csv)
+[Speicherverlauf als PNG](../../.build/soak-2h-20261025-r2/memory-overview.png) · [SVG](../../.build/soak-2h-20261025-r2/memory-overview.svg) · [Messwerte als CSV](../../.build/soak-2h-20261025-r2/memory.csv)
 
 ## Prüfaufbau und Grenzen
 
@@ -53,21 +53,21 @@ Zwei unterschiedliche synthetische 16-kHz-PCM-Spuren wurden in Echtzeit in die p
 
 Der Test verwendete die unveränderte 0.2.1-Testlaufzeit, transcribe.cpp 0.4.1 und das vorhandene lokale Nemotron Streaming 3.5. Parallel wurde auf Nutzerwunsch Nachbearbeitung 0.3.0 entwickelt und mit einem separaten lokalen Gemma-Modell im CPU-Betrieb geprüft. Die protokollierte Last von etwa 13:29 bis 13:47 Uhr ist im Diagramm markiert. Weitere normale Rechneraktivität wurde nicht isoliert. Daraus wird keine Ursache für einzelne Speicherschwankungen abgeleitet.
 
-Der erste Versuch ab 10:34 Uhr brach nach rund 82 Minuten durch eine kurzzeitige Statusdateisperre im Testwächter ab. Dessen anschließende Datenrettung bestand; er zählt nicht als Zweistundentest. Der korrigierte Wächter bestand absichtliche Sperren und 1.000 gleichzeitige Statuswechsel. Alle alten Nachweise bleiben unter [.build/soak-2h-20261025/REPORT-INTERRUPTED.md](.build/soak-2h-20261025/REPORT-INTERRUPTED.md) erhalten.
+Der erste Versuch ab 10:34 Uhr brach nach rund 82 Minuten durch eine kurzzeitige Statusdateisperre im Testwächter ab. Dessen anschließende Datenrettung bestand; er zählt nicht als Zweistundentest. Der korrigierte Wächter bestand absichtliche Sperren und 1.000 gleichzeitige Statuswechsel. Alle alten Nachweise bleiben unter [.build/soak-2h-20261025/REPORT-INTERRUPTED.md](../../.build/soak-2h-20261025/REPORT-INTERRUPTED.md) erhalten.
 
 ## Berichte und Rohdaten
 
-- [Vollständiger automatisch erzeugter Bericht](.build/soak-2h-20261025-r2/REPORT.md)
-- [Unverändertes Testergebnis](.build/soak-2h-20261025-r2/result.json)
-- [Vorab gesetzte Prüfgrenzen](.build/soak-2h-20261025-r2/plan.json)
-- [Speicher-Rohdaten](.build/soak-2h-20261025-r2/memory.jsonl)
-- [Parallel dokumentierte Aktivität](.build/soak-2h-20261025-r2/external-activity.jsonl)
-- [Gesamter Prüfbericht einschließlich Nachbearbeitung 0.3.0](TEST_REPORT.md)
+- [Vollständiger automatisch erzeugter Bericht](../../.build/soak-2h-20261025-r2/REPORT.md)
+- [Unverändertes Testergebnis](../../.build/soak-2h-20261025-r2/result.json)
+- [Vorab gesetzte Prüfgrenzen](../../.build/soak-2h-20261025-r2/plan.json)
+- [Speicher-Rohdaten](../../.build/soak-2h-20261025-r2/memory.jsonl)
+- [Parallel dokumentierte Aktivität](../../.build/soak-2h-20261025-r2/external-activity.jsonl)
+- [Gesamter Prüfbericht einschließlich Nachbearbeitung 0.3.0](../../TEST_REPORT.md)
 
 Die ausschließlich für den Test eingerichtete automatische Überwachung endet nach dieser Auswertung. Alle Aufnahmen und Protokolle bleiben erhalten. Bestehende Nutzeraufnahmen und laufende HandyMeeting- beziehungsweise LM-Studio-Prozesse wurden nicht beendet.
 # Ergänzung: isolierter Worker-Speichervergleich
 
 Am 25.10.2026 wurden zusätzlich je 30 Echtzeitminuten mit dem unveränderten ursprünglichen C#-Worker und den eingefrorenen Rust-Beta-2-Workern geprüft. Es handelt sich um synthetische Inferenz ohne Capture, Live-UI oder Abbrüche. Private Bytes, Working Set und GPU-dedizierter/-geteilter Speicher wurden je Prozess im Einsekundenabstand getrennt erfasst; Schwellen blieben vorab festgelegt. Rust-Medianwachstum: 6,66/6,96 MiB, Fits 17,84/17,92 MiB/h; C# 28,73 MiB und 68,78 MiB/h. Keine neue Grenzüberschreitung in diesem Versuch. Zwei Modellinstanzen verursachen jedoch zusätzlichen Grundbedarf und unterschiedliche GPU-Shared-/Working-Set-Verteilung.
 
-[Bericht und Grenzen](.build/issue7-paired-gpu-20261025-01/REPORT.md) · [Grafik](.build/issue7-paired-gpu-20261025-01/memory-comparison.png) · [Messrechenwerte](.build/issue7-paired-gpu-20261025-01/analysis.json). Dies erklärt den alten Warnfall nicht abschließend und ist kein neuer vollständiger Rust-Zweistundentest. Der folgende ursprüngliche Bericht und seine Grenzen bleiben erhalten.
+[Bericht und Grenzen](../../.build/issue7-paired-gpu-20261025-01/REPORT.md) · [Grafik](../../.build/issue7-paired-gpu-20261025-01/memory-comparison.png) · [Messrechenwerte](../../.build/issue7-paired-gpu-20261025-01/analysis.json). Dies erklärt den alten Warnfall nicht abschließend und ist kein neuer vollständiger Rust-Zweistundentest. Der folgende ursprüngliche Bericht und seine Grenzen bleiben erhalten.
 

@@ -142,6 +142,15 @@ def existing_complete(repository, tag, commit, fingerprint, release_id=None):
     return True
 
 
+def release_notes(repository, tag, notes):
+    """GitHub's generated list of merged changes, followed by the fixed download notes."""
+    generated = json.loads(gh('api', '--method', 'POST', f'repos/{repository}/releases/generate-notes', '-f', f'tag_name={tag}'))
+    body = generated.get('body') if isinstance(generated, dict) else None
+    if not isinstance(body, str):
+        raise ValueError('Generated release notes are missing')
+    return body.strip() + '\n\n' + notes.read_text(encoding='utf-8').strip() + '\n'
+
+
 def publish(folder, repository, tag, commit, notes, make_public, release_id=None):
     """Verify the exact bundle and tag, preserve existing assets, then optionally publish.
 
@@ -164,7 +173,11 @@ def publish(folder, repository, tag, commit, notes, make_public, release_id=None
             raise ValueError('Release bundle changed before upload')
     existing = find_release(repository, tag, release_id)
     if existing is None:
-        gh('release', 'create', tag, '-R', repository, '--verify-tag', '--target', commit, '--draft', '--title', 'Meeting for Handy ' + tag[1:], '--notes-file', notes)
+        # A release created on GitHub keeps its own text; a draft made here lists the merged changes.
+        with tempfile.TemporaryDirectory(prefix='handymeeting-release-notes-') as temp:
+            body = pathlib.Path(temp) / 'notes.md'
+            body.write_text(release_notes(repository, tag, notes), encoding='utf-8')
+            gh('release', 'create', tag, '-R', repository, '--verify-tag', '--target', commit, '--draft', '--title', 'Meeting for Handy ' + tag[1:], '--notes-file', body)
         existing = find_release(repository, tag)
         if existing is None:
             raise ValueError('Created draft could not be located; inspect before retrying')

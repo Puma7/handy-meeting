@@ -43,4 +43,4 @@ Schema 2 verwendet getrennte PCM-Dateien und append-only Audio-/Textjournale. Be
 
 Die sichere Rust-Bindung erlaubt aktuell einen aktiven Stream je Modellinstanz. Zwei gleichzeitig offene Spuren verwenden getrennte Worker/Modelle; der RAM-Bedarf kann höher sein als beim früheren gemeinsamen C-API-Modell. Eine gemeinsam genutzte Instanz benötigt eine unterstützte Upstream-Schnittstelle und wird nicht durch eigene unsichere FFI erzwungen.
 
-Details: [Handy-Kompatibilität](HANDY_COMPATIBILITY.md), [Speicherung](RUST_STORAGE.md), [Abhängigkeiten](RUST_DEPENDENCIES.md), [Prüfbericht](../TEST_REPORT.md).
+Details: [Handy-Kompatibilität](../HANDY_COMPATIBILITY.md), [Speicherung](../RUST_STORAGE.md), [Abhängigkeiten](../RUST_DEPENDENCIES.md), [Prüfbericht](../../TEST_REPORT.md).
