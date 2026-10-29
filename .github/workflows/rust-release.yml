@@ -83,17 +83,19 @@ jobs:
               out.write('complete='+str(json.load(open('.build/existing-release.json'))['complete']).lower()+'\n')
           PY
       # Publishing never builds. Publishing a release with a new tag also pushes that tag,
-      # and the tag run of the same commit builds and attaches the packages to this release.
+      # and the run of that tag builds and attaches the packages to this release. A run of
+      # another tag on the same commit does not count (`branch` is the tag of a tag push).
       - name: Refuse compilation on publication when the prepared bundle is missing
         if: github.event_name == 'release'
         env:
           COMPLETE: ${{ steps.existing.outputs.complete }}
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.identity.outputs.tag }}
         run: |
           set -euo pipefail
           if [ "$COMPLETE" = true ]; then exit 0; fi
           for attempt in 1 2 3 4 5 6; do
-            builds=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/rust-release.yml/runs?event=push&head_sha=$GITHUB_SHA" --jq '[.workflow_runs[] | select(.conclusion == null or .conclusion == "success")] | length')
+            builds=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/rust-release.yml/runs?event=push&branch=$RELEASE_TAG&head_sha=$GITHUB_SHA" --jq '[.workflow_runs[] | select(.conclusion == null or .conclusion == "success")] | length')
             if [ "$builds" -gt 0 ]; then
               echo '::notice::The tag build of this commit attaches the packages to this release; nothing is built here.'
               exit 0

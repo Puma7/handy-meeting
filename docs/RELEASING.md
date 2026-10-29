@@ -42,20 +42,20 @@ Each package has a SHA-256 sidecar and a proof (`.verification.json` or `.manife
 
 ## Before you publish
 
-These gates are not covered by CI; record their evidence in [TEST_REPORT.md](../TEST_REPORT.md) or accept a named limit explicitly:
+CI runs the dependency audit (`cargo audit`) and checks the retained licenses. These gates are not covered by CI; record their evidence in [TEST_REPORT.md](../TEST_REPORT.md) or accept a named limit explicitly:
 
 - Real system/microphone capture, denied permissions, device loss, storage errors and long-session recovery on each supported system.
 - A new full-app two-hour run (still outstanding for the Rust app).
 - Real Mac/Linux interface and device checks.
 - Signing: macOS packages are ad-hoc signed and not notarized, the Windows setup is unsigned. Never put signing credentials into the repository or ordinary workflow logs.
-- Known dependency advisories (`cargo audit` runs in CI) and retained licenses.
+- Advisories the audit reports and the decision to accept or fix them.
 
 ## Safety rules of the pipeline
 
 - Packages are attached only from the current run and the exact tag commit; artifacts of another commit or run are never used.
 - Missing or failed checks, targets, checksums, source fingerprints, credential-store or installer proofs stop the assembly before any upload.
 - Existing assets are never overwritten or deleted; a different or unexpected asset stops the upload and promotion.
-- Several drafts for one tag stop automatic publication. Run `scripts/publish-rust-release.py --release-id <id>` with the retained bundle to select one explicitly.
+- Several drafts for one tag stop automatic publication. Download the run's `verified-release-bundle` artifact into a folder and select one draft explicitly with an authenticated `gh`: `python3 scripts/publish-rust-release.py --folder <bundle folder> --repository Puma7/meeting-for-handy --tag vX.Y.Z --commit <tag commit> --notes .github/RELEASE_NOTES.md --release-id <id>` (add `--publish` to publish it).
 - Native SDK downloads retry transient failures at most three times; checksum, size and certificate failures stop at once.
 
 ## Installation and upgrades
