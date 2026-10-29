@@ -346,50 +346,186 @@ fn read_record<T: serde::de::DeserializeOwned>(path: &Path) -> meeting_core::Res
     Ok(serde_json::from_slice(&bytes)?)
 }
 #[tauri::command]
-/// Returns up to 26 verified compact-copy records: 25 visible rows plus one lookahead.
-/// Bounded catalogue reads run off the UI thread and never alter retained audio copies.
+/// Returns 25 verified page records and separate catalogue pagination metadata.
+/// A damaged next-page record cannot hide this page; retained files are never altered.
 pub(crate) async fn list_audio_copies(
     service: State<'_, Arc<Service>>,
     offset: usize,
-) -> AppResult<Vec<AudioCopy>> {
+) -> AppResult<AudioCopyPage> {
     let owned = Arc::clone(&service);
-    blocking(move || {
-        if offset > 1000000 {
-            return Err("Invalid audio-copy page".into());
-        }
-        let folder = owned.root.join("audio-copies");
-        if !folder.exists() {
-            return Ok(Vec::new());
-        }
-        meeting_core::metadata::checked_directory(&folder)
-            .map_err(|_| "Audio-copy catalog unavailable")?;
-        let mut names = Vec::new();
-        for entry in std::fs::read_dir(&folder).map_err(|_| "Audio-copy catalog unavailable")? {
-            let path = entry.map_err(|_| "Audio-copy catalog unavailable")?.path();
-            if path.extension().is_some_and(|v| v == "json") {
-                names.push(path);
-            }
-            if names.len() > 1000000 {
-                return Err("Audio-copy catalog exceeds bound".into());
-            }
-        }
-        names.sort();
-        let mut output = Vec::new();
-        // One lookahead item lets the renderer hide pagination on the final full page.
-        for path in names.iter().skip(offset).take(26) {
-            let value: AudioCopy = read_record(path)
-                .map_err(|_| "Audio-copy catalog is unreadable; retained files preserved")?;
-            crate::validate_id(&value.run_id)?;
-            crate::validate_id(&value.meeting_id)?;
-            if path.file_stem().and_then(|v| v.to_str()) != Some(value.run_id.as_str()) {
-                return Err("Audio-copy identity mismatch".into());
-            }
-            output.push(value);
-        }
-        Ok(output)
-    })
-    .await
+    blocking(move || audio_copy_page(&owned.root, offset)).await
 }
+
+#[derive(Default, serde::Serialize)]
+pub(crate) struct AudioCopyPage {
+    items: Vec<AudioCopy>,
+    more: bool,
+}
+
+/// Validate only the requested page. `more` counts remaining catalogue names without
+/// opening or trusting their contents; every record is validated when its page is requested.
+fn audio_copy_page(root: &Path, offset: usize) -> AppResult<AudioCopyPage> {
+    if offset > 1000000 {
+        return Err("Invalid audio-copy page".into());
+    }
+    let folder = root.join("audio-copies");
+    if !folder.exists() {
+        return Ok(AudioCopyPage::default());
+    }
+    meeting_core::metadata::checked_directory(&folder)
+        .map_err(|_| "Audio-copy catalog unavailable")?;
+    let mut names = Vec::new();
+    for entry in std::fs::read_dir(&folder).map_err(|_| "Audio-copy catalog unavailable")? {
+        let path = entry.map_err(|_| "Audio-copy catalog unavailable")?.path();
+        if path.extension().is_some_and(|v| v == "json") {
+            names.push(path);
+        }
+        if names.len() > 1000000 {
+            return Err("Audio-copy catalog exceeds bound".into());
+        }
+    }
+    names.sort();
+    let mut output = Vec::new();
+    let more = names.len().saturating_sub(offset) > 25;
+    for path in names.iter().skip(offset).take(25) {
+        let value: AudioCopy = read_record(path)
+            .map_err(|_| "Audio-copy catalog is unreadable; retained files preserved")?;
+        crate::validate_id(&value.run_id)?;
+        crate::validate_id(&value.meeting_id)?;
+        if path.file_stem().and_then(|v| v.to_str()) != Some(value.run_id.as_str()) {
+            return Err("Audio-copy identity mismatch".into());
+        }
+        output.push(value);
+    }
+    Ok(AudioCopyPage {
+        items: output,
+        more,
+    })
+}
+#[cfg(test)]
+mod audio_copy_page_tests {
+    use super::*;
+
+    #[test]
+    /// A damaged next-page entry must not hide valid retained records, yet remains an
+    /// error when explicitly requested. No catalogue file or audio copy is repaired or removed.
+    fn invalid_lookahead_keeps_the_current_audio_copy_page_readable() {
+        for invalid in ["json", "identity", "directory"] {
+            let nonce = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let root = std::env::temp_dir().join(format!(
+                "handymeeting-copy-page-{}-{nonce}",
+                std::process::id()
+            ));
+            let folder = root.join("audio-copies");
+            std::fs::create_dir_all(&folder).unwrap();
+            for number in 0..25 {
+                let run_id = format!("{number:032x}");
+                crate::create_json(
+                    &folder.join(format!("{run_id}.json")),
+                    &AudioCopy {
+                        run_id,
+                        meeting_id: "b".repeat(32),
+                        title: "Synthetic retained copy".into(),
+                        codec: meeting_core::audio_codec::Codec::Flac,
+                        created_at: "2026-10-29T00:00:00Z".into(),
+                        sections: 1,
+                    },
+                )
+                .unwrap();
+            }
+            let bad = folder.join(format!("{:032x}.json", 25));
+            match invalid {
+                "json" => std::fs::write(&bad, b"{incomplete").unwrap(),
+                "identity" => crate::create_json(
+                    &bad,
+                    &AudioCopy {
+                        run_id: "c".repeat(32),
+                        meeting_id: "b".repeat(32),
+                        title: "Synthetic mismatch".into(),
+                        codec: meeting_core::audio_codec::Codec::Flac,
+                        created_at: "2026-10-29T00:00:00Z".into(),
+                        sections: 1,
+                    },
+                )
+                .unwrap(),
+                _ => std::fs::create_dir(&bad).unwrap(),
+            }
+            let before: Vec<_> = (0..26)
+                .map(|number| {
+                    let path = folder.join(format!("{number:032x}.json"));
+                    (path.is_dir(), std::fs::read(path).ok())
+                })
+                .collect();
+            let first =
+                audio_copy_page(&root, 0).expect("valid current page must remain accessible");
+            assert_eq!(first.items.len(), 25);
+            assert!(first.more, "the unreadable next page must remain reachable");
+            assert!(
+                audio_copy_page(&root, 25).is_err(),
+                "{invalid}: requested invalid entries still fail closed"
+            );
+            for (number, previous) in before.into_iter().enumerate() {
+                let path = folder.join(format!("{number:032x}.json"));
+                assert_eq!((path.is_dir(), std::fs::read(path).ok()), previous);
+            }
+            assert_eq!(std::fs::read_dir(&folder).unwrap().count(), 26);
+            std::fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[test]
+    /// Exact full and short final pages expose no empty next page. Pagination is JSON
+    /// metadata, and counts are bounded independently from each returned record's validity.
+    fn audio_copy_page_metadata_handles_full_short_and_missing_catalogues() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "handymeeting-copy-page-count-{}-{nonce}",
+            std::process::id()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let empty = audio_copy_page(&root, 0).unwrap();
+        assert!(empty.items.is_empty() && !empty.more);
+        let folder = root.join("audio-copies");
+        std::fs::create_dir(&folder).unwrap();
+        for number in 0..26 {
+            let run_id = format!("{number:032x}");
+            crate::create_json(
+                &folder.join(format!("{run_id}.json")),
+                &AudioCopy {
+                    run_id,
+                    meeting_id: "b".repeat(32),
+                    title: "Synthetic retained copy".into(),
+                    codec: meeting_core::audio_codec::Codec::Flac,
+                    created_at: "2026-10-29T00:00:00Z".into(),
+                    sections: 1,
+                },
+            )
+            .unwrap();
+            if number >= 23 {
+                let page = audio_copy_page(&root, 0).unwrap();
+                assert_eq!(page.items.len(), (number + 1).min(25));
+                assert_eq!(page.more, number >= 25);
+                let json = serde_json::to_value(&page).unwrap();
+                assert_eq!(json["items"].as_array().unwrap().len(), page.items.len());
+                assert_eq!(json["more"], page.more);
+            }
+        }
+        let last = audio_copy_page(&root, 25).unwrap();
+        assert_eq!(last.items.len(), 1);
+        assert!(!last.more);
+        let past = audio_copy_page(&root, 26).unwrap();
+        assert!(past.items.is_empty() && !past.more);
+        assert!(audio_copy_page(&root, 1_000_001).is_err());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+}
+
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Conversion {

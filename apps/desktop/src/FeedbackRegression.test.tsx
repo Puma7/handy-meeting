@@ -285,7 +285,7 @@ it("keeps VIP actions out of the rename form and cancels without changing metada
 
 it("hides compact audio pagination when no further page exists", async () => {
   const api = {
-    listAudioCopies: vi.fn(async () => []),
+    listAudioCopies: vi.fn(async () => ({ items: [], more: false })),
   } as unknown as DesktopApi;
   render(<AudioCopiesPanel api={api} locale="de" models={[]} job={null} />);
   await waitFor(() => expect(api.listAudioCopies).toHaveBeenCalled());
@@ -351,9 +351,10 @@ it("clears an audio-copy confirmation when its row becomes the previous page's h
     sections: 1,
   }));
   const start = vi.fn(async () => "synthetic-job");
-  const list = vi.fn(async (offset: number) =>
-    copies.slice(offset, offset + 26),
-  );
+  const list = vi.fn(async (offset: number) => ({
+    items: copies.slice(offset, offset + 25),
+    more: offset + 25 < copies.length,
+  }));
   render(
     <AudioCopiesPanel
       api={
@@ -413,7 +414,7 @@ it("clears an audio-copy confirmation when its row becomes the previous page's h
 });
 
 it.each([25, 26])(
-  "uses lookahead rather than an empty next page for %i audio copies",
+  "uses page metadata rather than an empty next page for %i audio copies",
   async (count) => {
     const copies = Array.from({ length: count }, (_, i) => ({
       runId: `copy-${i}`,
@@ -423,9 +424,10 @@ it.each([25, 26])(
       createdAt: meeting.startedAt,
       sections: 1,
     }));
-    const list = vi.fn(async (offset: number) =>
-      copies.slice(offset, offset + 26),
-    );
+    const list = vi.fn(async (offset: number) => ({
+      items: copies.slice(offset, offset + 25),
+      more: offset + 25 < copies.length,
+    }));
     render(
       <AudioCopiesPanel
         api={{ listAudioCopies: list } as unknown as DesktopApi}

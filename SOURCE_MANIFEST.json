@@ -26,8 +26,8 @@
   },
   {
     "Path": "CHANGELOG.md",
-    "SHA256": "E919035C115B03566E70998B2FE841CB1B638041A662EE51016CD03365219773",
-    "Bytes": 19190
+    "SHA256": "C77FEC27047F922C5C51B3A428B8B6A77779F71D760BAC981205B529BC1B4891",
+    "Bytes": 19428
   },
   {
     "Path": "BUILD_STATUS.md",
@@ -41,8 +41,8 @@
   },
   {
     "Path": "TEST_REPORT.md",
-    "SHA256": "11476807201FE1FE5D8AE98F4DC89CB4CEC8B49CA27C0EABFBAC138187EDF357",
-    "Bytes": 183774
+    "SHA256": "4285723FE624B20FD1F70E7A0C77F9499FDB254C7BA1179EF420881FF1544ECC",
+    "Bytes": 184818
   },
   {
     "Path": "DAUERTEST.md",
@@ -14261,8 +14261,8 @@
   },
   {
     "Path": "apps/desktop/src/views/AudioCopiesPanel.tsx",
-    "SHA256": "70A2BD05CF864E0C59827006D84B1D8CB89E3007C8FBFF0F3C1321BE354F0D75",
-    "Bytes": 6366
+    "SHA256": "2C76C981EAF4BDC24417BD9E565F4DC83D1BDBF32EFC07D3EE0A4FBFE0B455AF",
+    "Bytes": 6345
   },
   {
     "Path": "apps/desktop/src/views/AudioLevelMeter.tsx",
@@ -14436,8 +14436,8 @@
   },
   {
     "Path": "apps/desktop/src/ArchivePanel.test.tsx",
-    "SHA256": "DC5A31982DCB32D60B358E5927A2247FAF6B0B8068AAA7B6B8BE8D4785FCF042",
-    "Bytes": 8757
+    "SHA256": "F564E367C0214396EA7EEC8D80507C2E20FD24FE5F549134641256375AA3E509",
+    "Bytes": 8816
   },
   {
     "Path": "apps/desktop/src/AudioLevels.test.tsx",
@@ -14461,8 +14461,8 @@
   },
   {
     "Path": "apps/desktop/src/FeedbackRegression.test.tsx",
-    "SHA256": "8674605CCB5E20A126D53BB23B30E2195755DCB9D981C3EF079CF831C736743B",
-    "Bytes": 13606
+    "SHA256": "36FA233C620441CF40EDE5CEC437039499717095B92BF8F8A1D43BA53416E306",
+    "Bytes": 13740
   },
   {
     "Path": "apps/desktop/src/handy-theme.css",
@@ -14551,8 +14551,8 @@
   },
   {
     "Path": "apps/desktop/src/types.ts",
-    "SHA256": "1DD0F32CC06C853A2315B922A6B02D0CF4C31947DC8449F30BB872FA629116EA",
-    "Bytes": 18274
+    "SHA256": "0E01D43A1EC5B1DEBEF07292FC36ACD7DB83443D299E2261E51419660FD2A0BD",
+    "Bytes": 18350
   },
   {
     "Path": "apps/desktop/src/useAudioLevels.ts",
@@ -14676,8 +14676,8 @@
   },
   {
     "Path": "apps/desktop/src-tauri/src/retention_commands.rs",
-    "SHA256": "FE7FD03CE5E2E25DC1A19A61C23462203FFCB9F703CA8FC0F8F3602961CEF7DD",
-    "Bytes": 24439
+    "SHA256": "9D613BBD67EDFC9D047285300AE4B3637A29B6AD10AD73D6EA695E0AF94072DC",
+    "Bytes": 30141
   },
   {
     "Path": "apps/desktop/src-tauri/src/service_tests.rs",

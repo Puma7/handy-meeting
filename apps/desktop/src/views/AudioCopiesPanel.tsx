@@ -8,7 +8,7 @@ import type {
   Locale,
 } from "../types";
 /**
- * Lists retained compact-audio copies with a 26th-row lookahead for 25 visible rows.
+ * Lists 25 verified compact-audio copies with independent next-page metadata.
  * Explicit consent creates a separate transcription; original meetings remain unchanged.
  */
 export default function AudioCopiesPanel({
@@ -38,9 +38,9 @@ export default function AudioCopiesPanel({
     try {
       const next = await api.listAudioCopies(offset);
       if (current !== generation.current) return;
-      const visible = next.slice(0, 25);
+      const visible = next.items;
       setCopies(visible);
-      setMore(next.length > 25);
+      setMore(next.more);
       setSelected((old) =>
         old && visible.some((copy) => copy.runId === old.runId) ? old : null,
       );

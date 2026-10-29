@@ -370,7 +370,7 @@ export interface NotesProgress {
  * native commands still validate IDs, file grants and explicit confirmations.
  */
 export interface DesktopApi {
-  listAudioCopies?(offset: number): Promise<AudioCopy[]>;
+  listAudioCopies?(offset: number): Promise<AudioCopyPage>;
   transcribeAudioCopy?(
     runId: string,
     modelId: string,
@@ -645,4 +645,8 @@ export interface AudioCopy {
   codec: "flac" | "opus";
   createdAt: string;
   sections: number;
+}
+export interface AudioCopyPage {
+  items: AudioCopy[];
+  more: boolean;
 }
