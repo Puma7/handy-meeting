@@ -311,7 +311,10 @@ fn drain_track_controlled(
         // The store retains failed diagnostics in the live snapshot. Their
         // manifest writes must not prevent this packet's independent PCM write.
         if info.discontinuity && diagnostics.discontinuities == 1 {
-            let _ = store.warn(&format!("{}: audio driver reported a discontinuity. Missing audio remains missing; trustworthy microphone clock gaps are represented by explicit silence, not recovered speech. Check the affected range.", diagnostics.source));
+            let _ = store.warn(&super::discontinuity_warning(
+                &diagnostics.source,
+                writer.written_samples(),
+            ));
         }
         if info.timestamp_error && diagnostics.timestamp_errors == 1 {
             let _ = store.warn(&format!(

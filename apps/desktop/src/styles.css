@@ -140,6 +140,8 @@ label {
   position: fixed;
   top: 0;
   bottom: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   background: var(--color-background);
 }
 .brand {
@@ -199,6 +201,115 @@ label {
   flex-shrink: 0;
   margin-top: 1px;
 }
+/* Recording health stays visible on every page and at every scroll position. */
+.sidebar-recording {
+  margin-bottom: 18px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--color-error) 30%, transparent);
+  border-radius: 10px;
+  background: var(--color-error-wash);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.sidebar-recording[data-paused] {
+  border-color: var(--color-line);
+  background: var(--color-wash);
+}
+.sidebar-recording-head {
+  width: 100%;
+  gap: 7px;
+  padding: 0;
+  justify-content: flex-start;
+  background: transparent;
+  color: var(--color-text);
+  font-weight: 600;
+  text-align: left;
+}
+.sidebar-recording-time {
+  margin-left: auto;
+  color: var(--color-ink-2);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.recording-pulse {
+  width: 9px;
+  height: 9px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-error);
+  animation: recording-pulse 1.6s ease-out infinite;
+}
+.sidebar-recording[data-paused] .recording-pulse {
+  background: var(--color-ink-3);
+  animation: none;
+}
+@keyframes recording-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-error) 55%, transparent);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 7px transparent;
+  }
+}
+.sidebar-recording-facts {
+  display: grid;
+  gap: 4px;
+  margin: 9px 0 0;
+}
+.sidebar-recording-facts > div {
+  display: grid;
+  gap: 0;
+}
+.sidebar-recording-facts dt {
+  color: var(--color-ink-2);
+  font-size: 11px;
+}
+.sidebar-recording-facts dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.sidebar-recording [data-high] {
+  color: var(--color-error);
+  font-weight: 600;
+}
+.sidebar-recording-text {
+  display: -webkit-box;
+  margin-top: 9px;
+  overflow: hidden;
+  color: var(--color-ink-2);
+  font-style: italic;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+/* Short windows keep every sidebar control reachable: a compact card, and scrolling. */
+@media (max-height: 720px) {
+  .brand {
+    padding-bottom: 16px;
+  }
+  .sidebar-bottom {
+    padding-top: 16px;
+  }
+  .sidebar-recording {
+    margin-bottom: 12px;
+  }
+  .sidebar-recording-facts {
+    gap: 2px;
+    margin-top: 6px;
+  }
+  /* The static note about Handy gives way to the recording while one runs. */
+  .sidebar-recording ~ .privacy-mark {
+    display: none;
+  }
+  .sidebar-recording-text {
+    margin-top: 6px;
+    -webkit-line-clamp: 1;
+  }
+}
 .appearance-row {
   display: flex;
   align-items: center;
@@ -231,15 +342,6 @@ main {
   margin-top: 8px;
   max-width: 760px;
 }
-.recording-link {
-  background: var(--color-moss-wash);
-  color: var(--color-moss);
-  border-radius: 8px;
-  padding: 9px 11px;
-  font-size: 12px;
-  flex-shrink: 0;
-}
-.recording-dot,
 .state-dot {
   display: inline-block;
   width: 7px;
@@ -247,9 +349,6 @@ main {
   border-radius: 50%;
   background: var(--color-ink-3);
   flex-shrink: 0;
-}
-.recording-dot {
-  background: var(--color-error);
 }
 .state.recording .state-dot {
   background: var(--color-error);
@@ -870,6 +969,11 @@ main {
   flex: 1;
   min-width: 0;
 }
+.transcript-order {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+}
 .transcript-part mark {
   background: var(--color-moss-wash);
   color: inherit;
@@ -1304,9 +1408,6 @@ mark {
     margin-left: 180px;
     width: calc(100% - 180px);
   }
-  .recording-link {
-    display: none;
-  }
   .setup-panel {
     padding: 20px 18px 0;
     gap: 16px;
@@ -1354,6 +1455,21 @@ mark {
   }
   .sidebar-bottom {
     padding: 0;
+  }
+  .sidebar-recording {
+    padding: 9px 0;
+    display: flex;
+    justify-content: center;
+  }
+  .sidebar-recording-head {
+    width: auto;
+    justify-content: center;
+  }
+  .sidebar-recording-label,
+  .sidebar-recording-time,
+  .sidebar-recording-facts,
+  .sidebar-recording-text {
+    display: none;
   }
   .appearance-row {
     flex-direction: column;
@@ -1893,7 +2009,8 @@ mark {
   gap: 8px;
   margin: 12px 0;
 }
-.meeting-view-choice [aria-pressed="true"] {
+.meeting-view-choice [aria-pressed="true"],
+.transcript-order[aria-pressed="true"] {
   border-color: var(--color-moss);
   background: var(--color-moss-wash);
 }
@@ -1942,6 +2059,11 @@ mark {
   gap: 6px 12px;
   margin-top: 10px;
   font-size: 12px;
+}
+.live-memory-note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
 }
 .live-controls {
   display: flex;

@@ -7,6 +7,7 @@ import {
   Sparkles,
   Sun,
 } from "lucide-react";
+import type { ReactNode } from "react";
 import type { AppState, Locale, Theme } from "../types";
 import type { MessageKey } from "../i18n";
 export type Page = "meeting" | "history" | "detail" | "notes" | "settings";
@@ -19,6 +20,8 @@ type Props = {
   navigate: (page: Page) => Promise<void>;
   setTheme: (theme: Theme) => void;
   setLocale: (locale: Locale) => void;
+  /** Recording health, shown on every page while a recording runs. */
+  recordingStatus?: ReactNode;
 };
 /**
  * Renders page navigation and locale/theme controls; the parent retains ownership of
@@ -33,6 +36,7 @@ export default function Sidebar({
   navigate,
   setTheme,
   setLocale,
+  recordingStatus,
 }: Props) {
   const dark =
     theme === "dark" ||
@@ -77,6 +81,7 @@ export default function Sidebar({
         ))}
       </nav>
       <div className="sidebar-bottom">
+        {recordingStatus}
         <div className="privacy-mark">
           <ShieldCheck size={17} />
           <span>{t.companion}</span>

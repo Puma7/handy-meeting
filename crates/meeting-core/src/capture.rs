@@ -341,6 +341,19 @@ impl Drop for CaptureController {
     }
 }
 
+/// The first driver-reported discontinuity of a track, with its position in the saved
+/// track, so the affected range can be found next to the transcript section times.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn discontinuity_warning(source: &str, saved_samples: u64) -> String {
+    let s = saved_samples / u64::from(crate::SAMPLE_RATE);
+    let at = if s >= 3600 {
+        format!("{}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60)
+    } else {
+        format!("{:02}:{:02}", s / 60, s % 60)
+    };
+    format!("{source}: audio driver reported a discontinuity at {at} of the saved track. Missing audio remains missing; trustworthy microphone clock gaps are represented by explicit silence, not recovered speech. Check the affected range.")
+}
+
 /// Enumerates supported platform devices on a separate thread without starting a recording.
 pub fn list_devices() -> Result<Vec<AudioDevice>> {
     #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
@@ -358,6 +371,16 @@ pub fn list_devices() -> Result<Vec<AudioDevice>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_discontinuity_warning_names_its_position_in_the_saved_track() {
+        assert!(discontinuity_warning("system", 0).starts_with(
+            "system: audio driver reported a discontinuity at 00:00 of the saved track."
+        ));
+        assert!(discontinuity_warning("microphone", 16_000 * 192 + 15_999)
+            .starts_with("microphone: audio driver reported a discontinuity at 03:12 of"));
+        assert!(discontinuity_warning("system", 16_000 * 3_725).contains(" at 1:02:05 of"));
+    }
 
     #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
     fn reconnect_fixture(

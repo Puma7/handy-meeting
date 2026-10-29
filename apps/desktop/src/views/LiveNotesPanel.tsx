@@ -668,6 +668,13 @@ export default function LiveNotesPanel({
         </label>
       </div>
 
+      {connection.mode === "local" && (
+        <p className="muted live-memory-note">
+          {de
+            ? "Das lokale Textmodell läuft neben der Aufnahme und belegt auch in kleinen Größen (etwa 4B) mehrere GB Arbeitsspeicher. Wird der Speicher knapp, werden Zusammenfassung und Erkennung langsam und der Ton kann stocken; die Auslastung zeigt die Seitenleiste. Bei wenig Arbeitsspeicher die Auswertung besser nach der Aufnahme starten."
+            : "The local text model runs next to the recording and takes several GB of memory even in small sizes (around 4B). When memory runs short, the summary and recognition slow down and the audio can stutter; the sidebar shows the load. With little memory, run the analysis after the recording instead."}
+        </p>
+      )}
       {(error || status?.error) && (
         <p className="notice warning" role="alert">
           {error ?? status?.error}

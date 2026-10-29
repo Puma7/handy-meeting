@@ -1,12 +1,18 @@
 # Meeting for Handy user guide
 
-This guide describes the released [1.0.7 controls](https://github.com/Puma7/meeting-for-handy/releases/tag/v1.0.7). The microphone reconnection and live-overview recovery below are newer, unreleased source changes. AI notes and speaker results remain reviewable drafts with original section references. Installation checks do not establish recording reliability on every device. See the [English](../README.md) or [German README](../README.de.md) for packages, prerequisites and the first meeting.
+This guide describes the released [1.0.7 controls](https://github.com/Puma7/meeting-for-handy/releases/tag/v1.0.7) and marks later changes as unreleased, such as the microphone reconnection and live-overview recovery below; the filename is retained for existing links. AI notes and speaker results remain reviewable drafts with original section references. Installation checks do not establish recording reliability on every device. See the [English](../README.md) or [German README](../README.de.md) for packages, prerequisites and the first meeting.
 
 ## Recording controls and transcript files
 
 During a recording, pause/resume controls the app's capture; the separate app microphone mute affects only its microphone track. Neither control mutes Teams, Zoom or another meeting app. Paused/muted intervals retain explicit silence and control events on the meeting timeline. Devices may remain open and the operating system may continue to show its recording indicator. Confirmed UI state follows the native control acknowledgement. Device permissions, interruptions and endurance still need the separate hardware checks in [TEST_REPORT.md](../TEST_REPORT.md).
 
 Use **Save transcript** to choose a complete TXT, Markdown or JSON snapshot of the selected meeting, including both available tracks. Markdown escapes active input; JSON retains source IDs and section times. These are section times, not precise word alignment. Each export is an additional file; original journals, saved analyses and earlier exports are retained. **Open session folder** opens that meeting's local audio, journals and exports. General MP3/MP4/WAV import and individual result-tab export remain [roadmap work](OPTIONAL_FEATURE_ROADMAP.md).
+
+## Recording status and transcript order (unreleased)
+
+While a recording runs, the sidebar shows it on every page: a pulsing red mark with the running time, the processor and memory load of the whole computer (not only this app; highlighted from 90 %), notices about the recording, whether recognition keeps up, and the latest recognized words. Click it to return to the recording. A value the system does not provide is shown as "—". **Newest first** above the transcript shows the latest sections at the top; the choice is remembered on this computer and changes neither the transcript nor its exports.
+
+If the audio driver reports an interruption, **Check the recording** names the track and, for recordings made with this version or later, the position in the saved track where it first happened; earlier recordings show the notice without a position. The usual cause is a computer that was briefly too busy to collect the audio in time, for example because a local text model takes up almost all memory; some drivers also flag the start of a recording without losing anything. Where a position is shown, listen to it before relying on the track being complete; otherwise check the whole track.
 
 <a id="live-input-levels-unreleased-development"></a>
 
@@ -24,7 +30,7 @@ Bounded local diagnostic files distinguish connection, HTTP, incomplete response
 
 ## Live input levels
 
-The released app provides one meter under **System audio** and one under **Microphone**. Both stay visible when recording setup is collapsed. They become available after you start a recording; opening this view does not start a device preview or grant microphone access. Green indicates signal, yellow a high level and red a very high level. If **Clipping** appears, lower the source's volume or microphone gain and check again. Silence is shown separately from missing measurements. The meters follow this app's pause and microphone-mute controls; stopping or switching meetings clears old values.
+The released app provides one meter under **System audio** and one under **Microphone**. Both stay visible when recording setup is collapsed. They become available after you start a recording; opening this view does not start a device preview or grant microphone access. Green indicates signal, yellow a high level and red a level just below the maximum. Speech usually stays in the green to yellow range, with pauses 20–40 dB lower; that difference is normal. **Clipping** means the samples already arrived at the full-scale limit, which cannot be repaired afterwards. For system audio, lower the volume in the meeting app or the program that plays the sound; for the microphone, lower its input level in the system settings or keep more distance. Then check again. Silence is shown separately from missing measurements. The meters follow this app's pause and microphone-mute controls; stopping or switching meetings clears old values.
 
 Values are digital peaks in **dBFS**, with 0 at the full-scale limit. They measure the effective 16 kHz mono samples after the platform adapter's downmix and capture gates, rather than room loudness or separate hardware input channels. Brief peaks/clipping are held for about 300 ms; RMS weights the samples in the same bounded window. If packets stop, the last received value is retained for less than one second, then shown as unavailable. Fast polling clears stale or delayed IPC responses; padded timeline gaps are not invented input signal. Only scalar levels reach the UI, without raw audio, transcript text or file paths.
 
@@ -50,9 +56,9 @@ Opening **Evaluate this meeting** opens setup. Choose a local text model and exp
 
 Neutral voice IDs are scoped to one section and track. They may change between sections and do not identify people. No automatic cross-section voice matching or precise word alignment is established. Model/language quality and a positive compatible-model result must be evaluated separately; weights are never downloaded automatically.
 
-### Speaker-check recovery (since 1.0.7)
+### Speaker-check recovery
 
-The follow-up groups the optional speaker tools and makes model-capability checks available in Settings before the first recording. Completed proofs can be reused only for the same freshly verified model and native runtime. If the active proof folder is full or contains conflicting results, **Archive check records** preserves the existing complete and partial proofs together in a separate local archive. Click it explicitly, then run the model check again. Every file stays on disk; recordings and analysis results are unchanged. Recording, analysis and another model check block this action. A temporary lock failure leaves the retry action available. Linked or unexpected records stop archival and remain unchanged. No proof is removed automatically.
+Since 1.0.7 the app groups the optional speaker tools and makes model-capability checks available in Settings before the first recording. Completed proofs can be reused only for the same freshly verified model and native runtime. If the active proof folder is full or contains conflicting results, **Archive check records** preserves the existing complete and partial proofs together in a separate local archive. Click it explicitly, then run the model check again. Every file stays on disk; recordings and analysis results are unchanged. Recording, analysis and another model check block this action. A temporary lock failure leaves the retry action available. Linked or unexpected records stop archival and remain unchanged. No proof is removed automatically.
 
 ## Retention, archives and compact audio
 
