@@ -24,11 +24,12 @@ Nacharbeit nach den Reviews von Codex, CodeRabbit und Claude, nach dem Zusammenf
 - Scheitert ein Start nach bereits geschriebener Lückenstille, wird der Abschnitt abgeschlossen (Windows und portable Aufnahme). So blockiert ein vorübergehender Startfehler spätere Versuche nicht mehr.
 - Unter macOS ist der Eintrag „Standardmikrofon“ kein Wiederverbindungsziel, weil er dem jeweils aktuellen Eingang folgt.
 - Ein Fehler beim Wiederverbinden nennt jetzt seinen Grund.
+- „Meeting beenden“ bricht ein laufendes Wiederverbinden sofort ab, wartet, bis die Aufnahme zurückgegeben ist, und beendet dann alle Spuren. Vorher wurde das Beenden abgelehnt, solange das Wiederverbinden lief.
 - Endet die Wartephase auf die Erkennung, entfernt das nur den eigenen Wartehinweis, keine anderen Fehler.
 - Ein Hinweis zu nicht gespeicherten Diagnosen gilt nur für die betroffene Aktualisierung.
 - Eine nach HTTP 200 abgebrochene Antwort zählt als Verbindungsfehler, ungültiges Antwort-JSON als unvollständige Antwort, nicht als Validierungsfehler.
 - Zahlenprüfung: Ein Minuszeichen gehört zur Zahl, ein Bindestrich zwischen Zahlen nicht. Auch Zahlen in Termin und Zuständigen müssen vollständig im Zitat stehen.
-- „Ich übernehme den Bericht, vielleicht bis Freitag“ bleibt eine Aufgabe, aber ohne den unsicheren Termin. „… werde ich nicht vergessen“ gilt nicht mehr als Absage.
+- „Ich übernehme den Bericht, vielleicht bis Freitag“ bleibt eine Aufgabe, aber ohne den unsicheren Termin. Ein Termin braucht ein verbindliches Zitat, das ihn selbst nennt. Mehrdeutige Wörter wie „diese“ oder „am“ zählen nach „vielleicht“ nur dann als Termin, wenn ein Datum folgt; sonst bleibt die Aufgabe unverbindlich. „… werde ich nicht vergessen“ gilt nicht mehr als Absage.
 - Der lokale Referenzbericht behauptet kein geprüftes Modell mehr (`servedModelVerified: false`).
 
 Neue Regressionstests decken all diese Fälle **synthetisch** ab. `meeting-core` besteht Clippy mit `-D warnings` auch für `x86_64-pc-windows-gnu` und `aarch64-apple-darwin`; für diese Prüfung wurde der C-Teil von SQLite durch einen Platzhalter ersetzt, nichts wurde gelinkt oder ausgeführt. Ein echter Gerätelauf fehlt weiterhin.

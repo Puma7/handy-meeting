@@ -604,3 +604,26 @@ fn resume_does_not_finalize_failed_or_open_audio_parts() {
         assert_eq!(service.data(&id).unwrap().status, "recorded");
     }
 }
+
+#[test]
+fn stopping_ends_a_running_microphone_reconnect_before_closing_the_recording() {
+    // Synthetic: the canceller stands in for a reconnect that waits on a slow device.
+    let root = fixture_root("reconnect-cancel");
+    let service = Arc::new(Service::new(root).unwrap());
+    let cancel = Arc::new(AtomicBool::new(false));
+    service.lock().unwrap().reconnect_cancel = Some(Arc::clone(&cancel));
+    let reconnect = {
+        let service = Arc::clone(&service);
+        let cancel = Arc::clone(&cancel);
+        std::thread::spawn(move || {
+            while !cancel.load(Ordering::Acquire) {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            service.lock().unwrap().reconnect_cancel = None;
+        })
+    };
+    service.cancel_microphone_reconnect().unwrap();
+    reconnect.join().unwrap();
+    assert!(cancel.load(Ordering::Acquire));
+    assert!(service.lock().unwrap().reconnect_cancel.is_none());
+}

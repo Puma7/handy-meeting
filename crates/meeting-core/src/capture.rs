@@ -80,9 +80,18 @@ pub struct CaptureController {
     /// Longest wait for a track's readiness without any reported startup progress.
     #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
     ready_timeout: Duration,
+    /// Set from outside (an explicit stop) to end a running readiness wait at once.
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    start_cancel: Arc<AtomicBool>,
 }
 
 impl CaptureController {
+    /// A handle that ends a running microphone reconnect at once, so stopping the meeting
+    /// never waits for a slow device. The started track is stopped like a missed deadline.
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    pub fn reconnect_canceller(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.start_cancel)
+    }
     /// True only for an ended, explicitly selected microphone in this still-running capture.
     pub fn can_reconnect_microphone(&self) -> bool {
         #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
@@ -126,6 +135,8 @@ impl CaptureController {
                 return Err("Microphone reconnect limit reached; stop and check the device before a new recording".into());
             }
             self.reconnect_attempts += 1;
+            // A stop request keeps setting the canceller while this reconnect runs.
+            self.start_cancel.store(false, Ordering::Release);
             if let Some(index) = self
                 .tracks
                 .iter()
@@ -188,6 +199,7 @@ impl CaptureController {
             recorder,
             reconnect_attempts: 0,
             ready_timeout: Duration::from_secs(if cfg!(target_os = "macos") { 60 } else { 10 }),
+            start_cancel: Arc::new(AtomicBool::new(false)),
         };
         if let Err(error) = controller.start_track("system", options.output_id, recorder) {
             if let Err(cleanup) = controller.stop() {
@@ -245,6 +257,12 @@ impl CaptureController {
                         .into(),
                 ),
                 Err(mpsc::RecvTimeoutError::Timeout) => {
+                    if self.start_cancel.load(Ordering::Acquire) {
+                        track_stop.store(true, Ordering::Release);
+                        return Err(
+                            "The recording is stopping; the starting track was stopped".into()
+                        );
+                    }
                     let current = self.controls.startup_progress();
                     if current != progress {
                         progress = current;
@@ -655,6 +673,26 @@ mod tests {
 
     #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
     #[test]
+    fn a_stop_request_ends_a_running_reconnect_without_waiting_for_the_device() {
+        let (_root, store, mut controller) = interrupted_slow_microphone(false);
+        controller.ready_timeout = Duration::from_secs(30);
+        let cancel = controller.reconnect_canceller();
+        let requester = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(100));
+            cancel.store(true, Ordering::Release);
+        });
+        let started = std::time::Instant::now();
+        let error = controller.reconnect_microphone().unwrap_err().to_string();
+        requester.join().unwrap();
+        assert!(error.contains("recording is stopping"), "{error}");
+        assert!(started.elapsed() < Duration::from_secs(5));
+        assert!(!controller.controls().has_microphone);
+        controller.stop().unwrap();
+        assert!(!store.folder().join("synthetic-late-mic-recorded").exists());
+    }
+
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    #[test]
     fn only_an_explicit_device_is_a_reconnect_target() {
         assert_eq!(
             reconnect_target(Some("mic-1".into()), false).as_deref(),
@@ -818,6 +856,8 @@ mod tests {
             reconnect_attempts: 0,
             #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
             ready_timeout: Duration::from_secs(10),
+            #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+            start_cancel: Arc::new(AtomicBool::new(false)),
             store: store.clone(),
         };
         let (finished, stopped) = mpsc::sync_channel(1);
@@ -929,6 +969,8 @@ mod tests {
             reconnect_attempts: 0,
             #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
             ready_timeout: Duration::from_secs(10),
+            #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+            start_cancel: Arc::new(AtomicBool::new(false)),
             store,
         };
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);

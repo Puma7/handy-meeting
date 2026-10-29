@@ -105,9 +105,17 @@ fn generation_check(fact: &Fact, kind: &Kind) -> Option<RejectionReason> {
         if commitments.iter().all(|c| *c == Commitment::Nonbinding) {
             return Some(RejectionReason::NonbindingTask);
         }
-        // "Ich übernehme das, vielleicht bis Freitag" commits to the task, not to the date.
-        if fact.due.is_some() && !commitments.contains(&Commitment::Binding) {
-            return Some(RejectionReason::UnverifiedOwnerOrDue);
+        // "Ich übernehme das, vielleicht bis Freitag" commits to the task, not to the date:
+        // the quote that names the date must itself be binding.
+        if let Some(due) = &fact.due {
+            let due = due.to_lowercase();
+            let committed =
+                fact.evidence.iter().zip(&commitments).any(|(e, c)| {
+                    *c == Commitment::Binding && e.quote.to_lowercase().contains(&due)
+                });
+            if !committed {
+                return Some(RejectionReason::UnverifiedOwnerOrDue);
+            }
         }
     }
     None
@@ -150,15 +158,22 @@ enum Commitment {
     Nonbinding,
 }
 
-/// Words that start a date or deadline, so a preceding hedge qualifies only the date.
+/// Words that can only start a date or deadline, so a preceding hedge qualifies the date.
 const DATE_WORDS: &[&str] = &[
     "bis",
-    "am",
-    "ab",
     "spätestens",
     "heute",
     "morgen",
     "übermorgen",
+    "until",
+    "today",
+    "tomorrow",
+];
+/// Words that start a date only when a date follows ("am Freitag", "next week"); otherwise
+/// ("Maybe this is …", "Vielleicht diese Aufgabe …") the hedge covers the whole task.
+const DATE_PREFIXES: &[&str] = &[
+    "am",
+    "ab",
     "nächste",
     "nächsten",
     "nächster",
@@ -169,6 +184,14 @@ const DATE_WORDS: &[&str] = &[
     "dieses",
     "ende",
     "anfang",
+    "by",
+    "on",
+    "next",
+    "this",
+    "end",
+];
+/// Weekdays, months and calendar units that complete a date after a prefix.
+const DATE_NOUNS: &[&str] = &[
     "montag",
     "dienstag",
     "mittwoch",
@@ -176,14 +199,23 @@ const DATE_WORDS: &[&str] = &[
     "freitag",
     "samstag",
     "sonntag",
-    "by",
-    "until",
-    "on",
-    "today",
-    "tomorrow",
-    "next",
-    "this",
-    "end",
+    "woche",
+    "wochenende",
+    "monat",
+    "jahr",
+    "quartal",
+    "januar",
+    "februar",
+    "märz",
+    "april",
+    "mai",
+    "juni",
+    "juli",
+    "august",
+    "september",
+    "oktober",
+    "november",
+    "dezember",
     "monday",
     "tuesday",
     "wednesday",
@@ -191,7 +223,31 @@ const DATE_WORDS: &[&str] = &[
     "friday",
     "saturday",
     "sunday",
+    "week",
+    "weekend",
+    "month",
+    "year",
+    "quarter",
+    "january",
+    "february",
+    "march",
+    "june",
+    "july",
+    "october",
+    "december",
 ];
+
+/// Whether the words after a hedge form a date ("bis Freitag", "am 3. Mai", "next week").
+fn starts_date(words: &[&str]) -> bool {
+    let is_date = |word: &&str| {
+        DATE_NOUNS.contains(word) || word.chars().next().is_some_and(char::is_numeric)
+    };
+    match words {
+        [first, ..] if DATE_WORDS.contains(first) || DATE_NOUNS.contains(first) => true,
+        [first, second, ..] if DATE_PREFIXES.contains(first) => is_date(second),
+        _ => false,
+    }
+}
 /// Negated phrases that still promise the action ("das werde ich nicht vergessen").
 const AFFIRMING_NEGATIONS: &[&str] = &[
     "nicht vergessen",
@@ -233,9 +289,10 @@ fn commitment(quote: &str) -> Commitment {
     let mut hedged_date = false;
     for (index, word) in words.iter().enumerate() {
         if ["vielleicht", "maybe", "perhaps"].contains(word) {
-            match words.get(index + 1) {
-                Some(next) if DATE_WORDS.contains(next) => hedged_date = true,
-                _ => return Commitment::Nonbinding,
+            if starts_date(&words[index + 1..]) {
+                hedged_date = true;
+            } else {
+                return Commitment::Nonbinding;
             }
         }
     }
@@ -421,6 +478,52 @@ mod generation_tests {
         )
         .items
         .is_empty());
+        for quote in [
+            "Maybe this is something Anna should handle.",
+            "Vielleicht diese Aufgabe Anna?",
+        ] {
+            assert!(
+                check(quote, "Anna übernimmt", Kind::Tasks).items.is_empty(),
+                "{quote}"
+            );
+        }
+        assert_eq!(
+            check(
+                "Ich prüfe das, vielleicht am Freitag.",
+                "Prüfen",
+                Kind::Tasks
+            )
+            .items
+            .len(),
+            1
+        );
+        assert_eq!(
+            check("I will review it, maybe next week.", "Review", Kind::Tasks)
+                .items
+                .len(),
+            1
+        );
+    }
+    #[test]
+    fn a_due_date_needs_a_binding_quote_that_names_it() {
+        let source = Source {
+            id: "synthetic".into(),
+            source: "system".into(),
+            start_ms: 0,
+            end_ms: 1000,
+            text: "Ich übernehme den Bericht. Vielleicht bis Freitag.".into(),
+        };
+        let answer = serde_json::json!({"items":[{"text":"Bericht übernehmen","owner":null,"due":"Freitag","evidence":[
+            {"sourceId":"synthetic","quote":"Ich übernehme den Bericht."},
+            {"sourceId":"synthetic","quote":"Vielleicht bis Freitag."}
+        ]}]})
+        .to_string();
+        let checked = validate_answer(&answer, &[source], &Kind::Tasks, "synthetic").unwrap();
+        assert!(checked.items.is_empty());
+        assert_eq!(
+            checked.rejected.get(&RejectionReason::UnverifiedOwnerOrDue),
+            Some(&1)
+        );
     }
     #[test]
     fn introduced_numbers_are_not_rescued_by_a_literal_quote() {

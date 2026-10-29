@@ -145,6 +145,8 @@ struct Inner {
     error: Option<String>,
     transitioning: bool,
     reconnecting_microphone: bool,
+    /// Ends a running microphone reconnect when the user stops the meeting.
+    reconnect_cancel: Option<Arc<AtomicBool>>,
 }
 struct Service {
     agent: agent::Controller,
@@ -502,6 +504,7 @@ impl Service {
                 .ok_or("Audioaufnahme ist beendet. / Audio capture has ended.")?;
             inner.transitioning = true;
             inner.reconnecting_microphone = true;
+            inner.reconnect_cancel = Some(capture.reconnect_canceller());
             capture
         };
         let result = capture.reconnect_microphone().map_err(|error| format!("Mikrofon konnte nicht verbunden werden. Das ursprünglich gewählte Gerät prüfen und erneut versuchen. Computerton und gesicherte Daten bleiben erhalten. / Could not reconnect the original microphone. Check the device and retry; system audio and saved data are retained. ({error})"));
@@ -515,6 +518,7 @@ impl Service {
                 .capture = Some(capture);
             inner.transitioning = false;
             inner.reconnecting_microphone = false;
+            inner.reconnect_cancel = None;
         }
         result?;
         self.state()
@@ -631,9 +635,29 @@ impl Service {
     fn stop(&self) -> AppResult<MeetingView> {
         self.stop_for(None, None)
     }
+    /// Stopping must not wait for a slow microphone: end a running reconnect and wait until
+    /// it has returned the capture, so the regular stop below closes every track.
+    fn cancel_microphone_reconnect(&self) -> AppResult<()> {
+        use std::time::{Duration, Instant};
+        let deadline = Instant::now() + Duration::from_secs(90);
+        loop {
+            match &self.lock()?.reconnect_cancel {
+                None => return Ok(()),
+                Some(cancel) => cancel.store(true, Ordering::Release),
+            }
+            if Instant::now() >= deadline {
+                return Err("Das Mikrofon wird noch verbunden; bitte erneut „Meeting beenden“ wählen. / The microphone is still reconnecting; choose Stop meeting again.".into());
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
     /// Check optional owner/session constraints before closing audio; retain unfinished
     /// recognition as capture-less catch-up instead of waiting for every worker.
     fn stop_for(&self, owner: Option<&str>, session: Option<&str>) -> AppResult<MeetingView> {
+        // Only a manual recording can be reconnecting; an agent never stops it from here.
+        if owner.is_none() {
+            self.cancel_microphone_reconnect()?;
+        }
         let _gate = self.try_transition()?;
         let mut active = {
             let mut inner = self.lock()?;
