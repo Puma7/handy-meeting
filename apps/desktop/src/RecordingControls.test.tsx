@@ -269,6 +269,58 @@ it("ignores a reconnect answer that arrives after Stop closed the recording", as
   expect(screen.queryByRole("button", { name: "Meeting beenden" })).toBeNull();
 });
 
+it("shows no device error when the cancelled reconnect fails only after Stop finished", async () => {
+  const f = fixture();
+  const state = {
+    ...f.state(),
+    microphoneReconnectAvailable: true,
+    captureControl: {
+      paused: false,
+      microphoneMuted: false,
+      hasMicrophone: false,
+    },
+  };
+  f.setState(state);
+  let fail!: (error: Error) => void;
+  f.api.reconnectMicrophone = vi.fn(
+    () =>
+      new Promise<AppState>((_, reject) => {
+        fail = reject;
+      }),
+  );
+  f.api.stopMeeting = vi.fn(async () => {
+    f.setState({
+      ...state,
+      recording: false,
+      activeMeeting: null,
+      captureControl: null,
+    });
+    return { ...original, status: "complete" as const };
+  });
+  render(<App api={f.api} />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Mikrofon erneut verbinden" }),
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "Meeting beenden" }),
+  );
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("button", { name: "Meeting beenden" }),
+    ).toBeNull(),
+  );
+  await act(async () =>
+    fail(
+      new Error(
+        "Mikrofon konnte nicht verbunden werden. (The recording is stopping)",
+      ),
+    ),
+  );
+  expect(
+    screen.queryByText(/Mikrofon konnte nicht verbunden werden/),
+  ).toBeNull();
+});
+
 it("waits for native pause acknowledgement, binds it to the current session and retains transcript text", async () => {
   const f = fixture();
   let acknowledge!: (value: AppState) => void;

@@ -2004,8 +2004,12 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
                         setApp(state);
                       })
                       .catch((failure) => {
-                        // Stopping cancels the reconnect; that is not a device error.
-                        if (!latestRuntime.current.isStopping)
+                        // Stopping cancels the reconnect; that is not a device error,
+                        // also when the stop has already finished.
+                        if (
+                          epoch === stopEpoch.current &&
+                          !latestRuntime.current.isStopping
+                        )
                           setError(errorMessage(failure));
                       })
                       .finally(() => setReconnecting(false));
