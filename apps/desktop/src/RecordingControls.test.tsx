@@ -288,15 +288,21 @@ it("shows no device error when the cancelled reconnect fails only after Stop fin
         fail = reject;
       }),
   );
-  f.api.stopMeeting = vi.fn(async () => {
-    f.setState({
-      ...state,
-      recording: false,
-      activeMeeting: null,
-      captureControl: null,
-    });
-    return { ...original, status: "complete" as const };
-  });
+  let completeStop!: () => void;
+  f.api.stopMeeting = vi.fn(
+    () =>
+      new Promise<Meeting>((resolve) => {
+        completeStop = () => {
+          f.setState({
+            ...state,
+            recording: false,
+            activeMeeting: null,
+            captureControl: null,
+          });
+          resolve({ ...original, status: "complete" });
+        };
+      }),
+  );
   render(<App api={f.api} />);
   await userEvent.click(
     await screen.findByRole("button", { name: "Mikrofon erneut verbinden" }),
@@ -304,11 +310,19 @@ it("shows no device error when the cancelled reconnect fails only after Stop fin
   await userEvent.click(
     screen.getByRole("button", { name: "Meeting beenden" }),
   );
-  await waitFor(() =>
+  // Stop is still running; finish it explicitly and wait until it has completed.
+  expect(
+    screen.getByRole("button", { name: "Aufnahme wird beendet …" }),
+  ).toBeTruthy();
+  await act(async () => completeStop());
+  await waitFor(() => {
+    expect(
+      screen.queryByRole("button", { name: "Aufnahme wird beendet …" }),
+    ).toBeNull();
     expect(
       screen.queryByRole("button", { name: "Meeting beenden" }),
-    ).toBeNull(),
-  );
+    ).toBeNull();
+  });
   await act(async () =>
     fail(
       new Error(
