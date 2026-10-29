@@ -630,9 +630,13 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       // original record, so the first device still returns.
       const standIns = new Set(
         losses
-          .filter((loss) => !loss.duringRecording && loss.replacementId)
+          .filter((loss) => loss.replacementId)
           .map((loss) => `${loss.source}:${loss.replacementId}`),
       );
+      // The device selected in place of a lost one. A recording keeps its selection, so a
+      // loss from a recording stands in for itself until an automatic choice replaces it.
+      const standing = (loss: DeviceLoss) =>
+        loss.replacementId ?? (loss.duringRecording ? loss.id : "");
       if (!current.recording) {
         for (const source of ["system", "microphone"] as const) {
           if (listed(source, chosen[source])) continue;
@@ -640,9 +644,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
           // A later automatic choice is not the user's: the lost device still returns, and
           // its notice names the device now selected.
           losses = losses.map((loss) =>
-            loss.source === source &&
-            !loss.duringRecording &&
-            (loss.replacementId ?? "") === chosen[source]
+            loss.source === source && standing(loss) === chosen[source]
               ? {
                   ...loss,
                   replacement: automatic?.name,
@@ -654,10 +656,11 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         }
       }
       if (!current.recording) {
-        // A device that is back takes over again unless another one was chosen meanwhile.
+        // A device that is back takes over again unless another one was chosen meanwhile,
+        // also when it was lost during a recording that has ended since.
         for (const loss of losses) {
-          if (loss.duringRecording || !listed(loss.source, loss.id)) continue;
-          if (chosen[loss.source] === (loss.replacementId ?? ""))
+          if (!listed(loss.source, loss.id)) continue;
+          if (chosen[loss.source] === standing(loss))
             chosen[loss.source] = loss.id;
           losses = losses.filter((item) => item !== loss);
         }

@@ -300,6 +300,38 @@ describe("audio devices follow connected and removed hardware (synthetic IPC)", 
     expect(confirmed.textContent).toContain("Der Computerton läuft weiter");
   });
 
+  it("takes a microphone lost during a recording back after the recording ended", async () => {
+    let devices = [output, builtIn, headset];
+    let recording = false;
+    const api = fakeApi(
+      () => devices,
+      () => state(recording),
+    );
+    render(<App api={api} />);
+    await screen.findByRole("option", { name: headset.name });
+    await userEvent.click(
+      screen.getByLabelText("Mikrofon zusätzlich aufnehmen"),
+    );
+    await userEvent.selectOptions(microphoneSelect(), headset.id);
+    recording = true;
+    await waitFor(() =>
+      expect(screen.getAllByText("Audioaufnahme läuft").length).toBeGreaterThan(
+        0,
+      ),
+    );
+    devices = [output, builtIn];
+    fireEvent.focus(window);
+    await screen.findByText(/aus der Geräteliste verschwunden/);
+    // The recording ends; the built-in microphone stands in automatically ...
+    recording = false;
+    await waitFor(() => expect(microphoneSelect().value).toBe(builtIn.id));
+    // ... and the headset takes over again once it is back.
+    devices = [output, builtIn, headset];
+    fireEvent.focus(window);
+    await waitFor(() => expect(microphoneSelect().value).toBe(headset.id));
+    expect(screen.queryByText(/Synthetic headset“ ist/)).toBeNull();
+  });
+
   it("warns when the native microphone track ends during a recording", async () => {
     let hasMicrophone = true;
     let recording = false;
