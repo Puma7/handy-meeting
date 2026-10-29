@@ -231,8 +231,12 @@ class WorkflowBoundaries(unittest.TestCase):
             self.assertIn('packages: true', job(text, name))
         validate = job(text, 'validate')
         self.assertIn("if: github.event_name == 'release'", validate)
-        self.assertIn('if [ "$COMPLETE" != true ]; then', validate)
+        self.assertIn('if [ "$COMPLETE" = true ]; then exit 0; fi', validate)
         self.assertIn('exit 1', validate)
+        # Releases published on GitHub with a new tag: the tag run of the same commit builds.
+        refusal = validate[validate.index('Refuse compilation on publication'):]
+        self.assertIn('actions/workflows/rust-release.yml/runs?event=push&head_sha=$GITHUB_SHA', refusal)
+        self.assertIn('actions: read', validate)
         existing = job(text, 'publish_existing')
         self.assertIn("already_complete == 'true'", existing)
         self.assertIn('Complete exact-source release required immediately before promotion', existing)

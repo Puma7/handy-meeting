@@ -26,6 +26,9 @@ jobs:
   validate:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
     outputs:
       tag: ${{ steps.identity.outputs.tag }}
       version: ${{ steps.identity.outputs.version }}
@@ -79,15 +82,26 @@ jobs:
           with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
               out.write('complete='+str(json.load(open('.build/existing-release.json'))['complete']).lower()+'\n')
           PY
+      # Publishing never builds. Publishing a release with a new tag also pushes that tag,
+      # and the tag run of the same commit builds and attaches the packages to this release.
       - name: Refuse compilation on publication when the prepared bundle is missing
         if: github.event_name == 'release'
         env:
           COMPLETE: ${{ steps.existing.outputs.complete }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if [ "$COMPLETE" != true ]; then
-            echo '::error::Publication requires a complete exact-source draft. Wait for the tag build, or recover its retained verified-release-bundle with Re-run failed jobs. Publishing never starts another build or replaces assets.'
-            exit 1
-          fi
+          set -euo pipefail
+          if [ "$COMPLETE" = true ]; then exit 0; fi
+          for attempt in 1 2 3 4 5 6; do
+            builds=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/rust-release.yml/runs?event=push&head_sha=$GITHUB_SHA" --jq '[.workflow_runs[] | select(.conclusion == null or .conclusion == "success")] | length')
+            if [ "$builds" -gt 0 ]; then
+              echo '::notice::The tag build of this commit attaches the packages to this release; nothing is built here.'
+              exit 0
+            fi
+            sleep 10
+          done
+          echo '::error::Publication requires a complete exact-source draft or a tag build of the same commit. Wait for the tag build, or recover its retained verified-release-bundle with Re-run failed jobs. Publishing never starts another build or replaces assets.'
+          exit 1
   windows:
     needs: validate
     if: github.event_name != 'pull_request' && github.event_name != 'release' && needs.validate.outputs.already_complete != 'true'

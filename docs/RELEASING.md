@@ -7,15 +7,15 @@ A release needs exactly one action: **create a GitHub release with a new version
 1. Merge the reviewed changes into `main` (the PR's Windows, Linux and Mac checks must be green).
 2. On GitHub open **Releases → Draft a new release**.
 3. **Choose a tag** → type a new tag such as `v1.0.8` (or `v1.1.0-beta.1` for a prerelease) → *Create new tag on publish*, target `main`.
-4. Click **Generate release notes**. GitHub lists the merged pull requests since the previous release; edit the text if you like.
+4. Click **Generate release notes**. GitHub lists the merged pull requests since the previous release; edit the text if you like. For a version with a suffix tick **Set as a pre-release**.
 5. Click **Publish release**.
 
-That is all. Publishing creates the tag, and the tag starts **Build and publish downloads** (`.github/workflows/rust-release.yml`):
+That is all. Publishing creates the tag, and the tag push starts **Build and publish downloads** (`.github/workflows/rust-release.yml`). The run started by the publication itself never builds: it finds the tag run of the same commit and leaves the packages to it.
 
 - Every job first writes the tag's version into `Cargo.toml`, `Cargo.lock`, `apps/desktop/package.json`, `package-lock.json` and `tauri.conf.json` (`scripts/set-version.py`). **Nothing has to be bumped by hand**, and the version in the repository files does not have to match the tag.
 - Windows (installer and ZIP), Linux (DEB) and macOS (two DMGs) are built and checked, including a real install/uninstall run on Windows.
 - Only when the whole matrix passed are the five packages, their checksums and proofs attached to the release. This takes about 30–40 minutes; until then the release page shows no downloads.
-- A final version (`v1.2.3`) becomes **Latest**; a version with a suffix (`v1.2.3-beta.1`) stays a prerelease.
+- A final version (`v1.2.3`) becomes **Latest**; a version with a suffix (`v1.2.3-beta.1`) stays a prerelease. A release published on GitHub keeps the choice made there.
 
 Release notes are the changelog: [CHANGELOG.md](../CHANGELOG.md) keeps the history up to 1.0.7 and points to the releases page for everything after.
 

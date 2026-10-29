@@ -1,4 +1,5 @@
 """The release tag sets the version; synthetic copies of the repository files only."""
+import ast
 import hashlib
 import importlib.util
 import json
@@ -63,6 +64,23 @@ class VersionFromTag(unittest.TestCase):
         package.write_text(re.sub(r'"version": "[^"]*"', '"version": "0.0.1"', package.read_text(), count=1))
         with self.assertRaises(SystemExit):
             self.module.main(['--check'])
+
+    def test_a_stale_license_record_is_refused_instead_of_refreshed(self):
+        # A changed dependency without regenerated notices must not look current after stamping.
+        lock = self.temp / 'Cargo.lock'
+        lock.write_bytes(lock.read_bytes().replace(b'name = "new_debug_unreachable"\r\nversion = "1.0.6"', b'name = "new_debug_unreachable"\r\nversion = "1.0.7"', 1))
+        before = {name: (self.temp / name).read_bytes() for name in self.names}
+        with self.assertRaises(SystemExit) as refused:
+            self.module.main(['v9.8.7'])
+        self.assertIn('regenerate the license notices', str(refused.exception))
+        self.assertEqual(before, {name: (self.temp / name).read_bytes() for name in self.names})
+
+    def test_the_script_runs_on_the_linux_release_runner_python(self):
+        # ubuntu-22.04 ships Python 3.10: tomllib (3.11+) stopped the Linux release job.
+        tree = ast.parse((ROOT / 'scripts/set-version.py').read_text(encoding='utf-8'))
+        imported = {alias.name.split('.')[0] for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names}
+        imported |= {node.module.split('.')[0] for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module}
+        self.assertEqual(imported, {'hashlib', 'json', 'pathlib', 're', 'sys'})
 
 
 if __name__ == '__main__':
