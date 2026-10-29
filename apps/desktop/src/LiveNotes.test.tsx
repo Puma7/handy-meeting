@@ -129,8 +129,13 @@ it("starts a local live summary with the chosen model, interval and language", a
     getLiveNotes: vi.fn().mockResolvedValue(status()),
     startLiveNotes: start,
   });
+  await screen.findByRole("button", { name: "Live-Zusammenfassung starten" });
+  // A local model shares the computer's memory with the recording; the panel says so.
+  expect(
+    screen.getByText(/belegt auch in kleinen Größen \(etwa 4B\) mehrere GB/),
+  ).toBeTruthy();
   await userEvent.click(
-    await screen.findByRole("button", { name: "Live-Zusammenfassung starten" }),
+    screen.getByRole("button", { name: "Live-Zusammenfassung starten" }),
   );
   expect(start).toHaveBeenCalledWith({
     meetingId: "m".repeat(32),

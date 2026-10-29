@@ -10,6 +10,12 @@ pub(crate) fn get_audio_levels(
     service.audio_levels()
 }
 
+/// Whole-computer processor and memory load for the recording status; reads no session data.
+#[tauri::command]
+pub(crate) fn get_system_load() -> crate::system_load::SystemLoad {
+    crate::system_load::sample()
+}
+
 /// Collect finished catch-up work when the transition gate is free, then return bounded app state.
 /// A collection error is left for a later poll rather than blocking the state snapshot.
 #[tauri::command]

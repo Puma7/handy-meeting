@@ -12,6 +12,7 @@ import NotesView from "./views/NotesView";
 import TextModelSettings from "./views/TextModelSettings";
 import ResumeAnalysisDialog from "./views/ResumeAnalysisDialog";
 import Sidebar, { type Page } from "./views/Sidebar";
+import RecordingStatus from "./views/RecordingStatus";
 import MeetingView from "./views/MeetingView";
 import LiveNotesPanel, {
   INTERVAL_CHOICES,
@@ -1707,6 +1708,34 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         navigate={navigate}
         setTheme={setTheme}
         setLocale={setLocale}
+        recordingStatus={
+          recording && app?.activeMeeting ? (
+            <RecordingStatus
+              locale={locale}
+              paused={Boolean(app.captureControl?.paused)}
+              durationMs={
+                liveMeeting?.id === app.activeMeeting.id
+                  ? liveMeeting.durationMs
+                  : app.activeMeeting.durationMs
+              }
+              parts={
+                liveMeeting?.id === app.activeMeeting.id
+                  ? liveMeeting.parts
+                  : app.activeMeeting.parts
+              }
+              warningCount={new Set(app.activeMeeting.warnings).size}
+              microphoneSilent={
+                micEnabled &&
+                app.captureControl?.hasMicrophone === false &&
+                !app.captureControl.paused
+              }
+              microphoneMuted={Boolean(app.captureControl?.microphoneMuted)}
+              backlogMs={app.activeMeeting.pendingAudioMs ?? null}
+              getSystemLoad={api.getSystemLoad}
+              onOpen={() => setPage("meeting")}
+            />
+          ) : undefined
+        }
       />
       <main ref={mainRef}>
         <header className="page-header">
@@ -1724,17 +1753,6 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
                     : t.compatibility}
             </p>
           </div>
-          {recording && (
-            <button
-              className="recording-link"
-              onClick={() => {
-                setPage("meeting");
-              }}
-            >
-              <span className="recording-dot" />
-              {t.recording}
-            </button>
-          )}
         </header>
         {(page === "meeting"
           ? liveMeeting

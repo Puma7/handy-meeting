@@ -6,7 +6,7 @@ import SessionWarnings from "./views/SessionWarnings";
 import TranscriptBody from "./views/TranscriptBody";
 import NotesProgressPanel from "./views/NotesProgressPanel";
 import { de, en } from "./i18n";
-import { renderTranscript } from "./domain";
+import { describeWarning, renderTranscript } from "./domain";
 import { testServices } from "./test-services";
 import type { DesktopApi, Meeting, NotesProgress } from "./types";
 // Full-App cases render the whole UI with its status polling. On slow CI runners
@@ -103,6 +103,23 @@ it("translates the 1.0.5 driver discontinuity wording instead of showing it twic
   expect(screen.getAllByText(/discontinuity/)).toHaveLength(1);
 });
 
+it("names where the driver reported an interruption and explains the usual cause", async () => {
+  const timed =
+    "system: audio driver reported a discontinuity at 03:12 of the saved track. Missing audio remains missing; trustworthy microphone clock gaps are represented by explicit silence, not recovered speech. Check the affected range.";
+  render(<SessionWarnings warnings={[timed]} locale="de" t={de} />);
+  expect(
+    screen.getByText(
+      "Computerton: Der Audiotreiber hat bei 03:12 eine Unterbrechung gemeldet. Ab dort können Teile dieser Spur fehlen.",
+    ),
+  ).toBeTruthy();
+  await userEvent.click(screen.getByText(de.technicalDetails));
+  expect(screen.getByText(/lokales Textmodell/)).toBeTruthy();
+  expect(screen.getByText(timed)).toBeTruthy();
+  // An unknown time format is not interpreted; the notice stays as recorded.
+  const odd = timed.replace("03:12", "soon");
+  expect(describeWarning(odd, "en")).toBe(odd);
+});
+
 it("retains the first and last original sections of a two-hour transcript in a keyboard-scrollable region", () => {
   const { container } = render(
     <TranscriptBody parts={meeting.parts} locale="en" t={en} />,
@@ -112,6 +129,32 @@ it("retains the first and last original sections of a two-hour transcript in a k
   expect(screen.getByText(meeting.parts[0].text!)).toBeTruthy();
   expect(screen.getByText(meeting.parts[479].text!)).toBeTruthy();
   expect(container.querySelector("img")).toBeNull();
+});
+
+it("shows the newest sections first on request and keeps that choice", async () => {
+  localStorage.clear();
+  const parts = meeting.parts.slice(0, 3);
+  const order = (container: HTMLElement) =>
+    [...container.querySelectorAll(".transcript-part p")].map(
+      (item) => item.textContent,
+    );
+  const first = render(<TranscriptBody parts={parts} locale="de" t={de} />);
+  expect(order(first.container)).toEqual(parts.map((part) => part.text));
+  const toggle = screen.getByRole("button", { name: "Neueste oben" });
+  expect(toggle.getAttribute("aria-pressed")).toBe("false");
+  await userEvent.click(toggle);
+  expect(toggle.getAttribute("aria-pressed")).toBe("true");
+  expect(order(first.container)).toEqual(
+    [...parts].reverse().map((part) => part.text),
+  );
+  // The sections themselves are unchanged; a new view reads the stored order.
+  expect(parts.map((part) => part.text)).toEqual(
+    meeting.parts.slice(0, 3).map((part) => part.text),
+  );
+  first.unmount();
+  const second = render(<TranscriptBody parts={parts} locale="de" t={de} />);
+  expect(order(second.container)[0]).toBe(parts[2].text);
+  localStorage.clear();
 });
 
 it("searches the transcript without changing it and renders matches literally", async () => {

@@ -1,11 +1,21 @@
-import { AudioLines, Search } from "lucide-react";
+import { AudioLines, ArrowDownUp, Search } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { clock, trackName } from "../domain";
 import type { AudioPart, Locale } from "../types";
 import type { MessageKey } from "../i18n";
+/** Stored choice of the reading order; the transcript itself is never reordered. */
+const ORDER_KEY = "handymeeting.transcriptOrder";
+function storedNewestFirst() {
+  try {
+    return localStorage.getItem(ORDER_KEY) === "newest";
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Renders all retained transcript sections and searches their literal text without markup.
- * Scroll following respects the reader's position; search highlights use original indices.
+ * Sections can be read oldest or newest first; search highlights use original indices.
  */
 export default function TranscriptBody({
   parts,
@@ -25,9 +35,19 @@ export default function TranscriptBody({
   const [query, setQuery] = useState("");
   const needle = query.trim();
   // Search filters the displayed sections only; the transcript itself is never changed.
-  const shown = needle
+  const matching = needle
     ? parts.filter((part) => searchPattern(needle).test(part.text ?? ""))
     : parts;
+  const [newestFirst, setNewestFirst] = useState(storedNewestFirst);
+  const shown = newestFirst ? [...matching].reverse() : matching;
+  const chooseOrder = (newest: boolean) => {
+    setNewestFirst(newest);
+    try {
+      localStorage.setItem(ORDER_KEY, newest ? "newest" : "oldest");
+    } catch {
+      // The order still applies to this view when the preference cannot be stored.
+    }
+  };
   const scrolledFile = useRef<string | null>(null);
   useEffect(() => {
     if (!selectedFile) {
@@ -57,6 +77,22 @@ export default function TranscriptBody({
               onChange={(event) => setQuery(event.target.value)}
             />
           </label>
+          {parts.length > 1 && (
+            <button
+              type="button"
+              className="secondary transcript-order"
+              aria-pressed={newestFirst}
+              title={
+                de
+                  ? "Reihenfolge der Abschnitte umschalten"
+                  : "Switch the order of the sections"
+              }
+              onClick={() => chooseOrder(!newestFirst)}
+            >
+              <ArrowDownUp size={14} aria-hidden="true" />
+              {de ? "Neueste oben" : "Newest first"}
+            </button>
+          )}
           {needle && (
             <span role="status" className="muted">
               {de

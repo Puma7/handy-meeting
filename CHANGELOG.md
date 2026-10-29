@@ -6,14 +6,11 @@ From 1.0.8 on, the changes of every version are listed automatically in its [Git
 
 - Remove the C# prototype (0.4/0.5): `src/`, `verify.ps1`, `build.ps1`, `setup-native.ps1`, `global.json`, `NuGet.config`, `System.Numerics.Tensors.*`, the NuGet/Avalonia/Inter license files and `docs/legacy/`. The repository then contains only the Rust project.
 
-## Unreleased
-
-- **Releases need one step:** creating a GitHub release with a new tag sets the version everywhere (`scripts/set-version.py`), builds and checks all five packages, attaches them and lists the merged changes. 1.0.7 failed because its tag did not match the version in the files; that check is replaced by taking the version from the tag.
-- **Audio devices follow the hardware:** a connected or removed headset appears without restarting the app. The device list refreshes every few seconds while the window is visible, on returning to the window and with the new refresh button next to *System audio*. When a selected device disappears, a notice names it and the device chosen instead, and a reconnected device is selected again. During a recording a red warning names the affected track and says it stopped once the microphone capture confirms it; audio saved so far is kept.
-- **Tidier repository:** removed stale launchers, status files, the source manifest, the C# prototype download workflows and outdated plans; measurement records moved to `docs/evidence/`, C# prototype documents to `docs/legacy/`. Shorter README, README.de and release guide.
-
 ## 1.0.7 — recording backlog and simpler workflows (29 October 2026)
 
+- **Releases need one step:** creating a GitHub release with a new tag sets the version everywhere (`scripts/set-version.py`), builds and checks all five packages, attaches them and lists the merged changes. The first 1.0.7 build failed because its tag did not match the version in the files; that check is replaced by taking the version from the tag.
+- **Audio devices follow the hardware:** a connected or removed headset appears without restarting the app. The device list refreshes every few seconds while the window is visible, on returning to the window and with the new refresh button next to *System audio*. When a selected device disappears, a notice names it and the device chosen instead, and a reconnected device is selected again. During a recording a red warning names the affected track and says it stopped once the microphone capture confirms it; audio saved so far is kept.
+- **Tidier repository:** removed stale launchers, status files, the source manifest, the C# prototype download workflows and outdated plans; measurement records moved to `docs/evidence/`, C# prototype documents to `docs/legacy/`. Shorter README, README.de and release guide.
 - Windows microphone clock gaps retain their exact gap evidence without creating a separate audio/recognition job for every tiny gap. Capture returns to stop/pause controls between bounded drain turns instead of treating cumulative processed audio as an invalid backlog.
 - Live text-model requests wait while speech recognition has more than five seconds of confirmed audio pending. Already running model requests are not cancelled by this scheduler.
 - Resumed live summaries ignore completed same-model audio even if an older progress counter remains; unfinished and other-model audio still receive recognition priority. Audio-copy confirmations are cleared when paging hides the selected row, including lookahead records.
