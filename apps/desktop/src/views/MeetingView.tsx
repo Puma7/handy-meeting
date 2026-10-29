@@ -60,6 +60,8 @@ type Props = {
   setMicId: (v: string) => void;
   setMicEnabled: (v: boolean) => void;
   refreshHandy: () => void;
+  /** Re-reads the audio devices, for example after connecting a headset. */
+  refreshDevices?: () => void;
   start: () => Promise<void>;
   stop: () => Promise<void>;
   savedByTrack: (track: "system" | "microphone") => number;
@@ -112,6 +114,7 @@ export default function MeetingView({
   setMicId,
   setMicEnabled,
   refreshHandy,
+  refreshDevices,
   start,
   stop,
   savedByTrack,
@@ -222,6 +225,7 @@ export default function MeetingView({
           setSystemId={setSystemId}
           setMicId={setMicId}
           setMicEnabled={setMicEnabled}
+          onRefresh={refreshDevices}
         />
         <div className="record-controls full">
           <span

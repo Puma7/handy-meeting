@@ -1,5 +1,11 @@
 # Prüfung von HandyMeeting
 
+## Audiogeräte ohne Neustart aktualisieren — 29.10.2026
+
+Gemeldete Ursache: Ein nach dem Start angeschlossenes Headset erschien nicht in der Geräteliste; die App las die Geräte nur beim Start oder über einen Knopf in den Einstellungen. Jetzt wird die Liste bei sichtbarem Fenster alle drei Sekunden, beim Zurückkehren ins Fenster und über einen neuen Knopf neben *Computerton* gelesen; das Lesen öffnet keinen Audiostrom. Verschwindet ein gewähltes Gerät, nennt ein Hinweis Gerät und Ersatz; ein wieder angeschlossenes Gerät wird erneut gewählt, wenn inzwischen nichts anderes gewählt wurde. Während einer Aufnahme bleibt die Auswahl unverändert, und eine Warnung meldet die betroffene Spur – auch dann, wenn die native Mikrofonspur endet, bevor die Liste das Gerät verliert.
+
+`src/DeviceRefresh.test.tsx` (synthetische Geräteliste, kein echtes Gerät): Headset anschließen und entfernen, Ersatzwahl und Rückkehr, Verlust während der Aufnahme sowie das Ende der nativen Mikrofonspur. Ohne die automatische Aktualisierung schlagen drei der fünf Fälle fehl. 201 Frontendtests, `tsc -b` und Prettier bestanden. Sichtbare Prüfung mit synthetischer Desktop-Schnittstelle bei 1440×900 und 800×600 ohne Konsolenfehler oder horizontalen Überlauf. Echtes An- und Abstecken unter Windows, Linux und macOS ist noch nicht geprüft.
+
 ## Unveröffentlichte Nacharbeit nach dem 1.0.6-Praxistest — 28.10.2026
 
 Basis ist der veröffentlichte 1.0.6-Commit `3bc69543dee65b253fe3e05f32319a4f4ea3a149`; die folgenden Nachweise gelten ausschließlich für die neue Quellkorrektur. Veröffentlichtes Programm und historische Ergebnisse bleiben unverändert. Private Gesprächsinhalte und Sitzungskennungen sind kein Bestandteil dieser Quellen oder der PR-Beschreibung.

@@ -12,6 +12,8 @@ Use **Save transcript** to choose a complete TXT, Markdown or JSON snapshot of t
 
 ## Live input levels
 
+Connected or removed devices appear automatically within a few seconds; the refresh button next to **System audio** reads the list at once. If a selected device disappears, a notice names the device chosen instead. During a recording, a red warning says which track stopped recording; audio saved so far is kept. End the recording and start a new one once the device is back.
+
 The released app provides one meter under **System audio** and one under **Microphone**. Both stay visible when recording setup is collapsed. They become available after you start a recording; opening this view does not start a device preview or grant microphone access. Green indicates signal, yellow a high level and red a very high level. If **Clipping** appears, lower the source's volume or microphone gain and check again. Silence is shown separately from missing measurements. The meters follow this app's pause and microphone-mute controls; stopping or switching meetings clears old values.
 
 Values are digital peaks in **dBFS**, with 0 at the full-scale limit. They measure the effective 16 kHz mono samples after the platform adapter's downmix and capture gates, rather than room loudness or separate hardware input channels. Brief peaks/clipping are held for about 300 ms; RMS weights the samples in the same bounded window. If packets stop, the last received value is retained for less than one second, then shown as unavailable. Fast polling clears stale or delayed IPC responses; padded timeline gaps are not invented input signal. Only scalar levels reach the UI, without raw audio, transcript text or file paths.
