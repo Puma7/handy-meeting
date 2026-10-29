@@ -372,7 +372,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
   const latestRuntime = useRef({ app, busy, isStopping, connected });
   latestRuntime.current = { app, busy, isStopping, connected };
   const devicesRef = useRef<AudioDevice[]>([]),
-    deviceLossesRef = useRef<DeviceLoss[]>([]);
+    deviceLossesRef = useRef<DeviceLoss[]>([]),
+    deviceRequest = useRef(0);
   /** Keeps the rendered device notices and the reconciliation input identical. */
   const updateDeviceLosses = useCallback((next: DeviceLoss[]) => {
     deviceLossesRef.current = next;
@@ -685,7 +686,11 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
    * opening an audio stream.
    */
   const refreshDevices = useCallback(async () => {
-    applyDevices(await api.listDevices());
+    // Startup, manual and automatic refreshes can overlap; only the newest list applies,
+    // so an older reply cannot bring back a device that was just removed.
+    const request = ++deviceRequest.current;
+    const items = await api.listDevices();
+    if (request === deviceRequest.current) applyDevices(items);
   }, [api, applyDevices]);
   useDeviceRefresh(refreshDevices, connected);
   const micCapturing = useRef(false),

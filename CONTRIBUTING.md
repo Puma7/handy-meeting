@@ -15,7 +15,7 @@ Never attach private recordings, meeting transcripts, journals, model weights, A
 
 Report the exact app version, OS, architecture, relevant local model/runtime version, scope and reproduction steps. Separate build success, synthetic recovery, real-device capture and long-session behavior. Do not describe a draft workflow as a successful CI run.
 
-Releases need no version bump in a pull request: the release tag sets the version ([RELEASING.md](docs/RELEASING.md)). Describe user-visible changes in the pull request title and text; they become the release notes.
+Releases need no version bump in a pull request: the release tag sets the version ([RELEASING.md](docs/RELEASING.md)). Give the pull request a title that describes the user-visible change: the generated release notes list the titles of the merged pull requests.
 
 Changes are provided under the repository's MIT license. Preserve upstream notices and review licenses before adding dependencies or redistributing models. This is not an official Handy release; do not imply endorsement by Handy's maintainers.
 

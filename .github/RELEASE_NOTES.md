@@ -8,4 +8,4 @@
 
 Meeting for Handy needs [Handy](https://github.com/cjpais/Handy) with a compatible streaming model. On Windows it also needs Microsoft WebView2 and the Visual C++ x64 runtime. Running the setup again updates or repairs the installed version; recordings and settings stay untouched.
 
-`SHA256SUMS.txt` lists the checksum of every package; `RELEASE_MANIFEST.json` and the `*.verification.json`/`*.manifest.json` files record the source commit and the checks each package passed. The packages are not code-signed.
+`SHA256SUMS.txt` lists the checksum of every package; `RELEASE_MANIFEST.json` and the `*.verification.json`/`*.manifest.json` files record the source commit and the checks each package passed. The macOS apps are ad-hoc signed and verified but not notarized; the Windows packages are unsigned.

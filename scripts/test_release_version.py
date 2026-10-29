@@ -23,6 +23,11 @@ def load():
     return module
 
 
+def registry(lock):
+    """Name and version of every Cargo.lock entry that comes from a registry or git source."""
+    return re.findall(rb'^\[\[package\]\]\r?\nname = "([^"]+)"\r?\nversion = "([^"]+)"\r?\nsource = ', lock, re.M)
+
+
 class VersionFromTag(unittest.TestCase):
     def setUp(self):
         self.temp = pathlib.Path(tempfile.mkdtemp(prefix='handymeeting-version-'))
@@ -52,8 +57,8 @@ class VersionFromTag(unittest.TestCase):
             self.assertEqual(json.loads(manifest.read_text())['CargoLockSHA256'], lock)
         package_lock = hashlib.sha256((self.temp / 'apps/desktop/package-lock.json').read_bytes()).hexdigest()
         self.assertEqual(json.loads((self.temp / 'licenses/frontend/manifest.json').read_text())['PackageLockSHA256'], package_lock)
-        # Registry crates that share the old version number keep it.
-        self.assertRegex((self.temp / 'Cargo.lock').read_text(), r'name = "new_debug_unreachable"\r?\nversion = "1\.0\.6"')
+        # Registry crates keep their versions, including any that share the old number.
+        self.assertEqual(registry(before['Cargo.lock']), registry((self.temp / 'Cargo.lock').read_bytes()))
 
     def test_invalid_tags_and_disagreeing_files_are_refused(self):
         for tag in ['1.2', 'release-1.2.3', 'v1.2.3;rm', '']:
@@ -68,7 +73,9 @@ class VersionFromTag(unittest.TestCase):
     def test_a_stale_license_record_is_refused_instead_of_refreshed(self):
         # A changed dependency without regenerated notices must not look current after stamping.
         lock = self.temp / 'Cargo.lock'
-        lock.write_bytes(lock.read_bytes().replace(b'name = "new_debug_unreachable"\r\nversion = "1.0.6"', b'name = "new_debug_unreachable"\r\nversion = "1.0.7"', 1))
+        changed, count = re.subn(rb'(\[\[package\]\]\r?\nname = "[^"]+"\r?\nversion = ")([^"]+)("\r?\nsource = )', rb'\g<1>\g<2>-changed\g<3>', lock.read_bytes(), count=1)
+        self.assertEqual(count, 1)
+        lock.write_bytes(changed)
         before = {name: (self.temp / name).read_bytes() for name in self.names}
         with self.assertRaises(SystemExit) as refused:
             self.module.main(['v9.8.7'])

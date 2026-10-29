@@ -1,6 +1,6 @@
 # Plattformstand und Testpakete
 
-Stand: 26.10.2026. Rust/Tauri 1.0.0 wird mit Windows-Setup/ZIP, Ubuntu-/Debian-DEB sowie getrennten Apple-Silicon-/Intel-DMGs vorbereitet. [Aktueller Buildstand](https://github.com/Puma7/meeting-for-handy/blob/a510bfea2dfba5ca62fe8638fcf1acf836628000/BUILD_STATUS.md), [Paketierung](../RUST_PORTABLE.md), [Veröffentlichung](../RELEASING.md). Erfolgreiche Paketbauten und echte Geräte-/Langzeitprüfungen bleiben getrennte Nachweise. Keine Installation beendet fremde Handy-Prozesse oder laufende Nutzeraufnahmen.
+Stand: 26.10.2026. Rust/Tauri 1.0.0 wird mit Windows-Setup/ZIP, Ubuntu-/Debian-DEB sowie getrennten Apple-Silicon-/Intel-DMGs vorbereitet. [Archivierter Buildstatus (Stand a510bfe)](https://github.com/Puma7/meeting-for-handy/blob/a510bfea2dfba5ca62fe8638fcf1acf836628000/BUILD_STATUS.md), [Paketierung](../RUST_PORTABLE.md), [Veröffentlichung](../RELEASING.md). Erfolgreiche Paketbauten und echte Geräte-/Langzeitprüfungen bleiben getrennte Nachweise. Keine Installation beendet fremde Handy-Prozesse oder laufende Nutzeraufnahmen.
 
 ## Historische Vorschauen
 
@@ -13,7 +13,7 @@ Stand: 26.10.2026. Rust/Tauri 1.0.0 wird mit Windows-Setup/ZIP, Ubuntu-/Debian-D
 | Mac Apple Silicon | .NET-Programm, Swift-Helfer und DMG auf einem echten Mac-Runner gebaut; Signaturen und synthetische Kernprüfungen bestanden | Berechtigungen, echte Audiogeräte, native GUI und lange Sessions auf Hardware testen |
 | Mac Intel | Dasselbe auf einem Intel-Mac-Runner bestanden | Dieselben Hardwareprüfungen auf Intel-Mac |
 
-**Mac-DMGs wurden inzwischen auf GitHub gebaut und geprüft.** Der erfolgreiche Workflow lief auf echten Mac-Runnern beider Architekturen. Das belegt den Swift-Build, Paket-/Signaturprüfungen und synthetische Kernprüfungen, aber keine funktionierende Aufnahme realer Meetings. Der aktuelle Prüfumfang steht in [BUILD_STATUS.md](https://github.com/Puma7/meeting-for-handy/blob/a510bfea2dfba5ca62fe8638fcf1acf836628000/BUILD_STATUS.md).
+**Mac-DMGs wurden inzwischen auf GitHub gebaut und geprüft.** Der erfolgreiche Workflow lief auf echten Mac-Runnern beider Architekturen. Das belegt den Swift-Build, Paket-/Signaturprüfungen und synthetische Kernprüfungen, aber keine funktionierende Aufnahme realer Meetings. Der damalige Prüfumfang steht im archivierten [BUILD_STATUS.md](https://github.com/Puma7/meeting-for-handy/blob/a510bfea2dfba5ca62fe8638fcf1acf836628000/BUILD_STATUS.md).
 
 Die [portable Vorschau 0.5.0-preview.1](https://github.com/Puma7/handy-meeting/releases/tag/v0.5.0-preview.1) enthält jetzt tatsächlich veröffentlichte DMGs für Apple Silicon/Intel und das Ubuntu-/Debian-DEB, ergänzt um `SHA256SUMS.txt`. Diese Dateien stammen aus dem erfolgreichen Build von Release-Commit `cbc0f1e358b51ee3c568ad3f319d8fc02281ca07`. Die Veröffentlichung ersetzt die offenen Hardwareprüfungen nicht.
 

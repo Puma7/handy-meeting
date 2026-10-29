@@ -204,6 +204,39 @@ describe("audio devices follow connected and removed hardware (synthetic IPC)", 
     ).toBeTruthy();
   });
 
+  it("ignores an older device list that arrives after a newer one", async () => {
+    let devices = [output, builtIn, headset];
+    let release: (items: AudioDevice[]) => void = () => undefined;
+    const api = fakeApi(
+      () => devices,
+      () => state(),
+    );
+    render(<App api={api} />);
+    await screen.findByRole("option", { name: headset.name });
+    await userEvent.click(
+      screen.getByLabelText("Mikrofon zusätzlich aufnehmen"),
+    );
+    await userEvent.selectOptions(microphoneSelect(), headset.id);
+    // A slow automatic query still sees the headset ...
+    vi.mocked(api.listDevices).mockImplementationOnce(
+      () => new Promise((resolve) => (release = resolve)),
+    );
+    fireEvent.focus(window);
+    // ... while a newer manual refresh already reports it removed.
+    devices = [output, builtIn];
+    await userEvent.click(
+      screen.getByRole("button", { name: "Audiogeräte aktualisieren" }),
+    );
+    const notice = await screen.findByText(
+      /Das Mikrofon „Synthetic headset“ ist nicht mehr verfügbar/,
+    );
+    release([output, builtIn, headset]);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(notice.isConnected).toBe(true);
+    expect(microphoneSelect().value).toBe(builtIn.id);
+    expect(screen.queryByRole("option", { name: headset.name })).toBeNull();
+  });
+
   it("only reports selected devices that were listed before", () => {
     const selected = { system: "out", microphone: "headset" };
     expect(lostSelections([], [output], selected)).toEqual([]);
