@@ -1,11 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  configure,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "./App";
-import { lostSelections } from "./deviceWatch";
+import { lostSelections, useDeviceRefresh } from "./deviceWatch";
 import { testServices } from "./test-services";
 import type { AppState, AudioDevice, DesktopApi, Meeting } from "./types";
+// Full-App cases: role queries over the whole page are slow on the macos-15-intel runner.
 vi.setConfig({ testTimeout: 15_000 });
+configure({ asyncUtilTimeout: 5000 });
 
 // Synthetic IPC fixtures only. These tests never open an audio device or a model server.
 const output: AudioDevice = {
@@ -235,6 +245,24 @@ describe("audio devices follow connected and removed hardware (synthetic IPC)", 
     expect(notice.isConnected).toBe(true);
     expect(microphoneSelect().value).toBe(builtIn.id);
     expect(screen.queryByRole("option", { name: headset.name })).toBeNull();
+  });
+
+  it("repeats a refresh requested while an earlier query is still running", async () => {
+    // The running query may have read the list before the headset was connected.
+    const replies: (() => void)[] = [];
+    const refresh = vi.fn(
+      () => new Promise<void>((resolve) => replies.push(resolve)),
+    );
+    renderHook(() => useDeviceRefresh(refresh, true));
+    act(() => {
+      fireEvent.focus(window);
+      fireEvent.focus(window);
+    });
+    expect(refresh).toHaveBeenCalledTimes(1);
+    await act(async () => replies[0]());
+    expect(refresh).toHaveBeenCalledTimes(2);
+    await act(async () => replies[1]());
+    expect(refresh).toHaveBeenCalledTimes(2);
   });
 
   it("only reports selected devices that were listed before", () => {
