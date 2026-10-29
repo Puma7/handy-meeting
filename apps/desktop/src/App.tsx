@@ -341,6 +341,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     null,
   );
   const requestSequence = useRef(0),
+    // Counts stop requests; a reconnect answer from before a stop is outdated.
+    stopEpoch = useRef(0),
     mainRef = useRef<HTMLElement>(null),
     previousPage = useRef(page),
     selectedRef = useRef<string | null>(null),
@@ -1289,6 +1291,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
    */
   async function stop() {
     const work = async () => {
+      // A reconnect answer created before this stop must not restore the recording.
+      stopEpoch.current++;
       setIsStopping(true);
       try {
         const item = await api.stopMeeting();
@@ -1990,10 +1994,12 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
                 ? () => {
                     const id = app?.activeMeeting?.id;
                     if (!id || busy || reconnecting) return;
+                    const epoch = stopEpoch.current;
                     setReconnecting(true);
                     setError(null);
                     void api.reconnectMicrophone!(id)
                       .then((state) => {
+                        if (epoch !== stopEpoch.current) return;
                         requestSequence.current++;
                         setApp(state);
                       })

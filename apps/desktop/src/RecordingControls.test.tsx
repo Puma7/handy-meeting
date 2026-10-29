@@ -218,6 +218,57 @@ it("sends Stop during a reconnect even while an unrelated history refresh is pen
   expect(f.api.stopMeeting).toHaveBeenCalledOnce();
 });
 
+it("ignores a reconnect answer that arrives after Stop closed the recording", async () => {
+  const f = fixture();
+  const state = {
+    ...f.state(),
+    microphoneReconnectAvailable: true,
+    captureControl: {
+      paused: false,
+      microphoneMuted: false,
+      hasMicrophone: false,
+    },
+  };
+  f.setState(state);
+  let acknowledge!: (value: AppState) => void;
+  f.api.reconnectMicrophone = vi.fn(
+    () =>
+      new Promise<AppState>((resolve) => {
+        acknowledge = resolve;
+      }),
+  );
+  const ended: AppState = {
+    ...state,
+    recording: false,
+    activeMeeting: null,
+    captureControl: null,
+  };
+  f.api.stopMeeting = vi.fn(async () => {
+    f.setState(ended);
+    return { ...original, status: "complete" as const };
+  });
+  render(<App api={f.api} />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Mikrofon erneut verbinden" }),
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "Meeting beenden" }),
+  );
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("button", { name: "Meeting beenden" }),
+    ).toBeNull(),
+  );
+  // The reconnect snapshot was taken while the recording still ran.
+  await act(async () =>
+    acknowledge({
+      ...state,
+      captureControl: { ...state.captureControl, hasMicrophone: true },
+    }),
+  );
+  expect(screen.queryByRole("button", { name: "Meeting beenden" })).toBeNull();
+});
+
 it("waits for native pause acknowledgement, binds it to the current session and retains transcript text", async () => {
   const f = fixture();
   let acknowledge!: (value: AppState) => void;
