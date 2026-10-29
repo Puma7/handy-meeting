@@ -123,6 +123,7 @@ pub(super) struct CaptureControls {
     start: Instant,
     journal_failed: AtomicBool,
     meters: [AudioMeter; 2],
+    startup_progress: AtomicU64,
 }
 
 impl CaptureControls {
@@ -157,9 +158,19 @@ impl CaptureControls {
             start: Instant::now(),
             journal_failed: AtomicBool::new(false),
             meters: [AudioMeter::default(), AudioMeter::default()],
+            startup_progress: AtomicU64::new(0),
         }
     }
 
+    /// Reports that a starting track finished one bounded preparation step, such as
+    /// verifying a saved section or writing gap silence. It extends only its readiness wait.
+    pub fn note_startup_progress(&self) {
+        self.startup_progress.fetch_add(1, Ordering::AcqRel);
+    }
+    /// Counter of preparation steps reported by starting tracks.
+    pub fn startup_progress(&self) -> u64 {
+        self.startup_progress.load(Ordering::Acquire)
+    }
     /// Updates whether a microphone track was successfully made available.
     pub fn set_has_microphone(&self, value: bool) {
         self.has_microphone.store(value, Ordering::Release);

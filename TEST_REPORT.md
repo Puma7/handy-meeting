@@ -18,6 +18,21 @@ Prüfstand: 215 Frontendtests, 327 Rust-All-Targettests und zwei regulär ignori
 
 Erste CI des neuen PR #33 auf `c53faab028cf657660dea04c1f2adc741dfb16c3`: Die [Linux-/Mac-Kernmatrix](https://github.com/Puma7/meeting-for-handy/actions/runs/40910935261) erkannte einen echten plattformspezifischen Kompilierfehler. Der gemeinsam genutzte Lückenjournaleintrag war noch ausschließlich für Windows freigeschaltet, obwohl die portable Mikrofonfortsetzung ihn nun ebenfalls benötigt. Die Freischaltung gilt jetzt für alle unterstützten Plattformen und Tests; Journalschema und Validierung bleiben unverändert. Die neue Matrix muss diese Korrektur auf einem frischen Head bestätigen.
 
+Nacharbeit nach den Reviews von Codex, CodeRabbit und Claude, nach dem Zusammenführen mit `main` (Aufnahmestatus aus PR #34):
+
+- Ein Mikrofonstart, der seine Bereitschaftsfrist verpasst, wird jetzt gestoppt. Vorher lief er unsichtbar weiter, nahm auf, war in der App als fehlend markiert, ließ sich nicht stummschalten und blockierte jede weitere Wiederverbindung. Jede Spur hat dafür ein eigenes Stoppsignal. Die Frist von 10 s (macOS 60 s) beginnt neu, sobald die Spur Fortschritt meldet: ein geprüfter gesicherter Abschnitt oder ein geschriebener Stilleabschnitt. Lange Meetings oder lange Ausfälle erschöpfen sie dadurch nicht mehr.
+- Scheitert ein Start nach bereits geschriebener Lückenstille, wird der Abschnitt abgeschlossen (Windows und portable Aufnahme). So blockiert ein vorübergehender Startfehler spätere Versuche nicht mehr.
+- Unter macOS ist der Eintrag „Standardmikrofon“ kein Wiederverbindungsziel, weil er dem jeweils aktuellen Eingang folgt.
+- Ein Fehler beim Wiederverbinden nennt jetzt seinen Grund.
+- Endet die Wartephase auf die Erkennung, entfernt das nur den eigenen Wartehinweis, keine anderen Fehler.
+- Ein Hinweis zu nicht gespeicherten Diagnosen gilt nur für die betroffene Aktualisierung.
+- Eine nach HTTP 200 abgebrochene Antwort zählt als Verbindungsfehler, ungültiges Antwort-JSON als unvollständige Antwort, nicht als Validierungsfehler.
+- Zahlenprüfung: Ein Minuszeichen gehört zur Zahl, ein Bindestrich zwischen Zahlen nicht. Auch Zahlen in Termin und Zuständigen müssen vollständig im Zitat stehen.
+- „Ich übernehme den Bericht, vielleicht bis Freitag“ bleibt eine Aufgabe, aber ohne den unsicheren Termin. „… werde ich nicht vergessen“ gilt nicht mehr als Absage.
+- Der lokale Referenzbericht behauptet kein geprüftes Modell mehr (`servedModelVerified: false`).
+
+Neue Regressionstests decken all diese Fälle **synthetisch** ab. `meeting-core` besteht Clippy mit `-D warnings` auch für `x86_64-pc-windows-gnu` und `aarch64-apple-darwin`; für diese Prüfung wurde der C-Teil von SQLite durch einen Platzhalter ersetzt, nichts wurde gelinkt oder ausgeführt. Ein echter Gerätelauf fehlt weiterhin.
+
 Offen bleiben eine echte Geräteunterbrechung mit Wiederverbindung unter allen Plattformen, der kombinierte zweistündige Aufnahme-/ASR-/Textmodelllauf sowie aktuelle GPU-, Signatur-, Notarisierungs-, GLib- und Wartungsnachweise. Der historische 60-Sekunden-Gerätelauf mit 92 ms Spurdifferenz hatte eine echte Unterbrechung und ist kein lückenloser Audiobeweis. Die damalige konkrete Treiberursache und der damalige Modellfehler lassen sich aus den vorhandenen alten Logs nicht eindeutig bestimmen. Deshalb ergänzen diese Änderungen Diagnosemöglichkeiten und Regressionsschutz, ohne eine vollständig geprüfte Auslieferung zu behaupten. Neue CI und unabhängige Reviews gelten erst nach tatsächlichem Lauf auf dem neuen Head. Private Aufnahmen, Gesprächsdaten und Sitzungskennungen werden nicht veröffentlicht.
 
 ## Aufnahmestatus, Transkript-Reihenfolge und verständlichere Hinweise nach dem 1.0.7-Praxistest — 29.10.2026

@@ -89,14 +89,26 @@ fn generation_check(fact: &Fact, kind: &Kind) -> Option<RejectionReason> {
         .iter()
         .flat_map(|e| number_tokens(&e.quote))
         .collect();
-    if number_tokens(&fact.text)
-        .iter()
-        .any(|n| !quoted.contains(n))
+    // A due date or owner is checked as a substring of its quote, so "5. Mai" would pass
+    // against "bis zum 15. Mai"; its numbers must therefore match whole quoted numbers too.
+    let stated = [Some(&fact.text), fact.owner.as_ref(), fact.due.as_ref()];
+    if stated
+        .into_iter()
+        .flatten()
+        .flat_map(|text| number_tokens(text))
+        .any(|n| !quoted.contains(&n))
     {
         return Some(RejectionReason::NumberNotQuoted);
     }
-    if *kind == Kind::Tasks && fact.evidence.iter().all(|e| nonbinding(&e.quote)) {
-        return Some(RejectionReason::NonbindingTask);
+    if *kind == Kind::Tasks {
+        let commitments: Vec<_> = fact.evidence.iter().map(|e| commitment(&e.quote)).collect();
+        if commitments.iter().all(|c| *c == Commitment::Nonbinding) {
+            return Some(RejectionReason::NonbindingTask);
+        }
+        // "Ich übernehme das, vielleicht bis Freitag" commits to the task, not to the date.
+        if fact.due.is_some() && !commitments.contains(&Commitment::Binding) {
+            return Some(RejectionReason::UnverifiedOwnerOrDue);
+        }
     }
     None
 }
@@ -106,7 +118,15 @@ fn number_tokens(text: &str) -> Vec<String> {
     let mut tokens = Vec::new();
     let mut token = String::new();
     for (index, &c) in chars.iter().enumerate() {
-        if c.is_numeric()
+        // A sign belongs to its number ("-100 Euro"), a hyphen between digits does not
+        // ("2025-2026", "10-12 Uhr").
+        let sign = token.is_empty()
+            && matches!(c, '-' | '−')
+            && (index == 0 || !chars[index - 1].is_alphanumeric())
+            && chars.get(index + 1).is_some_and(|c| c.is_numeric());
+        if sign {
+            token.push('-');
+        } else if c.is_numeric()
             || (!token.is_empty()
                 && matches!(c, '.' | ',' | ':' | '/')
                 && chars.get(index + 1).is_some_and(|c| c.is_numeric()))
@@ -122,25 +142,108 @@ fn number_tokens(text: &str) -> Vec<String> {
     tokens
 }
 
-fn nonbinding(quote: &str) -> bool {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Commitment {
+    Binding,
+    /// The task is accepted, but its date is hedged ("vielleicht bis Freitag").
+    UncertainDate,
+    Nonbinding,
+}
+
+/// Words that start a date or deadline, so a preceding hedge qualifies only the date.
+const DATE_WORDS: &[&str] = &[
+    "bis",
+    "am",
+    "ab",
+    "spätestens",
+    "heute",
+    "morgen",
+    "übermorgen",
+    "nächste",
+    "nächsten",
+    "nächster",
+    "nächstes",
+    "diese",
+    "diesen",
+    "dieser",
+    "dieses",
+    "ende",
+    "anfang",
+    "montag",
+    "dienstag",
+    "mittwoch",
+    "donnerstag",
+    "freitag",
+    "samstag",
+    "sonntag",
+    "by",
+    "until",
+    "on",
+    "today",
+    "tomorrow",
+    "next",
+    "this",
+    "end",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+];
+/// Negated phrases that still promise the action ("das werde ich nicht vergessen").
+const AFFIRMING_NEGATIONS: &[&str] = &[
+    "nicht vergessen",
+    "nicht vergisst",
+    "nicht liegen lassen",
+    "not forget",
+    "won't forget",
+];
+
+/// Conservative commitment reading of one literal quote. Hedges and refusals reject the task;
+/// a hedge directly before a date only makes the date unverified.
+fn commitment(quote: &str) -> Commitment {
     let text = quote.to_lowercase();
-    [
-        "vielleicht",
+    let negation = AFFIRMING_NEGATIONS
+        .iter()
+        .fold(text.clone(), |text, phrase| text.replace(phrase, " "));
+    if [
         "könnten ",
         "könnte ",
         "wäre es",
         "unverbindlich",
         "no commitment",
         "we could",
-        "maybe",
-        "perhaps",
         "might ",
     ]
     .iter()
     .any(|marker| text.contains(marker))
-        || ((text.contains("werde ") || text.contains("werden ")) && text.contains(" nicht "))
-        || text.contains("will not ")
-        || text.contains("won't ")
+        || ((negation.contains("werde ") || negation.contains("werden "))
+            && negation.contains(" nicht "))
+        || negation.contains("will not ")
+        || negation.contains("won't ")
+    {
+        return Commitment::Nonbinding;
+    }
+    let words: Vec<&str> = text
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .collect();
+    let mut hedged_date = false;
+    for (index, word) in words.iter().enumerate() {
+        if ["vielleicht", "maybe", "perhaps"].contains(word) {
+            match words.get(index + 1) {
+                Some(next) if DATE_WORDS.contains(next) => hedged_date = true,
+                _ => return Commitment::Nonbinding,
+            }
+        }
+    }
+    if hedged_date {
+        Commitment::UncertainDate
+    } else {
+        Commitment::Binding
+    }
 }
 
 /// Reads a saved per-batch checkpoint strictly: saved items are never filtered or repaired,
@@ -230,6 +333,9 @@ fn check_fact(fact: &Fact, allowed: &HashMap<&str, &str>, kind: &Kind) -> Option
 mod generation_tests {
     use super::*;
     fn check(quote: &str, text: &str, kind: Kind) -> CheckedAnswer {
+        check_due(quote, text, None, kind)
+    }
+    fn check_due(quote: &str, text: &str, due: Option<&str>, kind: Kind) -> CheckedAnswer {
         let source = Source {
             id: "synthetic".into(),
             source: "system".into(),
@@ -237,8 +343,84 @@ mod generation_tests {
             end_ms: 1000,
             text: quote.into(),
         };
-        let answer = serde_json::json!({"items":[{"text":text,"owner":null,"due":null,"evidence":[{"sourceId":"synthetic","quote":quote}]}]}).to_string();
+        let answer = serde_json::json!({"items":[{"text":text,"owner":null,"due":due,"evidence":[{"sourceId":"synthetic","quote":quote}]}]}).to_string();
         validate_answer(&answer, &[source], &kind, "synthetic").unwrap()
+    }
+    #[test]
+    fn a_sign_is_part_of_the_number_but_a_range_hyphen_is_not() {
+        assert!(check(
+            "Das Ergebnis liegt bei -100 Euro.",
+            "100 Euro",
+            Kind::Summary
+        )
+        .items
+        .is_empty());
+        assert_eq!(
+            check(
+                "Das Ergebnis liegt bei -100 Euro.",
+                "-100 Euro",
+                Kind::Summary
+            )
+            .items
+            .len(),
+            1
+        );
+        assert_eq!(
+            check(
+                "Der Plan gilt für 2025-2026.",
+                "Plan für 2025 bis 2026",
+                Kind::Summary
+            )
+            .items
+            .len(),
+            1
+        );
+        assert_eq!(number_tokens("10-12 Uhr, −3 Grad"), ["10", "12", "-3"]);
+    }
+    #[test]
+    fn a_due_date_needs_its_whole_quoted_number() {
+        let quote = "Anna schickt den Bericht bis zum 15. Mai.";
+        assert!(
+            check_due(quote, "Bericht schicken", Some("5. Mai"), Kind::Tasks)
+                .items
+                .is_empty()
+        );
+        assert_eq!(
+            check_due(quote, "Bericht schicken", Some("15. Mai"), Kind::Tasks)
+                .items
+                .len(),
+            1
+        );
+    }
+    #[test]
+    fn a_hedged_date_keeps_the_task_but_not_the_date() {
+        let quote = "Ich übernehme den Bericht, vielleicht bis Freitag.";
+        assert_eq!(
+            check(quote, "Bericht übernehmen", Kind::Tasks).items.len(),
+            1
+        );
+        assert!(
+            check_due(quote, "Bericht übernehmen", Some("Freitag"), Kind::Tasks)
+                .items
+                .is_empty()
+        );
+        assert_eq!(
+            check(
+                "Das Protokoll werde ich nicht vergessen, ich schicke es morgen.",
+                "Protokoll schicken",
+                Kind::Tasks
+            )
+            .items
+            .len(),
+            1
+        );
+        assert!(check(
+            "Vielleicht übernehme ich den Bericht.",
+            "Bericht übernehmen",
+            Kind::Tasks
+        )
+        .items
+        .is_empty());
     }
     #[test]
     fn introduced_numbers_are_not_rescued_by_a_literal_quote() {

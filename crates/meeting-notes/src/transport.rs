@@ -138,11 +138,11 @@ impl TextClient {
             if path == "chat/completions" {
                 let mut diagnostic = self.diagnostic.borrow_mut();
                 diagnostic.http_status = Some(response.status().as_u16());
-                diagnostic.result = if response.status().is_success() {
-                    crate::diagnostics::RequestResult::Envelope
-                } else {
-                    crate::diagnostics::RequestResult::Http
-                };
+                // A successful status stays a transport outcome until the whole body is
+                // read: an interrupted body is a connection failure, not a validation one.
+                if !response.status().is_success() {
+                    diagnostic.result = crate::diagnostics::RequestResult::Http;
+                }
             }
             ensure!(
                 response.status().is_success(),
@@ -162,7 +162,15 @@ impl TextClient {
                 bytes.extend_from_slice(&chunk);
             }
             control.check()?;
-            serde_json::from_slice(&bytes).context("KI-Dienst liefert kein gültiges JSON.")
+            let value = serde_json::from_slice(&bytes);
+            if path == "chat/completions" {
+                self.diagnostic.borrow_mut().result = if value.is_ok() {
+                    crate::diagnostics::RequestResult::Envelope
+                } else {
+                    crate::diagnostics::RequestResult::Incomplete
+                };
+            }
+            value.context("KI-Dienst liefert kein gültiges JSON.")
         })
     }
     pub fn models(&self) -> Result<Vec<String>> {

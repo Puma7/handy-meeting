@@ -138,7 +138,8 @@ fn main() -> Result<()> {
         negative.sections[1].items.is_empty() && negative.sections[2].items.is_empty(),
         "Nonbinding proposals must not become decisions or tasks."
     );
-    let report = serde_json::json!({"success":true,"syntheticText":true,"actualLocalModel":true,"model":model,"mode":"local","promptVersion":meeting_notes::PROMPT_VERSION,"elapsedSeconds":start.elapsed().as_secs_f64(),"positiveDecisions":positive.sections[1].items.len(),"positiveTasks":positive.sections[2].items.len(),"owner":"Anna","due":"Freitag","negativeDecisions":negative.sections[1].items.len(),"negativeTasks":negative.sections[2].items.len(),"resumedFromDurableCheckpoint":true,"confirmedStepsReused":2,"processCrashTested":false,"cloudTested":false});
+    // The run checks the answers, not which model the loopback server actually served.
+    let report = serde_json::json!({"success":true,"syntheticText":true,"requestedModel":model,"servedModelVerified":false,"mode":"local","promptVersion":meeting_notes::PROMPT_VERSION,"elapsedSeconds":start.elapsed().as_secs_f64(),"positiveDecisions":positive.sections[1].items.len(),"positiveTasks":positive.sections[2].items.len(),"owner":"Anna","due":"Freitag","negativeDecisions":negative.sections[1].items.len(),"negativeTasks":negative.sections[2].items.len(),"resumedFromDurableCheckpoint":true,"confirmedStepsReused":2,"processCrashTested":false,"cloudTested":false});
     fs::write(
         folder.join("reference.json"),
         serde_json::to_vec_pretty(&report)?,

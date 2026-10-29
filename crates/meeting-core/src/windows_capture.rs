@@ -458,7 +458,8 @@ pub(super) fn record(
         client.initialize_client(&desired, &Direction::Capture, &mode)?;
         let handle = client.set_get_eventhandle()?;
         let capture = client.get_audiocaptureclient()?;
-        let mut writer = PcmWriter::for_capture(store.clone(), source)?;
+        let mut writer =
+            PcmWriter::for_capture(store.clone(), source, &|| controls.note_startup_progress())?;
         let mut queue = VecDeque::with_capacity(SAMPLE_RATE as usize * 2);
         let mut pcm = Vec::with_capacity(SAMPLE_RATE as usize / 10);
         let mut diagnostics = CaptureDiagnostics::new(source);
@@ -466,17 +467,33 @@ pub(super) fn record(
         let previous_end = writer.written_samples();
         diagnostics.start_sample = previous_end;
         let resumed_at = controls.elapsed_samples();
-        pad_capture_origin(&mut writer, resumed_at, &stop)?;
-        if source == "microphone" && previous_end > 0 && resumed_at > previous_end {
-            controls.record_microphone_gap(previous_end, resumed_at - previous_end)?;
+        let mut stream_running = false;
+        // Gap silence may already be on disk when a later startup step fails or the
+        // controller gave up waiting. Close it, so a later reconnect can verify and
+        // continue this track instead of finding an unclosed section.
+        let startup = (|| -> Result<()> {
+            pad_capture_origin(&mut writer, resumed_at, &stop, &controls)?;
+            if source == "microphone" && previous_end > 0 && resumed_at > previous_end {
+                controls.record_microphone_gap(previous_end, resumed_at - previous_end)?;
+            }
+            client.start_stream()?;
+            stream_running = true;
+            ready
+                .send(Ok(()))
+                .map_err(|_| "Capture controller was closed")?;
+            Ok(())
+        })();
+        if let Err(error) = startup {
+            if stream_running {
+                let _ = client.stop_stream();
+            }
+            if let Err(finish) = writer.finish() {
+                return Err(format!("{error}; gap silence could not be closed: {finish}").into());
+            }
+            return Err(error);
         }
-        client.start_stream()?;
-        let mut stream_running = true;
         let mut epoch = controls.epoch(source);
         let mut timeline = PacketTimeline::default();
-        ready
-            .send(Ok(()))
-            .map_err(|_| "Capture controller was closed")?;
         started = true;
         let loop_result = (|| -> Result<()> {
             let mut drain_again = false;
@@ -616,7 +633,12 @@ pub(super) fn record(
 
 /// A reconnect gap comes from the controller's monotonic origin, not a device timestamp.
 /// Fill it in bounded turns even after a longer outage; never relax packet/clock bounds.
-fn pad_capture_origin(writer: &mut PcmWriter, target: u64, stop: &AtomicBool) -> Result<()> {
+fn pad_capture_origin(
+    writer: &mut PcmWriter,
+    target: u64,
+    stop: &AtomicBool,
+    controls: &CaptureControls,
+) -> Result<()> {
     while writer.written_samples() < target {
         if stop.load(Ordering::Acquire) {
             return Err("Capture stopped while aligning the reconnected microphone".into());
@@ -628,6 +650,7 @@ fn pad_capture_origin(writer: &mut PcmWriter, target: u64, stop: &AtomicBool) ->
                     .saturating_add(u64::from(SAMPLE_RATE) * 5),
             ),
         )?;
+        controls.note_startup_progress();
     }
     Ok(())
 }
@@ -1156,9 +1179,12 @@ mod tests {
         let first = store.snapshot().unwrap().parts[0].clone();
         let path = store.audio_path(&first).unwrap();
         let original = std::fs::read(&path).unwrap();
-        let mut resumed = PcmWriter::for_capture(store.clone(), "microphone").unwrap();
+        let mut resumed = PcmWriter::for_capture(store.clone(), "microphone", &|| {}).unwrap();
         let target = u64::from(SAMPLE_RATE) * 301;
-        pad_capture_origin(&mut resumed, target, &AtomicBool::new(false)).unwrap();
+        let controls = CaptureControls::uncontrolled();
+        pad_capture_origin(&mut resumed, target, &AtomicBool::new(false), &controls).unwrap();
+        // Each bounded five-second step counts as startup progress for the readiness wait.
+        assert_eq!(controls.startup_progress(), 61);
         resumed.append(&[93, -94]).unwrap();
         resumed.finish().unwrap();
         assert_eq!(resumed.written_samples(), target + 2);

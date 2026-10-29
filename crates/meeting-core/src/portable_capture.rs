@@ -115,12 +115,40 @@ pub(super) fn record_controlled(
         if !["system", "microphone"].contains(&source) {
             return Err("Invalid audio track".into());
         }
-        let mut writer = PcmWriter::for_capture(store.clone(), source)?;
+        let mut writer =
+            PcmWriter::for_capture(store.clone(), source, &|| controls.note_startup_progress())?;
         let previous_end = writer.written_samples();
         let resumed_at = controls.elapsed_samples();
-        if source == "microphone" && previous_end > 0 && resumed_at > previous_end {
-            pad_estimated(&mut writer, resumed_at)?;
-            controls.record_microphone_gap(previous_end, resumed_at - previous_end)?;
+        // Close any gap silence already written when this startup step fails, so a later
+        // reconnect can verify and continue the track.
+        let startup = (|| -> Result<()> {
+            if source == "microphone" && previous_end > 0 && resumed_at > previous_end {
+                if resumed_at - previous_end > u64::from(SAMPLE_RATE) * 86400 {
+                    return Err(
+                        "Audio receipt clock gap exceeds one day; check the recording timeline"
+                            .into(),
+                    );
+                }
+                while writer.written_samples() < resumed_at {
+                    if stop.load(Ordering::Acquire) {
+                        return Err(
+                            "Capture stopped while aligning the reconnected microphone".into()
+                        );
+                    }
+                    let step =
+                        resumed_at.min(writer.written_samples() + u64::from(SAMPLE_RATE) * 300);
+                    pad_estimated(&mut writer, step)?;
+                    controls.note_startup_progress();
+                }
+                controls.record_microphone_gap(previous_end, resumed_at - previous_end)?;
+            }
+            Ok(())
+        })();
+        if let Err(error) = startup {
+            if let Err(finish) = writer.finish() {
+                return Err(format!("{error}; gap silence could not be closed: {finish}").into());
+            }
+            return Err(error);
         }
         // Diagnostic failures remain visible in the live store and never gate PCM.
         let _ = store.notice("Portable audio track ranges use approximate receipt timing, not exact device or word timestamps.");

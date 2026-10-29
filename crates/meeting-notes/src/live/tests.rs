@@ -766,6 +766,111 @@ fn transport_diagnostics_do_not_copy_free_form_finish_reasons_or_model_content()
 }
 
 #[test]
+fn an_interrupted_answer_after_http_200_is_reported_as_a_connection_failure() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let endpoint = format!("http://{}/v1/", listener.local_addr().unwrap());
+    let server = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(10)))
+            .unwrap();
+        let mut request = Vec::new();
+        let mut buffer = [0_u8; 8192];
+        while !request.windows(4).any(|w| w == b"\r\n\r\n") {
+            let count = stream.read(&mut buffer).unwrap();
+            assert!(count > 0);
+            request.extend_from_slice(&buffer[..count]);
+        }
+        // Promise a long body, send only its start and close the connection.
+        stream
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 4000\r\nConnection: close\r\n\r\n{\"choices\":[")
+            .unwrap();
+    });
+    let dir = tempfile::tempdir().unwrap();
+    let connection = Connection {
+        endpoint,
+        model: "synthetic".into(),
+        mode: "local".into(),
+        cloud_consent: false,
+        api_key: String::new(),
+    };
+    let mut runner = LiveRunner::start(dir.path(), "synthetic", connection, "de").unwrap();
+    let texts = [part("system-0", "system", 0, BUDGET)];
+    assert!(runner
+        .update(
+            &runner.pending(&texts),
+            Trigger::Manual,
+            &AnalysisControl::default()
+        )
+        .is_err());
+    let folder = dir.path().join(&runner.run().id);
+    let request = diagnostics::latest(&folder).unwrap().request;
+    assert_eq!(request.result, RequestResult::Transport);
+    assert_eq!(request.http_status, Some(200));
+    server.join().unwrap();
+}
+
+#[test]
+fn a_diagnostic_storage_warning_describes_only_the_update_that_failed_to_save() {
+    let dir = tempfile::tempdir().unwrap();
+    let server = Server::start(vec![
+        window_answer(
+            vec![fact("Budget", None, "C0", BUDGET)],
+            vec![],
+            vec![],
+            vec![],
+        ),
+        overview_answer(vec![fact("Budget", None, "C0", BUDGET)]),
+        window_answer(
+            vec![fact("Anbieter", None, "C30", DECISION)],
+            vec![],
+            vec![],
+            vec![],
+        ),
+        overview_answer(vec![fact("Anbieter", None, "C30", DECISION)]),
+    ]);
+    let mut runner = LiveRunner::start(
+        dir.path(),
+        "synthetic",
+        server.connection("synthetic"),
+        "de",
+    )
+    .unwrap();
+    let folder = dir.path().join(&runner.run().id);
+    // Synthetic exhaustion: every bounded diagnostic slot is already taken.
+    let taken: Vec<_> = (1..=1024)
+        .map(|index| folder.join(format!("diagnostic-{index:06}.json")))
+        .collect();
+    for path in &taken {
+        std::fs::write(path, b"").unwrap();
+    }
+    let mut texts = vec![part("system-0", "system", 0, BUDGET)];
+    let first = runner
+        .update(
+            &runner.pending(&texts),
+            Trigger::Manual,
+            &AnalysisControl::default(),
+        )
+        .unwrap();
+    assert!(first.window.is_some());
+    assert!(first.diagnostic_warning.is_some());
+    for path in &taken {
+        std::fs::remove_file(path).unwrap();
+    }
+    texts.push(part("system-30", "system", 30, DECISION));
+    let second = runner
+        .update(
+            &runner.pending(&texts),
+            Trigger::Manual,
+            &AnalysisControl::default(),
+        )
+        .unwrap();
+    assert!(second.window.is_some());
+    assert_eq!(second.diagnostic_warning, None);
+    server.finish();
+}
+
+#[test]
 fn a_failed_window_commit_is_distinguished_from_a_model_validation_error() {
     let dir = tempfile::tempdir().unwrap();
     let server = Server::start(vec![window_answer(

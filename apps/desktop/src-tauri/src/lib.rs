@@ -504,7 +504,7 @@ impl Service {
             inner.reconnecting_microphone = true;
             capture
         };
-        let result = capture.reconnect_microphone().map_err(|_| "Mikrofon konnte nicht verbunden werden. Das ursprünglich gewählte Gerät prüfen und erneut versuchen. Computerton und gesicherte Daten bleiben erhalten. / Could not reconnect the original microphone. Check the device and retry; system audio and saved data are retained.".to_string());
+        let result = capture.reconnect_microphone().map_err(|error| format!("Mikrofon konnte nicht verbunden werden. Das ursprünglich gewählte Gerät prüfen und erneut versuchen. Computerton und gesicherte Daten bleiben erhalten. / Could not reconnect the original microphone. Check the device and retry; system audio and saved data are retained. ({error})"));
         {
             let mut inner = self.lock()?;
             // The transition guard excludes stop/start/revoke until ownership is restored.

@@ -162,6 +162,8 @@ impl LiveRunner {
         control: &AnalysisControl,
     ) -> Result<UpdateOutcome> {
         let mut outcome = UpdateOutcome::default();
+        // The warning describes this update only; a later successful save clears it.
+        self.diagnostic_warning.replace(None);
         if !pending.is_empty() {
             let window = self.summarize_window(pending, trigger, control)?;
             outcome.window = Some(window.index);

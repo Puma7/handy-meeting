@@ -46,7 +46,13 @@ pub struct PcmWriter {
 impl PcmWriter {
     /// Capture-controller-only continuation of a closed microphone track. Existing WAVs
     /// are read and verified, never reopened for writing. Normal `new` still refuses reuse.
-    pub(crate) fn for_capture(store: SessionStore, source: &str) -> Result<Self> {
+    /// `progress` is called after each verified section so the caller can tell a long
+    /// verification from a stalled device.
+    pub(crate) fn for_capture(
+        store: SessionStore,
+        source: &str,
+        progress: &dyn Fn(),
+    ) -> Result<Self> {
         let snapshot = store.snapshot()?;
         let mut parts: Vec<_> = snapshot
             .parts
@@ -69,6 +75,7 @@ impl PcmWriter {
                 return Err("Microphone audio is not completely closed and contiguous; original files are retained".into());
             }
             verify_confirmed(&store.audio_path(part)?, part)?;
+            progress();
             end = end
                 .checked_add(part.confirmed_sample_count)
                 .ok_or("Microphone timeline overflow")?;

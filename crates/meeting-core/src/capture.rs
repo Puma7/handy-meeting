@@ -15,7 +15,11 @@ use std::{
 };
 
 #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
-use std::{sync::mpsc, thread, time::Duration};
+use std::{
+    sync::mpsc,
+    thread,
+    time::{Duration, Instant},
+};
 
 #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 type TrackRecorder = fn(
@@ -55,12 +59,16 @@ pub struct CaptureOptions {
     pub include_microphone: bool,
 }
 
+/// One owned capture thread and its own stop request. An explicit stop sets every
+/// track's flag; a track that missed its readiness deadline is stopped alone.
+type Track = (&'static str, JoinHandle<()>, Arc<AtomicBool>);
+
 /// A track owns its capture client and disk writer on one dedicated thread.
 /// There is no unbounded queue between the device and durable storage.
 pub struct CaptureController {
     meeting_id: String,
     stop: Arc<AtomicBool>,
-    tracks: Vec<(&'static str, JoinHandle<()>)>,
+    tracks: Vec<Track>,
     store: SessionStore,
     controls: Arc<CaptureControls>,
     #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
@@ -69,6 +77,9 @@ pub struct CaptureController {
     recorder: TrackRecorder,
     #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
     reconnect_attempts: u8,
+    /// Longest wait for a track's readiness without any reported startup progress.
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    ready_timeout: Duration,
 }
 
 impl CaptureController {
@@ -82,7 +93,7 @@ impl CaptureController {
                 && !self
                     .tracks
                     .iter()
-                    .any(|(source, track)| *source == "microphone" && !track.is_finished())
+                    .any(|(source, track, _)| *source == "microphone" && !track.is_finished())
         }
         #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
         {
@@ -104,7 +115,7 @@ impl CaptureController {
             if self
                 .tracks
                 .iter()
-                .any(|(source, track)| *source == "microphone" && !track.is_finished())
+                .any(|(source, track, _)| *source == "microphone" && !track.is_finished())
             {
                 return Err(
                     "The microphone is still running or starting; a second track was not opened"
@@ -118,13 +129,15 @@ impl CaptureController {
             if let Some(index) = self
                 .tracks
                 .iter()
-                .position(|(source, _)| *source == "microphone")
+                .position(|(source, _, _)| *source == "microphone")
             {
-                let (_, track) = self.tracks.remove(index);
+                let (_, track, _) = self.tracks.remove(index);
                 let _ = track.join();
             }
             self.controls.set_has_microphone(false);
             let result = self.start_track("microphone", Some(id), self.recorder);
+            // A failed or late start was stopped by `start_track`; it can never record
+            // audio that the app reports as missing or cannot mute.
             if result.is_ok() {
                 self.controls.set_has_microphone(true);
             }
@@ -165,13 +178,16 @@ impl CaptureController {
             tracks: vec![],
             store,
             controls,
-            microphone_id: options
-                .include_microphone
-                .then(|| options.microphone_id.clone())
-                .flatten()
-                .filter(|id| !id.is_empty()),
+            microphone_id: reconnect_target(
+                options
+                    .include_microphone
+                    .then(|| options.microphone_id.clone())
+                    .flatten(),
+                cfg!(target_os = "macos"),
+            ),
             recorder,
             reconnect_attempts: 0,
+            ready_timeout: Duration::from_secs(if cfg!(target_os = "macos") { 60 } else { 10 }),
         };
         if let Err(error) = controller.start_track("system", options.output_id, recorder) {
             if let Err(cleanup) = controller.stop() {
@@ -197,14 +213,18 @@ impl CaptureController {
     }
 
     #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
-    /// Starts one owned capture thread and waits for its bounded readiness acknowledgment.
+    /// Starts one owned capture thread and waits for its readiness acknowledgment. The
+    /// deadline restarts whenever the track reports startup progress (verifying saved
+    /// audio, writing gap silence), so a long meeting cannot exhaust it; a device that
+    /// makes no progress is stopped instead of recording unseen after an error.
     fn start_track(
         &mut self,
         source: &'static str,
         device_id: Option<String>,
         recorder: TrackRecorder,
     ) -> Result<()> {
-        let stop = Arc::clone(&self.stop);
+        let track_stop = Arc::new(AtomicBool::new(self.stop.load(Ordering::Acquire)));
+        let stop = Arc::clone(&track_stop);
         let store = self.store.clone();
         let controls = Arc::clone(&self.controls);
         let (ready, result) = mpsc::sync_channel(1);
@@ -213,18 +233,33 @@ impl CaptureController {
                 let _ = store.warn(&format!("{source}: capture stopped: {error}. Saved audio is retained; check the device before recording again."));
             }
         })?;
-        self.tracks.push((source, track));
-        let timeout = if cfg!(target_os = "macos") { 60 } else { 10 };
-        match result.recv_timeout(Duration::from_secs(timeout)) {
-            Ok(Ok(())) => Ok(()),
-            Ok(Err(error)) => Err(error.into()),
-            Err(mpsc::RecvTimeoutError::Timeout) => {
-                Err("Audio device did not become ready in time".into())
+        self.tracks.push((source, track, Arc::clone(&track_stop)));
+        let mut progress = self.controls.startup_progress();
+        let mut deadline = Instant::now() + self.ready_timeout;
+        loop {
+            match result.recv_timeout(Duration::from_millis(100)) {
+                Ok(Ok(())) => return Ok(()),
+                Ok(Err(error)) => return Err(error.into()),
+                Err(mpsc::RecvTimeoutError::Disconnected) => return Err(
+                    "Audio capture ended before readiness; check the retained capture diagnostic"
+                        .into(),
+                ),
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    let current = self.controls.startup_progress();
+                    if current != progress {
+                        progress = current;
+                        deadline = Instant::now() + self.ready_timeout;
+                    } else if Instant::now() >= deadline {
+                        // Stop before the receiver is dropped: a late acknowledgment then
+                        // finds its stop request and finalizes instead of recording.
+                        track_stop.store(true, Ordering::Release);
+                        return Err(
+                            "Audio device did not become ready in time; the late start was stopped"
+                                .into(),
+                        );
+                    }
+                }
             }
-            Err(mpsc::RecvTimeoutError::Disconnected) => Err(
-                "Audio capture ended before readiness; check the retained capture diagnostic"
-                    .into(),
-            ),
         }
     }
 
@@ -239,7 +274,7 @@ impl CaptureController {
     /// Reports whether an owned track is still alive before an explicit stop request.
     pub fn is_running(&self) -> bool {
         !self.stop.load(Ordering::Acquire)
-            && self.tracks.iter().any(|(_, track)| !track.is_finished())
+            && self.tracks.iter().any(|(_, track, _)| !track.is_finished())
     }
 
     /// Returns pause/mute state and derives microphone availability from its live capture thread.
@@ -250,7 +285,7 @@ impl CaptureController {
             && self
                 .tracks
                 .iter()
-                .any(|(source, track)| *source == "microphone" && !track.is_finished());
+                .any(|(source, track, _)| *source == "microphone" && !track.is_finished());
         snapshot
     }
 
@@ -263,7 +298,7 @@ impl CaptureController {
         let alive = |name| {
             self.tracks
                 .iter()
-                .any(|(source, track)| *source == name && !track.is_finished())
+                .any(|(source, track, _)| *source == name && !track.is_finished())
         };
         let [system, microphone] = self.controls.audio_levels(
             alive("system"),
@@ -300,16 +335,19 @@ impl CaptureController {
         }
         self.tracks
             .iter()
-            .filter(|(_, track)| track.is_finished())
-            .map(|(source, _)| *source)
+            .filter(|(_, track, _)| track.is_finished())
+            .map(|(source, _, _)| *source)
             .collect()
     }
 
     /// Requests owned tracks to stop, joins their writers and marks the retained session recorded.
     pub fn stop(&mut self) -> Result<()> {
         self.stop.store(true, Ordering::Release);
+        for (_, _, track_stop) in &self.tracks {
+            track_stop.store(true, Ordering::Release);
+        }
         let mut failures = vec![];
-        for (_, track) in self.tracks.drain(..) {
+        for (_, track, _) in self.tracks.drain(..) {
             if track.join().is_err() {
                 if let Err(error) = self
                     .store
@@ -339,6 +377,13 @@ impl Drop for CaptureController {
     fn drop(&mut self) {
         let _ = self.stop();
     }
+}
+
+/// Only an explicitly chosen device can be reconnected. The macOS `default` entry follows
+/// whatever input is current, so reopening it could record a different microphone.
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+fn reconnect_target(id: Option<String>, macos: bool) -> Option<String> {
+    id.filter(|id| !id.is_empty() && (!macos || id != "default"))
 }
 
 /// The first driver-reported discontinuity of a track, with its position in the saved
@@ -391,7 +436,9 @@ mod tests {
         ready: mpsc::SyncSender<std::result::Result<(), String>>,
         controls: Arc<CaptureControls>,
     ) -> Result<()> {
-        let mut writer = crate::PcmWriter::for_capture(store.clone(), source)?;
+        let mut writer = crate::PcmWriter::for_capture(store.clone(), source, &|| {
+            controls.note_startup_progress()
+        })?;
         let before = writer.written_samples();
         let target = controls.elapsed_samples();
         writer.pad_to(target)?;
@@ -487,6 +534,139 @@ mod tests {
                 > 3
         );
         assert_eq!(std::fs::read(path).unwrap(), bytes);
+    }
+
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    /// Synthetic slow device: the first microphone start ends at once, the reconnect needs
+    /// 400 ms and reports preparation progress only when `synthetic-progress` exists.
+    fn slow_reconnect_fixture(
+        store: SessionStore,
+        source: &str,
+        _: Option<String>,
+        stop: Arc<AtomicBool>,
+        ready: mpsc::SyncSender<std::result::Result<(), String>>,
+        controls: Arc<CaptureControls>,
+    ) -> Result<()> {
+        if source == "microphone" {
+            let first = store.folder().join("synthetic-first-mic");
+            if std::fs::OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .open(first)
+                .is_ok()
+            {
+                ready.send(Ok(()))?;
+                return Err("Synthetic device interruption".into());
+            }
+            let reports = store.folder().join("synthetic-progress").exists();
+            for _ in 0..8 {
+                thread::sleep(Duration::from_millis(50));
+                if reports {
+                    controls.note_startup_progress();
+                }
+            }
+            if ready.send(Ok(())).is_err() {
+                return Err("Capture controller was closed".into());
+            }
+            while !stop.load(Ordering::Acquire) {
+                std::fs::write(store.folder().join("synthetic-late-mic-recorded"), b"")?;
+                thread::sleep(Duration::from_millis(5));
+            }
+            return Ok(());
+        }
+        ready.send(Ok(()))?;
+        while !stop.load(Ordering::Acquire) {
+            thread::sleep(Duration::from_millis(5));
+        }
+        Ok(())
+    }
+
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    fn interrupted_slow_microphone(
+        progress: bool,
+    ) -> (tempfile::TempDir, SessionStore, CaptureController) {
+        let root = tempfile::tempdir().unwrap();
+        let store = SessionStore::create(
+            root.path(),
+            "Synthetic slow reconnect",
+            "m",
+            "s",
+            Some("mic"),
+        )
+        .unwrap();
+        if progress {
+            std::fs::write(store.folder().join("synthetic-progress"), b"").unwrap();
+        }
+        let mut controller = CaptureController::start_with_recorder(
+            store.clone(),
+            CaptureOptions {
+                include_microphone: true,
+                microphone_id: Some("original-mic".into()),
+                ..Default::default()
+            },
+            slow_reconnect_fixture,
+        )
+        .unwrap();
+        controller.ready_timeout = Duration::from_millis(150);
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !controller.can_reconnect_microphone() {
+            assert!(std::time::Instant::now() < deadline);
+            thread::sleep(Duration::from_millis(5));
+        }
+        (root, store, controller)
+    }
+
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn a_reconnect_that_misses_its_deadline_is_stopped_and_can_be_retried() {
+        let (_root, store, mut controller) = interrupted_slow_microphone(false);
+        let error = controller.reconnect_microphone().unwrap_err().to_string();
+        assert!(error.contains("did not become ready in time"), "{error}");
+        assert!(!controller.controls().has_microphone);
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !controller.can_reconnect_microphone() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the late start must end"
+            );
+            thread::sleep(Duration::from_millis(5));
+        }
+        assert!(
+            !store.folder().join("synthetic-late-mic-recorded").exists(),
+            "a late microphone must never record while the app reports it missing"
+        );
+        assert!(controller.is_running(), "system audio keeps recording");
+        controller.stop().unwrap();
+    }
+
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn reported_startup_progress_extends_the_readiness_wait() {
+        let (_root, store, mut controller) = interrupted_slow_microphone(true);
+        controller.reconnect_microphone().unwrap();
+        assert!(controller.controls().has_microphone);
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !store.folder().join("synthetic-late-mic-recorded").exists() {
+            assert!(std::time::Instant::now() < deadline);
+            thread::sleep(Duration::from_millis(5));
+        }
+        controller.stop().unwrap();
+    }
+
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn only_an_explicit_device_is_a_reconnect_target() {
+        assert_eq!(
+            reconnect_target(Some("mic-1".into()), false).as_deref(),
+            Some("mic-1")
+        );
+        assert_eq!(
+            reconnect_target(Some("default".into()), false).as_deref(),
+            Some("default")
+        );
+        assert_eq!(reconnect_target(Some("default".into()), true), None);
+        assert_eq!(reconnect_target(Some(String::new()), false), None);
+        assert_eq!(reconnect_target(None, false), None);
     }
 
     #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
@@ -625,8 +805,9 @@ mod tests {
                 (
                     "microphone",
                     thread::spawn(|| panic!("Synthetic track panic")),
+                    Arc::new(AtomicBool::new(false)),
                 ),
-                ("system", tail),
+                ("system", tail, Arc::new(AtomicBool::new(false))),
             ],
             controls: Arc::new(CaptureControls::new(&store).unwrap()),
             #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
@@ -635,6 +816,8 @@ mod tests {
             recorder: platform::record,
             #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
             reconnect_attempts: 0,
+            #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+            ready_timeout: Duration::from_secs(10),
             store: store.clone(),
         };
         let (finished, stopped) = mpsc::sync_channel(1);
@@ -733,7 +916,10 @@ mod tests {
         let mut controller = CaptureController {
             meeting_id: store.preview_snapshot(0).unwrap().id,
             stop,
-            tracks: vec![("system", system), ("microphone", microphone)],
+            tracks: vec![
+                ("system", system, Arc::new(AtomicBool::new(false))),
+                ("microphone", microphone, Arc::new(AtomicBool::new(false))),
+            ],
             controls: Arc::new(CaptureControls::new(&store).unwrap()),
             #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
             microphone_id: None,
@@ -741,6 +927,8 @@ mod tests {
             recorder: platform::record,
             #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
             reconnect_attempts: 0,
+            #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+            ready_timeout: Duration::from_secs(10),
             store,
         };
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
