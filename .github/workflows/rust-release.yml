@@ -83,8 +83,11 @@ jobs:
               out.write('complete='+str(json.load(open('.build/existing-release.json'))['complete']).lower()+'\n')
           PY
       # Publishing never builds. Publishing a release with a new tag also pushes that tag,
-      # and the run of that tag builds and attaches the packages to this release. A run of
-      # another tag on the same commit does not count (`branch` is the tag of a tag push).
+      # and the run of that tag builds and attaches the packages to this release. Both runs
+      # share the concurrency group, so a tag run that is still to come is queued or pending;
+      # only such an unfinished run of this tag counts (`branch` is the tag of a tag push).
+      # A finished run has already attached its packages, so an incomplete release after it
+      # needs the recovery below.
       - name: Refuse compilation on publication when the prepared bundle is missing
         if: github.event_name == 'release'
         env:
@@ -95,7 +98,7 @@ jobs:
           set -euo pipefail
           if [ "$COMPLETE" = true ]; then exit 0; fi
           for attempt in 1 2 3 4 5 6; do
-            builds=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/rust-release.yml/runs?event=push&branch=$RELEASE_TAG&head_sha=$GITHUB_SHA" --jq '[.workflow_runs[] | select(.conclusion == null or .conclusion == "success")] | length')
+            builds=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/rust-release.yml/runs?event=push&branch=$RELEASE_TAG&head_sha=$GITHUB_SHA" --jq '[.workflow_runs[] | select(.status != "completed")] | length')
             if [ "$builds" -gt 0 ]; then
               echo '::notice::The tag build of this commit attaches the packages to this release; nothing is built here.'
               exit 0

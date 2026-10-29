@@ -237,6 +237,9 @@ class WorkflowBoundaries(unittest.TestCase):
         refusal = validate[validate.index('Refuse compilation on publication'):]
         self.assertIn('actions/workflows/rust-release.yml/runs?event=push&branch=$RELEASE_TAG&head_sha=$GITHUB_SHA', refusal)
         self.assertIn('RELEASE_TAG: ${{ steps.identity.outputs.tag }}', refusal)
+        # A finished earlier build must not let an empty release pass.
+        self.assertIn('select(.status != "completed")', refusal)
+        self.assertNotIn('"success"', refusal)
         self.assertIn('actions: read', validate)
         existing = job(text, 'publish_existing')
         self.assertIn("already_complete == 'true'", existing)
