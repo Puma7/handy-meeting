@@ -199,6 +199,91 @@ label {
   flex-shrink: 0;
   margin-top: 1px;
 }
+/* Recording health stays visible on every page and at every scroll position. */
+.sidebar-recording {
+  margin-bottom: 18px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--color-error) 30%, transparent);
+  border-radius: 10px;
+  background: var(--color-error-wash);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.sidebar-recording[data-paused] {
+  border-color: var(--color-line);
+  background: var(--color-wash);
+}
+.sidebar-recording-head {
+  width: 100%;
+  gap: 7px;
+  padding: 0;
+  justify-content: flex-start;
+  background: transparent;
+  color: var(--color-text);
+  font-weight: 600;
+  text-align: left;
+}
+.sidebar-recording-time {
+  margin-left: auto;
+  color: var(--color-ink-2);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.recording-pulse {
+  width: 9px;
+  height: 9px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-error);
+  animation: recording-pulse 1.6s ease-out infinite;
+}
+.sidebar-recording[data-paused] .recording-pulse {
+  background: var(--color-ink-3);
+  animation: none;
+}
+@keyframes recording-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-error) 55%, transparent);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 7px transparent;
+  }
+}
+.sidebar-recording-facts {
+  display: grid;
+  gap: 4px;
+  margin: 9px 0 0;
+}
+.sidebar-recording-facts > div {
+  display: grid;
+  gap: 0;
+}
+.sidebar-recording-facts dt {
+  color: var(--color-ink-2);
+  font-size: 11px;
+}
+.sidebar-recording-facts dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.sidebar-recording [data-high] {
+  color: var(--color-error);
+  font-weight: 600;
+}
+.sidebar-recording-text {
+  display: -webkit-box;
+  margin-top: 9px;
+  overflow: hidden;
+  color: var(--color-ink-2);
+  font-style: italic;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
 .appearance-row {
   display: flex;
   align-items: center;
@@ -231,15 +316,6 @@ main {
   margin-top: 8px;
   max-width: 760px;
 }
-.recording-link {
-  background: var(--color-moss-wash);
-  color: var(--color-moss);
-  border-radius: 8px;
-  padding: 9px 11px;
-  font-size: 12px;
-  flex-shrink: 0;
-}
-.recording-dot,
 .state-dot {
   display: inline-block;
   width: 7px;
@@ -247,9 +323,6 @@ main {
   border-radius: 50%;
   background: var(--color-ink-3);
   flex-shrink: 0;
-}
-.recording-dot {
-  background: var(--color-error);
 }
 .state.recording .state-dot {
   background: var(--color-error);
@@ -1309,9 +1382,6 @@ mark {
     margin-left: 180px;
     width: calc(100% - 180px);
   }
-  .recording-link {
-    display: none;
-  }
   .setup-panel {
     padding: 20px 18px 0;
     gap: 16px;
@@ -1359,6 +1429,21 @@ mark {
   }
   .sidebar-bottom {
     padding: 0;
+  }
+  .sidebar-recording {
+    padding: 9px 0;
+    display: flex;
+    justify-content: center;
+  }
+  .sidebar-recording-head {
+    width: auto;
+    justify-content: center;
+  }
+  .sidebar-recording-label,
+  .sidebar-recording-time,
+  .sidebar-recording-facts,
+  .sidebar-recording-text {
+    display: none;
   }
   .appearance-row {
     flex-direction: column;

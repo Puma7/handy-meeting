@@ -28,6 +28,12 @@ export interface AudioLevel {
   clipped: boolean;
   ageMs: number | null;
 }
+/** Load of the whole computer, not only of this app. */
+export interface SystemLoad {
+  cpuPercent: number | null;
+  memoryUsedBytes: number | null;
+  memoryTotalBytes: number | null;
+}
 export interface AudioLevels {
   meetingId: string;
   system: AudioLevel;
@@ -438,6 +444,8 @@ export interface DesktopApi {
   getAppState(): Promise<AppState>;
   /** Lightweight, read-only capture snapshot; null when no capture is active. */
   getAudioLevels?(): Promise<AudioLevels | null>;
+  /** Whole-computer processor and memory load; values that cannot be read are null. */
+  getSystemLoad?(): Promise<SystemLoad>;
   /** Binds a pause request to the current meeting; resolves with native acknowledgement. */
   setCapturePaused?(meetingId: string, paused: boolean): Promise<AppState>;
   /** Mutes only this app's microphone track for the bound meeting, retaining system audio. */

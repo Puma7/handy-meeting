@@ -88,6 +88,7 @@ export const desktopApi: DesktopApi = {
   cancelLibraryJob: (jobId) => desktopInvoke("cancel_library_job", { jobId }),
   getAppState: () => desktopInvoke("get_app_state"),
   getAudioLevels: () => desktopInvoke("get_audio_levels"),
+  getSystemLoad: () => desktopInvoke("get_system_load"),
   setCapturePaused: (meetingId, paused) =>
     desktopInvoke("set_capture_paused", { meetingId, paused }),
   setMicrophoneMuted: (meetingId, muted) =>
