@@ -149,6 +149,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
+    // A pending microphone reconnect blocks other controls but never Stop, which cancels it.
+    [reconnecting, setReconnecting] = useState(false),
     [isStopping, setIsStopping] = useState(false),
     [refreshingHandy, setRefreshingHandy] = useState(false),
     [handyRefreshFailure, setHandyRefreshFailure] = useState<string | null>(
@@ -1963,11 +1965,13 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             recording={recording}
             busy={
               busy ||
+              reconnecting ||
               speakerChecking ||
               refreshingHandy ||
               catchingUp ||
               (app?.transitioning ?? false)
             }
+            reconnecting={reconnecting}
             controlsAvailable={Boolean(
               api.setCapturePaused && api.setMicrophoneMuted,
             )}
@@ -1976,12 +1980,20 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
               api.reconnectMicrophone
                 ? () => {
                     const id = app?.activeMeeting?.id;
-                    if (!id) return;
-                    void action(async () => {
-                      const state = await api.reconnectMicrophone!(id);
-                      requestSequence.current++;
-                      setApp(state);
-                    });
+                    if (!id || busy || reconnecting) return;
+                    setReconnecting(true);
+                    setError(null);
+                    void api.reconnectMicrophone!(id)
+                      .then((state) => {
+                        requestSequence.current++;
+                        setApp(state);
+                      })
+                      .catch((failure) => {
+                        // Stopping cancels the reconnect; that is not a device error.
+                        if (!latestRuntime.current.isStopping)
+                          setError(errorMessage(failure));
+                      })
+                      .finally(() => setReconnecting(false));
                   }
                 : undefined
             }

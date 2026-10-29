@@ -31,6 +31,8 @@ type Props = {
   recording: boolean;
   isStopping: boolean;
   busy: boolean;
+  /** A microphone reconnect is pending; Stop stays available and cancels it. */
+  reconnecting?: boolean;
   connected: boolean;
   title: string;
   defaultTitle: string;
@@ -86,6 +88,7 @@ export default function MeetingView({
   recording,
   isStopping,
   busy,
+  reconnecting = false,
   connected,
   title,
   defaultTitle,
@@ -261,7 +264,7 @@ export default function MeetingView({
           {recording || isStopping ? (
             <button
               className="danger"
-              disabled={busy || isStopping}
+              disabled={(busy && !reconnecting) || isStopping}
               title={t.stopTooltip}
               onClick={() => void stop()}
             >

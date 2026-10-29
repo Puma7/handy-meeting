@@ -24,7 +24,7 @@ Nacharbeit nach den Reviews von Codex, CodeRabbit und Claude, nach dem Zusammenf
 - Scheitert ein Start nach bereits geschriebener Lückenstille, wird der Abschnitt abgeschlossen (Windows und portable Aufnahme). So blockiert ein vorübergehender Startfehler spätere Versuche nicht mehr.
 - Unter macOS ist der Eintrag „Standardmikrofon“ kein Wiederverbindungsziel, weil er dem jeweils aktuellen Eingang folgt.
 - Ein Fehler beim Wiederverbinden nennt jetzt seinen Grund.
-- „Meeting beenden“ bricht ein laufendes Wiederverbinden sofort ab, wartet, bis die Aufnahme zurückgegeben ist, und beendet dann alle Spuren. Vorher wurde das Beenden abgelehnt, solange das Wiederverbinden lief.
+- „Meeting beenden“ bricht ein laufendes Wiederverbinden sofort ab, wartet, bis die Aufnahme zurückgegeben ist, und beendet dann alle Spuren. Vorher wurde das Beenden abgelehnt, solange das Wiederverbinden lief. Die Oberfläche lässt „Meeting beenden“ dafür während des Wiederverbindens bedienbar und zeigt den Abbruch nicht als Gerätefehler.
 - Endet die Wartephase auf die Erkennung, entfernt das nur den eigenen Wartehinweis, keine anderen Fehler.
 - Ein Hinweis zu nicht gespeicherten Diagnosen gilt nur für die betroffene Aktualisierung.
 - Eine nach HTTP 200 abgebrochene Antwort zählt als Verbindungsfehler, ungültiges Antwort-JSON als unvollständige Antwort, nicht als Validierungsfehler.
