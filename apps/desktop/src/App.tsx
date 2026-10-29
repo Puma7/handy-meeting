@@ -626,6 +626,13 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       });
       const chosen = { system: current.systemId, microphone: current.micId };
       let losses = deviceLossesRef.current;
+      // Devices that stand in automatically for a lost one; losing them too keeps the
+      // original record, so the first device still returns.
+      const standIns = new Set(
+        losses
+          .filter((loss) => !loss.duringRecording && loss.replacementId)
+          .map((loss) => `${loss.source}:${loss.replacementId}`),
+      );
       if (!current.recording) {
         for (const source of ["system", "microphone"] as const) {
           if (listed(source, chosen[source])) continue;
@@ -656,6 +663,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         }
       }
       for (const item of lost) {
+        if (!current.recording && standIns.has(`${item.source}:${item.id}`))
+          continue;
         // The native capture usually reports the stop first; a later list change must not
         // weaken that confirmation or reopen a closed notice.
         if (

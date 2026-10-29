@@ -202,6 +202,35 @@ describe("audio devices follow connected and removed hardware (synthetic IPC)", 
     await waitFor(() => expect(microphoneSelect().value).toBe(headset.id));
   });
 
+  it("keeps the first lost microphone across successive automatic fallbacks", async () => {
+    let devices = [output, builtIn, alternate, headset];
+    const api = fakeApi(
+      () => devices,
+      () => state(),
+    );
+    render(<App api={api} />);
+    await screen.findByRole("option", { name: headset.name });
+    await userEvent.click(
+      screen.getByLabelText("Mikrofon zusätzlich aufnehmen"),
+    );
+    await userEvent.selectOptions(microphoneSelect(), headset.id);
+    // The headset goes, the default stands in; then the stand-in goes as well.
+    devices = [output, builtIn, alternate];
+    fireEvent.focus(window);
+    await waitFor(() => expect(microphoneSelect().value).toBe(builtIn.id));
+    devices = [output, alternate];
+    fireEvent.focus(window);
+    await waitFor(() => expect(microphoneSelect().value).toBe(alternate.id));
+    expect(
+      await screen.findByText(
+        /„Synthetic headset“ ist nicht mehr verfügbar. Ausgewählt ist jetzt „Synthetic alternate microphone“/,
+      ),
+    ).toBeTruthy();
+    devices = [output, alternate, headset];
+    fireEvent.focus(window);
+    await waitFor(() => expect(microphoneSelect().value).toBe(headset.id));
+  });
+
   it("reports a removed microphone, chooses another one and takes it back on reconnect", async () => {
     let devices = [output, builtIn, headset];
     const api = fakeApi(
