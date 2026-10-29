@@ -296,7 +296,7 @@ impl CaptureControls {
     fn record(&self, kind: &str, paused: bool, microphone_muted: bool) -> Result<()> {
         self.record_event(kind, paused, microphone_muted, None, None, None)
     }
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux", target_os = "macos", test))]
     /// Records explicit missing microphone samples separately from intentional pause/mute silence.
     pub fn record_microphone_gap(&self, start_sample: u64, missing_samples: u64) -> Result<()> {
         let snapshot = self.snapshot();
