@@ -622,8 +622,70 @@ fn stopping_ends_a_running_microphone_reconnect_before_closing_the_recording() {
             service.lock().unwrap().reconnect_cancel = None;
         })
     };
-    service.cancel_microphone_reconnect().unwrap();
+    assert!(service.cancel_microphone_reconnect().unwrap());
     reconnect.join().unwrap();
+    assert!(!service.cancel_microphone_reconnect().unwrap());
     assert!(cancel.load(Ordering::Acquire));
     assert!(service.lock().unwrap().reconnect_cancel.is_none());
+}
+
+#[test]
+fn a_stop_during_a_finishing_reconnect_waits_and_then_closes_the_recording() {
+    // Synthetic: a reconnect thread clears its canceller and only then releases the
+    // transition, the harder order for the stop. No audio device is used.
+    let root = fixture_root("reconnect-handover");
+    let store = SessionStore::create(
+        &root.join("sessions"),
+        "Synthetic reconnect handover",
+        "fixture-model",
+        "fixture-output",
+        None,
+    )
+    .unwrap();
+    let mut writer = meeting_core::PcmWriter::new(store.clone(), "system").unwrap();
+    writer.append(&[1_i16, 2, 3, 4]).unwrap();
+    writer.finish().unwrap();
+    drop(writer);
+    let service = Arc::new(Service::new(root).unwrap());
+    let cancel = Arc::new(AtomicBool::new(false));
+    {
+        let mut inner = service.lock().unwrap();
+        inner.active = Some(Active {
+            _operation: None,
+            owner: None,
+            store: store.clone(),
+            capture: None,
+            stop: Arc::new(AtomicBool::new(false)),
+            workers: vec![],
+        });
+        inner.reconnecting_microphone = true;
+        inner.reconnect_cancel = Some(Arc::clone(&cancel));
+    }
+    let (ready, held) = std::sync::mpsc::channel::<()>();
+    let reconnect = {
+        let service = Arc::clone(&service);
+        let cancel = Arc::clone(&cancel);
+        std::thread::spawn(move || {
+            let gate = service.try_transition().unwrap();
+            ready.send(()).unwrap();
+            while !cancel.load(Ordering::Acquire) {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            {
+                let mut inner = service.lock().unwrap();
+                inner.reconnecting_microphone = false;
+                inner.reconnect_cancel = None;
+            }
+            // The stop request now sees no canceller while the transition is still held.
+            std::thread::sleep(std::time::Duration::from_millis(150));
+            drop(gate);
+        })
+    };
+    held.recv().unwrap();
+    let stopped = service.stop_for(None, None);
+    reconnect.join().unwrap();
+    assert!(stopped.is_ok(), "{:?}", stopped.err());
+    assert!(cancel.load(Ordering::Acquire));
+    assert!(service.lock().unwrap().active.is_none());
+    assert_eq!(store.snapshot().unwrap().parts[0].confirmed_sample_count, 4);
 }

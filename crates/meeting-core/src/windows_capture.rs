@@ -466,13 +466,17 @@ pub(super) fn record(
         let start = Instant::now();
         let previous_end = writer.written_samples();
         diagnostics.start_sample = previous_end;
-        let resumed_at = controls.elapsed_samples();
         let mut stream_running = false;
         // Gap silence may already be on disk when a later startup step fails or the
         // controller gave up waiting. Close it, so a later reconnect can verify and
         // continue this track instead of finding an unclosed section.
         let startup = (|| -> Result<()> {
-            pad_capture_origin(&mut writer, resumed_at, &stop, &controls)?;
+            // Re-reads the clock while the gap is written, right before the stream starts, so
+            // resumed speech is not placed early relative to system audio.
+            let resumed_at =
+                super::pad_to_clock(&mut writer, &|| controls.elapsed_samples(), &stop, &|| {
+                    controls.note_startup_progress()
+                })?;
             if source == "microphone" && previous_end > 0 && resumed_at > previous_end {
                 controls.record_microphone_gap(previous_end, resumed_at - previous_end)?;
             }
@@ -629,30 +633,6 @@ pub(super) fn record(
         }
     }
     result
-}
-
-/// A reconnect gap comes from the controller's monotonic origin, not a device timestamp.
-/// Fill it in bounded turns even after a longer outage; never relax packet/clock bounds.
-fn pad_capture_origin(
-    writer: &mut PcmWriter,
-    target: u64,
-    stop: &AtomicBool,
-    controls: &CaptureControls,
-) -> Result<()> {
-    while writer.written_samples() < target {
-        if stop.load(Ordering::Acquire) {
-            return Err("Capture stopped while aligning the reconnected microphone".into());
-        }
-        writer.pad_to(
-            target.min(
-                writer
-                    .written_samples()
-                    .saturating_add(u64::from(SAMPLE_RATE) * 5),
-            ),
-        )?;
-        controls.note_startup_progress();
-    }
-    Ok(())
 }
 
 /// Keeps earlier capture generations immutable, including failed reconnect attempts.
@@ -1182,7 +1162,10 @@ mod tests {
         let mut resumed = PcmWriter::for_capture(store.clone(), "microphone", &|| {}).unwrap();
         let target = u64::from(SAMPLE_RATE) * 301;
         let controls = CaptureControls::uncontrolled();
-        pad_capture_origin(&mut resumed, target, &AtomicBool::new(false), &controls).unwrap();
+        super::super::pad_to_clock(&mut resumed, &|| target, &AtomicBool::new(false), &|| {
+            controls.note_startup_progress()
+        })
+        .unwrap();
         // Each bounded five-second step counts as startup progress for the readiness wait.
         assert_eq!(controls.startup_progress(), 61);
         resumed.append(&[93, -94]).unwrap();

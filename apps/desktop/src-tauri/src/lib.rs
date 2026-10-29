@@ -249,6 +249,19 @@ impl Service {
         })
     }
     /// Try the recording transition mutex without waiting; contention returns a busy error.
+    /// Waits a bounded time for a transition that is known to be ending (a cancelled
+    /// reconnect returning its capture).
+    fn wait_for_transition(&self) -> AppResult<MutexGuard<'_, ()>> {
+        use std::time::{Duration, Instant};
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            match self.try_transition() {
+                Ok(guard) => return Ok(guard),
+                Err(error) if Instant::now() >= deadline => return Err(error),
+                Err(_) => std::thread::sleep(Duration::from_millis(20)),
+            }
+        }
+    }
     fn try_transition(&self) -> AppResult<MutexGuard<'_, ()>> {
         self.transition.try_lock().map_err(|error| match error {
             std::sync::TryLockError::WouldBlock => "A recording transition is running. Try again shortly. / Die Aufnahmesteuerung arbeitet noch. Bitte kurz warten.".into(),
@@ -476,7 +489,7 @@ impl Service {
     /// Device initialization runs outside the state lock; ordinary failure restores the
     /// controller with its system track and operation lease still owned.
     fn reconnect_microphone(&self, meeting_id: &str) -> AppResult<AppView> {
-        let _transition = self.try_transition()?;
+        let transition = self.try_transition()?;
         let mut capture = {
             let mut inner = self.lock()?;
             let active = inner
@@ -508,18 +521,28 @@ impl Service {
             capture
         };
         let result = capture.reconnect_microphone().map_err(|error| format!("Mikrofon konnte nicht verbunden werden. Das ursprünglich gewählte Gerät prüfen und erneut versuchen. Computerton und gesicherte Daten bleiben erhalten. / Could not reconnect the original microphone. Check the device and retry; system audio and saved data are retained. ({error})"));
-        {
+        let restored = {
             let mut inner = self.lock()?;
             // The transition guard excludes stop/start/revoke until ownership is restored.
-            inner
-                .active
-                .as_mut()
-                .ok_or("Recording ownership unavailable")?
-                .capture = Some(capture);
+            let restored = match inner.active.as_mut() {
+                Some(active) => {
+                    active.capture = Some(capture);
+                    Ok(())
+                }
+                None => Err("Recording ownership unavailable".to_string()),
+            };
             inner.transitioning = false;
+            restored
+        };
+        // Release the transition before the canceller: a stop that saw the canceller waits
+        // for the transition, so it can never find neither a canceller nor a free transition.
+        drop(transition);
+        {
+            let mut inner = self.lock()?;
             inner.reconnecting_microphone = false;
             inner.reconnect_cancel = None;
         }
+        restored?;
         result?;
         self.state()
     }
@@ -636,14 +659,19 @@ impl Service {
         self.stop_for(None, None)
     }
     /// Stopping must not wait for a slow microphone: end a running reconnect and wait until
-    /// it has returned the capture, so the regular stop below closes every track.
-    fn cancel_microphone_reconnect(&self) -> AppResult<()> {
+    /// it has returned the capture, so the regular stop below closes every track. Returns
+    /// whether a reconnect was running.
+    fn cancel_microphone_reconnect(&self) -> AppResult<bool> {
         use std::time::{Duration, Instant};
         let deadline = Instant::now() + Duration::from_secs(90);
+        let mut cancelled = false;
         loop {
             match &self.lock()?.reconnect_cancel {
-                None => return Ok(()),
-                Some(cancel) => cancel.store(true, Ordering::Release),
+                None => return Ok(cancelled),
+                Some(cancel) => {
+                    cancel.store(true, Ordering::Release);
+                    cancelled = true;
+                }
             }
             if Instant::now() >= deadline {
                 return Err("Das Mikrofon wird noch verbunden; bitte erneut „Meeting beenden“ wählen. / The microphone is still reconnecting; choose Stop meeting again.".into());
@@ -655,10 +683,13 @@ impl Service {
     /// recognition as capture-less catch-up instead of waiting for every worker.
     fn stop_for(&self, owner: Option<&str>, session: Option<&str>) -> AppResult<MeetingView> {
         // Only a manual recording can be reconnecting; an agent never stops it from here.
-        if owner.is_none() {
-            self.cancel_microphone_reconnect()?;
-        }
-        let _gate = self.try_transition()?;
+        // A cancelled reconnect still holds the transition briefly while it returns; wait
+        // for it instead of refusing the stop.
+        let _gate = if owner.is_none() && self.cancel_microphone_reconnect()? {
+            self.wait_for_transition()?
+        } else {
+            self.try_transition()?
+        };
         let mut active = {
             let mut inner = self.lock()?;
             if owner.is_some()

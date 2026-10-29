@@ -404,6 +404,31 @@ fn reconnect_target(id: Option<String>, macos: bool) -> Option<String> {
     id.filter(|id| !id.is_empty() && (!macos || id != "default"))
 }
 
+/// Pads a resumed track with silence up to `now()`, reading the clock again after every
+/// bounded five-second step. Writing a long gap takes time while system audio advances;
+/// without the re-read, the first resumed packet would be placed early by that time and the
+/// recorded gap would end too soon. Returns the reached position.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn pad_to_clock(
+    writer: &mut crate::PcmWriter,
+    now: &dyn Fn() -> u64,
+    stop: &AtomicBool,
+    progress: &dyn Fn(),
+) -> Result<u64> {
+    loop {
+        let target = now();
+        if writer.written_samples() >= target {
+            return Ok(writer.written_samples());
+        }
+        if stop.load(Ordering::Acquire) {
+            return Err("Capture stopped while aligning the reconnected microphone".into());
+        }
+        let step = target.min(writer.written_samples() + u64::from(crate::SAMPLE_RATE) * 5);
+        writer.pad_to(step)?;
+        progress();
+    }
+}
+
 /// The first driver-reported discontinuity of a track, with its position in the saved
 /// track, so the affected range can be found next to the transcript section times.
 #[cfg_attr(not(windows), allow(dead_code))]
@@ -689,6 +714,36 @@ mod tests {
         assert!(!controller.controls().has_microphone);
         controller.stop().unwrap();
         assert!(!store.folder().join("synthetic-late-mic-recorded").exists());
+    }
+
+    #[test]
+    fn gap_padding_follows_the_clock_while_the_gap_is_written() {
+        let root = tempfile::tempdir().unwrap();
+        let store =
+            SessionStore::create(root.path(), "Synthetic clock", "m", "s", Some("mic")).unwrap();
+        let mut writer = crate::PcmWriter::new(store, "microphone").unwrap();
+        // Synthetic shared clock: writing the gap costs three seconds of wall time at first.
+        let rate = u64::from(crate::SAMPLE_RATE);
+        let reads = std::cell::Cell::new(0_u64);
+        let now = || {
+            reads.set(reads.get() + 1);
+            rate * 10 + rate * 3 * reads.get().min(4)
+        };
+        let steps = std::cell::Cell::new(0);
+        let reached = pad_to_clock(&mut writer, &now, &AtomicBool::new(false), &|| {
+            steps.set(steps.get() + 1)
+        })
+        .unwrap();
+        assert_eq!(
+            reached,
+            rate * 22,
+            "the gap covers the time spent writing it"
+        );
+        assert_eq!(writer.written_samples(), reached);
+        assert!(steps.get() >= 5);
+        let stopped = pad_to_clock(&mut writer, &|| rate * 60, &AtomicBool::new(true), &|| {});
+        assert!(stopped.is_err());
+        writer.finish().unwrap();
     }
 
     #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
