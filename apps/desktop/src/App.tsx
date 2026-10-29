@@ -22,6 +22,13 @@ import NotesProgressPanel from "./views/NotesProgressPanel";
 import TemplateDialog, { type TemplateAction } from "./views/TemplateDialog";
 import SourceDialog, { type SourceSelection } from "./views/SourceDialog";
 import AgentPanel from "./views/AgentPanel";
+import DeviceNotices from "./views/DeviceNotices";
+import {
+  lostSelections,
+  useDeviceRefresh,
+  type DeviceLoss,
+  type DeviceSource,
+} from "./deviceWatch";
 import { useTemplateLibrary } from "./useTemplateLibrary";
 import { useLocalTextModels } from "./useLocalTextModels";
 import { useNotesJob } from "./useNotesJob";
@@ -152,6 +159,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     file: string;
   } | null>(null);
   const [devices, setDevices] = useState<AudioDevice[]>([]),
+    [deviceLosses, setDeviceLosses] = useState<DeviceLoss[]>([]),
     [history, setHistory] = useState<MeetingSummary[]>([]),
     [meeting, setMeeting] = useState<Meeting | null>(null),
     [liveMeeting, setLiveMeeting] = useState<Meeting | null>(null),
@@ -363,6 +371,25 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     ["catching-up", "streaming"].includes(app?.activeMeeting?.status ?? "");
   const latestRuntime = useRef({ app, busy, isStopping, connected });
   latestRuntime.current = { app, busy, isStopping, connected };
+  const devicesRef = useRef<AudioDevice[]>([]),
+    deviceLossesRef = useRef<DeviceLoss[]>([]),
+    deviceRequest = useRef(0),
+    // The device IDs a pending start sent to the capture, until the recording is reported.
+    startDevices = useRef<Record<DeviceSource, string | null> | null>(null);
+  /** Keeps the rendered device notices and the reconciliation input identical. */
+  const updateDeviceLosses = useCallback((next: DeviceLoss[]) => {
+    deviceLossesRef.current = next;
+    setDeviceLosses(next);
+  }, []);
+  const meetingId = app?.activeMeeting?.id ?? null;
+  const selectionRef = useRef({
+    systemId,
+    micId,
+    micEnabled,
+    recording,
+    meetingId,
+  });
+  selectionRef.current = { systemId, micId, micEnabled, recording, meetingId };
   /**
    * Merges a completed result only into its still-selected meeting and removes the
    * corresponding resumable placeholder.
@@ -588,25 +615,144 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
   }, [app?.handy, modelId, handyRefreshFailure, t.modelUnavailable]);
   /**
    * Retains available device selections; otherwise chooses the default or first device
-   * separately for system audio and microphone.
+   * separately for system audio and microphone. A running recording keeps its devices,
+   * and every selected device that disappeared is reported.
    */
-  const applyDevices = useCallback((items: AudioDevice[]) => {
-    setDevices(items);
-    setSystemId((old) =>
-      items.some((d) => d.source === "system" && d.id === old)
-        ? old
-        : (items.find((d) => d.source === "system" && d.isDefault)?.id ??
-          items.find((d) => d.source === "system")?.id ??
-          ""),
-    );
-    setMicId((old) =>
-      items.some((d) => d.source === "microphone" && d.id === old)
-        ? old
-        : (items.find((d) => d.source === "microphone" && d.isDefault)?.id ??
-          items.find((d) => d.source === "microphone")?.id ??
-          ""),
-    );
-  }, []);
+  const applyDevices = useCallback(
+    (items: AudioDevice[]) => {
+      const previous = devicesRef.current;
+      const current = selectionRef.current;
+      devicesRef.current = items;
+      setDevices(items);
+      const listed = (source: DeviceSource, id: string) =>
+        items.some((d) => d.source === source && d.id === id);
+      const fallback = (source: DeviceSource) =>
+        items.find((d) => d.source === source && d.isDefault) ??
+        items.find((d) => d.source === source);
+      const lost = lostSelections(previous, items, {
+        system: current.systemId,
+        microphone: current.micEnabled ? current.micId : null,
+      });
+      const chosen = { system: current.systemId, microphone: current.micId };
+      let losses = deviceLossesRef.current;
+      // Devices that stand in automatically for a lost one; losing them too keeps the
+      // original record, so the first device still returns.
+      const standIns = new Set(
+        losses
+          .filter((loss) => loss.replacementId && !loss.userChose)
+          .map((loss) => `${loss.source}:${loss.replacementId}`),
+      );
+      // The device selected in place of a lost one. A recording keeps its selection, so a
+      // loss from a recording stands in for itself until an automatic choice replaces it.
+      // After the user's own choice nothing stands in: the lost device no longer returns.
+      const standing = (loss: DeviceLoss) =>
+        loss.userChose
+          ? null
+          : (loss.replacementId ?? (loss.duringRecording ? loss.id : ""));
+      if (!current.recording) {
+        for (const source of ["system", "microphone"] as const) {
+          if (listed(source, chosen[source])) continue;
+          const automatic = fallback(source);
+          // A later automatic choice is not the user's: the lost device still returns, and
+          // its notice names the device now selected. Without any device the record stands
+          // for the empty selection, so the next device that appears stands in too.
+          losses = losses.map((loss) =>
+            loss.source === source && standing(loss) === chosen[source]
+              ? {
+                  ...loss,
+                  replacement: automatic?.name,
+                  replacementId: automatic?.id ?? "",
+                }
+              : loss,
+          );
+          chosen[source] = automatic?.id ?? "";
+        }
+      }
+      if (!current.recording) {
+        // A device that is back takes over again unless another one was chosen meanwhile,
+        // also when it was lost during a recording that has ended since.
+        for (const loss of losses) {
+          if (!listed(loss.source, loss.id)) continue;
+          if (chosen[loss.source] === standing(loss))
+            chosen[loss.source] = loss.id;
+          losses = losses.filter((item) => item !== loss);
+        }
+      }
+      for (const item of lost) {
+        if (!current.recording && standIns.has(`${item.source}:${item.id}`))
+          continue;
+        // The native capture usually reports the stop first; a later list change must not
+        // weaken that confirmation or reopen a closed notice.
+        if (
+          current.recording &&
+          losses.some(
+            (loss) =>
+              loss.source === item.source &&
+              loss.duringRecording &&
+              loss.confirmed,
+          )
+        )
+          continue;
+        const replacement = current.recording
+          ? undefined
+          : items.find(
+              (d) => d.source === item.source && d.id === chosen[item.source],
+            );
+        losses = [
+          ...losses.filter((loss) => loss.source !== item.source),
+          {
+            ...item,
+            duringRecording: current.recording,
+            meetingId: current.recording ? current.meetingId : undefined,
+            replacement: replacement?.name,
+            replacementId: replacement?.id,
+          },
+        ];
+      }
+      if (
+        losses.length !== deviceLossesRef.current.length ||
+        losses.some((loss, index) => loss !== deviceLossesRef.current[index])
+      )
+        updateDeviceLosses(losses);
+      setSystemId(chosen.system);
+      setMicId(chosen.microphone);
+    },
+    [updateDeviceLosses],
+  );
+  /**
+   * A device the user picks wins over a later returning one, even when it is the device
+   * that was chosen automatically before. The notice then names the picked device.
+   */
+  const chooseDevice = useCallback(
+    (source: DeviceSource, id: string) => {
+      if (source === "system") setSystemId(id);
+      else setMicId(id);
+      const losses = deviceLossesRef.current;
+      const name = devicesRef.current.find(
+        (d) => d.source === source && d.id === id,
+      )?.name;
+      if (
+        losses.some(
+          (loss) =>
+            loss.source === source &&
+            (!loss.userChose || loss.replacementId !== id),
+        )
+      )
+        updateDeviceLosses(
+          losses.map((loss) =>
+            loss.source === source
+              ? {
+                  ...loss,
+                  userChose: true,
+                  replacement: name,
+                  replacementId: id,
+                }
+              : loss,
+          ),
+        );
+    },
+    [updateDeviceLosses],
+  );
   /**
    * Reloads the backend meeting summaries without changing the currently selected meeting
    * or opening its source files.
@@ -630,8 +776,87 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
    * opening an audio stream.
    */
   const refreshDevices = useCallback(async () => {
-    applyDevices(await api.listDevices());
+    // Startup, manual and automatic refreshes can overlap; only the newest list applies,
+    // so an older reply cannot bring back a device that was just removed.
+    const request = ++deviceRequest.current;
+    const items = await api.listDevices();
+    if (request === deviceRequest.current) applyDevices(items);
   }, [api, applyDevices]);
+  useDeviceRefresh(refreshDevices, connected);
+  const micCapturing = useRef(false),
+    wasRecording = useRef(false);
+  useEffect(() => {
+    // A new recording starts with its own devices; earlier notices no longer apply. A loss
+    // of this recording may already be recorded before this effect runs, so it stays.
+    if (recording && !wasRecording.current) {
+      const id = app?.activeMeeting?.id ?? null,
+        started = startDevices.current;
+      startDevices.current = null;
+      const kept = deviceLossesRef.current.flatMap((loss) =>
+        loss.duringRecording && loss.meetingId === id
+          ? [loss]
+          : // A device lost while the start was pending still went to the capture: the
+            // recording keeps it, like a loss during the recording.
+            !loss.duringRecording && started?.[loss.source] === loss.id
+            ? [
+                {
+                  ...loss,
+                  duringRecording: true,
+                  meetingId: id,
+                  replacement: undefined,
+                  replacementId: undefined,
+                },
+              ]
+            : [],
+      );
+      updateDeviceLosses(kept);
+      for (const loss of kept) {
+        if (started?.[loss.source] !== loss.id) continue;
+        if (loss.source === "system") setSystemId(loss.id);
+        else setMicId(loss.id);
+      }
+    }
+    wasRecording.current = recording;
+    // The native microphone track ended while the recording continues: the device was
+    // removed or failed, even before the next device list shows it.
+    const capturing = Boolean(recording && app?.captureControl?.hasMicrophone);
+    const ended =
+      micCapturing.current &&
+      !capturing &&
+      recording &&
+      !isStopping &&
+      !app?.transitioning;
+    micCapturing.current = capturing;
+    if (!ended) return;
+    // This confirms the stop, so it replaces an earlier list-based or closed notice.
+    const id = selectionRef.current.micId;
+    const earlier = deviceLossesRef.current.find(
+      (loss) => loss.source === "microphone" && loss.duringRecording,
+    );
+    updateDeviceLosses([
+      ...deviceLossesRef.current.filter((loss) => loss.source !== "microphone"),
+      {
+        source: "microphone",
+        id,
+        // After the device left the list, only the earlier record still knows its name.
+        name:
+          devicesRef.current.find(
+            (d) => d.source === "microphone" && d.id === id,
+          )?.name ??
+          earlier?.name ??
+          "",
+        duringRecording: true,
+        meetingId: selectionRef.current.meetingId,
+        confirmed: true,
+      },
+    ]);
+  }, [
+    recording,
+    app?.captureControl?.hasMicrophone,
+    app?.transitioning,
+    isStopping,
+    updateDeviceLosses,
+  ]);
   /**
    * Applies only the newest state request and loads a complete transcript when the active
    * session has finished. It observes capture rather than starting or stopping it.
@@ -1027,12 +1252,23 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         throw new Error(catalogueFailure.current);
       if (pendingNativeChoice.current !== null) throw new Error(t.busy);
       if (modelRefreshInFlight.current) throw new Error(t.busy);
-      const item = await api.startMeeting({
-        title: title.trim() || defaultMeetingTitle(locale),
-        modelId,
-        systemDeviceId: systemId,
-        microphoneDeviceId: micEnabled ? micId : null,
-      });
+      const selected = {
+        system: systemId,
+        microphone: micEnabled ? micId : null,
+      };
+      startDevices.current = selected;
+      let item: Meeting;
+      try {
+        item = await api.startMeeting({
+          title: title.trim() || defaultMeetingTitle(locale),
+          modelId,
+          systemDeviceId: selected.system,
+          microphoneDeviceId: selected.microphone,
+        });
+      } catch (failure) {
+        if (startDevices.current === selected) startDevices.current = null;
+        throw failure;
+      }
       selectedRef.current = item.id;
       fullMeetingRef.current = null;
       liveFullRef.current = null;
@@ -1620,6 +1856,18 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             </button>
           </div>
         )}
+        <DeviceNotices
+          losses={deviceLosses.filter((loss) => !loss.dismissed)}
+          locale={locale}
+          t={t}
+          onDismiss={(loss) =>
+            updateDeviceLosses(
+              deviceLossesRef.current.map((item) =>
+                item === loss ? { ...item, dismissed: true } : item,
+              ),
+            )
+          }
+        />
         {isStopping && (
           <div role="status" className="notice info">
             {t.stoppingDetail}
@@ -1768,8 +2016,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             locale={locale}
             setTitle={setTitle}
             setModelId={setModelId}
-            setSystemId={setSystemId}
-            setMicId={setMicId}
+            setSystemId={(id) => chooseDevice("system", id)}
+            setMicId={(id) => chooseDevice("microphone", id)}
             setMicEnabled={setMicEnabled}
             start={start}
             stop={stop}
@@ -1779,6 +2027,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             onLiveFocus={setLiveFocus}
             liveNotes={livePanel(false)}
             refreshHandy={() => void action(() => refreshModels(false))}
+            refreshDevices={() => void action(refreshDevices)}
             resume={() =>
               void action(async () => {
                 if (!meeting) return;

@@ -652,6 +652,11 @@ main {
   flex-direction: column;
   gap: 7px;
 }
+/* Matches the selects inside labels; this one sits beside its checkbox label. */
+.microphone-field select {
+  font-size: 13px;
+  font-weight: 550;
+}
 .audio-sources {
   margin: 17px 0 14px;
 }

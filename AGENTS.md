@@ -1,6 +1,6 @@
 # Qualitätsanforderungen für HandyMeeting
 
-HandyMeeting ist eine eigenständige Companion App im Handy-Ökosystem. Zuverlässige lokale Aufnahme und überprüfbare Ergebnisse haben Vorrang vor neuen Funktionen. Ziele und Freigabekriterien stehen in MASTERPLAN.md; tatsächliche Nachweise und Grenzen stehen in TEST_REPORT.md.
+HandyMeeting ist eine eigenständige Companion App im Handy-Ökosystem. Zuverlässige lokale Aufnahme und überprüfbare Ergebnisse haben Vorrang vor neuen Funktionen. Ziele und Freigabekriterien stehen in docs/MASTERPLAN.md; tatsächliche Nachweise und Grenzen stehen in TEST_REPORT.md.
 
 ## Daten und Datenschutz
 

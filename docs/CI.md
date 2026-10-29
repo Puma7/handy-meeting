@@ -8,7 +8,7 @@ Source checks and complete downloadable candidates serve different purposes. A g
 | PR marked ready, or relevant update while ready | Windows legacy/UI/Rust/guards and dependency audit; portable full workspace | All four target hosts, five packages, installer/native-store/GUI/relocation checks | None |
 | Relevant main push | Same source-only checks as a draft | Omitted | None |
 | Manual candidate workflow | Full by default; `packages=false` selects source-only Windows checks | Only the explicitly selected Windows or portable workflow | None |
-| Matching version tag | Reusable complete verification | All five packages once for that release attempt | Assemble and populate a draft |
+| Release tag (sets the version) | Reusable complete verification | All five packages once for that release attempt | Assemble and populate a draft |
 | Publish an already complete draft | Recheck exact commit, fingerprint, 17 assets and hashes | Omitted; existing bytes retained | Promote/Latest for final versions |
 | Publish an incomplete draft | Actionable failure | Never fall back to recompiling | Preserve assets; recover the tag run |
 

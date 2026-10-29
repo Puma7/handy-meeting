@@ -22,3 +22,5 @@ target/
 **/__pycache__/
 *.pyc
 apps/desktop/dist/
+# Start files written next to local builds
+/*starten.cmd

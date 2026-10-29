@@ -52,6 +52,29 @@ class DraftReleaseRecovery(unittest.TestCase):
         self.assertFalse(any(args[:2] == ('release', 'create') for args, _ in self.calls))
         self.assertFalse(any('PATCH' in args for args, _ in self.calls))
 
+    def test_new_draft_lists_generated_changes_before_the_download_notes(self):
+        (self.fixture.root / 'notes.md').write_text('## Downloads\nSynthetic download notes.\n')
+        created = []
+        def cli(*args, **kwargs):
+            if args == ('api', 'repos/owner/repo/releases?per_page=100&page=1'):
+                return json.dumps(created)
+            if args[:4] == ('api', '--method', 'POST', 'repos/owner/repo/releases/generate-notes'):
+                self.assertIn('tag_name=v1.0.0', args)
+                return json.dumps({'name': 'v1.0.0', 'body': "## What's Changed\n* Synthetic change by @someone"})
+            if args[:2] == ('release', 'create'):
+                body = pathlib.Path(args[args.index('--notes-file') + 1]).read_text()
+                self.assertTrue(body.startswith("## What's Changed\n* Synthetic change"))
+                self.assertTrue(body.endswith('## Downloads\nSynthetic download notes.\n'))
+                self.assertIn('--draft', args)
+                created.append(self.release)
+                return ''
+            return self.cli(*args, **kwargs)
+        with mock.patch.object(self.publisher, 'gh', side_effect=cli):
+            self.publisher.publish(self.fixture.output, 'owner/repo', 'v1.0.0',
+                                   fixtures.COMMIT, self.fixture.root / 'notes.md', False)
+        self.assertEqual(len(created), 1)
+        self.assertEqual(len(self.release['assets']), 17)
+
     def test_duplicate_drafts_fail_before_any_upload_or_mutation(self):
         def cli(*args, **kwargs):
             if args == ('api', 'repos/owner/repo/releases?per_page=100&page=1'):

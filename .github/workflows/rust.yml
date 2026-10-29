@@ -53,6 +53,10 @@ on:
       packages:
         type: boolean
         default: true
+      version:
+        description: Release version from the tag (empty keeps the version in the files)
+        type: string
+        default: ''
 permissions:
   contents: read
 concurrency:
@@ -91,6 +95,12 @@ jobs:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
         with:
           node-version: '26.7.0'
+      - name: Use the version of the release tag
+        if: inputs.version
+        env:
+          VERSION: ${{ inputs.version }}
+        shell: pwsh
+        run: python scripts/set-version.py "$env:VERSION"
       - name: Install pinned Rust tooling
         shell: pwsh
         run: |

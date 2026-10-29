@@ -1,4 +1,4 @@
-import { Mic, Monitor } from "lucide-react";
+import { Mic, Monitor, RefreshCw } from "lucide-react";
 import { useId } from "react";
 import type { AudioDevice, CaptureControl, DesktopApi, Locale } from "../types";
 import type { MessageKey } from "../i18n";
@@ -24,6 +24,8 @@ type Props = {
   setMicId: (value: string) => void;
   setMicEnabled: (value: boolean) => void;
   compact?: boolean;
+  /** Re-reads the device list; shown beside the system-audio choice. */
+  onRefresh?: () => void;
 };
 
 /** The source controls and their meters stay visible when title/model setup collapses. */
@@ -46,6 +48,7 @@ export default function AudioSources({
   setMicId,
   setMicEnabled,
   compact = false,
+  onRefresh,
 }: Props) {
   const levelExplanation = useId();
   const bound =
@@ -90,20 +93,34 @@ export default function AudioSources({
               {t.system}
             </span>
             {!compact && (
-              <select
-                value={systemId}
-                disabled={recording || busy || !hasSystemDevice}
-                onChange={(event) => setSystemId(event.target.value)}
-              >
-                {!hasSystemDevice && <option value="">{t.noDevices}</option>}
-                {devices
-                  .filter((item) => item.source === "system")
-                  .map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                    </option>
-                  ))}
-              </select>
+              <div className="inline-control">
+                <select
+                  value={systemId}
+                  disabled={recording || busy || !hasSystemDevice}
+                  onChange={(event) => setSystemId(event.target.value)}
+                >
+                  {!hasSystemDevice && <option value="">{t.noDevices}</option>}
+                  {devices
+                    .filter((item) => item.source === "system")
+                    .map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                </select>
+                {onRefresh && (
+                  <button
+                    type="button"
+                    className="icon-button bordered"
+                    title={t.refreshDevices}
+                    aria-label={t.refreshDevices}
+                    disabled={busy || !connected}
+                    onClick={onRefresh}
+                  >
+                    <RefreshCw size={17} />
+                  </button>
+                )}
+              </div>
             )}
           </label>
           <AudioLevelMeter

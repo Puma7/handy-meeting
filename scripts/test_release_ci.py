@@ -231,8 +231,16 @@ class WorkflowBoundaries(unittest.TestCase):
             self.assertIn('packages: true', job(text, name))
         validate = job(text, 'validate')
         self.assertIn("if: github.event_name == 'release'", validate)
-        self.assertIn('if [ "$COMPLETE" != true ]; then', validate)
+        self.assertIn('if [ "$COMPLETE" = true ]; then exit 0; fi', validate)
         self.assertIn('exit 1', validate)
+        # Releases published on GitHub with a new tag: the tag run of the same commit builds.
+        refusal = validate[validate.index('Refuse compilation on publication'):]
+        self.assertIn('actions/workflows/rust-release.yml/runs?event=push&branch=$RELEASE_TAG&head_sha=$GITHUB_SHA', refusal)
+        self.assertIn('RELEASE_TAG: ${{ steps.identity.outputs.tag }}', refusal)
+        # A finished earlier build must not let an empty release pass.
+        self.assertIn('select(.status != "completed")', refusal)
+        self.assertNotIn('"success"', refusal)
+        self.assertIn('actions: read', validate)
         existing = job(text, 'publish_existing')
         self.assertIn("already_complete == 'true'", existing)
         self.assertIn('Complete exact-source release required immediately before promotion', existing)
@@ -247,6 +255,21 @@ class WorkflowBoundaries(unittest.TestCase):
         self.assertIn('  verify:', text)
         self.assertIn('run: ./verify.ps1', text)
         self.assertIn('./verify.ps1', job(workflow('rust.yml'), 'windows'))
+
+    def test_every_release_job_takes_the_version_from_the_tag(self):
+        # 1.0.7: the tag was created without bumping the files, and the build refused it.
+        text = workflow('rust-release.yml')
+        self.assertIn('scripts/set-version.py "$REQUESTED_TAG"', job(text, 'validate'))
+        self.assertNotIn('Tag must match all application versions', text)
+        for name in ('windows', 'portable'):
+            self.assertIn('version: ${{ needs.validate.outputs.version }}', job(text, name))
+        for name in ('publish', 'publish_existing'):
+            body = job(text, name)
+            self.assertLess(body.index('scripts/set-version.py'), body.index('source-fingerprint'), name)
+        for name, job_name in (('rust.yml', 'windows'), ('rust-portable.yml', 'desktop')):
+            body = job(workflow(name), job_name)
+            self.assertIn('if: inputs.version', body)
+            self.assertLess(body.index('set-version.py'), body.index('Install pinned Rust tooling'), name)
 
     def test_release_artifact_retention_and_current_run_binding_remain(self):
         text = workflow('rust-release.yml')
