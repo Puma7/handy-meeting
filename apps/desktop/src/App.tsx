@@ -1288,7 +1288,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
    * while keeping the stopping state visible.
    */
   async function stop() {
-    await action(async () => {
+    const work = async () => {
       setIsStopping(true);
       try {
         const item = await api.stopMeeting();
@@ -1302,7 +1302,16 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       } finally {
         setIsStopping(false);
       }
-    });
+    };
+    // During a reconnect Stop must reach the native cancellation even when an unrelated
+    // foreground action (such as a history refresh) holds the busy state.
+    if (busy && reconnecting) {
+      if (isStopping) return;
+      setError(null);
+      await work().catch((failure) => setError(errorMessage(failure)));
+      return;
+    }
+    await action(work);
   }
   /**
    * Reloads the bound meeting before copying every original section, bypassing the bounded

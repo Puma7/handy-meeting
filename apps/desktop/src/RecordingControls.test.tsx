@@ -184,6 +184,40 @@ it("keeps Stop available during a pending reconnect and treats the cancelled rec
   ).toBeNull();
 });
 
+it("sends Stop during a reconnect even while an unrelated history refresh is pending", async () => {
+  const f = fixture();
+  const state = {
+    ...f.state(),
+    microphoneReconnectAvailable: true,
+    captureControl: {
+      paused: false,
+      microphoneMuted: false,
+      hasMicrophone: false,
+    },
+  };
+  f.setState(state);
+  f.api.reconnectMicrophone = vi.fn(
+    () => new Promise<AppState>(() => undefined),
+  );
+  render(<App api={f.api} />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Mikrofon erneut verbinden" }),
+  );
+  // Opening the history starts a foreground refresh that never finishes here.
+  vi.mocked(f.api.listMeetings).mockImplementation(
+    () => new Promise(() => undefined),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Historie" }));
+  await userEvent.click(screen.getByRole("button", { name: "Meeting" }));
+  f.api.stopMeeting = vi
+    .fn()
+    .mockResolvedValue({ ...original, status: "complete" });
+  const stop = await screen.findByRole("button", { name: "Meeting beenden" });
+  expect((stop as HTMLButtonElement).disabled).toBe(false);
+  await userEvent.click(stop);
+  expect(f.api.stopMeeting).toHaveBeenCalledOnce();
+});
+
 it("waits for native pause acknowledgement, binds it to the current session and retains transcript text", async () => {
   const f = fixture();
   let acknowledge!: (value: AppState) => void;
