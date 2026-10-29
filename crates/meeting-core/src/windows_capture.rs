@@ -147,34 +147,43 @@ impl PacketTimeline {
             return Err("Microphone clock jumped beyond monotonic capture time; saved audio is retained and the affected timeline requires review".into());
         }
         if missing > 0 {
-            writer.finish()?;
+            // Keep the normal bounded chunk. Closing around every gap creates two tiny
+            // files per discontinuity, restarting recognition and amplifying disk stalls.
+            // The exact silence range is recorded separately in capture-controls.jsonl.
             writer.pad_to(target)?;
-            writer.finish()?;
         }
         Ok(missing)
     }
 }
 
-/// Drain every currently queued packet before waiting for another event. The
-/// same path runs after Stop, when no future event can announce buffered audio.
+#[derive(Debug, PartialEq, Eq)]
+enum DrainState {
+    Empty,
+    More,
+}
+
+/// Drain a bounded turn before checking Stop/privacy controls again. Packets can arrive
+/// while durable writes run: five seconds processed is not five seconds of queued backlog.
+/// A single oversized packet is still refused before it is read or acknowledged.
 fn drain_packets(
     capture: &impl PacketReader,
     queue: &mut VecDeque<u8>,
     pcm: &mut Vec<i16>,
     mut consume: impl FnMut(PacketInfo, &[i16]) -> Result<()>,
-) -> Result<()> {
+) -> Result<DrainState> {
     let mut drained = 0usize;
     loop {
         let frames = capture.next_frames()?;
         if frames == 0 {
-            return Ok(());
+            return Ok(DrainState::Empty);
         }
-        if frames > SAMPLE_RATE * 5
-            || drained.saturating_add(frames as usize) > SAMPLE_RATE as usize * 5
-        {
+        if frames > SAMPLE_RATE * 5 {
             return Err(
-                "Audio device backlog exceeded five seconds; saved audio remains available".into(),
+                "Audio device packet exceeded five seconds; saved audio remains available".into(),
             );
+        }
+        if drained.saturating_add(frames as usize) > SAMPLE_RATE as usize * 5 {
+            return Ok(DrainState::More);
         }
         queue.clear();
         let info = capture.read_packet(queue)?;
@@ -210,7 +219,7 @@ fn drain_track(
     diagnostics: &mut CaptureDiagnostics,
     start: Instant,
     store: &SessionStore,
-) -> Result<()> {
+) -> Result<DrainState> {
     drain_track_controlled(capture, queue, pcm, writer, diagnostics, start, store, None)
 }
 
@@ -225,7 +234,7 @@ fn drain_track_controlled(
     start: Instant,
     store: &SessionStore,
     mut control: Option<(&CaptureControls, u64, &mut PacketTimeline)>,
-) -> Result<()> {
+) -> Result<DrainState> {
     drain_packets(capture, queue, pcm, |info, samples| {
         diagnostics.observe(
             info,
@@ -378,6 +387,7 @@ pub(super) fn record(
             .map_err(|_| "Capture controller was closed")?;
         started = true;
         let loop_result = (|| -> Result<()> {
+            let mut drain_again = false;
             while !stop.load(Ordering::Acquire) {
                 if controls.changed(source, epoch) || controls.suppressed(source) {
                     if controls.changed(source, epoch) {
@@ -391,6 +401,7 @@ pub(super) fn record(
                         queue.clear();
                         pcm.clear();
                         timeline = PacketTimeline::default();
+                        drain_again = false;
                     }
                     writer.pad_to(controls.elapsed_samples())?;
                     writer.checkpoint_if_due()?;
@@ -406,11 +417,13 @@ pub(super) fn record(
                 }
                 // A short timeout is normal during digital silence. Pad the system track
                 // to wall time so remote speech remains aligned with microphone audio.
-                let _ = handle.wait_for_event(100);
+                if !drain_again {
+                    let _ = handle.wait_for_event(100);
+                }
                 // A timeout alone is normal. Query the client on every tick
                 // nevertheless: this also detects invalidated devices before
                 // a missing event can be mistaken for continuing silence.
-                drain_track_controlled(
+                drain_again = drain_track_controlled(
                     &capture,
                     &mut queue,
                     &mut pcm,
@@ -419,8 +432,8 @@ pub(super) fn record(
                     start,
                     &store,
                     Some((&controls, epoch, &mut timeline)),
-                )?;
-                if source == "system" && queue.is_empty() {
+                )? == DrainState::More;
+                if source == "system" && !drain_again {
                     // Keep one buffer of headroom; events already received are written first.
                     let elapsed = start.elapsed().as_secs_f64();
                     let target = ((elapsed - 0.2).max(0.0) * f64::from(SAMPLE_RATE)) as u64;
@@ -440,20 +453,24 @@ pub(super) fn record(
         let stopped_at = start.elapsed();
         // Stop prevents new packets, but already buffered frames still belong
         // to this recording and must be drained without waiting for an event.
-        let tail_result = if loop_result.is_ok() && stream_running {
-            drain_track_controlled(
-                &capture,
-                &mut queue,
-                &mut pcm,
-                &mut writer,
-                &mut diagnostics,
-                start,
-                &store,
-                Some((&controls, epoch, &mut timeline)),
-            )
-        } else {
+        let tail_result = (|| -> Result<()> {
+            if loop_result.is_ok() && stop_result.is_ok() && stream_running {
+                // No new packets can arrive after a successful Stop. Preserve every
+                // queued tail packet, across bounded turns, without waiting on events.
+                while drain_track_controlled(
+                    &capture,
+                    &mut queue,
+                    &mut pcm,
+                    &mut writer,
+                    &mut diagnostics,
+                    start,
+                    &store,
+                    Some((&controls, epoch, &mut timeline)),
+                )? == DrainState::More
+                {}
+            }
             Ok(())
-        };
+        })();
         if controls.suppressed(source)
             && loop_result.is_ok()
             && stop_result.is_ok()
@@ -499,6 +516,97 @@ pub(super) fn record(
 mod tests {
     use super::*;
     use std::cell::RefCell;
+
+    #[test]
+    /// Replays 100 synthetic packets with one-sample gaps, retaining every original sample,
+    /// silence sample and gap record while requiring one regular audio/recognition chunk.
+    fn repeated_small_device_gaps_do_not_fragment_one_audio_chunk() {
+        let root = tempfile::tempdir().unwrap();
+        let store =
+            SessionStore::create(root.path(), "Synthetic small gaps", "m", "s", Some("mic"))
+                .unwrap();
+        let controls = CaptureControls::new(&store).unwrap();
+        let mut writer = PcmWriter::new(store.clone(), "microphone").unwrap();
+        let mut timeline = PacketTimeline::default();
+        let mut expected = Vec::new();
+        for index in 0..100_u64 {
+            let mut packet = info(false);
+            packet.discontinuity = index > 0;
+            // Each packet begins one sample after the preceding packet ended.
+            packet.device_timestamp_hns = 40_000_000 + index * 321 * 625;
+            let missing = timeline
+                .align_microphone(packet, &mut writer, 64_000)
+                .unwrap();
+            if index > 0 {
+                assert_eq!(missing, 1);
+                controls
+                    .record_microphone_gap(writer.written_samples() - missing, missing)
+                    .unwrap();
+                expected.push(0);
+            }
+            controls
+                .write("microphone", 0, &mut writer, &[17; 320])
+                .unwrap();
+            expected.extend_from_slice(&[17; 320]);
+        }
+        writer.finish().unwrap();
+        let data = store.snapshot().unwrap();
+        let mut actual = Vec::new();
+        for part in &data.parts {
+            actual.extend(
+                hound::WavReader::open(store.audio_path(part).unwrap())
+                    .unwrap()
+                    .samples::<i16>()
+                    .map(std::result::Result::unwrap),
+            );
+        }
+        assert_eq!(
+            actual, expected,
+            "All captured samples and explicit missing-sample silence must stay in order"
+        );
+        assert_eq!(
+            data.parts.len(),
+            1,
+            "Device-gap evidence must not turn one audio chunk into hundreds of ASR sessions"
+        );
+        let events = super::super::controls::read_capture_control_events(store.folder())
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            events
+                .events
+                .iter()
+                .filter(|event| event.kind == "device-gap")
+                .count(),
+            99
+        );
+    }
+
+    #[test]
+    /// Drains six seconds of valid synthetic packets across bounded turns without treating
+    /// cumulative work as capture failure or dropping any saved sample.
+    fn valid_packets_can_be_drained_in_bounded_turns_without_stopping_capture() {
+        let packets = Packets(RefCell::new(VecDeque::from_iter(
+            (0..300).map(|_| (vec![23; 320], info(false))),
+        )));
+        let mut saved = 0;
+        let mut turns = 0;
+        while !packets.0.borrow().is_empty() {
+            let result =
+                drain_packets(&packets, &mut VecDeque::new(), &mut vec![], |_, samples| {
+                    saved += samples.len();
+                    Ok(())
+                });
+            assert!(
+                result.is_ok(),
+                "A cumulative drain budget is not evidence of an invalid device packet: {result:?}"
+            );
+            turns += 1;
+            assert!(turns <= 3);
+        }
+        assert_eq!(saved, 96_000);
+        assert_eq!(turns, 2, "Return to capture controls between bounded turns");
+    }
 
     #[test]
     /// Checks synthetic device-clock gaps insert silence without moving confirmed microphone samples.
@@ -550,9 +658,8 @@ mod tests {
                     .map(std::result::Result::unwrap),
             );
         }
-        assert_eq!(data.parts.len(), 3);
-        assert!(!data.parts[1].has_signal);
-        assert_eq!(data.parts[1].confirmed_sample_count, 15_680);
+        assert_eq!(data.parts.len(), 1);
+        assert_eq!(data.parts[0].confirmed_sample_count, 16_320);
         assert_eq!(audio.len(), 16_320);
         assert!(audio[..320].iter().all(|s| *s == 11));
         assert!(audio[320..16_000].iter().all(|s| *s == 0));

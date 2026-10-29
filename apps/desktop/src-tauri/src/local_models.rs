@@ -5,6 +5,8 @@ use crate::AppResult;
 use meeting_notes::AnalysisControl;
 use serde::Serialize;
 use std::{
+    io::Read,
+    path::Path,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -55,7 +57,7 @@ pub(crate) fn recommend(total_memory: Option<u64>) -> Recommendation {
 pub(crate) struct Provider {
     id: &'static str,
     name: &'static str,
-    endpoint: &'static str,
+    endpoint: String,
     reachable: bool,
     models: Vec<String>,
     recommended_installed: bool,
@@ -127,17 +129,132 @@ fn installed(models: &[String], wanted: Option<&str>) -> bool {
     })
 }
 
+/// The documented Ollama bind setting is used only for loopback. Wildcard binds are
+/// contacted through loopback too; remote hosts, credentials and URL paths are rejected.
+fn ollama_root_from(value: Option<&str>) -> String {
+    let Some(value) = value.filter(|v| v.len() <= 4096).map(str::trim) else {
+        return OLLAMA_ROOT.into();
+    };
+    let configured_url = value.split_once("://");
+    let address = if configured_url.is_some() {
+        value.to_owned()
+    } else {
+        format!("http://{value}")
+    };
+    let Ok(mut url) = url::Url::parse(&address) else {
+        return OLLAMA_ROOT.into();
+    };
+    if url.scheme() != "http"
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+        || url.path() != "/"
+    {
+        return OLLAMA_ROOT.into();
+    }
+    let host = match url.host() {
+        Some(url::Host::Domain("localhost")) => "localhost".to_owned(),
+        Some(url::Host::Ipv4(ip)) if ip.is_loopback() => ip.to_string(),
+        Some(url::Host::Ipv4(ip)) if ip.is_unspecified() => "127.0.0.1".to_owned(),
+        Some(url::Host::Ipv6(ip)) if ip.is_loopback() => format!("[{ip}]"),
+        Some(url::Host::Ipv6(ip)) if ip.is_unspecified() => "[::1]".to_owned(),
+        _ => return OLLAMA_ROOT.into(),
+    };
+    // URL parsing erases an explicit HTTP :80. Preserve the original port, and
+    // match Ollama's defaults: bare hosts use 11434; HTTP URLs use 80.
+    let authority = configured_url
+        .map_or(value, |(_, rest)| rest)
+        .split('/')
+        .next()
+        .unwrap_or_default();
+    let explicit_port = if authority.starts_with('[') {
+        authority
+            .split_once(']')
+            .and_then(|(_, tail)| tail.strip_prefix(':'))
+    } else {
+        authority.rsplit_once(':').map(|(_, port)| port)
+    };
+    let port = match explicit_port {
+        Some(port) => match port.parse::<u16>() {
+            Ok(port) => port,
+            Err(_) => return OLLAMA_ROOT.into(),
+        },
+        None => url
+            .port()
+            .unwrap_or(if configured_url.is_some() { 80 } else { 11434 }),
+    };
+    if port == 0 {
+        return OLLAMA_ROOT.into();
+    }
+    if url.set_host(Some(&host)).is_err() || url.set_port(Some(port)).is_err() {
+        return OLLAMA_ROOT.into();
+    }
+    url.to_string()
+}
+
+fn ollama_root() -> String {
+    ollama_root_from(std::env::var("OLLAMA_HOST").ok().as_deref())
+}
+
+/// Reads just LM Studio's bounded server configuration, never conversations or credentials.
+/// A custom bind address does not grant remote access: only its port is used on loopback.
+fn lm_studio_endpoint(home: &Path) -> String {
+    let path = home.join(".lmstudio/.internal/http-server-config.json");
+    let fallback = || LM_STUDIO_ENDPOINT.to_owned();
+    let Ok(meta) = std::fs::symlink_metadata(&path) else {
+        return fallback();
+    };
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        if meta.file_attributes() & 0x400 != 0 {
+            return fallback();
+        }
+    }
+    if !meta.is_file() || meta.file_type().is_symlink() || meta.len() > 65_536 {
+        return fallback();
+    }
+    let Ok(file) = std::fs::File::open(path) else {
+        return fallback();
+    };
+    let mut bytes = Vec::new();
+    if file.take(65_537).read_to_end(&mut bytes).is_err() || bytes.len() > 65_536 {
+        return fallback();
+    }
+    let Ok(config) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return fallback();
+    };
+    let Some(port) = config
+        .get("port")
+        .and_then(|v| v.as_u64())
+        .filter(|p| (1..=65_535).contains(p))
+    else {
+        return fallback();
+    };
+    format!("http://127.0.0.1:{port}/v1/")
+}
+
 /// Checks both known local servers on loopback and suggests a model.
 pub(crate) fn setup() -> LocalModelSetup {
     let total_memory_bytes = total_memory();
     let recommendation = recommend(total_memory_bytes);
+    let root = ollama_root();
+    let ollama = if root == OLLAMA_ROOT {
+        OLLAMA_ENDPOINT.into()
+    } else {
+        format!("{root}v1/")
+    };
+    let lm_studio = dirs::home_dir()
+        .map(|home| lm_studio_endpoint(&home))
+        .unwrap_or_else(|| LM_STUDIO_ENDPOINT.into());
     let providers = [
-        ("ollama", "Ollama", OLLAMA_ENDPOINT),
-        ("lmstudio", "LM Studio", LM_STUDIO_ENDPOINT),
+        ("ollama", "Ollama", ollama),
+        ("lmstudio", "LM Studio", lm_studio),
     ]
     .into_iter()
     .map(|(id, name, endpoint)| {
-        let found = meeting_notes::local_model_ids(endpoint);
+        let found = meeting_notes::local_model_ids(&endpoint);
         let models = found.as_ref().cloned().unwrap_or_default();
         Provider {
             id,
@@ -289,7 +406,7 @@ fn pull(
     control: &AnalysisControl,
     mut progress: impl FnMut(PullLine),
 ) -> AppResult<()> {
-    pull_from(OLLAMA_ROOT, model, control, PULL_IDLE, &mut progress)
+    pull_from(&ollama_root(), model, control, PULL_IDLE, &mut progress)
 }
 
 /// Follows Ollama's streamed pull answer line by line through the loopback-only text model
@@ -338,6 +455,104 @@ mod tests {
     use super::*;
     use std::io::{Read, Write};
     use std::net::TcpListener;
+
+    #[test]
+    /// Reads only a valid bounded port setting and rejects oversized or invalid
+    /// configuration while retaining a loopback endpoint even for a remote bind setting.
+    fn configured_lm_studio_port_is_loopback_only_and_bounded() {
+        let root =
+            std::env::temp_dir().join(format!("handy-lm-config-{}", meeting_notes::new_job_id()));
+        let folder = root.join(".lmstudio/.internal");
+        std::fs::create_dir_all(&folder).unwrap();
+        let path = folder.join("http-server-config.json");
+        for (input, wanted) in [
+            (
+                r#"{"port":1235,"networkInterface":"0.0.0.0"}"#,
+                "http://127.0.0.1:1235/v1/",
+            ),
+            (r#"{"port":0}"#, LM_STUDIO_ENDPOINT),
+            (r#"{"port":65536}"#, LM_STUDIO_ENDPOINT),
+            (r#"{"port":"1235"}"#, LM_STUDIO_ENDPOINT),
+            ("invalid", LM_STUDIO_ENDPOINT),
+        ] {
+            std::fs::write(&path, input).unwrap();
+            assert_eq!(lm_studio_endpoint(&root), wanted);
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), input);
+        }
+        std::fs::write(&path, vec![b' '; 65_537]).unwrap();
+        assert_eq!(lm_studio_endpoint(&root), LM_STUDIO_ENDPOINT);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    /// Preserves explicit IPv4, IPv6 and localhost bind identities instead of probing a
+    /// different loopback address that may have no server listening on it.
+    fn explicit_ollama_loopback_addresses_keep_their_bind_identity() {
+        for (input, expected) in [
+            ("127.0.0.2:2345", "http://127.0.0.2:2345/"),
+            ("http://127.23.45.67:2345", "http://127.23.45.67:2345/"),
+            ("localhost:2345", "http://localhost:2345/"),
+            ("[::1]:2345", "http://[::1]:2345/"),
+        ] {
+            assert_eq!(ollama_root_from(Some(input)), expected, "{input}");
+        }
+    }
+
+    #[test]
+    /// Covers URL normalization of explicit port 80, including leading zeros and wildcard
+    /// binds; all resulting requests must still target that same local HTTP service.
+    fn explicit_ollama_http_default_ports_are_not_replaced_by_11434() {
+        for input in [
+            "127.0.0.1:80",
+            "http://127.0.0.1:80/",
+            "127.0.0.1:00080",
+            "http://0.0.0.0:80",
+        ] {
+            assert_eq!(
+                ollama_root_from(Some(input)),
+                "http://127.0.0.1/",
+                "{input}"
+            );
+        }
+        assert_eq!(ollama_root_from(Some("localhost:80")), "http://localhost/");
+        assert_eq!(ollama_root_from(Some("[::1]:80")), "http://[::1]/");
+        assert_eq!(ollama_root_from(Some("http://[::]:80/")), "http://[::1]/");
+    }
+
+    #[test]
+    fn omitted_ollama_ports_follow_the_configured_address_form() {
+        assert_eq!(ollama_root_from(Some("127.0.0.1")), OLLAMA_ROOT);
+        assert_eq!(
+            ollama_root_from(Some("http://127.0.0.1")),
+            "http://127.0.0.1/"
+        );
+        assert_eq!(
+            ollama_root_from(Some("http://localhost/")),
+            "http://localhost/"
+        );
+        assert_eq!(ollama_root_from(Some("[::1]")), "http://[::1]:11434/");
+        assert_eq!(ollama_root_from(Some("http://[::1]")), "http://[::1]/");
+    }
+
+    #[test]
+    /// Accepts valid local binds while rejecting remote hosts, credentials, non-root paths,
+    /// query data and zero ports without forwarding any of those values.
+    fn ollama_bind_settings_never_contact_remote_hosts_or_forward_credentials() {
+        for address in ["127.0.0.1:2345", "http://0.0.0.0:2345"] {
+            assert_eq!(ollama_root_from(Some(address)), "http://127.0.0.1:2345/");
+        }
+        assert_eq!(ollama_root_from(Some("[::1]:2345")), "http://[::1]:2345/");
+        for address in [
+            "https://example.com",
+            "http://example.com:1234",
+            "http://user:secret@127.0.0.1:2345",
+            "http://127.0.0.1:2345/other",
+            "http://127.0.0.1:2345/?key=secret",
+            "http://127.0.0.1:0",
+        ] {
+            assert_eq!(ollama_root_from(Some(address)), OLLAMA_ROOT);
+        }
+    }
 
     #[test]
     fn memory_tiers_follow_the_documented_thresholds() {

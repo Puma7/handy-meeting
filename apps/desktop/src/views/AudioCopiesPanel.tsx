@@ -7,6 +7,10 @@ import type {
   LibraryProgress,
   Locale,
 } from "../types";
+/**
+ * Lists 25 verified compact-audio copies with independent next-page metadata.
+ * Explicit consent creates a separate transcription; original meetings remain unchanged.
+ */
 export default function AudioCopiesPanel({
   api,
   locale,
@@ -20,6 +24,7 @@ export default function AudioCopiesPanel({
 }) {
   const de = locale === "de";
   const [copies, setCopies] = useState<AudioCopy[]>([]),
+    [more, setMore] = useState(false),
     [offset, setOffset] = useState(0),
     [selected, setSelected] = useState<AudioCopy | null>(null),
     [model, setModel] = useState(""),
@@ -33,9 +38,11 @@ export default function AudioCopiesPanel({
     try {
       const next = await api.listAudioCopies(offset);
       if (current !== generation.current) return;
-      setCopies(next);
+      const visible = next.items;
+      setCopies(visible);
+      setMore(next.more);
       setSelected((old) =>
-        old && next.some((copy) => copy.runId === old.runId) ? old : null,
+        old && visible.some((copy) => copy.runId === old.runId) ? old : null,
       );
       setError(null);
     } catch (e) {
@@ -115,20 +122,22 @@ export default function AudioCopiesPanel({
             : "No completed audio copies on this page."}
         </p>
       )}
-      <div className="search-pages">
-        <button
-          disabled={!offset || busy || running}
-          onClick={() => setOffset((n) => Math.max(0, n - 25))}
-        >
-          {de ? "Zurück" : "Previous"}
-        </button>
-        <button
-          disabled={copies.length < 25 || busy || running}
-          onClick={() => setOffset((n) => n + 25)}
-        >
-          {de ? "Weiter" : "Next"}
-        </button>
-      </div>
+      {(offset > 0 || more) && (
+        <div className="search-pages">
+          <button
+            disabled={!offset || busy || running}
+            onClick={() => setOffset((n) => Math.max(0, n - 25))}
+          >
+            {de ? "Zurück" : "Previous"}
+          </button>
+          <button
+            disabled={!more || busy || running}
+            onClick={() => setOffset((n) => n + 25)}
+          >
+            {de ? "Weiter" : "Next"}
+          </button>
+        </div>
+      )}
       {selected && (
         <section className="retention-confirm">
           <h4>{selected.title}</h4>

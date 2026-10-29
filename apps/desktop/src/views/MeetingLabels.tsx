@@ -2,6 +2,10 @@ import { useEffect, useState } from "react";
 import { Pencil, Pin, Save, X } from "lucide-react";
 import type { DesktopApi, Meeting, MeetingMetadata, Locale } from "../types";
 import { errorMessage } from "../api";
+/**
+ * Edits revision-checked display metadata while keeping VIP protection out of the rename form.
+ * A failed native save leaves the draft and original metadata available for correction.
+ */
 export default function MeetingLabels({
   api,
   meeting,
@@ -100,21 +104,23 @@ export default function MeetingLabels({
           {de ? "Meeting umbenennen" : "Rename meeting"}
         </button>
       )}
-      <button
-        className={meta.pinned ? "secondary pinned" : "text-button"}
-        aria-pressed={meta.pinned}
-        disabled={busy || Boolean(meeting.metadataError)}
-        onClick={() => void save(meta.title, !meta.pinned)}
-      >
-        <Pin size={15} />
-        {meta.pinned
-          ? de
-            ? "VIP · vor Aufräumen geschützt"
-            : "VIP · protected from cleanup"
-          : de
-            ? "Als VIP anheften"
-            : "Pin as VIP"}
-      </button>
+      {!editing && (
+        <button
+          className={meta.pinned ? "secondary pinned" : "text-button"}
+          aria-pressed={meta.pinned}
+          disabled={busy || Boolean(meeting.metadataError)}
+          onClick={() => void save(meta.title, !meta.pinned)}
+        >
+          <Pin size={15} />
+          {meta.pinned
+            ? de
+              ? "VIP · vor Aufräumen geschützt"
+              : "VIP · protected from cleanup"
+            : de
+              ? "Als VIP anheften"
+              : "Pin as VIP"}
+        </button>
+      )}
       {(error || meeting.metadataError) && (
         <p role="alert" className="inline-error">
           {error ?? meeting.metadataError}

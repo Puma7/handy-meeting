@@ -101,6 +101,8 @@ export const de = {
     "Die Liste enthält die vom Dienst gemeldeten Modellkennungen. Wähle ein Modell für Textantworten. Manche Dienste laden es erst bei der ersten Anfrage; dabei kann die erste Auswertung länger dauern.",
   meeting: "Meeting",
   history: "Historie",
+  historyHelp:
+    "Gespeicherte Meetings finden, Transkripte öffnen und Ergebnisse weiterbearbeiten.",
   notes: "Nachbearbeitung",
   settings: "Einstellungen",
   companion: "Eigenständige Companion App",
@@ -130,7 +132,7 @@ export const de = {
   emptyTranscript:
     "Hier erscheint der Text, sobald die lokale Erkennung Abschnitte liefert.",
   emptyHistory:
-    "Noch keine Sitzungen in der neuen Rust-Version. Vorhandene Prototyp-Sitzungen bleiben erhalten.",
+    "Noch keine gespeicherten Meetings. Starte eine Aufnahme. Ältere Prototyp-Sitzungen lassen sich unter Einstellungen importieren.",
   open: "Öffnen",
   duration: "Dauer",
   sourceTimes:
@@ -422,6 +424,8 @@ export const en: Record<MessageKey, string> = {
     "Saved preferences cannot be read or written. Existing values are preserved.",
   meeting: "Meeting",
   history: "History",
+  historyHelp:
+    "Find saved meetings, open transcripts and continue working with their results.",
   notes: "Post-processing",
   settings: "Settings",
   companion: "Independent companion app",
@@ -451,7 +455,7 @@ export const en: Record<MessageKey, string> = {
   emptyTranscript:
     "Text appears here when local recognition produces transcript sections.",
   emptyHistory:
-    "No sessions in the new Rust version yet. Existing prototype sessions are preserved.",
+    "No saved meetings yet. Start a recording. Older prototype sessions can be imported in Settings.",
   open: "Open",
   duration: "Duration",
   sourceTimes: "Times identify recording sections, not exact word timestamps.",

@@ -1,18 +1,18 @@
 # Releases: version tag to downloadable packages
 
-The Rust distribution is versioned together in the workspace Cargo manifest, desktop package/lock and Tauri configuration. Existing native dependency versions and model weights are not changed by a release. **[1.0.4 is public](https://github.com/Puma7/meeting-for-handy/releases/tag/v1.0.4)** as of 28 October 2026, with five packages and twelve checksum/source proofs (17 assets). The [audit corrections](AUDIT_FIXES_20261028.md) are subsequent unreleased source work; the synchronized 1.0.5 release candidate and the 1.0.6 development source (live summary) have no release or tag yet. Future releases must use a new version: update the Cargo workspace, desktop package/lock and Tauri configuration together, then tag that exact reviewed commit. Existing published tags and asset bytes are preserved.
+The Rust distribution is versioned together in the workspace Cargo manifest, desktop package/lock and Tauri configuration. Existing native dependency versions and model weights are not changed by a release. **[1.0.6 is public](https://github.com/Puma7/meeting-for-handy/releases/tag/v1.0.6)** with 17 assets as of 29 October 2026; its unchanged tag points to `3bc69543dee65b253fe3e05f32319a4f4ea3a149`. The recording/workflow corrections in [PR #31](https://github.com/Puma7/meeting-for-handy/pull/31) remain unreleased. Public availability does not close the manual release gates below. Future releases must use a new version: update the Cargo workspace, desktop package/lock and Tauri configuration together, then tag that exact reviewed commit. Existing published tags and asset bytes are preserved.
 
 ## What is attached
 
-These are the current 1.0.4 asset names. A future release uses its own synchronized application version in every filename and proof; do not reuse or move the published 1.0.4 tag.
+These are the current 1.0.6 asset names. A future release uses its own synchronized application version in every filename and proof; do not reuse or move any published tag.
 
 | Target | Asset |
 | --- | --- |
-| Windows x64 installer | `HandyMeeting-1.0.4-windows-x64-setup.exe` |
-| Windows x64 portable | `HandyMeeting-1.0.4-windows-x64.zip` |
-| Ubuntu/Debian x64 | `HandyMeeting-1.0.4-linux-amd64.deb` |
-| macOS 15+ Apple Silicon | `HandyMeeting-1.0.4-osx-arm64.dmg` |
-| macOS 15+ Intel | `HandyMeeting-1.0.4-osx-x64.dmg` |
+| Windows x64 installer | `HandyMeeting-1.0.6-windows-x64-setup.exe` |
+| Windows x64 portable | `HandyMeeting-1.0.6-windows-x64.zip` |
+| Ubuntu/Debian x64 | `HandyMeeting-1.0.6-linux-amd64.deb` |
+| macOS 15+ Apple Silicon | `HandyMeeting-1.0.6-osx-arm64.dmg` |
+| macOS 15+ Intel | `HandyMeeting-1.0.6-osx-x64.dmg` |
 
 Each has a SHA-256 sidecar and package proof. `SHA256SUMS.txt` covers all five packages. `RELEASE_MANIFEST.json` binds their bytes to the application version, exact Git commit and common source fingerprint. No audio, model, session, setting or key is packaged. The workflow publishes no bare Windows EXE requiring users to reconstruct its native libraries: the Setup EXE and ZIP contain the complete checked payload.
 

@@ -56,16 +56,19 @@ it("does not start compact-audio recognition until a model and new-copy confirma
   const start = vi.fn().mockResolvedValue("job");
   const runId = "d".repeat(32);
   const api = {
-    listAudioCopies: vi.fn().mockResolvedValue([
-      {
-        runId,
-        meetingId: "e".repeat(32),
-        title: "Synthetic Opus copy",
-        codec: "opus",
-        createdAt: "2026-01-01",
-        sections: 2,
-      },
-    ]),
+    listAudioCopies: vi.fn().mockResolvedValue({
+      items: [
+        {
+          runId,
+          meetingId: "e".repeat(32),
+          title: "Synthetic Opus copy",
+          codec: "opus",
+          createdAt: "2026-01-01",
+          sections: 2,
+        },
+      ],
+      more: false,
+    }),
     transcribeAudioCopy: start,
   } as unknown as DesktopApi;
   render(

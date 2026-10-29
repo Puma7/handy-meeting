@@ -2,6 +2,7 @@ import { FolderOpen, RefreshCw } from "lucide-react";
 import type { AppState, DesktopApi, Locale, Theme } from "../types";
 import type { MessageKey } from "../i18n";
 import RetentionPanel from "./RetentionPanel";
+import type { ReactNode } from "react";
 import UpdatePanel from "./UpdatePanel";
 
 /**
@@ -27,6 +28,8 @@ export default function SettingsView({
   onRebuildIndex,
   onLocale,
   onTheme,
+  textModelSettings,
+  speakerModelSettings,
 }: {
   api: DesktopApi;
   app: AppState | null;
@@ -46,6 +49,8 @@ export default function SettingsView({
   onRebuildIndex: () => void;
   onLocale: (locale: Locale) => void;
   onTheme: (theme: Theme) => void;
+  textModelSettings?: ReactNode;
+  speakerModelSettings?: ReactNode;
 }) {
   const de = locale === "de";
   const unavailable = busy || blocked || !connected;
@@ -97,6 +102,22 @@ export default function SettingsView({
               : "Choose another program in the operating system's file dialog. Manual approvals last for this app session; a typed path does not grant permission to start it."}
           </p>
         </section>
+        {textModelSettings && (
+          <section id="text-model-settings" tabIndex={-1}>
+            <h2>{de ? "Textmodelle" : "Text models"}</h2>
+            {textModelSettings}
+          </section>
+        )}
+        {speakerModelSettings && (
+          <section>
+            <h2>
+              {de
+                ? "Sprecherfunktionen · optional"
+                : "Speaker features · optional"}
+            </h2>
+            {speakerModelSettings}
+          </section>
+        )}
         <section>
           <h2>{t.theme}</h2>
           <div className="settings-grid">

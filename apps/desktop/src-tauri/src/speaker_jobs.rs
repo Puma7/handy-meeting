@@ -15,6 +15,279 @@ use std::{
     },
     time::{Duration, Instant},
 };
+
+const MAX_MODEL_CHECK_FOLDERS: usize = crate::speaker_check_archive::MAX_RECORDS;
+
+/// Reads a completed capability result only for the freshly rehashed full model/runtime
+/// identity. Partial or mismatched evidence never grants model capability.
+fn cached_model_check(
+    root: &Path,
+    identity: &handy_bridge::ModelIdentity,
+) -> AppResult<Option<bool>> {
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase", deny_unknown_fields)]
+    struct ResultRecord {
+        model_id: String,
+        supported: bool,
+        checked_at: String,
+        audio_access: bool,
+    }
+    let checks = root.join("speaker-model-checks");
+    match std::fs::symlink_metadata(&checks) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(_) => return Err("Model check evidence unavailable".into()),
+        Ok(_) => {}
+    }
+    meeting_core::metadata::checked_directory(&checks).map_err(|_| "Unsafe model check folder")?;
+    let entries = std::fs::read_dir(&checks)
+        .map_err(|_| "Model check evidence unavailable")?
+        .take(MAX_MODEL_CHECK_FOLDERS + 1)
+        .collect::<std::io::Result<Vec<_>>>()
+        .map_err(|_| "Model check evidence unavailable")?;
+    if entries.len() > MAX_MODEL_CHECK_FOLDERS {
+        return Err(format!("{} Das Prüfarchiv ist voll. Vorhandene Nachweise bleiben erhalten. / The check archive is full; all records are retained.", crate::speaker_check_archive::ARCHIVE_REQUIRED));
+    }
+    let mut found = None;
+    for entry in entries {
+        let folder = entry.path();
+        if meeting_core::metadata::checked_directory(&folder).is_err() {
+            continue;
+        }
+        let stored = json_file(&folder.join("model.json"))
+            .ok()
+            .and_then(|v| serde_json::from_value::<handy_bridge::ModelIdentity>(v).ok());
+        if stored.as_ref() != Some(identity) {
+            continue;
+        }
+        let result = json_file(&folder.join("result.json"))
+            .ok()
+            .and_then(|v| serde_json::from_value::<ResultRecord>(v).ok());
+        let Some(result) = result else {
+            continue;
+        };
+        if result.model_id != identity.source_model_metadata.id
+            || result.audio_access
+            || chrono::DateTime::parse_from_rfc3339(&result.checked_at).is_err()
+        {
+            continue;
+        }
+        if found.is_some_and(|previous| previous != result.supported) {
+            return Err(format!("{} Widersprüchliche Prüfnachweise bleiben erhalten. Bitte archivieren und erneut prüfen. / Conflicting check records are retained. Archive them, then check again.", crate::speaker_check_archive::ARCHIVE_REQUIRED));
+        }
+        found = Some(result.supported);
+    }
+    Ok(found)
+}
+
+/// Preserve all prior checks, including partial failures. Stop reserving new evidence
+/// folders at a fixed ceiling instead of silently deleting or overwriting their contents.
+fn reserve_model_check_folder(root: &Path) -> AppResult<std::path::PathBuf> {
+    let checks = root.join("speaker-model-checks");
+    std::fs::create_dir_all(&checks).map_err(|_| "Model check folder unavailable")?;
+    meeting_core::metadata::checked_directory(&checks).map_err(|_| "Unsafe model check folder")?;
+    let used = std::fs::read_dir(&checks)
+        .map_err(|_| "Model check evidence unavailable")?
+        .take(MAX_MODEL_CHECK_FOLDERS)
+        .try_fold(0_usize, |count, entry| entry.map(|_| count + 1))
+        .map_err(|_| "Model check evidence could not be counted")?;
+    if used >= MAX_MODEL_CHECK_FOLDERS {
+        return Err(format!("{} 128 Sprecher-Prüfnachweise bleiben erhalten. Bitte die Nachweise archivieren und danach erneut prüfen. / 128 speaker-check records are retained. Archive the check records, then run the model check again.", crate::speaker_check_archive::ARCHIVE_REQUIRED));
+    }
+    let folder = checks.join(meeting_notes::new_job_id());
+    std::fs::create_dir(&folder).map_err(|_| "Could not reserve model check")?;
+    Ok(folder)
+}
+
+/// Explicit capability check in an owned CPU child, without access to any recording folder.
+/// Exclusive admission avoids loading another model while capture or analysis is running.
+pub(crate) fn check_model(service: &Service, model_id: &str) -> AppResult<bool> {
+    let _lease = service.reserve_operation(crate::operations::Kind::Selection)?;
+    let _proof_lock = crate::speaker_check_archive::lock_checks(&service.root)?;
+    let (bridge, catalog, _) = service.refresh(None)?;
+    let model = catalog.model(model_id).map_err(|e| e.to_string())?;
+    let resolved = bridge
+        .resolve_downloaded_model(model)
+        .map_err(|e| e.to_string())?;
+    let identity = handy_bridge::capture_optional_model_identity(
+        model,
+        &resolved,
+        handy_bridge::native::runtime_identity(),
+    )
+    .map_err(|e| e.to_string())?;
+    if let Some(supported) = cached_model_check(&service.root, &identity)? {
+        return Ok(supported);
+    }
+    let folder = reserve_model_check_folder(&service.root)?;
+    crate::create_json(&folder.join("model.json"), &identity)?;
+    let mut worker = Worker::start_speaker(
+        &resolved.path,
+        &crate::backend_directory()?,
+        &folder,
+        Arc::new(AtomicBool::new(false)),
+    )?;
+    let supported = match worker.call(Request::SpeakerIdentity { identity }) {
+        Ok(_) => true,
+        Err(error) if error.contains("does not support local speaker separation") => false,
+        Err(error) => return Err(error),
+    };
+    crate::create_json(
+        &folder.join("result.json"),
+        &serde_json::json!({"modelId":model_id,"supported":supported,"checkedAt":chrono::Utc::now().to_rfc3339(),"audioAccess":false}),
+    )?;
+    Ok(supported)
+}
+
+#[cfg(test)]
+mod model_check_tests {
+    use super::*;
+
+    #[test]
+    /// Fills all 128 evidence slots and verifies exact-identity reuse after restart, rejecting
+    /// changed weights/runtime/catalogue and malformed or contradictory retained results.
+    fn a_full_check_archive_reuses_only_complete_exact_model_and_runtime_identity() {
+        let root =
+            std::env::temp_dir().join(format!("hm-speaker-cache-{}", meeting_notes::new_job_id()));
+        std::fs::create_dir(&root).unwrap();
+        let model = handy_bridge::HandyModel {
+            id: "synthetic".into(),
+            name: "Synthetic".into(),
+            filename: "weights.bin".into(),
+            source: serde_json::json!({"revision":"one"}),
+            is_downloaded: true,
+            is_downloading: false,
+            supports_streaming: false,
+            supported_languages: vec![],
+        };
+        let weights = root.join("weights.bin");
+        std::fs::write(&weights, b"original weights").unwrap();
+        let resolved = handy_bridge::ResolvedModel {
+            model_id: model.id.clone(),
+            path: weights.clone(),
+            resolution: "synthetic".into(),
+            revision: Some("one".into()),
+        };
+        let runtime = handy_bridge::RuntimeIdentity {
+            compiled_version: "synthetic".into(),
+            loaded_version: "synthetic".into(),
+            loaded_commit: "one".into(),
+            public_header_hash: "one".into(),
+        };
+        let identity =
+            handy_bridge::capture_optional_model_identity(&model, &resolved, runtime.clone())
+                .unwrap();
+        let folder = reserve_model_check_folder(&root).unwrap();
+        crate::create_json(&folder.join("model.json"), &identity).unwrap();
+        let result = serde_json::json!({"modelId":model.id,"supported":true,"checkedAt":"2026-10-28T00:00:00Z","audioAccess":false});
+        crate::create_json(&folder.join("result.json"), &result).unwrap();
+        for _ in 1..MAX_MODEL_CHECK_FOLDERS {
+            reserve_model_check_folder(&root).unwrap();
+        }
+        let before = std::fs::read(folder.join("result.json")).unwrap();
+        assert_eq!(cached_model_check(&root, &identity).unwrap(), Some(true));
+        assert_eq!(std::fs::read(folder.join("result.json")).unwrap(), before);
+        assert!(
+            reserve_model_check_folder(&root).is_err(),
+            "the fixed evidence limit remains"
+        );
+        for change in ["runtime", "revision", "metadata", "path", "hash"] {
+            let mut different = identity.clone();
+            match change {
+                "runtime" => different.native_runtime_identity.loaded_commit = "two".into(),
+                "revision" => different.resolved_revision = Some("two".into()),
+                "metadata" => {
+                    different.source_model_metadata.source = serde_json::json!({"revision":"two"})
+                }
+                "path" => different.canonical_path = root.join("different.bin"),
+                _ => different.sha256 = "different".into(),
+            }
+            assert_eq!(
+                cached_model_check(&root, &different).unwrap(),
+                None,
+                "{change}"
+            );
+        }
+        std::fs::write(&weights, b"changed! weights").unwrap();
+        let changed =
+            handy_bridge::capture_optional_model_identity(&model, &resolved, runtime).unwrap();
+        assert_eq!(changed.bytes, identity.bytes);
+        assert_eq!(cached_model_check(&root, &changed).unwrap(), None);
+        let mut unsupported = result.clone();
+        unsupported["supported"] = false.into();
+        std::fs::write(
+            folder.join("result.json"),
+            serde_json::to_vec(&unsupported).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(cached_model_check(&root, &identity).unwrap(), Some(false));
+        for invalid in [b"{".as_slice(), b"{}".as_slice()] {
+            std::fs::write(folder.join("result.json"), invalid).unwrap();
+            assert_eq!(cached_model_check(&root, &identity).unwrap(), None);
+            assert_eq!(std::fs::read(folder.join("result.json")).unwrap(), invalid);
+        }
+        for (field, value) in [
+            ("modelId", serde_json::json!("different")),
+            ("checkedAt", serde_json::json!("invalid date")),
+            ("audioAccess", serde_json::json!(true)),
+        ] {
+            let mut invalid = result.clone();
+            invalid[field] = value;
+            std::fs::write(
+                folder.join("result.json"),
+                serde_json::to_vec(&invalid).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(
+                cached_model_check(&root, &identity).unwrap(),
+                None,
+                "{field}"
+            );
+        }
+        std::fs::write(folder.join("result.json"), &before).unwrap();
+        let conflicting = std::fs::read_dir(root.join("speaker-model-checks"))
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .find(|path| *path != folder)
+            .unwrap();
+        crate::create_json(&conflicting.join("model.json"), &identity).unwrap();
+        crate::create_json(&conflicting.join("result.json"), &unsupported).unwrap();
+        assert!(cached_model_check(&root, &identity).is_err());
+        assert_eq!(std::fs::read(folder.join("result.json")).unwrap(), before);
+    }
+
+    #[test]
+    /// Retains complete and partial proof folders at the fixed ceiling and verifies that
+    /// refusing a 129th reservation neither removes nor overwrites earlier evidence.
+    fn model_check_evidence_is_bounded_without_removing_partial_or_complete_records() {
+        let root = std::env::temp_dir().join(format!(
+            "hm-speaker-check-cap-{}",
+            meeting_notes::new_job_id()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let mut retained = Vec::new();
+        for index in 0..MAX_MODEL_CHECK_FOLDERS {
+            let folder = reserve_model_check_folder(&root).unwrap();
+            if index % 2 == 0 {
+                let proof = folder.join("synthetic-proof.json");
+                std::fs::write(&proof, b"preserve this confirmed check").unwrap();
+                retained.push(proof);
+            }
+        }
+        let error = reserve_model_check_folder(&root).unwrap_err();
+        assert!(error.contains("128"));
+        assert_eq!(
+            std::fs::read_dir(root.join("speaker-model-checks"))
+                .unwrap()
+                .count(),
+            MAX_MODEL_CHECK_FOLDERS
+        );
+        for path in retained {
+            assert_eq!(
+                std::fs::read(path).unwrap(),
+                b"preserve this confirmed check"
+            );
+        }
+    }
+}
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct Section {

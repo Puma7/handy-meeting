@@ -12,6 +12,7 @@ type Props = {
   api: DesktopApi;
   locale: Locale;
   connected: boolean;
+  disabled?: boolean;
   /** Applies a detected local server and model to the text model settings. */
   onUse: (endpoint: string, model: string) => void;
 };
@@ -27,6 +28,7 @@ export default function LocalModelSetup({
   api,
   locale,
   connected,
+  disabled = false,
   onUse,
 }: Props) {
   const de = locale === "de";
@@ -95,8 +97,9 @@ export default function LocalModelSetup({
         : "unknown";
   const command = recommended ? `ollama pull ${recommended}` : "";
 
+  /** Requests an explicitly selected model download only while setup actions are unlocked. */
   async function startPull() {
-    if (!recommended || !api.pullOllamaModel) return;
+    if (disabled || !recommended || !api.pullOllamaModel) return;
     setError(null);
     try {
       setPull(await api.pullOllamaModel(recommended));
@@ -181,7 +184,10 @@ export default function LocalModelSetup({
                       <button
                         key={model}
                         className="secondary"
-                        onClick={() => onUse(provider.endpoint, model)}
+                        disabled={disabled}
+                        onClick={() => {
+                          if (!disabled) onUse(provider.endpoint, model);
+                        }}
                       >
                         <Check size={14} />
                         {de ? "Verwenden" : "Use"}: {model}
@@ -213,7 +219,7 @@ export default function LocalModelSetup({
                         ) : (
                           <button
                             className="primary"
-                            disabled={!api.pullOllamaModel}
+                            disabled={disabled || !api.pullOllamaModel}
                             onClick={() => void startPull()}
                           >
                             <Download size={14} />

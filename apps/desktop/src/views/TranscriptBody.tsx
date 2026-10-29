@@ -3,6 +3,10 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { clock, trackName } from "../domain";
 import type { AudioPart, Locale } from "../types";
 import type { MessageKey } from "../i18n";
+/**
+ * Renders all retained transcript sections and searches their literal text without markup.
+ * Scroll following respects the reader's position; search highlights use original indices.
+ */
 export default function TranscriptBody({
   parts,
   locale,
@@ -19,12 +23,10 @@ export default function TranscriptBody({
 }) {
   const de = locale === "de";
   const [query, setQuery] = useState("");
-  const needle = query.trim().toLocaleLowerCase();
+  const needle = query.trim();
   // Search filters the displayed sections only; the transcript itself is never changed.
   const shown = needle
-    ? parts.filter((part) =>
-        (part.text ?? "").toLocaleLowerCase().includes(needle),
-      )
+    ? parts.filter((part) => searchPattern(needle).test(part.text ?? ""))
     : parts;
   const scrolledFile = useRef<string | null>(null);
   useEffect(() => {
@@ -128,18 +130,21 @@ export default function TranscriptBody({
 /** Marks case-insensitive matches; the text is rendered literally, never as markup. */
 function highlight(text: string, needle: string): ReactNode {
   if (!needle) return text;
-  const lower = text.toLocaleLowerCase();
   const pieces: ReactNode[] = [];
   let from = 0;
-  for (
-    let at = lower.indexOf(needle);
-    at >= 0;
-    at = lower.indexOf(needle, from)
-  ) {
+  for (const match of text.matchAll(searchPattern(needle, true))) {
+    const at = match.index;
     if (at > from) pieces.push(text.slice(from, at));
-    pieces.push(<mark key={at}>{text.slice(at, at + needle.length)}</mark>);
-    from = at + needle.length;
+    pieces.push(<mark key={at}>{match[0]}</mark>);
+    from = at + match[0].length;
   }
   if (from < text.length) pieces.push(text.slice(from));
   return pieces;
+}
+/** Escape all pattern syntax: transcript searches remain literal and use original indices. */
+function searchPattern(needle: string, all = false) {
+  return new RegExp(
+    needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+    all ? "giu" : "iu",
+  );
 }

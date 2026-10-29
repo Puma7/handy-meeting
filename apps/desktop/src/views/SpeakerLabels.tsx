@@ -9,6 +9,10 @@ import type {
   SpeakerDocument,
   SpeakerAssignment,
 } from "../types";
+/**
+ * Hydrates saved speaker names even while editing controls are closed, publishing only names
+ * whose original source hashes still match. Text revisions invalidate stale assignments.
+ */
 export default function SpeakerLabels({
   api,
   meeting,
@@ -16,6 +20,7 @@ export default function SpeakerLabels({
   onPropose,
   proposeDisabled = false,
   onLabels,
+  embedded = false,
 }: {
   api: DesktopApi;
   meeting: Meeting;
@@ -25,6 +30,7 @@ export default function SpeakerLabels({
   proposeDisabled?: boolean;
   /** Enabled assignments whose original text is unchanged, by source ID; empty when off. */
   onLabels?: (meetingId: string, labels: Record<string, string>) => void;
+  embedded?: boolean;
 }) {
   const de = locale === "de";
   const [doc, setDoc] = useState<
@@ -68,6 +74,7 @@ export default function SpeakerLabels({
     .join("\u0000");
   useEffect(() => {
     let active = true;
+    setDoc(null);
     api
       .getSpeakerLabels?.(meeting.id)
       .then((v) => {
@@ -113,13 +120,20 @@ export default function SpeakerLabels({
       setBusy(false);
     }
   }
+  const Container = embedded ? "section" : "details";
   return (
-    <details className="speaker-options">
-      <summary>
-        {de
-          ? "Sprecher nach dem Meeting zuordnen · optional"
-          : "Assign speakers after the meeting · optional"}
-      </summary>
+    <Container className="speaker-options">
+      {embedded ? (
+        <h3>
+          {de ? "Sprecher selbst bestätigen" : "Confirm speakers yourself"}
+        </h3>
+      ) : (
+        <summary>
+          {de
+            ? "Sprecher nach dem Meeting zuordnen · optional"
+            : "Assign speakers after the meeting · optional"}
+        </summary>
+      )}
       <p>
         {de
           ? "Eine Namensnennung belegt nicht, wer spricht. Ordne nur Abschnitte zu, deren Sprecher du bestätigen kannst. Bei mehreren Stimmen bleibt die Zuordnung unbekannt. Originaltexte und ältere Zuordnungen bleiben erhalten."
@@ -313,7 +327,7 @@ export default function SpeakerLabels({
           </form>
         </>
       )}
-    </details>
+    </Container>
   );
 }
 /** FNV-1a over the whole text: cheap enough per render, sensitive to any change. */

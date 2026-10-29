@@ -20,12 +20,12 @@
 
   /* Status colors. Each has a -wash tint below. */
   --light-color-warning: #d97706;
-  --light-color-error: #dc2626;
+  --light-color-error: #b91c1c;
   --dark-color-warning: #fbbf24;
   --dark-color-error: #f87171;
 
   /* Success. Pink already means "recording", so it gets its own hue. */
-  --light-color-moss: #2f7d5b;
+  --light-color-moss: #256548;
   --dark-color-moss: #86c9a4;
 
   /* Plum: the ink for keycaps and picked items. */

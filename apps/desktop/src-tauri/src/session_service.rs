@@ -31,21 +31,24 @@ impl Service {
             return Ok(data);
         }
         validate_id(id)?;
-        {
+        let stores = {
             let inner = self.lock()?;
-            for store in inner
+            inner
                 .active
                 .as_ref()
                 .map(|a| &a.store)
                 .into_iter()
                 .chain(inner.view.iter())
-            {
-                let data = store
-                    .snapshot()
-                    .map_err(|_| "Sitzungsstand konnte nicht gelesen werden.")?;
-                if data.id == id {
-                    return Ok(data);
-                }
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+        // Full transcript reads must not hold the UI/capture-control application lock.
+        for store in stores {
+            let data = store
+                .snapshot()
+                .map_err(|_| "Sitzungsstand konnte nicht gelesen werden.")?;
+            if data.id == id {
+                return Ok(data);
             }
         }
         let folder = self.root.join("sessions").join(id);

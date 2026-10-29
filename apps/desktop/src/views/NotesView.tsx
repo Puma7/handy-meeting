@@ -21,27 +21,15 @@ import type {
 } from "../types";
 import type { MessageKey } from "../i18n";
 import type { TemplateAction } from "./TemplateDialog";
-import CredentialPanel from "./CredentialPanel";
-import LocalModelSetup from "./LocalModelSetup";
-import { useEffect, useState } from "react";
-import type { DesktopApi } from "../types";
+import { useEffect, useState, type ReactNode } from "react";
 type Props = {
+  connectionSettings: ReactNode;
   t: Record<MessageKey, string>;
-  api: DesktopApi;
-  useSavedKey: boolean;
-  setUseSavedKey: (value: boolean) => void;
   meeting: Meeting | null;
   meetingId: string;
   meetings: MeetingSummary[];
   meetingLoading: boolean;
   selectMeeting: (id: string) => void;
-  localModels: string[];
-  modelsLoading: boolean;
-  modelsError: string | null;
-  modelsLoaded: boolean;
-  refreshModels: () => void;
-  manualModel: boolean;
-  setManualModel: (manual: boolean) => void;
   modelReady: boolean;
   libraryInvalid: boolean;
   libraryPending: boolean;
@@ -51,14 +39,8 @@ type Props = {
   importBrowser: (() => void) | null;
   templates: AnalysisTemplate[];
   notesBusy: boolean;
-  mode: "local" | "cloud";
-  setMode: (v: "local" | "cloud") => void;
-  setEndpoint: (v: string) => void;
-  setApiKey: (v: string) => void;
   textModel: string;
-  setTextModel: (v: string) => void;
   endpoint: string;
-  apiKey: string;
   template: AnalysisTemplate;
   resultId: string;
   analyses: AnalysisResult[];
@@ -86,23 +68,18 @@ type Props = {
   showEvidence: (evidence: Evidence) => void;
   locale: Locale;
 };
+/**
+ * Orders post-processing around the selected meeting, shared connection, template and result.
+ * Execution and per-run cloud consent remain parent-owned; editing never starts a model call.
+ */
 export default function NotesView({
+  connectionSettings,
   t,
-  api,
-  useSavedKey,
-  setUseSavedKey,
   meeting,
   meetingId,
   meetings,
   meetingLoading,
   selectMeeting,
-  localModels,
-  modelsLoading,
-  modelsError,
-  modelsLoaded,
-  refreshModels,
-  manualModel,
-  setManualModel,
   modelReady,
   libraryInvalid,
   libraryPending,
@@ -112,14 +89,8 @@ export default function NotesView({
   importBrowser,
   templates,
   notesBusy,
-  mode,
-  setMode,
-  setEndpoint,
-  setApiKey,
   textModel,
-  setTextModel,
   endpoint,
-  apiKey,
   template,
   resultId,
   analyses,
@@ -145,30 +116,9 @@ export default function NotesView({
   locale,
 }: Props) {
   const [setupOpen, setSetupOpen] = useState(!result);
-  const [localSetupOpen, setLocalSetupOpen] = useState(false);
   useEffect(() => {
     if (notesBusy || result) setSetupOpen(false);
   }, [notesBusy, result?.id]);
-  // No model at the configured local endpoint: show the Ollama/LM Studio detection at once
-  // instead of expecting the user to know ports. Nothing is changed until "Use" is clicked.
-  const noLocalModel =
-    mode === "local" &&
-    !manualModel &&
-    (Boolean(modelsError) || (modelsLoaded && !localModels.length));
-  useEffect(() => {
-    if (noLocalModel) setLocalSetupOpen(true);
-  }, [noLocalModel]);
-  // A server chosen from the detection is queried once its address has been applied;
-  // changing the address clears the list, and typing alone never sends a request.
-  // Counts "Use" clicks, so a choice at the current address refreshes as well.
-  const [usedServer, setUsedServer] = useState(0);
-  useEffect(() => {
-    if (!usedServer) return;
-    // After this commit: the parent's list reset for a new address runs after child effects.
-    const timer = setTimeout(refreshModels, 0);
-    return () => clearTimeout(timer);
-    // Runs once per "Use"; the refresh callback reads the current settings.
-  }, [usedServer]);
   const templateLocked =
     notesBusy || libraryInvalid || libraryPending || !connected;
   const builtIn = template.id === "speaker-name-candidates-v1";
@@ -243,293 +193,120 @@ export default function NotesView({
             </span>
           </summary>
           <div className="analysis-setup-fields">
-            <div className="settings-grid">
-              <label>
-                {t.processing}
-                <select
-                  value={mode}
-                  disabled={notesBusy}
-                  onChange={(event) => {
-                    setMode(event.target.value as "local" | "cloud");
-                    setEndpoint(
-                      event.target.value === "local"
-                        ? "http://127.0.0.1:1234/v1/"
-                        : "https://openrouter.ai/api/v1/",
-                    );
-                    setApiKey("");
-                    // A cloud model name is never kept as the local (and remembered) choice.
-                    if (event.target.value === "local") setTextModel("");
-                  }}
-                >
-                  <option value="local">{t.local}</option>
-                  <option value="cloud">{t.cloud}</option>
-                </select>
-              </label>
-              <label>
-                {t.textModel}
-                {mode === "local" && !manualModel ? (
-                  <div className="inline-control">
-                    <select
-                      aria-label={t.textModel}
-                      value={textModel}
-                      disabled={notesBusy || modelsLoading}
-                      onChange={(event) => setTextModel(event.target.value)}
-                    >
-                      <option value="">
-                        {modelsLoading
-                          ? t.loadingTextModels
-                          : t.selectTextModel}
-                      </option>
-                      {textModel && !localModels.includes(textModel) && (
-                        <option value={textModel} disabled>
-                          {textModel} · {t.notFound}
-                        </option>
-                      )}
-                      {localModels.map((model) => (
-                        <option value={model} key={model}>
-                          {model}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      className="icon-button bordered"
-                      onClick={refreshModels}
-                      disabled={notesBusy || modelsLoading || !connected}
-                      title={t.refreshTextModels}
-                      aria-label={t.refreshTextModels}
-                    >
-                      <RefreshCw
-                        size={17}
-                        className={modelsLoading ? "spinning" : undefined}
-                      />
-                    </button>
-                  </div>
-                ) : (
-                  <input
-                    aria-label={t.textModel}
-                    value={textModel}
-                    disabled={notesBusy}
-                    onChange={(event) => setTextModel(event.target.value)}
-                    autoComplete="off"
-                  />
-                )}
-              </label>
-            </div>
-            {mode === "local" && (
-              <details className="local-service-help">
-                <summary>{t.setupHelp}</summary>
-                <p>{t.localServiceHelp}</p>
-                <p>{t.firstModelLoad}</p>
-              </details>
-            )}
-            {mode === "local" && (
-              <>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={manualModel}
-                    disabled={notesBusy}
-                    onChange={(event) => setManualModel(event.target.checked)}
-                  />
-                  {t.manualTextModel}
-                </label>
-                {modelsError && (
-                  <div className="notice warning">
-                    <div>
-                      <strong>{modelsError}</strong>
-                      <p>{t.textModelsHelp}</p>
-                    </div>
-                  </div>
-                )}
-                {modelsLoaded && !localModels.length && (
-                  <p className="muted">
-                    {t.noTextModels} {t.textModelsHelp}
-                  </p>
-                )}
-                {textModel &&
-                  !manualModel &&
-                  modelsLoaded &&
-                  !localModels.includes(textModel) && (
-                    <p className="inline-error">{t.textModelUnavailable}</p>
-                  )}
-              </>
-            )}
-            {mode === "local" && (
-              <details
-                className="connection-settings"
-                open={localSetupOpen}
-                onToggle={(event) =>
-                  setLocalSetupOpen(event.currentTarget.open)
-                }
-              >
-                <summary>
-                  {locale === "de"
-                    ? "Lokales Modell einrichten (Ollama oder LM Studio)"
-                    : "Set up a local model (Ollama or LM Studio)"}
-                </summary>
-                {/* Probes loopback and reads memory only while opened. */}
-                {localSetupOpen && (
-                  <LocalModelSetup
-                    api={api}
-                    locale={locale}
-                    connected={connected}
-                    onUse={(nextEndpoint, nextModel) => {
-                      // A key entered for another route must never reach the local server.
-                      setApiKey("");
-                      setUseSavedKey(false);
-                      setEndpoint(nextEndpoint);
-                      setTextModel(nextModel);
-                      setUsedServer((count) => count + 1);
-                    }}
-                  />
-                )}
-              </details>
-            )}
-            <details
-              className="connection-settings"
-              open={mode === "cloud" ? true : undefined}
+            {connectionSettings}
+            <section
+              className="notes-template-settings"
+              aria-label={
+                locale === "de"
+                  ? "Vorlage und Arbeitsauftrag"
+                  : "Template and instructions"
+              }
             >
-              <summary>{t.connectionSettings}</summary>
-              <label>
-                {mode === "local" ? t.localEndpoint : t.endpoint}
-                <input
-                  type="url"
-                  value={endpoint}
-                  disabled={notesBusy}
-                  onChange={(event) => setEndpoint(event.target.value)}
-                  autoComplete="off"
-                />
-              </label>
-              <CredentialPanel
-                api={api}
-                endpoint={endpoint}
-                mode={mode}
-                connected={connected}
-                disabled={notesBusy}
-                apiKey={apiKey}
-                setApiKey={setApiKey}
-                useSavedKey={useSavedKey}
-                setUseSavedKey={setUseSavedKey}
-                t={t}
-              />
-            </details>
-            <div className="template-selector">
-              <label>
-                {t.template}
-                <select
-                  value={template.id}
-                  disabled={templateLocked}
-                  onChange={(event) => {
-                    const next = templates.find(
-                      (item) => item.id === event.target.value,
-                    )!;
-                    setTemplateId(next.id);
-                    setStepId(next.steps[0].id);
-                    setResultId("");
-                  }}
-                >
-                  {templates.map((item) => (
-                    <option value={item.id} key={item.id}>
-                      {item.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <div className="template-actions" aria-label={t.template}>
-              <button
-                className="secondary"
-                disabled={templateLocked || templates.length >= 100}
-                onClick={() => openTemplateAction("new")}
-              >
-                <Plus size={15} />
-                {t.newTemplate}
-              </button>
-              <button
-                className="secondary"
-                disabled={templateLocked || templates.length >= 100}
-                onClick={() =>
-                  openTemplateAction("duplicate", result?.template ?? template)
-                }
-              >
-                <Copy size={15} />
-                {t.duplicateTemplate}
-              </button>
-              <button
-                className="text-button"
-                disabled={templateLocked || builtIn}
-                onClick={() => openTemplateAction("rename")}
-              >
-                <Pencil size={14} />
-                {t.renameTemplate}
-              </button>
-              <button
-                className="text-button"
-                disabled={
-                  templateLocked || builtIn || editableTemplateCount < 2
-                }
-                title={
-                  editableTemplateCount < 2 ? t.lastTemplate : t.removeTemplate
-                }
-                onClick={() => openTemplateAction("delete")}
-              >
-                <Trash2 size={14} />
-                {t.removeTemplate}
-              </button>
-              <button
-                className="text-button"
-                disabled={notesBusy || libraryPending || !connected}
-                onClick={refreshTemplates}
-              >
-                <RefreshCw
-                  size={14}
-                  className={libraryPending ? "spinning" : undefined}
-                />
-                {t.refreshTemplates}
-              </button>
-            </div>
-            <p className="muted">{t.templatesPortable}</p>
-            {importBrowser && (
-              <details>
-                <summary>{t.importBrowserTemplates}</summary>
-                <p>{t.browserTemplatesHelp}</p>
-                <button
-                  className="secondary"
-                  disabled={templateLocked}
-                  onClick={importBrowser}
-                >
-                  {t.importBrowserTemplates}
-                </button>
+              <h3>
+                {locale === "de"
+                  ? "Vorlage und Arbeitsauftrag"
+                  : "Template and instructions"}
+              </h3>
+              <div className="template-selector">
+                <label>
+                  {t.template}
+                  <select
+                    value={template.id}
+                    disabled={templateLocked}
+                    onChange={(event) => {
+                      const next = templates.find(
+                        (item) => item.id === event.target.value,
+                      )!;
+                      setTemplateId(next.id);
+                      setStepId(next.steps[0].id);
+                      setResultId("");
+                    }}
+                  >
+                    {templates.map((item) => (
+                      <option value={item.id} key={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <details className="template-management">
+                <summary>
+                  {locale === "de" ? "Vorlagen verwalten" : "Manage templates"}
+                </summary>
+                <div className="template-actions" aria-label={t.template}>
+                  <button
+                    className="secondary"
+                    disabled={templateLocked || templates.length >= 100}
+                    onClick={() => openTemplateAction("new")}
+                  >
+                    <Plus size={15} />
+                    {t.newTemplate}
+                  </button>
+                  <button
+                    className="secondary"
+                    disabled={templateLocked || templates.length >= 100}
+                    onClick={() =>
+                      openTemplateAction(
+                        "duplicate",
+                        result?.template ?? template,
+                      )
+                    }
+                  >
+                    <Copy size={15} />
+                    {t.duplicateTemplate}
+                  </button>
+                  <button
+                    className="text-button"
+                    disabled={templateLocked || builtIn}
+                    onClick={() => openTemplateAction("rename")}
+                  >
+                    <Pencil size={14} />
+                    {t.renameTemplate}
+                  </button>
+                  <button
+                    className="text-button"
+                    disabled={
+                      templateLocked || builtIn || editableTemplateCount < 2
+                    }
+                    title={
+                      editableTemplateCount < 2
+                        ? t.lastTemplate
+                        : t.removeTemplate
+                    }
+                    onClick={() => openTemplateAction("delete")}
+                  >
+                    <Trash2 size={14} />
+                    {t.removeTemplate}
+                  </button>
+                  <button
+                    className="text-button"
+                    disabled={notesBusy || libraryPending || !connected}
+                    onClick={refreshTemplates}
+                  >
+                    <RefreshCw
+                      size={14}
+                      className={libraryPending ? "spinning" : undefined}
+                    />
+                    {t.refreshTemplates}
+                  </button>
+                </div>
+                <p className="muted">{t.templatesPortable}</p>
+                {importBrowser && (
+                  <details>
+                    <summary>{t.importBrowserTemplates}</summary>
+                    <p>{t.browserTemplatesHelp}</p>
+                    <button
+                      className="secondary"
+                      disabled={templateLocked}
+                      onClick={importBrowser}
+                    >
+                      {t.importBrowserTemplates}
+                    </button>
+                  </details>
+                )}
               </details>
-            )}
-            {analyses.length > 0 && (
-              <label>
-                {t.earlier}
-                <select
-                  value={resultId}
-                  onChange={(event) => {
-                    setResultId(event.target.value);
-                    const next = analyses.find(
-                      (item) => item.id === event.target.value,
-                    );
-                    if (next) setStepId(next.sections[0]?.id ?? "");
-                  }}
-                >
-                  <option value="">{t.currentTemplate}</option>
-                  {analyses.map((item) => (
-                    <option value={item.id} key={item.id}>
-                      {item.template.name} ·{" "}
-                      {new Date(item.createdAt).toLocaleString(
-                        locale === "de" ? "de-DE" : "en-GB",
-                      )}
-                      {item.currentPrompt === false &&
-                        ` · ${t.earlierPrompt} (${t.readOnly})`}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
+            </section>
           </div>
         </details>
         <div className="notes-run">
@@ -562,6 +339,34 @@ export default function NotesView({
         </div>
       </section>
       <section className="analysis-panel">
+        {analyses.length > 0 && (
+          <label>
+            {t.earlier}
+            <select
+              value={resultId}
+              onChange={(event) => {
+                setResultId(event.target.value);
+                const next = analyses.find(
+                  (item) => item.id === event.target.value,
+                );
+                if (next) setStepId(next.sections[0]?.id ?? "");
+              }}
+            >
+              <option value="">{t.currentTemplate}</option>
+              {analyses.map((item) => (
+                <option value={item.id} key={item.id}>
+                  {item.template.name} ·{" "}
+                  {new Date(item.createdAt).toLocaleString(
+                    locale === "de" ? "de-DE" : "en-GB",
+                  )}
+                  {item.currentPrompt === false &&
+                    ` · ${t.earlierPrompt} (${t.readOnly})`}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
         {result?.currentPrompt === false && (
           <p className="notice warning" role="note">
             {t.earlierPrompt}: {result.promptVersion} · {t.earlierPromptResult}

@@ -9,6 +9,7 @@ import SettingsView from "./views/SettingsView";
 import HistoryList from "./views/HistoryList";
 import MaintenanceStatus from "./views/MaintenanceStatus";
 import NotesView from "./views/NotesView";
+import TextModelSettings from "./views/TextModelSettings";
 import ResumeAnalysisDialog from "./views/ResumeAnalysisDialog";
 import Sidebar, { type Page } from "./views/Sidebar";
 import MeetingView from "./views/MeetingView";
@@ -24,6 +25,7 @@ import AgentPanel from "./views/AgentPanel";
 import { useTemplateLibrary } from "./useTemplateLibrary";
 import { useLocalTextModels } from "./useLocalTextModels";
 import { useNotesJob } from "./useNotesJob";
+import { hydrateLiveTranscript, mergeLiveTranscript } from "./live-transcript";
 import {
   useCallback,
   useEffect,
@@ -155,10 +157,80 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     [liveMeeting, setLiveMeeting] = useState<Meeting | null>(null),
     [notesMeetingId, setNotesMeetingId] = useState(""),
     [notesMeetingLoading, setNotesMeetingLoading] = useState(false);
+  const [transcriptLoading, setTranscriptLoading] = useState(false);
+  const transcriptRead = useRef<{
+    id: string;
+    promise: Promise<Meeting>;
+  } | null>(null);
+  const loadLiveTranscript = useCallback(async () => {
+    const id = liveMeeting?.id;
+    if (!id) return;
+    let read = transcriptRead.current;
+    if (!read || read.id !== id) {
+      read = { id, promise: api.getMeeting(id) };
+      transcriptRead.current = read;
+    }
+    setTranscriptLoading(true);
+    try {
+      const full = await read.promise;
+      if (full.id !== id)
+        throw new Error(
+          "Das geladene Transkript gehört zu einem anderen Meeting.",
+        );
+      setLiveMeeting((current) => hydrateLiveTranscript(current, full));
+      setMeeting((current) => hydrateLiveTranscript(current, full));
+    } catch (failure) {
+      if (transcriptRead.current === read) setError(errorMessage(failure));
+    } finally {
+      if (transcriptRead.current === read) {
+        transcriptRead.current = null;
+        setTranscriptLoading(false);
+      }
+    }
+  }, [api, liveMeeting?.id]);
+  useEffect(() => {
+    if (liveMeeting?.livePreviewLimited) void loadLiveTranscript();
+  }, [liveMeeting?.id, liveMeeting?.livePreviewLimited, loadLiveTranscript]);
+  useEffect(() => {
+    if (
+      page !== "meeting" ||
+      !liveMeeting?.id ||
+      !["recording", "streaming", "recorded", "catching-up"].includes(
+        liveMeeting.status,
+      )
+    )
+      return;
+    // Full text is read outside the application lock at a slower cadence than status.
+    // A backlog can update old sections that never enter the bounded recent preview.
+    const timer = setInterval(() => void loadLiveTranscript(), 5000);
+    return () => clearInterval(timer);
+  }, [page, liveMeeting?.id, liveMeeting?.status, loadLiveTranscript]);
   const [speakerLabels, setSpeakerLabels] = useState<{
     meetingId: string;
     labels: Record<string, string>;
   } | null>(null);
+  const [speakerOptionsOpen, setSpeakerOptionsOpen] = useState(false);
+  const [speakerChecks, setSpeakerChecks] = useState<Record<string, boolean>>(
+    {},
+  );
+  const [speakerModelId, setSpeakerModelId] = useState("");
+  const [speakerChecksInFlight, setSpeakerChecksInFlight] = useState(0);
+  const speakerChecking = speakerChecksInFlight > 0;
+  const onSpeakerCheckingChange = useCallback((checking: boolean) => {
+    setSpeakerChecksInFlight((count) =>
+      Math.max(0, count + (checking ? 1 : -1)),
+    );
+  }, []);
+  const onSpeakerModelChecked = useCallback(
+    (id: string, supported: boolean) => {
+      setSpeakerChecks((previous) => ({ ...previous, [id]: supported }));
+    },
+    [],
+  );
+  useEffect(
+    () => setSpeakerOptionsOpen(false),
+    [page, meeting?.id, liveMeeting?.id],
+  );
   /**
    * Keeps caller-supplied speaker labels with their meeting ID so another selected meeting
    * cannot inherit the display mapping.
@@ -202,7 +274,37 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     [manualTextModel, setManualTextModel] = useState(false),
     [apiKey, setApiKey] = useState(""),
     [savedKeyScope, setSavedKeyScope] = useState<string | null>(null),
-    [mode, setMode] = useState<"local" | "cloud">("local");
+    [mode, setProcessingMode] = useState<"local" | "cloud">("local");
+  const connectionDrafts = useRef({
+    local: {
+      endpoint: savedLive.endpoint ?? "http://127.0.0.1:1234/v1/",
+      model: savedLive.model ?? "",
+      manual: false,
+    },
+    cloud: {
+      endpoint: "https://openrouter.ai/api/v1/",
+      model: "",
+      manual: false,
+    },
+  });
+  const setMode = useCallback(
+    (next: "local" | "cloud") => {
+      if (mode === next) return;
+      connectionDrafts.current[mode] = {
+        endpoint,
+        model: textModel,
+        manual: manualTextModel,
+      };
+      const draft = connectionDrafts.current[next];
+      setEndpoint(draft.endpoint);
+      setTextModel(draft.model);
+      setManualTextModel(draft.manual);
+      setApiKey("");
+      setSavedKeyScope(null);
+      setProcessingMode(next);
+    },
+    [mode, endpoint, textModel, manualTextModel],
+  );
   const credentialScope = JSON.stringify([mode, endpoint.trim()]);
   const useSavedKey = savedKeyScope === credentialScope;
   /**
@@ -287,7 +389,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     endpoint,
     mode,
     connected,
-    page === "notes",
+    page === "notes" || page === "settings",
   );
   const notesMeeting = meeting?.id === notesMeetingId ? meeting : null;
   const notesMeetingOptions =
@@ -549,11 +651,11 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
           ["recording", "catching-up", "streaming"].includes(active.status);
         if (live) {
           liveFullRef.current = null;
-          setLiveMeeting(active);
+          setLiveMeeting((previous) => mergeLiveTranscript(previous, active));
           if (!selectedRef.current || selectedRef.current === active.id) {
             selectedRef.current = active.id;
             fullMeetingRef.current = null;
-            setMeeting(active);
+            setMeeting((previous) => mergeLiveTranscript(previous, active));
           }
         } else if (
           liveFullRef.current !== active.id ||
@@ -660,6 +762,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
           return;
         lastModelRefresh.current = Date.now();
         queriedHandy = true;
+        if (!automatic) setSpeakerChecks({});
         setRefreshingHandy(true);
         // The backend retains discovery/native origin. A displayed cached path
         // must not turn an automatic refresh into an explicit file selection.
@@ -673,6 +776,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             // supersede the reread below, but cannot restore an invalid model.
             catalogueFailure.current = reason;
             if (mounted.current) {
+              setSpeakerChecks({});
               setHandyRefreshFailure(reason);
               setModelId("");
             }
@@ -682,6 +786,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             throw failure;
           });
         if (!mounted.current) return;
+        if (automatic && JSON.stringify(fresh.handy) !== JSON.stringify(handy))
+          setSpeakerChecks({});
         // An older automatic query, or an earlier same-path confirmation, has
         // no authority to release the latest still-pending native choice.
         if (
@@ -1237,10 +1343,33 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         )
         .filter((item) => (item.text ?? "").trim())
     : [];
-  const recentParts =
-    shownMeeting?.status === "complete" && !shownMeeting.livePreviewLimited
-      ? orderedParts
-      : orderedParts.slice(-40);
+  const recentParts = orderedParts;
+  const textModelSettings = (
+    <TextModelSettings
+      api={api}
+      t={t}
+      locale={locale}
+      connected={connected}
+      disabled={notesBusy || busy}
+      mode={mode}
+      setMode={setMode}
+      endpoint={endpoint}
+      setEndpoint={setEndpoint}
+      textModel={textModel}
+      setTextModel={setTextModel}
+      apiKey={apiKey}
+      setApiKey={setApiKey}
+      useSavedKey={useSavedKey}
+      setUseSavedKey={setUseSavedKey}
+      localModels={localTextModels.models}
+      modelsLoading={localTextModels.loading}
+      modelsLoaded={localTextModels.loaded}
+      modelsError={localTextModels.error}
+      refreshModels={() => void localTextModels.refresh()}
+      manualModel={manualTextModel}
+      setManualModel={setManualTextModel}
+    />
+  );
   /**
    * Uses native saved-audio totals or the greatest confirmed 16 kHz sample boundary,
    * expressed in milliseconds independently of ASR progress.
@@ -1282,8 +1411,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
           ),
         ));
 
-  // The live summary of the recording; without UI on other pages, so an automatic start
-  // also covers recordings started from History or Settings (e.g. an agent approval).
+  /**
+   * Binds live notes to the recording, including headless auto-start on other pages.
+   * Switching to a local model clears credentials and respects a running analysis lock.
+   */
   const livePanel = (headless: boolean) =>
     liveMeeting && !liveMeeting.readOnly ? (
       <LiveNotesPanel
@@ -1305,6 +1436,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         preferences={livePreferences}
         setPreferences={setLivePreferences}
         onUseLocalModel={(nextEndpoint, nextModel) => {
+          if (notesBusy) return;
           // A key entered for another route must never reach the local server.
           setApiKey("");
           setUseSavedKey(false);
@@ -1313,10 +1445,18 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
           setTextModel(nextModel);
           setManualTextModel(false);
         }}
-        onOpenTextModelSettings={() => void openNotesFor(liveMeeting.id)}
+        onOpenTextModelSettings={() => {
+          setPage("settings");
+          requestAnimationFrame(() => {
+            const section = document.getElementById("text-model-settings");
+            section?.scrollIntoView?.({ block: "start" });
+            section?.focus();
+          });
+        }}
         focus={liveFocus}
         setFocus={setLiveFocus}
         headless={headless}
+        connectionLocked={notesBusy}
       />
     ) : undefined;
 
@@ -1338,13 +1478,13 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             <h1 tabIndex={-1}>
               {page === "detail" ? t.meetingDetail : t[page]}
             </h1>
-            <p>
+            <p className={page === "meeting" ? "sr-only" : undefined}>
               {page === "meeting"
                 ? t.preserve
                 : page === "notes"
                   ? t.draft
                   : page === "history" || page === "detail"
-                    ? t.legacyHelp
+                    ? t.historyHelp
                     : t.compatibility}
             </p>
           </div>
@@ -1393,54 +1533,80 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             }}
           />
         )}
-        {page === "detail" && meeting && (
-          <SpeakerLabels
-            key={"speaker-labels-" + meeting.id}
-            api={api}
-            meeting={meeting}
-            locale={locale}
-            proposeDisabled={notesBusy}
-            onLabels={onSpeakerLabels}
-            onPropose={() => {
-              if (notesBusy) return;
-              void action(async () => {
-                // Name suggestions run locally only; local settings stay as they are.
-                if (mode === "cloud") {
-                  setMode("local");
-                  setApiKey("");
-                  setSavedKeyScope(null);
-                  setEndpoint("http://127.0.0.1:1234/v1/");
-                  setTextModel("");
-                }
-                await openNotesFor(meeting.id);
-                if (notesSelectionRef.current === meeting.id) {
-                  setTemplateId(SPEAKER_NAME_TEMPLATE.id);
-                  setResultId("");
-                }
-              });
+        {((page === "detail" && meeting) ||
+          (page === "meeting" && liveMeeting)) && (
+          <details
+            className="speaker-tools"
+            open={speakerOptionsOpen}
+            onToggle={(event) => {
+              if (event.target === event.currentTarget)
+                setSpeakerOptionsOpen(event.currentTarget.open);
             }}
-          />
-        )}
-        {(page === "detail"
-          ? meeting
-          : page === "meeting"
-            ? liveMeeting
-            : null) && (
-          <SpeakerExperiments
-            key={
-              "speaker-experiments-" +
-              (page === "detail" ? meeting : liveMeeting)!.id
-            }
-            api={api}
-            locale={locale}
-            meeting={page === "detail" ? meeting : liveMeeting}
-            models={app?.handy?.models ?? []}
-            recording={Boolean(
-              app?.recording &&
-                (page === "detail" ? meeting : liveMeeting)?.id ===
-                  liveMeeting?.id,
+          >
+            <summary>
+              {locale === "de"
+                ? "Sprecher zuordnen · optional"
+                : "Speaker tools · optional"}
+            </summary>
+            {page === "detail" && meeting && (
+              <SpeakerLabels
+                embedded
+                key={"speaker-labels-" + meeting.id}
+                api={api}
+                meeting={meeting}
+                locale={locale}
+                proposeDisabled={notesBusy}
+                onLabels={onSpeakerLabels}
+                onPropose={() => {
+                  if (notesBusy) return;
+                  void action(async () => {
+                    // Name suggestions run locally only; local settings stay as they are.
+                    if (mode === "cloud") {
+                      setMode("local");
+                      setApiKey("");
+                      setSavedKeyScope(null);
+                    }
+                    await openNotesFor(meeting.id);
+                    if (notesSelectionRef.current === meeting.id) {
+                      setTemplateId(SPEAKER_NAME_TEMPLATE.id);
+                      setResultId("");
+                    }
+                  });
+                }}
+              />
             )}
-          />
+            {speakerOptionsOpen &&
+              (page === "detail"
+                ? meeting
+                : page === "meeting"
+                  ? liveMeeting
+                  : null) && (
+                <SpeakerExperiments
+                  embedded
+                  checkedModels={speakerChecks}
+                  selectedModelId={speakerModelId}
+                  onSelectedModelChange={setSpeakerModelId}
+                  checkingBlocked={
+                    speakerChecking || notesBusy || busy || refreshingHandy
+                  }
+                  onModelChecked={onSpeakerModelChecked}
+                  onCheckingChange={onSpeakerCheckingChange}
+                  key={
+                    "speaker-experiments-" +
+                    (page === "detail" ? meeting : liveMeeting)!.id
+                  }
+                  api={api}
+                  locale={locale}
+                  meeting={page === "detail" ? meeting : liveMeeting}
+                  models={app?.handy?.models ?? []}
+                  recording={Boolean(
+                    app?.recording &&
+                      (page === "detail" ? meeting : liveMeeting)?.id ===
+                        liveMeeting?.id,
+                  )}
+                />
+              )}
+          </details>
         )}
         {error && (
           <div role="alert" className="notice error">
@@ -1531,6 +1697,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             recording={recording}
             busy={
               busy ||
+              speakerChecking ||
               refreshingHandy ||
               catchingUp ||
               (app?.transitioning ?? false)
@@ -1596,6 +1763,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             copied={copied === "transcript"}
             backlog={backlog}
             recentParts={recentParts}
+            transcriptLoading={transcriptLoading}
+            loadFullTranscript={loadLiveTranscript}
             locale={locale}
             setTitle={setTitle}
             setModelId={setModelId}
@@ -1607,6 +1776,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             savedByTrack={savedByTrack}
             copyFullTranscript={() => copyFullTranscript(liveMeeting)}
             liveFocus={liveFocus}
+            onLiveFocus={setLiveFocus}
             liveNotes={livePanel(false)}
             refreshHandy={() => void action(() => refreshModels(false))}
             resume={() =>
@@ -1681,6 +1851,29 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         )}
         {page === "settings" && (
           <SettingsView
+            textModelSettings={textModelSettings}
+            speakerModelSettings={
+              api.checkSpeakerModel && (
+                <SpeakerExperiments
+                  setupOnly
+                  embedded
+                  api={api}
+                  locale={locale}
+                  models={app?.handy?.models ?? []}
+                  recording={
+                    recording || catchingUp || Boolean(app?.transitioning)
+                  }
+                  checkedModels={speakerChecks}
+                  selectedModelId={speakerModelId}
+                  onSelectedModelChange={setSpeakerModelId}
+                  onModelChecked={onSpeakerModelChecked}
+                  onCheckingChange={onSpeakerCheckingChange}
+                  checkingBlocked={
+                    speakerChecking || notesBusy || busy || refreshingHandy
+                  }
+                />
+              )
+            }
             api={api}
             app={app}
             locale={locale}
@@ -1784,22 +1977,13 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         )}
         {page === "notes" && (
           <NotesView
+            connectionSettings={textModelSettings}
             t={t}
-            api={api}
-            useSavedKey={useSavedKey}
-            setUseSavedKey={setUseSavedKey}
             meeting={notesMeeting}
             meetingId={notesMeetingId}
             meetings={notesMeetingOptions}
             meetingLoading={notesMeetingLoading}
             selectMeeting={(id) => void selectNotesMeeting(id)}
-            localModels={localTextModels.models}
-            modelsLoading={localTextModels.loading}
-            modelsError={localTextModels.error}
-            modelsLoaded={localTextModels.loaded}
-            refreshModels={() => void localTextModels.refresh()}
-            manualModel={manualTextModel}
-            setManualModel={setManualTextModel}
             modelReady={notesModelReady}
             libraryInvalid={!templateStore.ready}
             libraryPending={templateStore.pending}
@@ -1813,14 +1997,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             }
             templates={templates}
             notesBusy={notesBusy}
-            mode={mode}
-            setMode={setMode}
-            setEndpoint={setEndpoint}
-            setApiKey={setApiKey}
             textModel={textModel}
-            setTextModel={setTextModel}
             endpoint={endpoint}
-            apiKey={apiKey}
             template={template}
             resultId={resultId}
             analyses={analyses}
@@ -1854,6 +2032,13 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         )}
       </main>
       <div className="job-status-stack">
+        {speakerChecking && (
+          <div role="status" className="notice info">
+            {locale === "de"
+              ? "Sprecherunterstützung wird lokal geprüft. Bitte vor dem Start einer Aufnahme abschließen lassen."
+              : "Checking speaker support locally. Please let this finish before starting a recording."}
+          </div>
+        )}
         {/* Settings already shows retention progress and the full update panel. */}
         <MaintenanceStatus
           api={api}

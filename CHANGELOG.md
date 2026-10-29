@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased — follow-up to the 1.0.6 walkthrough
+
+- Windows microphone clock gaps retain their exact gap evidence without creating a separate audio/recognition job for every tiny gap. Capture returns to stop/pause controls between bounded drain turns instead of treating cumulative processed audio as an invalid backlog.
+- Live text-model requests wait while speech recognition has more than five seconds of confirmed audio pending. Already running model requests are not cancelled by this scheduler.
+- Resumed live summaries ignore completed same-model audio even if an older progress counter remains; unfinished and other-model audio still receive recognition priority. Audio-copy confirmations are cleared when paging hides the selected row, including lookahead records.
+- The live transcript retains earlier sections, periodically refreshes catch-up text outside the recent status preview, and highlights literal Unicode searches without shifting matches.
+- A compact running view keeps both level meters and pause/mute/stop controls visible. Narrow windows offer a direct transcript/summary switch. Rename controls and export actions align, and compact-audio pagination uses separate page metadata.
+- A damaged compact-copy catalogue entry on the next page no longer hides the current valid page. Page metadata is independent of contents; requested invalid records still fail closed and all original files remain unchanged.
+- Settings and post-processing share one connection/model form. Detection reads LM Studio's configured server port and a local-only Ollama host; local/cloud drafts are kept separately and transient credentials are cleared on switching. Templates and optional speaker tools have a clearer grouping; local speaker jobs require an explicit capability check.
+- Live task deduplication retains different owners and deadlines, and saved live summaries from another meeting are rejected without changing their files. Confirmed speaker names load even while editing controls are closed; model-discovery actions respect a running analysis lock.
+- Speaker capability can be checked in Settings before the first recording and is retained across unchanged automatic catalogue refreshes. Explicit loopback bind addresses are preserved. Catch-up refreshes and preview sequencing retain later text, stopped summaries clear their waiting label, and speaker-check evidence has a fixed 128-folder ceiling that preserves existing complete and partial records.
+- Ollama detection preserves an explicit HTTP port 80 and follows Ollama's distinct defaults for bare hosts and complete HTTP URLs.
+- A recognition track that has ended no longer blocks live summaries of confirmed text from the other track; pending audio remains available for later recognition.
+- Completed speaker-capability proofs can be reused after restart only for the same freshly verified model and native runtime identity; incomplete or conflicting records never enable a model.
+- Full transcript publications use the same per-section freshness rules as bounded previews, preserving newer recognition independently of audio-journal sequencing.
+- Full or conflicting speaker-check archives offer an explicit preserving archive action, guarded across app instances. Existing proof files remain intact, the active 128-record bound stays fixed, and temporary failures retain a direct retry action.
+- Current release/help documentation identifies the published 1.0.6 separately from the unreleased PR-31 follow-up.
+- This source follow-up does not change the published 1.0.6 assets or authorize a new release. The real local text-model reference run and longer combined capture/recognition/model/GPU evidence remain open; see TEST_REPORT.md.
+
 ## 1.0.6 — live summary and easy local text models (in development)
 
 - **Live summary while recording:** a side panel summarizes the running meeting – summary so far, decisions, tasks, questions raised and important points – so the meeting can be recapped at any moment. Updates run every 1–15 minutes once at least 200 new characters are confirmed, earlier when a long contribution of one audio track (90 seconds or more) is followed by a reply on the other track, or after a lot of new speech, on request and once more after catch-up; less new text waits for the next trigger or "Update now".

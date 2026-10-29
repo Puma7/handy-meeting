@@ -110,7 +110,7 @@ p {
   line-height: 1.6;
 }
 small {
-  font-size: 11px;
+  font-size: 12px;
 }
 label {
   display: flex;
@@ -192,7 +192,7 @@ label {
   align-items: flex-start;
   gap: 8px;
   color: var(--color-ink-2);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
 }
 .privacy-mark svg {
@@ -385,7 +385,7 @@ main {
   overflow: hidden;
 }
 .notes-progress > .muted {
-  font-size: 11px;
+  font-size: 12px;
   margin-top: 8px;
 }
 .progress-result-actions {
@@ -532,6 +532,42 @@ main {
   gap: 12px;
   padding-bottom: 14px;
 }
+.text-model-settings > h3,
+.notes-template-settings > h3 {
+  font-size: 14px;
+  margin: 0 0 8px;
+  color: var(--color-text);
+}
+.text-model-settings > p {
+  margin: 0 0 10px;
+  font-size: 12px;
+}
+.text-model-settings .text-model-choice {
+  grid-column: 1 / -1;
+}
+.model-options-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  align-items: baseline;
+  margin-top: 8px;
+}
+.model-options-row .local-service-help {
+  flex-basis: 100%;
+}
+.text-model-settings .local-model-setup {
+  margin-top: 10px;
+}
+.notes-template-settings {
+  border-top: 1px solid var(--color-line);
+  padding-top: 14px;
+}
+.template-management {
+  margin-top: 10px;
+}
+.template-management .template-actions {
+  margin-top: 8px;
+}
 .connection-settings > label {
   margin-top: 12px;
 }
@@ -540,16 +576,18 @@ main {
   gap: 8px;
   flex-wrap: wrap;
   margin-top: 12px;
+  align-items: flex-end;
 }
 .meeting-files .secondary {
-  min-height: 34px;
+  height: 41px;
+  min-height: 41px;
   padding: 8px 11px;
   font-size: 12px;
 }
 .file-save-help,
 .export-feedback {
   flex-basis: 100%;
-  font-size: 11px;
+  font-size: 12px;
   overflow-wrap: anywhere;
 }
 .session-warnings {
@@ -565,7 +603,7 @@ main {
 }
 .session-warnings details {
   margin-top: 6px;
-  font-size: 11px;
+  font-size: 12px;
 }
 .session-warnings > summary {
   font-size: 12px;
@@ -574,7 +612,7 @@ main {
 .session-warnings summary,
 .progress-explanation summary {
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--color-ink-2);
 }
 .progress-explanation {
@@ -582,7 +620,7 @@ main {
 }
 .progress-explanation p {
   margin-top: 6px;
-  font-size: 11px;
+  font-size: 12px;
 }
 .notes-progress:not([data-status="running"]) {
   padding-top: 11px;
@@ -631,7 +669,7 @@ main {
 }
 .audio-level {
   margin-top: 9px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 400;
 }
 .microphone-field .audio-level {
@@ -655,7 +693,7 @@ main {
   font-weight: 600;
 }
 .audio-level-value small {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--color-ink-2);
   font-weight: 400;
 }
@@ -691,7 +729,7 @@ main {
   height: 18px;
   margin-top: 3px;
   color: var(--color-ink-2);
-  font-size: 9px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 .audio-level-scale span {
@@ -717,7 +755,7 @@ main {
 }
 .audio-level-help {
   color: var(--color-ink-2);
-  font-size: 10px;
+  font-size: 12px;
   margin-top: 6px;
 }
 .sr-only {
@@ -779,7 +817,7 @@ main {
   gap: 4px;
 }
 .session-progress span {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--color-ink-2);
 }
 .session-progress strong {
@@ -797,7 +835,7 @@ main {
   gap: 15px;
 }
 .section-heading p {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--color-ink-2);
   margin-top: 5px;
 }
@@ -843,7 +881,7 @@ main {
   gap: 12px;
   flex-wrap: wrap;
   color: var(--color-ink-2);
-  font-size: 11px;
+  font-size: 12px;
   margin-bottom: 9px;
   font-variant-numeric: tabular-nums;
 }
@@ -952,7 +990,7 @@ main {
   margin-top: 12px;
 }
 .notes-config details p {
-  font-size: 11px;
+  font-size: 12px;
   margin-top: 7px;
 }
 .notes-config summary {
@@ -977,7 +1015,7 @@ main {
 }
 .tab-help {
   margin: 9px 0;
-  font-size: 11px;
+  font-size: 12px;
 }
 .saved-template-notice {
   padding: 14px;
@@ -1037,7 +1075,7 @@ main {
   overflow-wrap: anywhere;
 }
 .agent-panel .section-heading > span {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--color-ink-2);
 }
 .agent-request {
@@ -1114,7 +1152,7 @@ main {
   border-top: 1px solid var(--color-line);
 }
 .analysis-footer > span {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--color-ink-2);
   max-width: 550px;
 }
@@ -1151,7 +1189,7 @@ main {
 }
 .source-button {
   background: var(--color-wash);
-  font-size: 11px;
+  font-size: 12px;
   padding: 6px 9px;
   border-radius: 6px;
   justify-content: flex-start;
@@ -1319,7 +1357,7 @@ mark {
   .appearance-row select {
     width: 50px;
     padding: 5px 2px;
-    font-size: 10px;
+    font-size: 12px;
   }
   main {
     margin-left: 68px;
@@ -1403,7 +1441,7 @@ mark {
   }
   .notice .secondary {
     padding: 8px;
-    font-size: 11px;
+    font-size: 12px;
   }
 }
 .legacy-panel {
@@ -1512,7 +1550,7 @@ mark {
 .notes-statusbar-time span,
 .notes-statusbar-details,
 .notes-statusbar-help {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--color-ink-2);
 }
 .notes-statusbar-summary p {
@@ -1553,7 +1591,7 @@ mark {
   flex: 1;
 }
 .notes-statusbar-details .text-button {
-  font-size: 11px;
+  font-size: 12px;
   padding: 2px 0;
 }
 .notes-statusbar-help {
@@ -1613,6 +1651,95 @@ mark {
   align-items: end;
   gap: 8px;
   flex-wrap: wrap;
+}
+.meeting-labels form button {
+  height: 41px;
+  padding: 8px 11px;
+  justify-content: center;
+}
+.meeting-labels form label {
+  min-width: 200px;
+  flex: 1;
+}
+.recording-compact {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 16px;
+  padding: 12px 16px;
+}
+.recording-compact .setup-details,
+.recording-compact .audio-sources {
+  grid-column: 1 / -1;
+}
+.recording-compact .setup-details summary {
+  padding: 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-bottom: 0;
+}
+.recording-compact .setup-details summary::before {
+  content: "▸";
+}
+.recording-compact .audio-sources {
+  margin: 0;
+}
+.recording-compact .audio-level {
+  margin-top: 3px;
+}
+.recording-compact .audio-level-scale {
+  display: none;
+}
+.recording-compact .record-controls {
+  grid-column: 2;
+  grid-row: 3;
+  padding: 0;
+  border: 0;
+  align-self: start;
+}
+.recording-compact .record-controls .state {
+  display: none;
+}
+.recording-compact .capture-control-panel {
+  grid-column: 1;
+  grid-row: 3;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.recording-compact .capture-control-help {
+  margin-top: 3px;
+}
+.session-progress.compact {
+  margin: 8px 0;
+  gap: 8px 20px;
+  padding: 0;
+}
+.session-progress.compact > div {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
+}
+@media (max-width: 1000px) {
+  .recording-compact {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .recording-compact .record-controls {
+    grid-column: 1;
+    grid-row: 4;
+    justify-content: space-between;
+  }
+  .recording-compact .record-controls .state {
+    display: flex;
+  }
+}
+.session-progress.compact strong {
+  font-size: 13px;
+}
+.session-progress.compact span {
+  font-size: 12px;
 }
 .meeting-labels .pinned {
   color: var(--color-text);
@@ -1725,7 +1852,7 @@ mark {
 .capture-control-help,
 .field-help {
   margin-top: 8px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--color-ink-2);
 }
 .capture-control-help summary,
@@ -1745,7 +1872,7 @@ mark {
     grid-template-columns: minmax(0, 1fr);
   }
 }
-/* Live summary beside the transcript; stacked (summary first) when the window is narrow. */
+/* Keep the transcript first in narrow windows; the view switch gives summary direct access. */
 .meeting-workspace-frame {
   container-type: inline-size;
 }
@@ -1754,12 +1881,24 @@ mark {
   flex-direction: column;
 }
 .meeting-workspace.with-live > .live-notes-panel {
-  order: -1;
+  order: 0;
+}
+.meeting-view-choice {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+.meeting-view-choice [aria-pressed="true"] {
+  border-color: var(--color-moss);
+  background: var(--color-moss-wash);
 }
 .meeting-workspace.live-focus > .transcript-panel {
   display: none;
 }
 @container (min-width: 860px) {
+  .meeting-view-choice {
+    display: none;
+  }
   .meeting-workspace.with-live:not(.live-focus) {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(300px, 400px);
@@ -1840,13 +1979,13 @@ mark {
   overflow-wrap: anywhere;
 }
 .live-item-meta {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--color-ink-2);
 }
 .live-evidence summary,
 .live-points > summary {
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--color-ink-2);
 }
 .live-points > summary {
@@ -1862,7 +2001,7 @@ mark {
 }
 .live-draft-note {
   margin-top: 14px;
-  font-size: 11px;
+  font-size: 12px;
 }
 .chip {
   display: inline-flex;
@@ -1870,7 +2009,7 @@ mark {
   border: 1px solid var(--color-line-strong);
   border-radius: 999px;
   padding: 0 8px;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 18px;
 }
 .chip.ok {
@@ -1933,4 +2072,9 @@ mark {
 }
 .live-notes-panel .detail-actions {
   flex-wrap: nowrap;
+}
+
+/* Keep explanatory prose readable while controls continue to use the full window. */
+p {
+  max-inline-size: 70ch;
 }

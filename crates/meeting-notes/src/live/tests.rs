@@ -116,6 +116,70 @@ const TASK: &str = "Anna schickt das Angebot bis Freitag an alle.";
 const QUESTION: &str = "Wer klärt eigentlich die Lizenzfrage mit der Rechtsabteilung?";
 
 #[test]
+fn identical_task_wording_keeps_distinct_assignees_and_deadlines() {
+    let dir = tempfile::tempdir().unwrap();
+    let quote_a = "Anna schickt das Angebot bis Freitag an alle.";
+    let quote_b = "Peter schickt das Angebot bis Montag an alle.";
+    let mut a = fact("Angebot verschicken", Some("Anna"), "C0", quote_a);
+    a["due"] = "Freitag".into();
+    let mut b = fact("Angebot verschicken", Some("Peter"), "C30", quote_b);
+    b["due"] = "Montag".into();
+    let server = Server::start(vec![
+        window_answer(vec![], vec![], vec![a.clone(), b, a], vec![]),
+        overview_answer(vec![]),
+    ]);
+    let mut runner = LiveRunner::start(
+        dir.path(),
+        "meeting-1",
+        server.connection("synthetic"),
+        "de",
+    )
+    .unwrap();
+    let texts = [
+        part("a", "system", 0, quote_a),
+        part("b", "system", 30, quote_b),
+    ];
+    let outcome = runner
+        .update(
+            &runner.pending(&texts),
+            Trigger::Manual,
+            &AnalysisControl::default(),
+        )
+        .unwrap();
+    server.finish();
+    assert_eq!(outcome.accepted, 2);
+    let tasks = runner.view().tasks;
+    assert_eq!(tasks.len(), 2);
+    assert_eq!(tasks[0].owner.as_deref(), Some("Anna"));
+    assert_eq!(tasks[0].due.as_deref(), Some("Freitag"));
+    assert_eq!(tasks[1].owner.as_deref(), Some("Peter"));
+    assert_eq!(tasks[1].due.as_deref(), Some("Montag"));
+}
+
+#[test]
+fn displaying_live_runs_rejects_another_meetings_manifest_without_changing_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let server = Server::start(vec![]);
+    let foreign = LiveRunner::start(
+        dir.path(),
+        "meeting-b",
+        server.connection("synthetic"),
+        "de",
+    )
+    .unwrap();
+    server.finish();
+    let manifest = dir.path().join(&foreign.run().id).join("run.json");
+    let before = std::fs::read(&manifest).unwrap();
+    let latest = read_latest(dir.path(), "meeting-a").unwrap().unwrap();
+    assert_eq!(
+        latest.run_id, None,
+        "A foreign run must not be displayed as meeting A"
+    );
+    assert_eq!(latest.damaged_runs, 1);
+    assert_eq!(std::fs::read(manifest).unwrap(), before);
+}
+
+#[test]
 fn windows_and_overview_are_source_checked_stored_and_shown_with_their_tracks() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("live-notes");
@@ -216,7 +280,7 @@ fn windows_and_overview_are_source_checked_stored_and_shown_with_their_tracks() 
     }
 
     // Everything reads back verified from disk.
-    let stored = read_latest(&root).unwrap().unwrap();
+    let stored = read_latest(&root, "meeting-1").unwrap().unwrap();
     assert_eq!(stored.run_id, view.run_id);
     assert_eq!(stored.decisions.len(), 1);
     assert_eq!(stored.overview.len(), 2);
@@ -283,7 +347,7 @@ fn a_damaged_window_blocks_its_run_and_is_never_shrunk_or_removed() {
     let tampered = fs_read(&path).replace("Wir besprechen heute", "Wir verschieben heute");
     std::fs::write(&path, &tampered).unwrap();
     assert!(load_run(&root.join(&id)).is_err());
-    let latest = read_latest(&root).unwrap().unwrap();
+    let latest = read_latest(&root, "meeting-1").unwrap().unwrap();
     assert_eq!(latest.run_id, None);
     assert_eq!(latest.damaged_runs, 1);
     assert_eq!(
@@ -467,7 +531,11 @@ fn the_run_worked_on_last_is_shown_even_when_another_was_created_later() {
     let other = LiveRunner::start(&root, "meeting-1", server.connection("y"), "de").unwrap();
     assert_ne!(other.run().id, first);
     assert_eq!(
-        read_latest(&root).unwrap().unwrap().run_id.as_deref(),
+        read_latest(&root, "meeting-1")
+            .unwrap()
+            .unwrap()
+            .run_id
+            .as_deref(),
         Some(other.run().id.as_str())
     );
     std::thread::sleep(Duration::from_millis(20));
@@ -478,7 +546,11 @@ fn the_run_worked_on_last_is_shown_even_when_another_was_created_later() {
     assert_eq!(pending.len(), 1);
     again.update(&pending, Trigger::Interval, &control).unwrap();
     assert_eq!(
-        read_latest(&root).unwrap().unwrap().run_id.as_deref(),
+        read_latest(&root, "meeting-1")
+            .unwrap()
+            .unwrap()
+            .run_id
+            .as_deref(),
         Some(first.as_str())
     );
     server.finish();

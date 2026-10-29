@@ -51,6 +51,7 @@ pub(crate) struct LiveNotesStatus {
     /// off | starting | waiting | updating | finished | stopped | failed
     status: String,
     running: bool,
+    waiting_for_transcript: bool,
     error: Option<String>,
     pending_chars: usize,
     interval_ms: u64,
@@ -61,6 +62,7 @@ pub(crate) struct LiveNotesStatus {
 
 struct Shared {
     status: String,
+    waiting_for_transcript: bool,
     error: Option<String>,
     pending_chars: usize,
     last_update: Instant,
@@ -83,6 +85,8 @@ impl Job {
             .lock()
             .is_ok_and(|s| ["starting", "waiting", "updating"].contains(&s.status.as_str()))
     }
+    /// Reads one job's scalar progress and retained view. Terminal jobs never advertise
+    /// a pending transcript wait, and retry backoff can only postpone the next update.
     fn status(&self) -> LiveNotesStatus {
         let interval_ms = self.interval_ms.load(Ordering::Acquire);
         let shared = self.shared.lock();
@@ -105,6 +109,7 @@ impl Job {
             meeting_id: self.meeting_id.clone(),
             status: shared.status.clone(),
             running,
+            waiting_for_transcript: running && shared.waiting_for_transcript,
             error: shared.error.clone(),
             pending_chars: shared.pending_chars,
             interval_ms,
@@ -120,6 +125,7 @@ fn off(meeting_id: &str, view: Option<LiveView>, error: Option<String>) -> LiveN
         meeting_id: meeting_id.into(),
         status: "off".into(),
         running: false,
+        waiting_for_transcript: false,
         error,
         pending_chars: 0,
         interval_ms: DEFAULT_INTERVAL_MS,
@@ -174,8 +180,35 @@ pub(crate) struct Snapshot {
     data: SessionData,
     /// The meeting still owns the active slot, so capture or recognition may add text.
     active: bool,
+    /// Only living recognizers can consume compute for their own pending track.
+    recognizing_tracks: [bool; 2],
 }
 impl Snapshot {
+    /// A living recognizer owns the compute budget while its track has over five seconds
+    /// unprocessed. Completed same-model parts, ended workers and archived meetings never
+    /// defer confirmed-text analysis, including after a resume with older progress counters.
+    fn recognition_needs_priority(&self) -> bool {
+        if !self.active {
+            return false;
+        }
+        let mut tracks = [0_u64; 2];
+        for part in &self.data.parts {
+            let same_model = part.model_id.as_deref() == Some(self.data.model_id.as_str());
+            let pending = if same_model && part.status == "complete" {
+                0
+            } else if same_model {
+                part.confirmed_sample_count
+                    .saturating_sub(part.processed_samples)
+            } else {
+                part.confirmed_sample_count
+            };
+            let index = usize::from(part.source == "microphone");
+            if self.recognizing_tracks[index] {
+                tracks[index] = tracks[index].saturating_add(pending);
+            }
+        }
+        tracks.into_iter().max().unwrap_or(0) > u64::from(meeting_core::SAMPLE_RATE) * 5
+    }
     /// No more confirmed text can follow: the status says so and no recognition still runs.
     fn finished(&self) -> bool {
         !self.active && live_texts(&self.data).1
@@ -193,14 +226,30 @@ impl Service {
         let (active_store, view_store) = {
             let inner = self.lock()?;
             (
-                inner.active.as_ref().map(|a| a.store.clone()),
+                inner.active.as_ref().map(|a| {
+                    let mut recognizing_tracks = [false; 2];
+                    for worker in &a.workers {
+                        if !worker.handle.is_finished() {
+                            match worker.source.as_str() {
+                                "system" => recognizing_tracks[0] = true,
+                                "microphone" => recognizing_tracks[1] = true,
+                                _ => {}
+                            }
+                        }
+                    }
+                    (a.store.clone(), recognizing_tracks)
+                }),
                 inner.view.clone(),
             )
         };
-        if let Some(store) = active_store {
+        if let Some((store, recognizing_tracks)) = active_store {
             if let Ok(data) = store.snapshot() {
                 if data.id == id {
-                    return Ok(Snapshot { data, active: true });
+                    return Ok(Snapshot {
+                        data,
+                        active: true,
+                        recognizing_tracks,
+                    });
                 }
             }
         }
@@ -210,6 +259,7 @@ impl Service {
                     return Ok(Snapshot {
                         data,
                         active: false,
+                        recognizing_tracks: [false; 2],
                     });
                 }
             }
@@ -218,6 +268,7 @@ impl Service {
             return Ok(Snapshot {
                 data: data.clone(),
                 active: false,
+                recognizing_tracks: [false; 2],
             });
         }
         let folder = self.root.join("sessions").join(id);
@@ -232,6 +283,7 @@ impl Service {
         Ok(Snapshot {
             data,
             active: false,
+            recognizing_tracks: [false; 2],
         })
     }
 }
@@ -248,7 +300,7 @@ impl LiveNotes {
         if let Some(job) = self.lock()?.as_ref().filter(|j| j.meeting_id == meeting_id) {
             return Ok(job.status());
         }
-        match live::read_latest(&live_root(service, meeting_id)) {
+        match live::read_latest(&live_root(service, meeting_id), meeting_id) {
             Ok(view) => Ok(off(meeting_id, view, None)),
             Err(_) => Ok(off(
                 meeting_id,
@@ -350,6 +402,7 @@ impl LiveNotes {
         let (texts, _) = live_texts(&data);
         let shared = Arc::new(Mutex::new(Shared {
             status: "starting".into(),
+            waiting_for_transcript: false,
             error: None,
             pending_chars: live::pending_chars(&runner.pending(&texts)),
             last_update: Instant::now(),
@@ -444,15 +497,24 @@ impl Worker {
     }
 
     fn wait(&self) {
+        self.wait_with_manual(true);
+    }
+
+    /// Waits cooperatively for cancellation, optionally allowing a queued manual update
+    /// to interrupt. ASR-priority waits retain manual work without spinning on that flag.
+    fn wait_with_manual(&self, interrupt_for_manual: bool) {
         let until = Instant::now() + POLL;
         while Instant::now() < until && !self.control.is_cancelled() {
-            if self.manual.load(Ordering::Acquire) {
+            if interrupt_for_manual && self.manual.load(Ordering::Acquire) {
                 return;
             }
             thread::sleep(Duration::from_millis(100));
         }
     }
 
+    /// Schedules text-only windows from confirmed sections, deferring only for living ASR
+    /// workers with backlog. Retries retain their trigger and backoff; cancellation wins
+    /// over later progress, and completed windows remain available after a stop.
     fn run(self, mut runner: LiveRunner) {
         let mut failures: u32 = 0;
         let mut overview_failures: u32 = 0;
@@ -486,6 +548,14 @@ impl Worker {
                 .map(|s| (s.last_update.elapsed(), s.retry_at))
                 .unwrap_or((Duration::ZERO, None));
             self.set(|s| s.pending_chars = pending_chars);
+            let defer = snapshot.recognition_needs_priority();
+            self.set(|s| s.waiting_for_transcript = defer);
+            if defer {
+                // Keep manual requests queued, but never busy-spin on them while ASR
+                // catches up. No new model request competes with the recording worker.
+                self.wait_with_manual(false);
+                continue;
+            }
             let backing_off = retry_at.is_some_and(|at| Instant::now() < at);
             let manual = self.manual.swap(false, Ordering::AcqRel);
             let interval = self.interval_ms.load(Ordering::Acquire);
@@ -591,6 +661,201 @@ mod tests {
     use super::*;
     use meeting_core::SessionStore;
 
+    #[test]
+    fn terminal_status_never_reports_waiting_for_transcript() {
+        let shared = Arc::new(Mutex::new(Shared {
+            status: "waiting".into(),
+            waiting_for_transcript: true,
+            error: None,
+            pending_chars: 250,
+            last_update: Instant::now(),
+            last_trigger: None,
+            retry_at: None,
+            view: None,
+        }));
+        let job = Job {
+            meeting_id: "a".repeat(32),
+            control: AnalysisControl::default(),
+            manual: Arc::new(AtomicBool::new(false)),
+            interval_ms: Arc::new(AtomicU64::new(DEFAULT_INTERVAL_MS)),
+            shared: Arc::clone(&shared),
+            worker: None,
+        };
+        assert!(job.status().waiting_for_transcript);
+        for status in ["stopped", "finished", "failed"] {
+            shared.lock().unwrap().status = status.into();
+            let view = job.status();
+            assert!(!view.running);
+            assert!(!view.waiting_for_transcript, "{status}");
+            assert_eq!(view.pending_chars, 250);
+        }
+    }
+
+    #[test]
+    fn live_generation_defers_for_real_unprocessed_audio_only() {
+        let mut data: SessionData = serde_json::from_value(serde_json::json!({
+            "schemaVersion":2,"id":"a".repeat(32),"title":"Synthetic backlog","startedAt":"2026-10-28T00:00:00Z",
+            "status":"streaming","modelId":"synthetic",
+            "parts":[{"file":"microphone-000000000000.wav","source":"microphone","startSample":0,"sampleCount":160000,"confirmedSampleCount":160000,"processedSamples":0,"modelId":"synthetic","status":"pending"}]
+        })).unwrap();
+        assert!(Snapshot {
+            data: data.clone(),
+            active: true,
+            recognizing_tracks: [true; 2],
+        }
+        .recognition_needs_priority());
+        data.parts[0].processed_samples = 80_000;
+        assert!(!Snapshot {
+            data: data.clone(),
+            active: true,
+            recognizing_tracks: [true; 2],
+        }
+        .recognition_needs_priority());
+        data.parts[0].processed_samples = 160_000;
+        assert!(!Snapshot {
+            data: data.clone(),
+            active: true,
+            recognizing_tracks: [true; 2],
+        }
+        .recognition_needs_priority());
+        data.parts[0].model_id = Some("another-model".into());
+        assert!(Snapshot {
+            data: data.clone(),
+            active: true,
+            recognizing_tracks: [true; 2],
+        }
+        .recognition_needs_priority());
+        assert!(!Snapshot {
+            data,
+            active: false,
+            recognizing_tracks: [false; 2],
+        }
+        .recognition_needs_priority());
+    }
+
+    #[test]
+    /// Resumed sessions may retain completed text with an older progress counter. Only the
+    /// unfinished same-track audio should defer summaries; another model still needs work.
+    fn completed_resumed_parts_do_not_defer_live_notes_for_their_pending_track() {
+        for source in ["system", "microphone"] {
+            for pending_seconds in [1, 6] {
+                let data: SessionData = serde_json::from_value(serde_json::json!({
+                    "schemaVersion":2,"id":"a".repeat(32),"title":"Synthetic resumed backlog",
+                    "startedAt":"2026-10-29T00:00:00Z","status":"catching-up","modelId":"synthetic",
+                    "parts":[
+                        {"file":format!("{source}-000000000000.wav"),"source":source,"startSample":0,
+                         "sampleCount":160000,"confirmedSampleCount":160000,"audioClosed":true,
+                         "processedSamples":0,"modelId":"synthetic","status":"complete","text":"Confirmed original text."},
+                        {"file":format!("{source}-000000160000.wav"),"source":source,"startSample":160000,
+                         "sampleCount":pending_seconds*16000,"confirmedSampleCount":pending_seconds*16000,
+                         "audioClosed":true,"processedSamples":0,"modelId":"synthetic","status":"pending"}
+                    ]
+                })).unwrap();
+                let before = serde_json::to_vec(&data).unwrap();
+                let mut snapshot = Snapshot {
+                    data,
+                    active: true,
+                    recognizing_tracks: [true; 2],
+                };
+                assert_eq!(
+                    live_texts(&snapshot.data).0[0].text,
+                    "Confirmed original text."
+                );
+                assert_eq!(
+                    snapshot.recognition_needs_priority(),
+                    pending_seconds > 5,
+                    "{source}: only the unfinished {pending_seconds}s should count"
+                );
+                assert_eq!(serde_json::to_vec(&snapshot.data).unwrap(), before);
+                snapshot.data.parts[0].model_id = Some("another-model".into());
+                assert!(
+                    snapshot.recognition_needs_priority(),
+                    "other-model audio still needs recognition"
+                );
+            }
+        }
+    }
+
+    #[test]
+    /// Exercises both ended-track directions against one- and six-second healthy backlogs.
+    /// Only the living recognizer's work may defer notes; retained session bytes must match.
+    fn ended_track_backlogs_do_not_starve_a_healthy_tracks_confirmed_text() {
+        for failed_track in ["system", "microphone"] {
+            for healthy_seconds in [1, 6] {
+                let root = fixture_root("ended-track-backlog");
+                let service = Service::new(root.clone()).unwrap();
+                let store = meeting_core::SessionStore::create(
+                    &root.join("sessions"),
+                    "Synthetic track failure",
+                    "synthetic",
+                    "s",
+                    None,
+                )
+                .unwrap();
+                let mut workers = Vec::new();
+                let (release, busy) = std::sync::mpsc::channel::<()>();
+                let mut busy = Some(busy);
+                for track in ["system", "microphone"] {
+                    let seconds = if track == failed_track {
+                        6
+                    } else {
+                        healthy_seconds
+                    };
+                    let mut writer = meeting_core::PcmWriter::new(store.clone(), track).unwrap();
+                    for _ in 0..seconds {
+                        writer
+                            .append(&vec![1_i16; meeting_core::SAMPLE_RATE as usize])
+                            .unwrap();
+                    }
+                    writer.finish().unwrap();
+                    let worker = if track == failed_track {
+                        let worker = thread::spawn(|| {});
+                        while !worker.is_finished() {
+                            thread::yield_now();
+                        }
+                        worker
+                    } else {
+                        let wait = busy.take().unwrap();
+                        thread::spawn(move || {
+                            let _ = wait.recv();
+                        })
+                    };
+                    workers.push(crate::asr::RecognitionWorker {
+                        source: track.into(),
+                        handle: worker,
+                    });
+                }
+                store.set_status("catching-up").unwrap();
+                let before = serde_json::to_vec(&store.snapshot().unwrap()).unwrap();
+                let id = store.snapshot().unwrap().id;
+                service.lock().unwrap().active = Some(crate::Active {
+                    _operation: None,
+                    owner: None,
+                    store: store.clone(),
+                    capture: None,
+                    stop: Arc::new(AtomicBool::new(true)),
+                    workers,
+                });
+                let snapshot = service.live_snapshot(&id, None).unwrap();
+                let defer = snapshot.recognition_needs_priority();
+                release.send(()).unwrap();
+                for worker in service.lock().unwrap().active.take().unwrap().workers {
+                    worker.handle.join().unwrap();
+                }
+                assert_eq!(
+                    serde_json::to_vec(&store.snapshot().unwrap()).unwrap(),
+                    before
+                );
+                assert_eq!(
+                    defer,
+                    healthy_seconds > 5,
+                    "ended {failed_track}, healthy backlog {healthy_seconds}s"
+                );
+                let _ = std::fs::remove_dir_all(root);
+            }
+        }
+    }
+
     fn fixture_root(label: &str) -> std::path::PathBuf {
         let nonce = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -671,7 +936,10 @@ mod tests {
             store: store.clone(),
             capture: None,
             stop: Arc::new(AtomicBool::new(false)),
-            workers: vec![worker],
+            workers: vec![crate::asr::RecognitionWorker {
+                source: "system".into(),
+                handle: worker,
+            }],
         });
         service
             .live_notes

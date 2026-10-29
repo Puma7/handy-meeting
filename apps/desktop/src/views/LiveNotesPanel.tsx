@@ -59,6 +59,7 @@ type Props = {
   setFocus: (focus: boolean) => void;
   /** Shows nothing and only keeps the automatic start running, e.g. on other pages. */
   headless?: boolean;
+  connectionLocked?: boolean;
 };
 
 const POLL_RUNNING_MS = 1500;
@@ -190,6 +191,7 @@ export default function LiveNotesPanel({
   focus,
   setFocus,
   headless = false,
+  connectionLocked = false,
 }: Props) {
   const de = locale === "de";
   const [loaded, setStatus] = useState<LiveNotesStatus | null>(null),
@@ -410,6 +412,10 @@ export default function LiveNotesPanel({
       ? Math.max(1, Math.ceil(status.nextUpdateInMs / 60_000))
       : null;
   const stateText = (() => {
+    if (status?.running && status.waitingForTranscript)
+      return de
+        ? "Wartet auf Spracherkennung · Aufnahme und Transkript haben Vorrang"
+        : "Waiting for recognition · recording and transcription take priority";
     switch (status?.status) {
       case "starting":
       case "waiting":
@@ -562,7 +568,9 @@ export default function LiveNotesPanel({
           api={api}
           locale={locale}
           connected={connected}
+          disabled={connectionLocked}
           onUse={(endpoint, model) => {
+            if (connectionLocked) return;
             onUseLocalModel(endpoint, model);
             setSetupOpen(false);
           }}
