@@ -131,6 +131,32 @@ it("retains the first and last original sections of a two-hour transcript in a k
   expect(container.querySelector("img")).toBeNull();
 });
 
+it("shows the newest sections first on request and keeps that choice", async () => {
+  localStorage.clear();
+  const parts = meeting.parts.slice(0, 3);
+  const order = (container: HTMLElement) =>
+    [...container.querySelectorAll(".transcript-part p")].map(
+      (item) => item.textContent,
+    );
+  const first = render(<TranscriptBody parts={parts} locale="de" t={de} />);
+  expect(order(first.container)).toEqual(parts.map((part) => part.text));
+  const toggle = screen.getByRole("button", { name: "Neueste oben" });
+  expect(toggle.getAttribute("aria-pressed")).toBe("false");
+  await userEvent.click(toggle);
+  expect(toggle.getAttribute("aria-pressed")).toBe("true");
+  expect(order(first.container)).toEqual(
+    [...parts].reverse().map((part) => part.text),
+  );
+  // The sections themselves are unchanged; a new view reads the stored order.
+  expect(parts.map((part) => part.text)).toEqual(
+    meeting.parts.slice(0, 3).map((part) => part.text),
+  );
+  first.unmount();
+  const second = render(<TranscriptBody parts={parts} locale="de" t={de} />);
+  expect(order(second.container)[0]).toBe(parts[2].text);
+  localStorage.clear();
+});
+
 it("searches the transcript without changing it and renders matches literally", async () => {
   const parts = [
     {

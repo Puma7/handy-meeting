@@ -870,6 +870,11 @@ main {
   flex: 1;
   min-width: 0;
 }
+.transcript-order {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+}
 .transcript-part mark {
   background: var(--color-moss-wash);
   color: inherit;
