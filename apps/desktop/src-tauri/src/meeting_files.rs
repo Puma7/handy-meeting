@@ -61,16 +61,60 @@ fn export_directory(folder: &Path) -> AppResult<PathBuf> {
     Ok(exports)
 }
 
+/// Translates the capture's driver-interruption notices, in every stored wording, into
+/// the same plain text the app shows; any other warning stays as recorded.
 fn warning(value: &str, de: bool) -> String {
+    const ENDINGS: [&str; 2] = [
+        "; affected recording ranges can be incomplete.",
+        ". Missing audio remains missing; trustworthy microphone clock gaps are represented by explicit silence, not recovered speech. Check the affected range.",
+    ];
     for (source, label_de, label_en) in [
         ("system", "Computerton", "System audio"),
         ("microphone", "Mikrofon", "Microphone"),
     ] {
-        if value == format!("{source}: audio driver reported a discontinuity; affected recording ranges can be incomplete.") {
-            return if de { format!("{label_de}: Der Audiotreiber hat eine Unterbrechung gemeldet. Teile dieser Spur können fehlen.") } else { format!("{label_en}: The audio driver reported an interruption. Parts of this track may be missing.") };
-        }
+        let Some(rest) =
+            value.strip_prefix(&format!("{source}: audio driver reported a discontinuity"))
+        else {
+            continue;
+        };
+        let Some(ending) = ENDINGS.iter().find(|ending| rest.ends_with(*ending)) else {
+            continue;
+        };
+        let middle = &rest[..rest.len() - ending.len()];
+        let at = if middle.is_empty() {
+            None
+        } else {
+            match middle
+                .strip_prefix(" at ")
+                .and_then(|time| time.strip_suffix(" of the saved track"))
+            {
+                Some(time) if valid_clock(time) => Some(time),
+                _ => continue,
+            }
+        };
+        return match (de, at) {
+            (true, Some(at)) => format!("{label_de}: Der Audiotreiber hat bei {at} eine Unterbrechung gemeldet. Ab dort können Teile dieser Spur fehlen."),
+            (true, None) => format!("{label_de}: Der Audiotreiber hat eine Unterbrechung gemeldet. Teile dieser Spur können fehlen."),
+            (false, Some(at)) => format!("{label_en}: The audio driver reported an interruption at {at}. Parts of this track may be missing from there on."),
+            (false, None) => format!("{label_en}: The audio driver reported an interruption. Parts of this track may be missing."),
+        };
     }
     value.into()
+}
+
+/// `mm:ss` or `h:mm:ss`, as written by the capture.
+fn valid_clock(time: &str) -> bool {
+    let fields: Vec<&str> = time.split(':').collect();
+    let digits = |field: &str, len: Option<usize>| {
+        !field.is_empty()
+            && field.bytes().all(|b| b.is_ascii_digit())
+            && len.is_none_or(|len| field.len() == len)
+    };
+    match fields.as_slice() {
+        [m, s] => digits(m, Some(2)) && digits(s, Some(2)),
+        [h, m, s] => digits(h, None) && digits(m, Some(2)) && digits(s, Some(2)),
+        _ => false,
+    }
 }
 
 fn timestamp(samples: u64) -> String {
@@ -429,6 +473,32 @@ mod tests {
         writer.append(&[0; 16000]).unwrap();
         writer.finish().unwrap();
         (root, store)
+    }
+    #[test]
+    fn driver_interruption_notices_are_translated_in_every_stored_wording() {
+        let tail = ". Missing audio remains missing; trustworthy microphone clock gaps are represented by explicit silence, not recovered speech. Check the affected range.";
+        assert_eq!(
+            warning(&format!("system: audio driver reported a discontinuity at 03:12 of the saved track{tail}"), true),
+            "Computerton: Der Audiotreiber hat bei 03:12 eine Unterbrechung gemeldet. Ab dort können Teile dieser Spur fehlen."
+        );
+        assert_eq!(
+            warning(&format!("microphone: audio driver reported a discontinuity at 1:02:05 of the saved track{tail}"), false),
+            "Microphone: The audio driver reported an interruption at 1:02:05. Parts of this track may be missing from there on."
+        );
+        assert_eq!(
+            warning(&format!("microphone: audio driver reported a discontinuity{tail}"), true),
+            "Mikrofon: Der Audiotreiber hat eine Unterbrechung gemeldet. Teile dieser Spur können fehlen."
+        );
+        // Anything that does not have exactly the stored shape stays as recorded.
+        for other in [
+            format!(
+                "system: audio driver reported a discontinuity at 3:12 of the saved track{tail}"
+            ),
+            format!("system: audio driver reported a discontinuity at soon{tail}"),
+            "system: audio driver reported a discontinuity".to_string(),
+        ] {
+            assert_eq!(warning(&other, true), other);
+        }
     }
     #[test]
     fn refuses_traversal_and_unknown_session_without_creating_output() {

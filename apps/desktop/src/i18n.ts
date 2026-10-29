@@ -1,7 +1,7 @@
 export const de = {
   audioQuality: "Aufnahme prüfen",
   audioQualityHelp:
-    "Bereits gesicherte Daten bleiben erhalten. Prüfe die betroffenen Spuren, bevor du dich auf ihre Vollständigkeit verlässt.",
+    "Bereits gesicherte Daten bleiben erhalten. Eine Unterbrechung meldet der Audiotreiber meist, wenn der Rechner kurz so ausgelastet war, dass die App den Ton nicht rechtzeitig abholen konnte, zum Beispiel weil ein lokales Textmodell fast den ganzen Arbeitsspeicher belegt. Direkt beim Aufnahmebeginn melden manche Treiber sie auch ohne Verlust. Hör dir die genannte Stelle an, bevor du dich auf die Vollständigkeit verlässt.",
   technicalDetails: "Technische Meldungen anzeigen",
   openFolder: "Sitzungsordner öffnen",
   openFolderHelp:
@@ -327,7 +327,7 @@ export type MessageKey = keyof typeof de;
 export const en: Record<MessageKey, string> = {
   audioQuality: "Check the recording",
   audioQualityHelp:
-    "Previously saved data is retained. Check the affected tracks before relying on their completeness.",
+    "Previously saved data is retained. The audio driver usually reports an interruption when the computer was briefly so busy that the app could not collect the audio in time, for example because a local text model takes up almost all memory. Some drivers also report one right at the start of a recording without losing anything. Listen to the named position before relying on the track being complete.",
   technicalDetails: "Show technical messages",
   openFolder: "Open session folder",
   openFolderHelp:

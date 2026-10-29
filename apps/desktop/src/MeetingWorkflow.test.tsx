@@ -6,7 +6,7 @@ import SessionWarnings from "./views/SessionWarnings";
 import TranscriptBody from "./views/TranscriptBody";
 import NotesProgressPanel from "./views/NotesProgressPanel";
 import { de, en } from "./i18n";
-import { renderTranscript } from "./domain";
+import { describeWarning, renderTranscript } from "./domain";
 import { testServices } from "./test-services";
 import type { DesktopApi, Meeting, NotesProgress } from "./types";
 // Full-App cases render the whole UI with its status polling. On slow CI runners
@@ -101,6 +101,23 @@ it("translates the 1.0.5 driver discontinuity wording instead of showing it twic
   expect(screen.getByText(/Mikrofon: Der Audiotreiber/)).toBeTruthy();
   expect(screen.getByText(current)).toBeTruthy();
   expect(screen.getAllByText(/discontinuity/)).toHaveLength(1);
+});
+
+it("names where the driver reported an interruption and explains the usual cause", async () => {
+  const timed =
+    "system: audio driver reported a discontinuity at 03:12 of the saved track. Missing audio remains missing; trustworthy microphone clock gaps are represented by explicit silence, not recovered speech. Check the affected range.";
+  render(<SessionWarnings warnings={[timed]} locale="de" t={de} />);
+  expect(
+    screen.getByText(
+      "Computerton: Der Audiotreiber hat bei 03:12 eine Unterbrechung gemeldet. Ab dort können Teile dieser Spur fehlen.",
+    ),
+  ).toBeTruthy();
+  await userEvent.click(screen.getByText(de.technicalDetails));
+  expect(screen.getByText(/lokales Textmodell/)).toBeTruthy();
+  expect(screen.getByText(timed)).toBeTruthy();
+  // An unknown time format is not interpreted; the notice stays as recorded.
+  const odd = timed.replace("03:12", "soon");
+  expect(describeWarning(odd, "en")).toBe(odd);
 });
 
 it("retains the first and last original sections of a two-hour transcript in a keyboard-scrollable region", () => {

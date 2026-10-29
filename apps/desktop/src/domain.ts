@@ -41,15 +41,20 @@ export const trackName = (track: Track, locale: Locale) =>
       : "Microphone";
 export function describeWarning(value: string, locale: Locale): string {
   const match =
-    /^(system|microphone): audio driver reported a discontinuity(?:; affected recording ranges can be incomplete\.|\. Missing audio remains missing; trustworthy microphone clock gaps are represented by explicit silence, not recovered speech\. Check the affected range\.)$/.exec(
+    /^(system|microphone): audio driver reported a discontinuity(?: at ((?:\d+:)?\d{2}:\d{2}) of the saved track)?(?:; affected recording ranges can be incomplete\.|\. Missing audio remains missing; trustworthy microphone clock gaps are represented by explicit silence, not recovered speech\. Check the affected range\.)$/.exec(
       value,
     );
   if (!match) return value;
+  const at = match[2];
   return (
     trackName(match[1] as Track, locale) +
     (locale === "de"
-      ? ": Der Audiotreiber hat eine Unterbrechung gemeldet. Teile dieser Spur können fehlen."
-      : ": The audio driver reported an interruption. Parts of this track may be missing.")
+      ? at
+        ? `: Der Audiotreiber hat bei ${at} eine Unterbrechung gemeldet. Ab dort können Teile dieser Spur fehlen.`
+        : ": Der Audiotreiber hat eine Unterbrechung gemeldet. Teile dieser Spur können fehlen."
+      : at
+        ? `: The audio driver reported an interruption at ${at}. Parts of this track may be missing from there on.`
+        : ": The audio driver reported an interruption. Parts of this track may be missing.")
   );
 }
 export function clock(ms: number): string {
