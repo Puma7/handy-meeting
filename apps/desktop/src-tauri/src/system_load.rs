@@ -1,7 +1,10 @@
 //! System-wide processor and memory load for the recording status, read without extra
 //! libraries. A value that cannot be read is `None`; nothing is estimated.
 use serde::Serialize;
-use std::sync::Mutex;
+use std::{
+    sync::Mutex,
+    time::{Duration, Instant},
+};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -19,17 +22,23 @@ struct CpuTicks {
     total: u64,
 }
 
-static PREVIOUS: Mutex<Option<CpuTicks>> = Mutex::new(None);
+/// A reading older than this no longer describes the current load, for example after the
+/// window was hidden or between two recordings.
+const MAX_SAMPLE_AGE: Duration = Duration::from_secs(10);
+
+static PREVIOUS: Mutex<Option<(Instant, CpuTicks)>> = Mutex::new(None);
 
 /// Reads the current load. The processor share covers the time since the previous call,
-/// so the first call after start reports no processor value.
+/// so the first call after start, or after a pause longer than `MAX_SAMPLE_AGE`, reports
+/// no processor value.
 pub(crate) fn sample() -> SystemLoad {
     let cpu_percent = platform::cpu_ticks().and_then(|now| {
+        let at = Instant::now();
         let before = PREVIOUS
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .replace(now);
-        before.and_then(|before| cpu_share(before, now))
+            .replace((at, now));
+        recent_share(before, at, now)
     });
     let memory = platform::memory();
     SystemLoad {
@@ -37,6 +46,15 @@ pub(crate) fn sample() -> SystemLoad {
         memory_used_bytes: memory.map(|(used, _)| used),
         memory_total_bytes: memory.map(|(_, total)| total),
     }
+}
+
+/// The share since a previous reading that is recent enough to describe the current load.
+fn recent_share(before: Option<(Instant, CpuTicks)>, at: Instant, now: CpuTicks) -> Option<f64> {
+    let (then, before) = before?;
+    if at.saturating_duration_since(then) > MAX_SAMPLE_AGE {
+        return None;
+    }
+    cpu_share(before, now)
 }
 
 /// A counter that went backwards (wrapped or reset) gives no value rather than a wrong one.
@@ -329,6 +347,33 @@ mod tests {
         // No time passed, or a counter went backwards: no value instead of a wrong one.
         assert_eq!(cpu_share(now, now), None);
         assert_eq!(cpu_share(now, before), None);
+    }
+
+    #[test]
+    fn a_reading_from_long_ago_gives_no_processor_value() {
+        let before = CpuTicks {
+            busy: 100,
+            total: 400,
+        };
+        let now = CpuTicks {
+            busy: 175,
+            total: 500,
+        };
+        let then = Instant::now();
+        assert_eq!(
+            recent_share(Some((then, before)), then + Duration::from_secs(2), now),
+            Some(75.0)
+        );
+        // After a hidden window or between recordings the average would span minutes.
+        assert_eq!(
+            recent_share(
+                Some((then, before)),
+                then + MAX_SAMPLE_AGE + Duration::from_millis(1),
+                now
+            ),
+            None
+        );
+        assert_eq!(recent_share(None, then, now), None);
     }
 
     #[test]
