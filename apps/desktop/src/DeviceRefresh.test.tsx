@@ -35,6 +35,11 @@ const headset: AudioDevice = {
   name: "Synthetic headset",
   source: "microphone",
 };
+const alternate: AudioDevice = {
+  id: "alternate",
+  name: "Synthetic alternate microphone",
+  source: "microphone",
+};
 const live: Meeting = {
   id: "synthetic-live",
   title: "Synthetic live meeting",
@@ -123,6 +128,46 @@ describe("audio devices follow connected and removed hardware (synthetic IPC)", 
     await waitFor(() =>
       expect(screen.queryByRole("option", { name: headset.name })).toBeNull(),
     );
+  });
+
+  it("takes a removed device back after its notice was closed, unless another one was chosen", async () => {
+    let devices = [output, builtIn, alternate, headset];
+    const api = fakeApi(
+      () => devices,
+      () => state(),
+    );
+    render(<App api={api} />);
+    await screen.findByRole("option", { name: headset.name });
+    await userEvent.click(
+      screen.getByLabelText("Mikrofon zusätzlich aufnehmen"),
+    );
+    await userEvent.selectOptions(microphoneSelect(), headset.id);
+    const unplug = async () => {
+      devices = [output, builtIn, alternate];
+      fireEvent.focus(window);
+      await screen.findByText(/„Synthetic headset“ ist nicht mehr verfügbar/);
+    };
+    const plugIn = async () => {
+      devices = [output, builtIn, alternate, headset];
+      fireEvent.focus(window);
+      await screen.findByRole("option", { name: headset.name });
+    };
+    // Closing the notice keeps the record, so the reconnected headset is chosen again.
+    await unplug();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Hinweis schließen" }),
+    );
+    expect(screen.queryByText(/ist nicht mehr verfügbar/)).toBeNull();
+    await plugIn();
+    await waitFor(() => expect(microphoneSelect().value).toBe(headset.id));
+    // A microphone chosen while the headset was away stays chosen.
+    await unplug();
+    await userEvent.selectOptions(microphoneSelect(), alternate.id);
+    await plugIn();
+    await waitFor(() =>
+      expect(screen.queryByText(/ist nicht mehr verfügbar/)).toBeNull(),
+    );
+    expect(microphoneSelect().value).toBe(alternate.id);
   });
 
   it("reports a removed microphone, chooses another one and takes it back on reconnect", async () => {

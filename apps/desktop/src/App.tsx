@@ -1725,12 +1725,14 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
           </div>
         )}
         <DeviceNotices
-          losses={deviceLosses}
+          losses={deviceLosses.filter((loss) => !loss.dismissed)}
           locale={locale}
           t={t}
           onDismiss={(loss) =>
             updateDeviceLosses(
-              deviceLossesRef.current.filter((item) => item !== loss),
+              deviceLossesRef.current.map((item) =>
+                item === loss ? { ...item, dismissed: true } : item,
+              ),
             )
           }
         />

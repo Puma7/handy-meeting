@@ -13,6 +13,8 @@ export interface DeviceLoss {
   /** Name and ID of the device chosen instead, when not recording. */
   replacement?: string;
   replacementId?: string;
+  /** The notice was closed; the record still restores the device when it returns. */
+  dismissed?: boolean;
 }
 
 /** Interval of the automatic device-list refresh while the window is visible. */
