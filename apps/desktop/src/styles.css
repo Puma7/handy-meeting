@@ -2009,7 +2009,8 @@ mark {
   gap: 8px;
   margin: 12px 0;
 }
-.meeting-view-choice [aria-pressed="true"] {
+.meeting-view-choice [aria-pressed="true"],
+.transcript-order[aria-pressed="true"] {
   border-color: var(--color-moss);
   background: var(--color-moss-wash);
 }
