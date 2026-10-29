@@ -629,16 +629,21 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       if (!current.recording) {
         for (const source of ["system", "microphone"] as const) {
           if (listed(source, chosen[source])) continue;
-          const automatic = fallback(source)?.id ?? "";
-          // A later automatic choice is not the user's: the lost device still returns.
+          const automatic = fallback(source);
+          // A later automatic choice is not the user's: the lost device still returns, and
+          // its notice names the device now selected.
           losses = losses.map((loss) =>
             loss.source === source &&
             !loss.duringRecording &&
             (loss.replacementId ?? "") === chosen[source]
-              ? { ...loss, replacementId: automatic }
+              ? {
+                  ...loss,
+                  replacement: automatic?.name,
+                  replacementId: automatic?.id,
+                }
               : loss,
           );
-          chosen[source] = automatic;
+          chosen[source] = automatic?.id ?? "";
         }
       }
       if (!current.recording) {

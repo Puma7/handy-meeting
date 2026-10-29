@@ -184,13 +184,18 @@ describe("audio devices follow connected and removed hardware (synthetic IPC)", 
     devices = [output];
     fireEvent.focus(window);
     await screen.findByText(/kein anderes Gerät dieser Art/);
-    await userEvent.click(
-      screen.getByRole("button", { name: "Hinweis schließen" }),
-    );
-    // A new microphone is selected automatically, not by the user ...
+    // A new microphone is selected automatically, not by the user, and the notice says so ...
     devices = [output, builtIn];
     fireEvent.focus(window);
     await waitFor(() => expect(microphoneSelect().value).toBe(builtIn.id));
+    expect(
+      await screen.findByText(
+        /„Synthetic headset“ ist nicht mehr verfügbar. Ausgewählt ist jetzt „Synthetic built-in microphone“/,
+      ),
+    ).toBeTruthy();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Hinweis schließen" }),
+    );
     // ... so the headset takes over again when it returns.
     devices = [output, builtIn, headset];
     fireEvent.focus(window);
