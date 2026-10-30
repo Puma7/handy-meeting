@@ -34,6 +34,70 @@ pub(super) fn manifest_id(folder: &Path) -> Result<String> {
         .ok_or_else(|| "Missing native source identity".into())
 }
 
+/// Pending creation is explicit attribution for incomplete ZIP bytes. If a ZIP is
+/// readable, every available identity record must still agree before unlinking it.
+fn reject_conflicting_zip_identity(path: &Path, id: &str, cancel: &AtomicBool) -> Result<()> {
+    regular(path)?;
+    let Ok(mut reader) = zip::ZipArchive::new(File::open(path)?) else {
+        return Ok(()); // A process interruption may leave no central directory.
+    };
+    if reader.len() > MAX_FILES * 2 + 1 {
+        return Err("Too many archive entries".into());
+    }
+    let mut seen = BTreeSet::new();
+    let mut total = 0u64;
+    for n in 0..reader.len() {
+        if cancel.load(Ordering::Acquire) {
+            return Err("Erasure preview cancelled".into());
+        }
+        let mut file = reader.by_index(n)?;
+        let name = file.name()?.into_owned();
+        if ![
+            "ARCHIVE_MANIFEST.json",
+            "session/session.json",
+            "session/session.json.bak",
+        ]
+        .contains(&name.as_str())
+        {
+            continue;
+        }
+        if !seen.insert(name) {
+            return Err("Duplicate archive identity record; erasure blocked".into());
+        }
+        total = total
+            .checked_add(file.size())
+            .ok_or("Archive identity size overflow")?;
+        if total > MAX_MANIFEST {
+            return Err("Oversized archive identity evidence; erasure blocked".into());
+        }
+        let mut bytes = Vec::new();
+        if file
+            .by_ref()
+            .take(MAX_MANIFEST + 1)
+            .read_to_end(&mut bytes)
+            .is_err()
+        {
+            continue; // An unfinished entry is not readable identity evidence.
+        }
+        if bytes.len() as u64 > MAX_MANIFEST {
+            return Err("Oversized archive identity evidence; erasure blocked".into());
+        }
+        if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes) {
+            for found in [&value["meetingId"], &value["session"]["id"], &value["id"]] {
+                if found
+                    .as_str()
+                    .is_some_and(|found| native_id(found) && found != id)
+                {
+                    return Err(
+                        "Archive ZIP conflicts with its attributed meeting; erasure blocked".into(),
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Collects archive identities without trusting paths embedded in any record.
 pub(super) fn targets(
     root: &Path,
@@ -44,6 +108,7 @@ pub(super) fn targets(
     let folder = root.join("archives");
     let mut ids: BTreeSet<String> = known.iter().cloned().collect();
     let mut assigned = BTreeMap::new();
+    let mut pending = BTreeSet::new();
     let mut assign = |aid: &str, meeting: String| -> Result<()> {
         if !native_id(aid) || !native_id(&meeting) {
             return Err("Invalid archive identity".into());
@@ -73,6 +138,7 @@ pub(super) fn targets(
             assign(aid, receipt_at(&folder, aid)?.meeting_id)?;
         } else if let Some(aid) = name.strip_suffix(".pending.json") {
             assign(aid, deletion::pending_meeting(&path)?)?;
+            pending.insert(aid.to_owned());
         }
     }
     // An orphan ZIP/source requires its own valid manifest, unless a prior confirmed
@@ -102,11 +168,15 @@ pub(super) fn targets(
                     continue;
                 }
                 if name.ends_with(".zip") {
-                    if verify(&path, Some(cancel), |_, _| {})?.meeting_id != expected {
-                        return Err(
-                            "Archive ZIP conflicts with its attributed meeting; erasure blocked"
-                                .into(),
-                        );
+                    match verify(&path, Some(cancel), |_, _| {}) {
+                        Ok(manifest) if manifest.meeting_id != expected => {
+                            return Err("Archive ZIP conflicts with its attributed meeting; erasure blocked".into());
+                        }
+                        Ok(_) => (),
+                        Err(_) if pending.contains(aid) => {
+                            reject_conflicting_zip_identity(&path, expected, cancel)?;
+                        }
+                        Err(error) => return Err(error),
                     }
                 } else {
                     metadata::checked_directory(&path)?;
@@ -146,6 +216,7 @@ pub(super) fn inventory(
         files: Vec::new(),
         directories: Vec::new(),
         archive_ids: targets(root, id, known, cancel)?,
+        preserved_atomic_remnants: 0,
     };
     for path in [
         root.join("sessions").join(id),
@@ -222,6 +293,16 @@ pub(super) fn inventory(
     }
     for entry in optional_entries(&root.join("audio-copies"))? {
         let path = entry?.path();
+        if records::is_temporary(&path)? {
+            match records::temporary_identities(&path, true)? {
+                Some(ids) if ids.len() == 1 && ids.contains(id) => {
+                    push_delete_file(root, &path, cancel, &mut data.files)?
+                }
+                Some(ids) if ids.len() == 1 => (),
+                _ => data.preserved_atomic_remnants += 1,
+            }
+            continue;
+        }
         let value = read_record(&path)?;
         if value["meetingId"].as_str() == Some(id) {
             let run = value["runId"]

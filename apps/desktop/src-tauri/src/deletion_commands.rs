@@ -155,6 +155,7 @@ mod tests {
                 files: 1,
                 bytes: 2,
                 rebuild_search: true,
+                preserved_atomic_remnants: 0,
             },
         )
         .unwrap();

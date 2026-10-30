@@ -37,6 +37,7 @@ export default function EraseMeetingDialog({
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [cancelling, setCancelling] = useState(false);
+  const [statusUnavailable, setStatusUnavailable] = useState(false);
   const form = useRef<HTMLFormElement>(null),
     alive = useRef(true);
   const job = useRef<string | null>(null),
@@ -58,10 +59,15 @@ export default function EraseMeetingDialog({
         : safeAction.current;
       target?.focus();
     }
-  }, [stage, cancelling]);
+  }, [stage, cancelling, statusUnavailable]);
 
   /** Only an exact current job's completed status may confirm success. */
-  async function watch(id: string, deleting: boolean, sequence: number) {
+  async function watch(
+    id: string,
+    deleting: boolean,
+    sequence: number,
+    failures = 0,
+  ) {
     if (!alive.current || generation.current !== sequence) return;
     try {
       const status = await api.getMaintenanceProgress?.();
@@ -72,7 +78,16 @@ export default function EraseMeetingDialog({
             ? "Der Auftragsstatus ist nicht bestätigt. Bitte erneut prüfen."
             : "The job status is unconfirmed. Check again.",
         );
+      if (
+        !["running", "complete", "failed", "cancelled"].includes(status.status)
+      )
+        throw new Error(
+          de
+            ? "Der Auftragsstatus ist unbekannt. Bitte erneut prüfen."
+            : "The job status is unknown. Check again.",
+        );
       setProgress({ done: status.confirmedTasks, total: status.totalTasks });
+      setStatusUnavailable(false);
       if (status.status === "running") {
         timer.current = setTimeout(
           () => void watch(id, deleting, sequence),
@@ -112,10 +127,19 @@ export default function EraseMeetingDialog({
       setError(errorMessage(failure));
       if (deleting && job.current) {
         // A failed status read is not evidence that destructive work stopped.
-        timer.current = setTimeout(
-          () => void watch(id, deleting, sequence),
-          800,
-        );
+        if (failures < 2) {
+          timer.current = setTimeout(
+            () => void watch(id, deleting, sequence, failures + 1),
+            800,
+          );
+        } else {
+          // Stop background retries, request cancellation, and keep the exact job
+          // reserved until a later explicit status check proves a terminal state.
+          setStatusUnavailable(true);
+          setCancelling(false);
+          cancelRequested.current = true;
+          void api.cancelMaintenance?.(id).catch(() => undefined);
+        }
         return;
       }
       setStage("failed");
@@ -133,6 +157,7 @@ export default function EraseMeetingDialog({
     setPreview(null);
     setConfirmation("");
     setCancelling(false);
+    setStatusUnavailable(false);
     cancelRequested.current = false;
     submitting.current = true;
     try {
@@ -185,6 +210,7 @@ export default function EraseMeetingDialog({
     destructive.current = true;
     callbacks.current.onStart();
     setStage("deleting");
+    setStatusUnavailable(false);
     setError(null);
     setProgress({ done: 0, total: preview.files });
     try {
@@ -224,13 +250,29 @@ export default function EraseMeetingDialog({
       return;
     }
     try {
-      await api.cancelMaintenance?.(job.current);
+      const id = job.current;
+      const sequence = ++generation.current;
+      clearTimeout(timer.current);
+      await api.cancelMaintenance?.(id);
+      if (alive.current && generation.current === sequence) {
+        setStatusUnavailable(false);
+        void watch(id, stage === "deleting", sequence);
+      }
     } catch (failure) {
       if (alive.current) {
         setError(errorMessage(failure));
         setCancelling(false);
+        if (stage === "deleting") setStatusUnavailable(true);
       }
     }
+  }
+  /** Reinspect the existing native job without releasing admission or starting another erasure. */
+  function retryStatus() {
+    if (!job.current) return;
+    clearTimeout(timer.current);
+    setStatusUnavailable(false);
+    setError(null);
+    void watch(job.current, stage === "deleting", ++generation.current);
   }
   return (
     <div className="modal-backdrop">
@@ -301,6 +343,13 @@ export default function EraseMeetingDialog({
                 ? `${preview.files.toLocaleString(locale)} zugeordnete Dateien · ${(preview.bytes / 1048576).toLocaleString(locale, { maximumFractionDigits: 1 })} MB. Der Suchindex wird neu aufgebaut.`
                 : `${preview.files.toLocaleString(locale)} attributed files · ${(preview.bytes / 1048576).toLocaleString(locale, { maximumFractionDigits: 1 })} MB. The search index will be rebuilt.`}
             </p>
+            {!!preview.preservedAtomicRemnants && (
+              <p role="alert">
+                {de
+                  ? `${preview.preservedAtomicRemnants} unterbrochene Datensätze sind keinem Meeting sicher zuzuordnen und bleiben erhalten. Zugeordnete Meetingdaten können trotzdem gelöscht werden.`
+                  : `${preview.preservedAtomicRemnants} interrupted records cannot be assigned to a meeting safely and will be preserved. Attributed meeting data can still be removed.`}
+              </p>
+            )}
             <label>
               {de
                 ? `Zur Bestätigung ${word} eingeben`
@@ -348,6 +397,11 @@ export default function EraseMeetingDialog({
           </p>
         )}
         <div className="dialog-actions">
+          {statusUnavailable && stage === "deleting" && (
+            <button type="button" className="secondary" onClick={retryStatus}>
+              {de ? "Auftragsstatus erneut prüfen" : "Check job status again"}
+            </button>
+          )}
           <button
             ref={safeAction}
             type="button"

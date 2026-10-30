@@ -6,6 +6,7 @@ use super::{
 };
 use std::collections::BTreeMap;
 mod copies;
+mod records;
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -15,6 +16,8 @@ pub struct ErasurePreview {
     pub files: usize,
     pub bytes: u64,
     pub rebuild_search: bool,
+    /// Unassignable atomic-write remnants are preserved and disclosed before confirmation.
+    pub preserved_atomic_remnants: usize,
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,6 +38,7 @@ struct Inventory {
     files: Vec<DeleteFile>,
     directories: Vec<PathBuf>,
     archive_ids: Vec<String>,
+    preserved_atomic_remnants: usize,
 }
 
 /// Reads bounded ordinary JSON without interpreting any embedded instructions or paths.
@@ -49,21 +53,12 @@ fn read_record(path: &Path) -> Result<serde_json::Value> {
     }
     Ok(serde_json::from_slice(&bytes)?)
 }
-/// Recognizes IDs and path components, never a title or an executable instruction.
+/// Attributes complete maintenance records by exact meetingId fields, never title/path text.
 fn references(value: &serde_json::Value, id: &str, depth: usize) -> Result<bool> {
     if depth > 64 {
         return Err("Retained record nesting exceeds erasure bound".into());
     }
     Ok(match value {
-        serde_json::Value::String(s) => {
-            s == id
-                || s.split(['/', '\\']).any(|part| {
-                    part == id
-                        || part == format!("{id}.json")
-                        || part == format!("{id}.json.bak")
-                        || part == format!("{id}-history")
-                })
-        }
         serde_json::Value::Array(rows) => {
             let mut found = false;
             for row in rows {
@@ -74,7 +69,8 @@ fn references(value: &serde_json::Value, id: &str, depth: usize) -> Result<bool>
         serde_json::Value::Object(rows) => {
             let mut found = false;
             for (key, row) in rows {
-                found |= key == id || references(row, id, depth + 1)?;
+                found |= (key == "meetingId" && row.as_str() == Some(id))
+                    || references(row, id, depth + 1)?;
             }
             found
         }
@@ -134,6 +130,7 @@ fn retained_records(
     id: &str,
     cancel: &AtomicBool,
     files: &mut Vec<DeleteFile>,
+    preserved: &mut usize,
 ) -> Result<()> {
     for parent in ["retention-plans", "maintenance-log"] {
         for entry in optional_entries(&root.join(parent))? {
@@ -141,6 +138,14 @@ fn retained_records(
                 return Err("Erasure preview cancelled".into());
             }
             let path = entry?.path();
+            if records::is_temporary(&path)? {
+                match records::temporary_identities(&path, false)? {
+                    Some(ids) if ids.contains(id) => push_delete_file(root, &path, cancel, files)?,
+                    Some(_) => (),
+                    None => *preserved += 1,
+                }
+                continue;
+            }
             if references(&read_record(&path)?, id, 0)? {
                 push_delete_file(root, &path, cancel, files)?;
             }
@@ -189,7 +194,13 @@ fn inventory_for(root: &Path, id: &str, cancel: &AtomicBool) -> Result<Inventory
     if data.files.is_empty() && data.directories.is_empty() && prior.is_none() {
         return Err("No app-owned meeting or attributed copy found".into());
     }
-    retained_records(root, id, cancel, &mut data.files)?;
+    retained_records(
+        root,
+        id,
+        cancel,
+        &mut data.files,
+        &mut data.preserved_atomic_remnants,
+    )?;
     let unique: BTreeMap<_, _> = data
         .files
         .into_iter()
@@ -251,16 +262,18 @@ fn cache_inventory(root: &Path, cancel: &AtomicBool) -> Result<Inventory> {
         files,
         directories,
         archive_ids: Vec::new(),
+        preserved_atomic_remnants: 0,
     })
 }
 /// The preview authority covers meeting data/retained copies, never mutable search-cache pages.
-fn fingerprint(id: &str, files: &[DeleteFile]) -> Result<String> {
+fn fingerprint(id: &str, files: &[DeleteFile], preserved: usize) -> Result<String> {
     Ok(format!(
         "{:x}",
         Sha256::digest(serde_json::to_vec(&(
-            "explicit-meeting-erasure-v1",
+            "explicit-meeting-erasure-v2",
             id,
-            files
+            files,
+            preserved
         ))?)
     ))
 }
@@ -279,10 +292,11 @@ pub fn preview_erasure(root: &Path, id: &str, cancel: &AtomicBool) -> Result<Era
     cache_inventory(root, cancel)?;
     Ok(ErasurePreview {
         meeting_id: id.into(),
-        fingerprint: fingerprint(id, &data.files)?,
+        fingerprint: fingerprint(id, &data.files, data.preserved_atomic_remnants)?,
         files: data.files.len(),
         bytes: data.files.iter().map(|f| f.bytes).sum(),
         rebuild_search: true,
+        preserved_atomic_remnants: data.preserved_atomic_remnants,
     })
 }
 /// Rechecks each ordinary parent and exact bytes before removing a confirmed owned file.
@@ -338,7 +352,7 @@ pub fn erase_meeting(
     let _annotations = annotation_locks(root, id)?;
     let _leases = source_leases(root, id, cancel)?;
     let mut data = inventory_for(root, id, cancel)?;
-    if fingerprint(id, &data.files)? != expected {
+    if fingerprint(id, &data.files, data.preserved_atomic_remnants)? != expected {
         return Err(
             "Meeting or copies changed since preview; nothing deleted. Create a new preview."
                 .into(),
@@ -391,6 +405,7 @@ pub fn erase_meeting(
     let remaining = inventory_for(root, id, cancel)?;
     if !remaining.files.is_empty()
         || !remaining.directories.is_empty()
+        || remaining.preserved_atomic_remnants != data.preserved_atomic_remnants
         || root.join("library-index").exists()
     {
         return Err("Erasure incomplete; remaining data requires a new confirmed preview".into());

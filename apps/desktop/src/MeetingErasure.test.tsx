@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import {
   act,
   cleanup,
+  fireEvent,
   render,
   renderHook,
   screen,
@@ -18,6 +19,7 @@ import { useNotesJob } from "./useNotesJob";
 import type { DesktopApi, ErasurePreview, MeetingSummary } from "./types";
 
 afterEach(cleanup);
+afterEach(() => vi.useRealTimers());
 const meeting: MeetingSummary = {
   id: "b".repeat(32),
   title: "Synthetic two-second meeting",
@@ -63,6 +65,84 @@ function fixture() {
     onClose: vi.fn(),
   };
 }
+
+it("bounds failed deletion status polls, keeps admission and can inspect cancellation later", async () => {
+  vi.useFakeTimers();
+  const props = fixture();
+  let deleting = false,
+    recovered = false,
+    terminalStatus = "unrecognized";
+  props.api.eraseMeetingNow = vi.fn().mockImplementation(async () => {
+    deleting = true;
+    return "erase-job";
+  });
+  props.api.getMaintenanceProgress = vi.fn().mockImplementation(async () => {
+    if (deleting && !recovered) throw new Error("Synthetic IPC read failure");
+    return {
+      jobId: deleting ? "erase-job" : "preview-job",
+      status: deleting ? terminalStatus : "complete",
+      confirmedTasks: 0,
+      totalTasks: 8,
+      elapsedMs: 0,
+      skipped: 0,
+      error: null,
+      cancelRequested: deleting,
+    };
+  });
+  render(<EraseMeetingDialog {...props} meeting={meeting} locale="en" />);
+  await act(() => vi.advanceTimersByTimeAsync(0));
+  fireEvent.change(
+    screen.getByRole("textbox", { name: "Type DELETE to confirm" }),
+    { target: { value: "DELETE" } },
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Permanently delete now" }),
+  );
+  await act(() => vi.advanceTimersByTimeAsync(10000));
+  const calls = vi.mocked(props.api.getMaintenanceProgress!).mock.calls.length;
+  expect(calls).toBe(4);
+  expect(props.api.cancelMaintenance).toHaveBeenCalledWith("erase-job");
+  await act(() => vi.advanceTimersByTimeAsync(10000));
+  expect(props.api.getMaintenanceProgress).toHaveBeenCalledTimes(calls);
+  expect(props.onStopped).not.toHaveBeenCalled();
+  expect(props.onDeleted).not.toHaveBeenCalled();
+  expect(props.api.eraseMeetingNow).toHaveBeenCalledOnce();
+  expect(
+    screen.queryByRole("button", { name: "Permanently delete now" }),
+  ).toBeNull();
+  recovered = true;
+  screen.getByRole("button", { name: "Check job status again" }).focus();
+  await act(async () =>
+    fireEvent.click(
+      screen.getByRole("button", { name: "Check job status again" }),
+    ),
+  );
+  expect(screen.getByRole("alertdialog").contains(document.activeElement)).toBe(
+    true,
+  );
+  await act(() => vi.advanceTimersByTimeAsync(10000));
+  expect(props.onStopped).not.toHaveBeenCalled();
+  terminalStatus = "cancelled";
+  await act(async () =>
+    fireEvent.click(
+      screen.getByRole("button", { name: "Check job status again" }),
+    ),
+  );
+  expect(props.onStopped).toHaveBeenCalledOnce();
+  expect(props.onDeleted).not.toHaveBeenCalled();
+});
+
+it("discloses unattributable atomic remnants before confirming erasure", async () => {
+  const props = fixture();
+  props.api.getMeetingErasurePreview = vi
+    .fn()
+    .mockResolvedValue({ ...plan, preservedAtomicRemnants: 2 });
+  render(<EraseMeetingDialog {...props} meeting={meeting} locale="en" />);
+  expect(
+    await screen.findByText(/2 interrupted records cannot be assigned/),
+  ).toBeTruthy();
+  expect(props.api.eraseMeetingNow).not.toHaveBeenCalled();
+});
 
 it("offers direct permanent deletion on the exact short meeting in searchable history", async () => {
   const remove = vi.fn();

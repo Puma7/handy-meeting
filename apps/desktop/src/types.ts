@@ -407,6 +407,8 @@ export interface ErasurePreview {
   files: number;
   bytes: number;
   rebuildSearch: boolean;
+  /** Unassignable interrupted metadata stays intact and is disclosed before confirmation. */
+  preservedAtomicRemnants?: number;
 }
 export interface PendingErasure {
   meetingId: string;

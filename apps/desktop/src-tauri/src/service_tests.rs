@@ -1,6 +1,85 @@
 //! Synthetic service-state regressions; ordinary tests never open audio devices.
 use super::*;
 
+/// A maintenance snapshot delayed until after erasure must not reinsert its saved text.
+#[test]
+fn delayed_maintenance_snapshots_cannot_repopulate_an_erased_index() {
+    for archived in [false, true] {
+        let root = fixture_root("late-maintenance-index");
+        let store = SessionStore::create(
+            &root.join("sessions"),
+            "Synthetic delayed maintenance",
+            "m",
+            "s",
+            None,
+        )
+        .unwrap();
+        let mut writer = meeting_core::PcmWriter::new(store.clone(), "system").unwrap();
+        writer.append(&[42; 1600]).unwrap();
+        writer.finish().unwrap();
+        drop(writer);
+        let part = store.snapshot().unwrap().parts[0].clone();
+        store
+            .append_transcript(meeting_core::TranscriptCheckpoint {
+                sequence: 0,
+                at: String::new(),
+                file: part.file,
+                model_id: "m".into(),
+                full: "syntheticlatemaintenancecanary".into(),
+                committed: "syntheticlatemaintenancecanary".into(),
+                tentative: String::new(),
+                processed_samples: part.confirmed_sample_count,
+                final_text: true,
+                revision_after_restart: false,
+            })
+            .unwrap();
+        store.set_status("complete").unwrap();
+        let folder = store.folder().to_owned();
+        drop(store);
+        let cancel = AtomicBool::new(false);
+        let stale = if archived {
+            meeting_core::archive::archive_audio(
+                &root,
+                &folder.file_name().unwrap().to_string_lossy(),
+                0,
+                &cancel,
+                |_, _| {},
+            )
+            .unwrap();
+            meeting_core::archive::read_archived_transcript(&folder)
+                .unwrap()
+                .unwrap()
+        } else {
+            SessionStore::open(&folder).unwrap().snapshot().unwrap()
+        };
+        // Both real maintenance source forms can be indexed before deletion.
+        library_service::update(&root, &stale).unwrap();
+        let preview = meeting_core::archive::preview_erasure(&root, &stale.id, &cancel).unwrap();
+        meeting_core::archive::erase_meeting(
+            &root,
+            &stale.id,
+            &preview.fingerprint,
+            &format!("DELETE {}", stale.id),
+            &cancel,
+            |_, _| {},
+        )
+        .unwrap();
+        assert!(
+            library_service::update(&root, &stale).is_err(),
+            "A delayed maintenance snapshot recreated erased transcript content"
+        );
+        let index = meeting_core::library::LibraryIndex::open(&root).unwrap();
+        assert_eq!(
+            index
+                .search("syntheticlatemaintenancecanary", 0, 25)
+                .unwrap()
+                .total,
+            0
+        );
+        assert!(!folder.exists());
+    }
+}
+
 #[test]
 fn recording_transitions_keep_saved_text_readable_without_maintenance_admission() {
     let root = fixture_root("read-during-capture-transition");
@@ -67,56 +146,36 @@ fn annotation_commands_fence_the_source_snapshot_and_commit_with_one_os_lease() 
             "user-metadata"
         });
         fs::create_dir_all(&parent).unwrap();
-        let annotation = OpenOptions::new()
-            .create(true)
-            .truncate(false)
-            .read(true)
-            .write(true)
-            .open(parent.join(format!("{id}.lock")))
-            .unwrap();
-        fs2::FileExt::try_lock_exclusive(&annotation).unwrap();
-        let worker_root = root.clone();
-        let worker_id = id.clone();
-        let worker = std::thread::spawn(move || {
-            let remote = Service::new(worker_root).unwrap();
+        let remote = Service::new(root.clone()).unwrap();
+        let source = root.join("sessions").join(&id).join("session.json");
+        let before = fs::read(&source).unwrap();
+        // Deterministic ordering: erasure already owns its OS lease before the
+        // second Service attempts either mutation. No probe competes with a writer.
+        let fence = meeting_core::archive::source_mutation_lease(&root).unwrap();
+        let mutate = || {
             if speaker {
-                speaker_commands::save_labels(&remote, &worker_id, 0, false, vec![]).map(|_| ())
+                speaker_commands::save_labels(&remote, &id, 0, false, vec![]).map(|_| ())
             } else {
                 library_commands::edit_metadata(
                     &remote,
-                    &worker_id,
+                    &id,
                     0,
                     Some("Synthetic edited title".into()),
                     false,
                 )
                 .map(|_| ())
             }
-        });
-        // The annotation lock pauses the final write. The operation must already
-        // own the process-shared archive lease across its earlier source read.
-        let fence = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(root.join("archive-maintenance.lock"))
-            .unwrap();
-        let until = std::time::Instant::now() + std::time::Duration::from_secs(2);
-        let mut fenced = false;
-        while std::time::Instant::now() < until && !worker.is_finished() {
-            if fs2::FileExt::try_lock_exclusive(&fence).is_err() {
-                fenced = true;
-                break;
-            }
-            fs2::FileExt::unlock(&fence).unwrap();
-            std::thread::sleep(std::time::Duration::from_millis(5));
-        }
-        drop(fence);
-        drop(annotation);
-        let outcome = worker.join().unwrap();
+        };
         assert!(
-            fenced,
-            "Annotation source read and final write had no OS-level erasure fence"
+            mutate().is_err(),
+            "Mutation bypassed process-shared erasure admission"
         );
-        outcome.unwrap();
+        assert_eq!(fs::read(&source).unwrap(), before);
+        assert!(!parent.join(format!("{id}.json")).exists());
+        assert!(!root.join("library-index").exists());
+        drop(fence);
+        mutate().unwrap();
+        drop(remote);
         drop(service);
         let cancel = AtomicBool::new(false);
         let preview = meeting_core::archive::preview_erasure(&root, &id, &cancel).unwrap();

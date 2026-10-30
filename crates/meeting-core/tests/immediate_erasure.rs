@@ -92,6 +92,149 @@ fn erase(root: &Path, id: &str) {
     assert!(result.complete);
 }
 
+/// Partial atomic records require structural identity, never title text or raw ID bytes.
+#[test]
+fn partial_atomic_records_use_exact_identity_and_preserve_unknown_or_foreign_bytes() {
+    let root = tempfile::tempdir().unwrap();
+    let id = fixture(root.path(), PRIVATE, 1);
+    let other = fixture(root.path(), "Foreign original retained", 1);
+    let mut preserved = Vec::new();
+    for parent in ["maintenance-log", "retention-plans", "audio-copies"] {
+        let folder = root.path().join(parent);
+        extra(
+            &folder.join(".tmpOwned"),
+            format!("{{\"meetingId\":\"{id}\",\"title\":\"{PRIVATE}").as_bytes(),
+        );
+        for (name, bytes) in [
+            (
+                ".tmpForeign",
+                format!("{{\"meetingId\":\"{other}\",\"title\":\"{id}\"}}"),
+            ),
+            (
+                ".tmpUnknown",
+                "{\"title\":\"unfinished unassigned metadata".into(),
+            ),
+            (
+                ".tmpQuoted",
+                format!("{{\"title\":\"\\\"meetingId\\\":\\\"{id}\\\""),
+            ),
+        ] {
+            let path = folder.join(name);
+            extra(&path, bytes.as_bytes());
+            preserved.push((path, bytes.into_bytes()));
+        }
+        if parent != "audio-copies" {
+            let path = folder.join("foreign.json");
+            let bytes=serde_json::to_vec(&serde_json::json!({"meetingId":other,"title":id,"path":format!("sessions/{id}/audio")})).unwrap();
+            extra(&path, &bytes);
+            preserved.push((path, bytes));
+        }
+    }
+    extra(
+        &root.path().join("retention-plans/.tmpNested"),
+        format!("{{\"candidates\":[{{\"meetingId\":\"{id}\",\"title\":\"{PRIVATE}").as_bytes(),
+    );
+    let cancel = AtomicBool::new(false);
+    let malformed = root.path().join("maintenance-log/broken.json");
+    extra(&malformed, b"{ incomplete ordinary record");
+    assert!(archive::preview_erasure(root.path(), &id, &cancel).is_err());
+    fs::remove_file(malformed).unwrap();
+    let preview = archive::preview_erasure(root.path(), &id, &cancel).unwrap();
+    assert_eq!(
+        serde_json::to_value(&preview).unwrap()["preservedAtomicRemnants"],
+        6
+    );
+    let changed = root.path().join("maintenance-log/.tmpChangedScope");
+    extra(&changed, b"{ unfinished unrelated metadata");
+    assert!(archive::erase_meeting(
+        root.path(),
+        &id,
+        &preview.fingerprint,
+        &format!("DELETE {id}"),
+        &cancel,
+        |_, _| {}
+    )
+    .is_err());
+    assert!(root.path().join("sessions").join(&id).exists());
+    fs::remove_file(changed).unwrap();
+    erase(root.path(), &id);
+    for (path, bytes) in preserved {
+        assert_eq!(fs::read(path).unwrap(), bytes);
+    }
+    for parent in ["maintenance-log", "retention-plans", "audio-copies"] {
+        assert!(!root.path().join(parent).join(".tmpOwned").exists());
+    }
+    assert!(!root.path().join("retention-plans/.tmpNested").exists());
+}
+
+/// An actual archive cancellation leaves an attributed ZIP without its final manifest.
+#[test]
+fn cancelled_archive_creation_does_not_block_explicit_meeting_erasure() {
+    let root = tempfile::tempdir().unwrap();
+    let id = fixture(root.path(), PRIVATE, 1);
+    let other = fixture(root.path(), "Other original retained", 1);
+    let other_folder = root.path().join("sessions").join(other);
+    let before = tree(&other_folder);
+    let cancel = AtomicBool::new(false);
+    assert!(
+        archive::create(root.path(), &id, 0, "whole-meeting", &cancel, |n, _| {
+            if n >= 1 {
+                cancel.store(true, Ordering::Release);
+            }
+        })
+        .is_err()
+    );
+    assert!(fs::read_dir(root.path().join("archives"))
+        .unwrap()
+        .any(|e| e.unwrap().path().extension().is_some_and(|s| s == "zip")));
+    erase(root.path(), &id);
+    assert_eq!(tree(&other_folder), before);
+    assert!(!root.path().join("sessions").join(&id).exists());
+    assert_eq!(
+        fs::read_dir(root.path().join("archives")).unwrap().count(),
+        0
+    );
+}
+
+/// Pending attribution never authorizes a readable foreign ZIP manifest or an unattributed ZIP.
+#[test]
+fn incomplete_zip_identity_conflicts_and_missing_attribution_still_block_erasure() {
+    use std::io::Write;
+    for name in [
+        "ARCHIVE_MANIFEST.json",
+        "session/session.json",
+        "session/session.json.bak",
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        let id = fixture(root.path(), PRIVATE, 1);
+        let foreign = fixture(root.path(), "Foreign ZIP identity preserved", 1);
+        let aid = "a".repeat(32);
+        let folder = root.path().join("archives");
+        fs::create_dir(&folder).unwrap();
+        let path = folder.join(format!("{aid}.zip"));
+        let mut zip = zip::ZipWriter::new(fs::File::create(&path).unwrap());
+        zip.start_file(name, zip::write::SimpleFileOptions::default())
+            .unwrap();
+        let value = if name == "ARCHIVE_MANIFEST.json" {
+            serde_json::json!({"meetingId":foreign,"session":{"id":foreign}})
+        } else {
+            serde_json::json!({"id":foreign})
+        };
+        zip.write_all(&serde_json::to_vec(&value).unwrap()).unwrap();
+        zip.finish().unwrap();
+        let bytes = fs::read(&path).unwrap();
+        let cancel = AtomicBool::new(false);
+        assert!(archive::preview_erasure(root.path(), &id, &cancel).is_err());
+        extra(
+            &folder.join(format!("{aid}.pending.json")),
+            &serde_json::to_vec(&serde_json::json!({"meetingId":id,"kind":"whole-meeting"}))
+                .unwrap(),
+        );
+        assert!(archive::preview_erasure(root.path(), &id, &cancel).is_err());
+        assert_eq!(fs::read(path).unwrap(), bytes);
+    }
+}
+
 /// A short native fixture is erasable directly while automatic retention remains archive-only.
 #[test]
 fn a_new_two_second_meeting_can_be_erased_without_archival_age_or_model_service() {

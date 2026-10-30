@@ -61,11 +61,57 @@ clean final-head review. The PR was returned to draft while these were corrected
 Function-level erasure capability, inventory and synthetic-fixture intent was
 also documented. The documentation coverage requirement remains 80%; only a
 fresh provider result can establish the new coverage and clean-review status.
-The current UI suite passes all 234 tests plus TypeScript/production build.
-Targeted core tests pass 15 erasure cases; native annotation-fence and transition
-regressions pass. The corrected local source now passes 367 full workspace/all-target Rust tests
+The preceding published candidate02 passed all 234 UI tests plus TypeScript/production build.
+Its targeted core suite passed 15 erasure cases; native annotation-fence and transition
+regressions passed. That source passed 367 full workspace/all-target Rust tests
 (two existing special entry points ignored), all 234 frontend tests,
 TypeScript/production build, formatting, Clippy with warnings as errors and a
 fresh sequential verify.ps1 (47 PCM, 35 notes, 28 templates, 8 agent checks and
 monitor). This result does not replace fresh target CI or clean external reviews.
 No real meeting was used.
+
+## Further complete-review corrections
+
+Maintenance can hold a source snapshot after its session lease ends. Every native
+search-index update now revalidates the source identity while holding shared index
+admission through the write. Explicit erasure holds exclusive admission across
+source removal and cache purging. A delayed restore/audio-archive snapshot cannot
+recreate erased transcript content. The regression failed before this correction
+for the actual native and archived snapshot forms.
+
+A canceled archive writer can leave a ZIP without its final archive manifest.
+Validated pending attribution now permits its explicit removal. Available ZIP,
+session and backup identities must still agree; readable foreign identities and
+unattributed ZIPs remain blocked. Real cancellation of the synthetic archive
+writer failed to reach erasure preview before the correction.
+
+Interrupted atomic metadata is parsed by bounded JSON structure, including a
+complete meetingId field in an otherwise EOF-truncated record. IDs embedded in
+titles, paths or quoted JSON are never deletion authority. Foreign records remain
+byte-identical. Malformed ordinary non-temporary records still fail closed.
+Unassignable temporary remnants are preserved and their count is displayed before
+confirmation; they are explicitly outside the claimed removal of attributed data.
+A changed count invalidates the preview. Their contents cannot be claimed erased.
+
+After three consecutive failed/missing/unknown status replies, the erasure dialog
+stops automatic retries and requests cancellation. It retains the exact native
+job and blocks a new deletion until a known terminal status is actually observed.
+An explicit status retry remains available; cancellation acknowledgment alone
+never calls the stopped/completed callbacks. Synthetic failure/recovery and safe
+focus tests cover this path. The former observer continued polling indefinitely.
+
+The annotation-admission fixture now acquires the real erasure OS lease before
+invoking a second Service's metadata/speaker command. Both must refuse with source
+bytes intact; both succeed after release. This removes the competing lock probe
+and scheduler-dependent two-second fixture deadline. It remains synthetic
+two-Service/OS-lock coverage, without a separate-process runtime claim.
+
+The current corrected source passed 371 Rust workspace/all-target tests (the two
+existing explicit special entry points normally ignored), 236 frontend tests,
+TypeScript/production build, Rust/frontend formatting and Clippy with warnings
+as errors. Eighteen synthetic core erasure tests passed. A sequential verify.ps1
+passed all 47 PCM, 35 notes, 28 template and 8 agent checks plus monitor.
+The real rendered dialog was checked with synthetic IPC at 1280px and 390px,
+including light/dark warning disclosure, bounded status failure and a later known
+cancellation. Neither viewport overflowed. No real meeting or native application
+was erased; these are not hardware, separate-process or endurance results.

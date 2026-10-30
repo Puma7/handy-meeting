@@ -264,8 +264,18 @@ pub(super) fn search(
 ) -> Result<SearchPage, String> {
     LibraryIndex::open(root).and_then(|index|index.search(query,offset,limit)).map_err(|_|"Search is unavailable. Update the local index; original sessions are preserved. / Suche nicht verfügbar. Bitte den lokalen Suchindex aktualisieren.".into())
 }
+/// Retain index admission from source revalidation through upsert, so a maintenance
+/// snapshot delayed past erasure cannot restore content to a newly created cache.
 pub(super) fn update(root: &Path, data: &SessionData) -> Result<(), String> {
     let mut index = LibraryIndex::open(root).map_err(|_| "The search index is unavailable")?;
+    if !crate::valid_legacy_id(&data.id) {
+        crate::validate_id(&data.id)?;
+        let current = meeting_core::inspect_manifest(&root.join("sessions").join(&data.id))
+            .map_err(|_| "Meeting source is no longer available; index update refused")?;
+        if current.id != data.id {
+            return Err("Meeting source identity changed; index update refused".into());
+        }
+    }
     let meta = metadata::read(root, &data.id)
         .map_err(|_| "Saved meeting labels could not be read; originals are preserved")?;
     index
