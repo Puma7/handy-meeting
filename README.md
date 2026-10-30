@@ -58,6 +58,8 @@ Every statement in a summary links to an existing transcript section and a verba
 
 For summaries you need a local text model as well: **Ollama** or **LM Studio**. The app finds both on this computer, suggests Gemma 4 E2B/E4B according to your memory and can download the suggestion through Ollama. Speech models and text models are different things; a speech model alone writes no notes.
 
+Live summaries keep the selected local model reserved until the final summary is saved; failed finalization keeps it available for retry. LM Studio requires native REST v1 support and a confirmed app-owned instance. See the [provider requirements and outstanding real-model validation](docs/validation/local-model-residency-20261030.md).
+
 ## Privacy and limits
 
 - **Audio stays local.** Speech recognition runs in the app's own local worker processes and reuses Handy's model files.

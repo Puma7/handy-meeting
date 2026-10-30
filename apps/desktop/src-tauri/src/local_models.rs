@@ -197,6 +197,45 @@ fn ollama_root() -> String {
     ollama_root_from(std::env::var("OLLAMA_HOST").ok().as_deref())
 }
 
+/// Only the configured loopback provider addresses opt into native model management.
+/// Other OpenAI-compatible local servers retain their existing transport behavior.
+pub(crate) fn provider_for_endpoint(
+    endpoint: &str,
+) -> Option<meeting_notes::residency::LocalProvider> {
+    fn address(value: &str) -> Option<(String, u16, String)> {
+        let url = url::Url::parse(value).ok()?;
+        if url.scheme() != "http"
+            || !url.username().is_empty()
+            || url.password().is_some()
+            || url.query().is_some()
+            || url.fragment().is_some()
+        {
+            return None;
+        }
+        match url.host()? {
+            url::Host::Domain("localhost") => (),
+            url::Host::Ipv4(ip) if ip.is_loopback() => (),
+            url::Host::Ipv6(ip) if ip.is_loopback() => (),
+            _ => return None,
+        }
+        Some((
+            url.scheme().into(),
+            url.port_or_known_default()?,
+            url.path().trim_end_matches('/').into(),
+        ))
+    }
+    let selected = address(endpoint)?;
+    let ollama = format!("{}v1/", ollama_root());
+    if address(&ollama).as_ref() == Some(&selected) {
+        return Some(meeting_notes::residency::LocalProvider::Ollama);
+    }
+    let lm = dirs::home_dir()
+        .map(|home| lm_studio_endpoint(&home))
+        .unwrap_or_else(|| LM_STUDIO_ENDPOINT.into());
+    (address(&lm).as_ref() == Some(&selected))
+        .then_some(meeting_notes::residency::LocalProvider::LmStudio)
+}
+
 /// Reads just LM Studio's bounded server configuration, never conversations or credentials.
 /// A custom bind address does not grant remote access: only its port is used on loopback.
 fn lm_studio_endpoint(home: &Path) -> String {

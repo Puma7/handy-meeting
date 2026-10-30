@@ -53,6 +53,8 @@ Jede Aussage einer Zusammenfassung verweist auf einen vorhandenen Transkriptabsc
 
 Für Zusammenfassungen braucht es zusätzlich ein lokales Textmodell: **Ollama** oder **LM Studio**. Die App findet beide auf diesem Computer, schlägt passend zum Arbeitsspeicher Gemma 4 E2B/E4B vor und kann den Vorschlag über Ollama laden. Ein Sprachmodell allein schreibt keine Notizen.
 
+Live-Zusammenfassungen halten das gewählte lokale Modell bis zum gespeicherten Abschluss reserviert; bei fehlgeschlagenem Abschluss bleibt es für die Wiederaufnahme verfügbar. LM Studio benötigt native REST-v1-Unterstützung und eine bestätigte eigene Modellinstanz. Siehe [Anbietervoraussetzungen und noch offene echte Modellprüfung](docs/validation/local-model-residency-20261030.md).
+
 ## Datenschutz und Grenzen
 
 - **Audio bleibt lokal.** Die Spracherkennung läuft in eigenen lokalen Prozessen und nutzt Handys Modelldateien.

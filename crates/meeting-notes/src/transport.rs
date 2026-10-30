@@ -41,10 +41,11 @@ pub struct TextClient {
     /// The address actually requested. For `localhost` it keeps the name, which
     /// connects to 127.0.0.1 or ::1 (whichever accepts) without DNS.
     target: Url,
-    model: String,
+    pub(crate) model: String,
     key: Zeroizing<String>,
     local: bool,
     runtime: tokio::runtime::Runtime,
+    residency: Option<std::sync::Arc<crate::residency::ModelLease>>,
 }
 
 impl TextClient {
@@ -114,7 +115,59 @@ impl TextClient {
             runtime: tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()?,
+            residency: None,
         })
+    }
+    /// Associates this text-only client with an already validated local model reservation.
+    pub fn with_residency(
+        mut self,
+        lease: std::sync::Arc<crate::residency::ModelLease>,
+    ) -> Result<Self> {
+        ensure!(
+            lease.matches_client(&self),
+            "Modellreservierung passt nicht zur lokalen Verbindung."
+        );
+        self.residency = Some(lease);
+        Ok(self)
+    }
+    pub(crate) fn local_identity(&self) -> Result<String> {
+        ensure!(
+            self.local,
+            "Modellreservierungen sind ausschließlich lokal verfügbar."
+        );
+        ensure!(
+            self.target.path().ends_with("/v1/"),
+            "Lokale Modellverwaltung benötigt eine /v1/-Adresse."
+        );
+        Ok(format!("{}\0{}", self.target, self.model))
+    }
+    pub(crate) fn local_auth_digest(&self) -> [u8; 32] {
+        use sha2::Digest;
+        sha2::Sha256::digest(self.key.as_bytes()).into()
+    }
+    /// Fixed native model-management routes reuse every local transport restriction.
+    pub(crate) fn model_request(
+        &self,
+        path: &str,
+        body: Option<&serde_json::Value>,
+        control: &AnalysisControl,
+        timeout: Duration,
+    ) -> Result<serde_json::Value> {
+        self.local_identity()?;
+        ensure!(
+            matches!(
+                path,
+                "api/ps"
+                    | "api/generate"
+                    | "api/v1/models"
+                    | "api/v1/models/load"
+                    | "api/v1/models/unload"
+                    | "api/chat"
+            ),
+            "Unbekannter lokaler Modellvorgang."
+        );
+        self.request(&format!("../{path}"), body, control, timeout)
+            .map_err(|error| if crate::is_cancelled(&error) { error } else { anyhow::anyhow!("Lokale Modellverwaltung fehlgeschlagen. Dienst, Modell und native API-Unterstützung prüfen; Audio und gespeicherte Ergebnisse bleiben erhalten.") })
     }
     fn request(
         &self,
@@ -135,7 +188,7 @@ impl TextClient {
         }
         self.runtime.block_on(async {
             let mut response = await_cancellable(request.timeout(timeout).send(), control).await?;
-            if path == "chat/completions" {
+            if matches!(path, "chat/completions" | "../api/chat") {
                 let mut diagnostic = self.diagnostic.borrow_mut();
                 diagnostic.http_status = Some(response.status().as_u16());
                 // A successful status stays a transport outcome until the whole body is
@@ -163,7 +216,7 @@ impl TextClient {
             }
             control.check()?;
             let value = serde_json::from_slice(&bytes);
-            if path == "chat/completions" {
+            if matches!(path, "chat/completions" | "../api/chat") {
                 self.diagnostic.borrow_mut().result = if value.is_ok() {
                     crate::diagnostics::RequestResult::Envelope
                 } else {
@@ -283,12 +336,47 @@ impl TextClient {
         if self.base.host_str() == Some("openrouter.ai") {
             body["provider"] = serde_json::json!({"data_collection":"deny","allow_fallbacks":false,"require_parameters":true});
         }
-        let response = self.request(
-            "chat/completions",
-            Some(&body),
-            control,
-            Duration::from_secs(300),
-        )?;
+        let response = if let Some(lease) = &self.residency {
+            lease.prepare(control)?;
+            let (provider, model) = lease.inference()?;
+            match provider {
+                crate::residency::LocalProvider::Ollama => {
+                    // Native chat supports keep_alive on older Ollama versions too.
+                    // The same fixed messages/schema/budget are used; only the envelope differs.
+                    let native = serde_json::json!({"model":model,"stream":false,
+                        "messages":body["messages"],"format":schema,"keep_alive":-1,
+                        "options":{"num_predict":max_tokens,"temperature":0}});
+                    let result = self.model_request(
+                        "api/chat",
+                        Some(&native),
+                        control,
+                        Duration::from_secs(300),
+                    )?;
+                    ensure!(
+                        result["done"] == true,
+                        "KI-Antwort wurde nicht vollständig abgeschlossen."
+                    );
+                    serde_json::json!({"choices":[{"finish_reason":result["done_reason"],"message":result["message"]}],
+                        "usage":{"prompt_tokens":result["prompt_eval_count"],"completion_tokens":result["eval_count"]}})
+                }
+                crate::residency::LocalProvider::LmStudio => {
+                    body["model"] = model.into();
+                    self.request(
+                        "chat/completions",
+                        Some(&body),
+                        control,
+                        Duration::from_secs(300),
+                    )?
+                }
+            }
+        } else {
+            self.request(
+                "chat/completions",
+                Some(&body),
+                control,
+                Duration::from_secs(300),
+            )?
+        };
         let choice = &response["choices"][0];
         {
             use crate::diagnostics::{Finish, RequestResult};
