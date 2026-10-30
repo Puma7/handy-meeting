@@ -58,3 +58,29 @@ ELF dependency. The extracted catalog executable has no hard libappindicator3
 dependency; the DEB's package-level dependency list also serves its tray GUI.
 This avoids installing the legacy conflicting package. A subsequent real Linux
 catalog/inference run remains required; the dependency fix is not a passing run.
+
+## Current macOS minimum and completed target CI
+
+The macOS package built on head `6a541d0e06fc22588b463a0369b181bcb69ba8c0`
+requires **macOS 15.0 or later** on both Intel and Apple Silicon. The packager and
+the current [portable-installation guide](../RUST_PORTABLE.md) declare 15.0.
+The actual Intel DMG from [the completed current CI job](https://github.com/Puma7/meeting-for-handy/actions/runs/41036718033/job/123999442517)
+was also inspected without mounting, installing or executing it. Its
+`Meeting for Handy.app/Contents/Info.plist` reports `LSMinimumSystemVersion=15.0`
+and application version `1.0.7`. The downloaded artifact (ID `12969339081`) matched
+its published SHA256
+`d8a3a24b073e67c6e92494a43cfae9f03bbe6e639983851c4262b7c447986dd8`.
+This is package-metadata evidence; no macOS 13 or 14 runtime test was performed.
+
+The macOS 13 statement in the historical `TEST_REPORT.md` belongs to its explicitly
+labelled Beta 2 CI/package record. It does not describe the current 1.0.7 package
+or extend current support to macOS 13/14. That historical report remains unchanged.
+
+On the same `6a541d0` head, current Linux, Windows, Intel and
+[Apple Silicon](https://github.com/Puma7/meeting-for-handy/actions/runs/41036718033/job/123999442411)
+checks completed successfully. Both downloaded model-free macOS proof artifacts
+matched their published digests and the checked source fingerprint. They include
+the real generated-speech CPU recognition, preservation/restart checks and native
+credential-store checks. These are CI results for that exact head, not physical
+microphone/loopback capture, permission-dialog interaction, GPU or a combined
+two-hour meeting. Subsequent commits still require their own current CI result.
