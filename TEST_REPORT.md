@@ -887,3 +887,13 @@ Alle 237 Frontendtests sowie TypeScript und Produktionsbuild bestehen lokal.
 Eine sichtbare 600px-Prüfung belegt die korrigierte Ebenenfolge ohne seitlichen
 Überlauf. Native Quellen und Abhängigkeiten bleiben unverändert; dies ist kein
 Hardware-, Modellserver-, GPU- oder Langzeitnachweis.
+
+
+### Oberflaechen-Nachweis Kandidat10 vom 30.10.2026
+
+Der CPU-Messwert bleibt in schmalen Fenstern ueber Rechnerdetails erreichbar,
+einschliesslich hoher Last und fehlender Messdaten. Drei synthetische Vorherfaelle
+schlugen fehl; alle 240 Frontendtests sowie TypeScript/Produktionsbuild bestehen.
+Die sichtbare 600px-Pruefung verwendet nur kuenstliche CPU-28%-/RAM-Werte und zeigt
+den weiterhin ausdruecklich ungemessenen GPU-Zustand. Native Quellen bleiben
+byteunveraendert. Hardware-, Modellserver-, GPU- und Langzeitgrenzen bleiben offen.

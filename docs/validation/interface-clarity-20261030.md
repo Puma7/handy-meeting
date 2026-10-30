@@ -146,3 +146,17 @@ change, then verifies the dialog paints above them and the open card still
 paints above ordinary content after the dialog closes, without horizontal
 overflow. The browser and IPC data are synthetic; no real maintenance or model
 operation is performed. Native code, dependencies and deadlines are unchanged.
+
+
+## Candidate10: CPU details at narrow widths
+
+At widths up to 740px, the compact navigation hides the regular recording facts.
+The separate computer-details disclosure now includes the measured CPU percentage,
+the same high-load threshold and an explicit unavailable state. It remains a
+reading of the entire computer, not a measurement of this application's CPU use.
+Three synthetic regressions for high, ordinary and unavailable CPU values failed
+before the correction. The complete frontend suite now passes 240 tests, together
+with TypeScript/production build. Native source and dependency bytes are unchanged.
+A rendered synthetic 600px check confirmed the regular facts hidden while the
+opened disclosure showed CPU 28%, memory amounts and the unmeasured-GPU limitation,
+with no horizontal document overflow. No real hardware reading is claimed.

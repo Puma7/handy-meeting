@@ -87,6 +87,37 @@ it("reopens capture warnings only when a new warning arrives", async () => {
 });
 
 describe("recording status in the sidebar (synthetic IPC)", () => {
+  it.each([
+    { value: 94.6, expected: "CPU: 95 % · hohe Auslastung", high: true },
+    { value: 20, expected: "CPU: 20 %", high: false },
+    { value: null, expected: "CPU: nicht gemessen", high: false },
+  ])(
+    "keeps CPU state available inside computer details ($expected)",
+    async ({ value, expected, high }) => {
+      render(
+        <RecordingStatus
+          locale="de"
+          paused={false}
+          durationMs={1000}
+          parts={[]}
+          warningCount={0}
+          microphoneSilent={false}
+          microphoneMuted={false}
+          backlogMs={0}
+          getSystemLoad={vi
+            .fn()
+            .mockResolvedValue({ ...load, cpuPercent: value })}
+          onOpen={() => undefined}
+        />,
+      );
+      const summary = screen.getByText("Rechnerdetails");
+      await userEvent.click(summary);
+      const details = summary.closest("details")!;
+      expect(details.closest(".sidebar-recording-facts")).toBeNull();
+      const reading = await within(details).findByText(expected);
+      expect(reading.hasAttribute("data-high")).toBe(high);
+    },
+  );
   it("names the newest recognized words and cuts long text at a word", () => {
     expect(recentText([part(30, "Später"), part(0, "Früher")])).toBe("Später");
     const long = "Wort ".repeat(40).trim() + " Ende";

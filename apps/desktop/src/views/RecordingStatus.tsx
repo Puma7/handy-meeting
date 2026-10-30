@@ -203,6 +203,14 @@ export default function RecordingStatus({
               ? "Auslastung des ganzen Computers"
               : "Load of the whole computer"}
           </p>
+          <p data-high={(cpu ?? 0) >= HIGH_LOAD_PERCENT || undefined}>
+            CPU:{" "}
+            {cpu === null
+              ? de
+                ? "nicht gemessen"
+                : "not measured"
+              : `${number(cpu, 0)} %${cpu >= HIGH_LOAD_PERCENT ? (de ? " · hohe Auslastung" : " · high load") : ""}`}
+          </p>
           <p>
             {de ? "Arbeitsspeicher" : "Memory"}:{" "}
             {used === null || !total
