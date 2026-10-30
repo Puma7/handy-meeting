@@ -469,6 +469,43 @@ class ReferenceVerdicts(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Silent or mixed-up"):
             audio.verify(self.root)
 
+    def test_linux_signal_failure_reports_only_source_and_numeric_window_evidence(self):
+        """Identify a failing source/window without exposing PCM, paths or session identities."""
+        self.linux_fixture(counts=(144000, 144000))
+        self.rewrite_linux_signal("microphone", lambda data: bytes(3200) + data[3200:])
+        with self.assertRaisesRegex(ValueError, "Silent or mixed-up") as raised:
+            audio.verify(self.root)
+        message = str(raised.exception)
+        detail = json.loads(message.partition(": ")[2])
+        self.assertEqual(detail["source"], "microphone")
+        self.assertEqual(detail["startSample"], 0)
+        self.assertEqual(detail["endSample"], 4000)
+        self.assertEqual(detail["trackSamples"], 144000)
+        self.assertEqual(detail["expectedHz"], 1000)
+        self.assertEqual(detail["toleranceHz"], 60)
+        self.assertEqual(detail["minimumRmsExclusive"], 1000)
+        self.assertEqual(detail["sampleRate"], 16000)
+        self.assertFalse(detail["declaredStartup"])
+        self.assertGreater(detail["rms"], 1000)
+        self.assertLess(detail["hz"], 940)
+        self.assertNotIn(str(self.root), message)
+        self.assertNotIn("b" * 32, message)
+        self.assertTrue(all(isinstance(value, (int, float, bool))
+                            for key, value in detail.items() if key != "source"))
+
+    def test_linux_signal_failure_identifies_a_late_system_window(self):
+        """Retain the strict final-window check and expose where its signal actually failed."""
+        self.linux_fixture(counts=(144000, 144000))
+        self.rewrite_linux_signal("system", lambda data: data[:-16000] + bytes(16000))
+        with self.assertRaisesRegex(ValueError, "Silent or mixed-up") as raised:
+            audio.verify(self.root)
+        detail = json.loads(str(raised.exception).partition(": ")[2])
+        self.assertEqual(detail["source"], "system")
+        self.assertGreater(detail["startSample"], 7 * 16000)
+        self.assertLessEqual(detail["endSample"], 144000)
+        self.assertEqual(detail["expectedHz"], 440)
+        self.assertEqual(detail["toleranceHz"], 40)
+
     def test_linux_declared_startup_silence_is_separate_from_eight_seconds_of_tone(self):
         """A declared half-second prefix leaves eight real seconds for window verification."""
         self.linux_fixture(warnings=[audio.TIMING, "system" + audio.START])

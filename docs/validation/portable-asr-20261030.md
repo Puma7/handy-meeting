@@ -126,3 +126,31 @@ accepts one second of declared prefix plus eight seconds of tone in a nine-secon
 receipt, and rejects1.25seconds prefix at that same length. Startup gaps remain
 explicitly incomplete audio. The actual new Linux CI is required; no physical
 microphone, performance, GPU or endurance result is implied.
+
+## Candidate 15: numeric virtual-capture failure evidence
+
+The actual candidate 14 Linux run also failed the existing full-track signal
+check with "Silent or mixed-up virtual source window". Its final capture flag
+was complete and its only warning concerned approximate receipt timing. The
+failure did not identify which source/window failed, and no raw PCM was uploaded.
+The cause remains unproven; neither playback latency nor a recorder defect is
+claimed from that message.
+
+The verifier now adds a bounded JSON diagnostic to that same failure: fixed
+source name, window start/end sample, track length, sample rate, measured RMS
+and zero-crossing frequency, required frequency/tolerance, unchanged minimum
+RMS, and whether this source declared startup padding. This contains no PCM,
+audio filenames, storage paths, meeting identities or transcript content.
+Synthetic early-microphone and late-system failures verify the reported source
+and position; the privacy check verifies that only the fixed source label and
+numeric/boolean fields are exposed. The former generic message failed both
+diagnostic regressions.
+
+All 118 Python checks ran with 117 passes and one regular Unix-only skip under
+Windows. This changes diagnostics only: the 250 ms overlapping windows through
+the final sample, eight seconds of actual tone, source-specific zero-prefix
+exception, RMS/frequency, 8–10 second track and 500 ms difference limits are
+unchanged. The recording fixture, native/frontend sources and the complete
+previously approved historical TEST_REPORT.md remain byte-identical to candidate
+14. A fresh actual Linux run is required to obtain evidence for the remaining
+failure; local synthetic success is not a successful device/target CI result.

@@ -21,8 +21,8 @@ def require(condition, message):
         raise ValueError(message)
 
 
-def verify_tone(samples, frequency, tolerance, declared_startup):
-    """Check overlapping250ms windows through the final sample; skip only declared zero prefix."""
+def verify_tone(samples, frequency, tolerance, declared_startup, source):
+    """Check every overlapping window; failures expose only its source and numeric signal evidence."""
     start = next((i for i, sample in enumerate(samples) if sample), len(samples)) if declared_startup else 0
     # The capture is8–10seconds including its estimated startup padding. Even a
     # declared gap must leave eight seconds of tone, allowing its first phase-zero sample.
@@ -37,7 +37,13 @@ def verify_tone(samples, frequency, tolerance, declared_startup):
         rms = math.sqrt(sum(s * s for s in window) / len(window))
         crossings = sum((a < 0) != (b < 0) for a, b in pairwise(window))
         hz = crossings * 16000 / 2 / len(window)
-        require(rms > 1000 and abs(hz - frequency) < tolerance, "Silent or mixed-up virtual source window")
+        detail = {"source": source, "startSample": offset, "endSample": offset + len(window),
+                  "trackSamples": len(samples), "sampleRate": 16000,
+                  "rms": round(rms, 3), "hz": round(hz, 3), "expectedHz": frequency,
+                  "toleranceHz": tolerance, "minimumRmsExclusive": 1000,
+                  "declaredStartup": declared_startup, "startupSamples": start}
+        require(rms > 1000 and abs(hz - frequency) < tolerance,
+                "Silent or mixed-up virtual source window: " + json.dumps(detail, sort_keys=True))
         levels.append(rms)
         frequencies.append(hz)
     return {"rms": round(sum(levels) / len(levels)), "hz": round(sum(frequencies) / len(frequencies)),
@@ -84,7 +90,7 @@ def verify(root):
                 "Confirmed audio changed or is incomplete")
         require(result[source + "Ms"] == count * 1000 // 16000, "Result duration differs from saved PCM")
         samples = struct.unpack(f"<{count}h", data)
-        tone = verify_tone(samples, frequency, tolerance, source + START in warnings)
+        tone = verify_tone(samples, frequency, tolerance, source + START in warnings, source)
         tracks[source] = {"durationMs": result[source + "Ms"], **tone}
     return {"success": True, "verdict": "passed-with-startup-gaps" if startup_gaps else "passed",
             "completeCapture": not result["captureIncomplete"], "startupGaps": startup_gaps,
