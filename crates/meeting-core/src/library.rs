@@ -18,6 +18,11 @@ const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS meetings (
     title, body, context, tokenize='unicode61 remove_diacritics 2');
   CREATE TABLE IF NOT EXISTS search_rows(row_id INTEGER PRIMARY KEY, meeting_id TEXT NOT NULL);
   CREATE INDEX IF NOT EXISTS search_rows_meeting ON search_rows(meeting_id);";
+// A compatible, content-free cache identity, not a meeting or schema version.
+// Recreated SQLite caches get a new identity even if a different app process
+// still remembers a previously completed scan.
+const IDENTITY_SCHEMA: &str = "CREATE TABLE IF NOT EXISTS index_identity (
+    singleton INTEGER PRIMARY KEY CHECK(singleton=1), generation TEXT NOT NULL);";
 
 pub struct LibraryIndex {
     db: Connection,
@@ -91,6 +96,9 @@ impl LibraryIndex {
         if quick != "ok" {
             return Ok(true);
         }
+        if !valid_cache_identity(&self.stored_cache_identity()?) {
+            return Ok(true);
+        }
         match self.db.execute(
             "INSERT INTO transcript_search(transcript_search) VALUES('integrity-check')",
             [],
@@ -124,7 +132,37 @@ impl LibraryIndex {
         if version != SCHEMA_VERSION {
             Self::upgrade(&db)?;
         }
+        db.execute_batch(IDENTITY_SCHEMA)?;
+        let has_identity: bool = db.query_row(
+            "SELECT EXISTS(SELECT 1 FROM index_identity WHERE singleton=1)",
+            [],
+            |row| row.get(0),
+        )?;
+        if !has_identity {
+            db.execute(
+                "INSERT OR IGNORE INTO index_identity(singleton,generation) VALUES(1,?1)",
+                [uuid::Uuid::new_v4().simple().to_string()],
+            )?;
+        }
         Ok(Self { db, _lease: lease })
+    }
+    /// Binds a completed scan to this actual derived database. Its existing shared
+    /// lease prevents erasure from replacing the cache until this handle closes.
+    pub fn cache_identity(&self) -> Result<String> {
+        let value = self.stored_cache_identity()?;
+        if !valid_cache_identity(&value) {
+            return Err("Invalid derived index identity; original sessions are preserved".into());
+        }
+        Ok(value)
+    }
+    /// Reads the cache token separately so an explicit rebuild can detect an
+    /// invalid token without converting SQLite access errors into corruption.
+    fn stored_cache_identity(&self) -> Result<String> {
+        Ok(self.db.query_row(
+            "SELECT generation FROM index_identity WHERE singleton=1",
+            [],
+            |row| row.get(0),
+        )?)
     }
     /// The index is derived from the session folders. An index of version 2 or older is
     /// converted row by row (title context added to section rows; older layouts also get
@@ -155,7 +193,8 @@ impl LibraryIndex {
                 )?;
             } else {
                 db.execute_batch(
-                    "DROP TABLE IF EXISTS transcript_search; DROP TABLE IF EXISTS search_rows;
+                    "DROP TABLE IF EXISTS index_identity;
+                     DROP TABLE IF EXISTS transcript_search; DROP TABLE IF EXISTS search_rows;
                      DROP TABLE IF EXISTS meetings;",
                 )?;
                 db.execute_batch(SCHEMA)?;
@@ -375,6 +414,10 @@ fn hit(row: &rusqlite::Row<'_>) -> rusqlite::Result<SearchHit> {
     })
 }
 
+/// Cache identities are opaque native tokens, never session paths or content.
+fn valid_cache_identity(value: &str) -> bool {
+    value.len() == 32 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
 fn unreadable_database(error: &(dyn std::error::Error + 'static)) -> bool {
     error.downcast_ref::<rusqlite::Error>().is_some_and(|e| {
         matches!(
@@ -412,6 +455,32 @@ mod index_admission_tests {
         atomic::{AtomicBool, Ordering},
         Arc,
     };
+
+    #[test]
+    /// Existing caches retain their token; explicit rebuild preserves invalid
+    /// evidence aside and creates a new identity without touching originals.
+    fn cache_identity_survives_reopen_and_invalid_identity_is_rebuildable() {
+        let root = tempfile::tempdir().unwrap();
+        let original = root.path().join("synthetic-original.txt");
+        fs::write(&original, b"retained synthetic original").unwrap();
+        let index = LibraryIndex::open(root.path()).unwrap();
+        let identity = index.cache_identity().unwrap();
+        drop(index);
+        let index = LibraryIndex::open(root.path()).unwrap();
+        assert_eq!(index.cache_identity().unwrap(), identity);
+        index
+            .db
+            .execute(
+                "UPDATE index_identity SET generation='invalid' WHERE singleton=1",
+                [],
+            )
+            .unwrap();
+        drop(index);
+        let (rebuilt, retained) = LibraryIndex::open_for_rebuild(root.path()).unwrap();
+        assert!(retained.is_some());
+        assert_ne!(rebuilt.cache_identity().unwrap(), identity);
+        assert_eq!(fs::read(original).unwrap(), b"retained synthetic original");
+    }
 
     #[test]
     /// Release an actual shared OS lease only after exclusive admission observes

@@ -251,3 +251,44 @@ and TypeScript/production build apply to those unchanged bytes and were not
 rerun here. No real user meeting, external export, provider or installed program
 was changed. All previously documented erasure and model-residency integration
 limits remain in force.
+
+## Candidate 07: history completeness after erasure
+
+The erasure worker now invalidates completed search progress before removing
+the derived cache, while maintenance admission is still held. A retained
+meeting's later metadata update may recreate a partial cache, but that cache
+must not hide other original meetings. Completed scans are also bound to a
+content-free identity stored inside their actual SQLite database. History
+checks that identity and holds the same shared OS index lease through every
+result page. A missing, invalid or replaced cache falls back to the original
+session folders, including in another Service that remembers an older scan.
+
+This adds compatible derived-cache metadata; the primary session format,
+existing search schema version and application version are unchanged. A
+recreated cache receives a new identity. Ordinary reopening preserves it. An
+explicit rebuild retains an invalid cache aside and creates a new identity;
+original session files are neither repaired nor removed by that operation.
+The identity is part of the SQLite cache already covered by erasure, with no
+new content-bearing file or erasure inventory location.
+
+The native regression uses three synthetic meetings and two independent
+Services. After both complete their scans, one erases the selected meeting
+through the actual deletion worker. Updating only one retained meeting then
+recreates a partial index. Both histories must still show both retained
+meetings and exclude the erased one; the retained manifests remain byte-equal.
+The old code failed that assertion in both Services. The corrected code passes,
+also proving that an unchanged fully scanned cache still uses the indexed path.
+This is a same-process two-Service test using real OS file leases, not an
+actual two-process, physical-device or provider test. An initial zero-test
+invocation and a fixture compilation error are retained separately and are not
+application regression evidence.
+
+All 384 Rust workspace/all-target tests pass with warnings denied; the same
+two existing special entry points remain normally ignored. The 24 core erasure
+cases remain covered. Frontend sources, locked dependencies, protection and
+review rules, and the entire historical TEST_REPORT.md remain byte-identical to
+published candidate 06. The earlier 238 frontend tests and TypeScript/production
+build are evidence for those unchanged bytes, not newly executed suites. No real
+user meeting, model, external export or installed program was changed. All
+previous erasure boundaries and the pending integration with model residency
+remain in force.

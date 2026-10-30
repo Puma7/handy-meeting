@@ -90,31 +90,30 @@ impl Service {
     /// Build summaries from a completed index or session folders, merging current and known
     /// legacy sessions; omit full transcript parts from the returned list.
     pub(crate) fn history(&self) -> AppResult<Vec<MeetingView>> {
-        // Only an index this process has fully scanned is complete; while a scan runs, failed
-        // or was cancelled, the session folders themselves are the history.
-        let index_complete = self.root.join("library-index/library.sqlite3").exists()
-            && self
-                .library_jobs
-                .snapshot()
-                .is_some_and(|p| p.status == "complete");
-        let mut sessions = if index_complete {
-            let mut all = Vec::new();
-            loop {
-                let page = library_service::search(&self.root, "", all.len() as u64, 100)?;
-                let count = page.items.len();
-                for item in page.items {
-                    all.push(item.session_summary().map_err(|_| {
+        // A full scan must belong to this same cache, including after another
+        // process erased and partially recreated it. Keep its shared lease through
+        // all pages; otherwise the authoritative session folders supply history.
+        let mut sessions =
+            if let Some(index) = self.library_jobs.completed_history_index(&self.root) {
+                let mut all = Vec::new();
+                loop {
+                    let page = index.search("", all.len() as u64, 100).map_err(|_| {
                         "The local history index is invalid; originals are preserved"
-                    })?);
+                    })?;
+                    let count = page.items.len();
+                    for item in page.items {
+                        all.push(item.session_summary().map_err(|_| {
+                            "The local history index is invalid; originals are preserved"
+                        })?);
+                    }
+                    if count == 0 || all.len() as u64 >= page.total {
+                        break all;
+                    }
                 }
-                if count == 0 || all.len() as u64 >= page.total {
-                    break all;
-                }
-            }
-        } else {
-            meeting_core::list_sessions(&self.root.join("sessions"))
-                .map_err(|_| "Sitzungshistorie konnte nicht gelesen werden.")?
-        };
+            } else {
+                meeting_core::list_sessions(&self.root.join("sessions"))
+                    .map_err(|_| "Sitzungshistorie konnte nicht gelesen werden.")?
+            };
         let (current, legacy) = {
             let inner = self.lock()?;
             (

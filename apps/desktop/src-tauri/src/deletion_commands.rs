@@ -131,6 +131,7 @@ fn start_confirmed_erasure(
             owned.live_notes.forget(&meeting_id)?;
             owned.notes_jobs.forget(&meeting_id)?;
             owned.speaker_jobs.forget(&meeting_id)?;
+            owned.library_jobs.invalidate_finished();
             meeting_core::archive::erase_meeting(
                 &owned.root,
                 &meeting_id,
@@ -214,6 +215,105 @@ mod tests {
             std::thread::sleep(Duration::from_millis(5));
         }
     }
+    #[test]
+    /// Both Services completed a real scan before erasure. Recreating only one
+    /// retained row must not hide the other original when the UI rebuild is absent.
+    fn erasure_never_reuses_a_completed_scan_for_a_recreated_partial_index() {
+        let root = std::env::temp_dir().join(format!(
+            "handymeeting-erasure-history-{}",
+            meeting_notes::new_job_id()
+        ));
+        let mut snapshots = vec![];
+        for title in [
+            "Synthetic erased",
+            "Synthetic retained A",
+            "Synthetic retained B",
+        ] {
+            let store =
+                meeting_core::SessionStore::create(&root.join("sessions"), title, "m", "s", None)
+                    .unwrap();
+            store.set_status("complete").unwrap();
+            snapshots.push(store.snapshot().unwrap());
+        }
+        let first = Arc::new(Service::new(root.clone()).unwrap());
+        let second = Arc::new(Service::new(root.clone()).unwrap());
+        let wait = |jobs: &crate::library_service::Jobs, id: &str| {
+            let deadline = Instant::now() + Duration::from_secs(10);
+            loop {
+                let state = jobs.snapshot().unwrap();
+                assert_eq!(state.job_id, id);
+                if state.status != "running" {
+                    assert_eq!(state.status, "complete", "{:?}", state.error);
+                    break;
+                }
+                assert!(Instant::now() < deadline);
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        };
+        for service in [&first, &second] {
+            let job = service
+                .library_jobs
+                .start_scan(root.clone(), true, None)
+                .unwrap();
+            wait(&service.library_jobs, &job);
+            assert_eq!(service.history().unwrap().len(), 3);
+            assert!(
+                service
+                    .library_jobs
+                    .completed_history_index(&root)
+                    .is_some(),
+                "An unchanged fully scanned cache must still serve indexed history"
+            );
+        }
+        let retained_bytes: Vec<_> = snapshots[1..]
+            .iter()
+            .map(|data| {
+                let path = root.join("sessions").join(&data.id).join("session.json");
+                (path.clone(), std::fs::read(path).unwrap())
+            })
+            .collect();
+        let preview = meeting_core::archive::preview_erasure(
+            &root,
+            &snapshots[0].id,
+            &std::sync::atomic::AtomicBool::new(false),
+        )
+        .unwrap();
+        let guard = crate::retention_commands::reserve(&first).unwrap();
+        let job = start_confirmed_erasure(first.clone(), preview, guard).unwrap();
+        wait(&first.maintenance_jobs, &job);
+        assert!(!root.join("library-index/library.sqlite3").exists());
+        // A real metadata/update path can recreate one row before any full rebuild.
+        crate::library_service::update(&root, &snapshots[1]).unwrap();
+        let mut expected = snapshots[1..]
+            .iter()
+            .map(|data| data.id.clone())
+            .collect::<Vec<_>>();
+        expected.sort();
+        let actual: Vec<_> = [&first, &second]
+            .iter()
+            .map(|service| {
+                let mut ids = service
+                    .history()
+                    .unwrap()
+                    .into_iter()
+                    .map(|meeting| meeting.data.id)
+                    .collect::<Vec<_>>();
+                ids.sort();
+                ids
+            })
+            .collect();
+        assert_eq!(
+            actual,
+            vec![expected.clone(), expected],
+            "A recreated partial cache must not become a complete history in either Service"
+        );
+        assert!(first.library_jobs.snapshot().is_none());
+        assert!(second.library_jobs.snapshot().is_none());
+        for (path, bytes) in retained_bytes {
+            assert_eq!(std::fs::read(path).unwrap(), bytes);
+        }
+    }
+
     #[test]
     fn previews_bind_confirmation_to_one_meeting_and_are_single_use() {
         let rows = Previews::default();

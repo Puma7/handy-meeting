@@ -32,6 +32,7 @@ pub(super) struct Jobs {
     pub state: Mutex<Option<Progress>>,
     cancel: Mutex<Option<Arc<AtomicBool>>>,
     started: Mutex<Option<(String, Instant)>>,
+    indexed_cache: Mutex<Option<String>>,
 }
 #[derive(Clone, Copy)]
 enum JobPolicy {
@@ -47,6 +48,52 @@ impl JobPolicy {
     }
 }
 impl Jobs {
+    /// Forget only terminal search progress. Callers holding maintenance admission
+    /// invalidate it before destructive cache removal; active jobs retain control.
+    pub fn invalidate_finished(&self) {
+        if let Ok(mut state) = self.state.lock() {
+            if state
+                .as_ref()
+                .is_some_and(|progress| progress.status == "running")
+            {
+                return;
+            }
+            *state = None;
+        }
+        if let Ok(mut identity) = self.indexed_cache.lock() {
+            *identity = None;
+        }
+    }
+    /// A remembered completion is usable only for the same actual SQLite cache.
+    /// Return its still-leased handle through all history pages. Missing, invalid
+    /// or recreated caches fall back to original session folders in every Service.
+    pub fn completed_history_index(&self, root: &Path) -> Option<LibraryIndex> {
+        if self
+            .snapshot()
+            .is_none_or(|progress| progress.status != "complete")
+        {
+            return None;
+        }
+        let expected = self
+            .indexed_cache
+            .lock()
+            .ok()
+            .and_then(|value| value.clone());
+        let index = expected.and_then(|expected| {
+            if !root.join("library-index/library.sqlite3").exists() {
+                return None;
+            }
+            LibraryIndex::open(root).ok().filter(|index| {
+                index
+                    .cache_identity()
+                    .is_ok_and(|actual| actual == expected)
+            })
+        });
+        if index.is_none() {
+            self.invalidate_finished();
+        }
+        index
+    }
     pub fn update_work(&self, id: &str, done: u64, total: u64) {
         if let Ok(mut state) = self.state.lock() {
             if let Some(p) = state
@@ -182,6 +229,7 @@ impl Jobs {
         rebuild: bool,
         lease: Option<crate::operations::Lease>,
     ) -> Result<String, String> {
+        self.invalidate_finished();
         self.start_job("search-index", JobPolicy::Search, lease, move |id, jobs, cancel| {
                 let sessions = root.join("sessions");
                 let sessions = metadata::checked_directory(&sessions)?;
@@ -233,6 +281,7 @@ impl Jobs {
                     }
                 }
                 index.prune_missing_sessions(&sessions,cancel)?;
+                *jobs.indexed_cache.lock().map_err(|_|"Search completeness state is unavailable")?=Some(index.cache_identity()?);
                 if let Ok(mut state)=jobs.state.lock(){if let Some(p)=state.as_mut().filter(|p|p.job_id==id){p.total_tasks=p.confirmed_tasks;}}
                 Ok(())
         })
