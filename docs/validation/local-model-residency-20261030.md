@@ -27,7 +27,7 @@ The new component tests use synthetic loopback HTTP services. They cover virtual
 
 The idle regression fails with the previous unreserved client; the cancellation regression fails when a submitted native load is abandoned before its acknowledgement. Both pass with the corrected implementation.
 
-For published candidate02, the prescribed `verify.ps1` passed: 47 PCM, 35 notes, 28 template and 8 agent checks, plus monitor checks. The unchanged frontend passed 225 tests, TypeScript and production build. All-target Rust tests passed: 365 passed, zero failed, two existing dedicated entry points normally ignored (native credential-provider roundtrip and crash-writer child). Workspace/all-target Clippy passed with `-D warnings`, and formatting and diff checks passed. The final local run used four test threads and two build jobs; no test deadline changed.
+For published candidate 02, the prescribed `verify.ps1` passed: 47 PCM, 35 notes, 28 template and 8 agent checks, plus monitor checks. The unchanged frontend passed 225 tests, TypeScript and production build. All-target Rust tests passed: 365 passed, zero failed, two existing dedicated entry points normally ignored (native credential-provider roundtrip and crash-writer child). Workspace/all-target Clippy passed with `-D warnings`, and formatting and diff checks passed. The final local run used four test threads and two build jobs; no test deadline changed.
 
 A concurrent repeat of the legacy checks timed out during an agent exchange; the sequential repeat passed with the same check and unchanged deadline. The initial full Rust build exhausted local disk space; only this task's fresh build cache was removed, then the checks were rebuilt with debug symbols and incremental compilation disabled. Prior logs remain retained. No product test, warning policy or CI threshold was weakened.
 
@@ -57,7 +57,7 @@ an owner renews without inference, and failed renewal blocks text until retry.
 All 16 provider protocol tests passed in 60.09 seconds. These are not real-model
 residency, memory, performance, GPU, device or long-meeting measurements.
 
-Actual Ollama and configured LM Studio remained unreachable in probe05. The real
+Actual Ollama and configured LM Studio remained unreachable in probe 05. The real
 positive/nonbinding local reference is still required; the PR remains a draft.
 Unexpected app suspension longer than the finite lease, server shutdown/manual
 unload, unacknowledged management and external server changes remain boundaries.
@@ -70,12 +70,12 @@ the prior 225-test proof; no new frontend run is claimed. The final required
 project check and publication fingerprint are recorded with the exact candidate.
 
 
-## Candidate04: provider retry and conservative LM Studio admission
+## Candidate 04: provider retry and conservative LM Studio admission
 
 A transient preload failure no longer terminates the live worker. Cancellation
 still releases its owner and stops it; other failures stay visible while the
 existing update loop can prepare again through its normal retry/backoff. A
-synthetic503 provider refusal made the former worker end with failed; the same
+synthetic 503 provider refusal made the former worker end with failed; the same
 actual worker now stays waiting with its owner retained and ends only after an
 explicit stop. This does not show that an unavailable real server becomes ready.
 
@@ -100,7 +100,7 @@ A submitted native LM Studio load with no validated new instance acknowledgement
 is now an uncertain outcome, retained on that route. Automatic retry never submits
 a second load and never guesses an instance to unload. A synthetic unacknowledged
 load previously produced two load submissions; it now produces only one. The
-existing bounded300s acknowledgement wait, cancellation handling and exact unload
+existing bounded 300 s acknowledgement wait, cancellation handling and exact unload
 identity verification are unchanged. An HTTP error is conservatively uncertain,
 not proof that the provider created nothing.
 
@@ -125,10 +125,10 @@ still need the real local reference test. The P1 remains open and the PR remains
 a draft while both configured services are unreachable. No service, model or
 private meeting was started/used by these protocol regressions.
 
-The corrected candidate passed371 workspace/all-target Rust tests, with the two
-existing special entry points normally ignored. All18 provider protocol cases
-passed, including the actual60-second renewal timers and finite-TTL own-child
+The corrected candidate passed 371 workspace/all-target Rust tests, with the two
+existing special entry points normally ignored. All 18 provider protocol cases
+passed, including the actual 60-second renewal timers and finite-TTL own-child
 termination test. The exact native preload regression passed. Frontend bytes
-remain identical to the earlier225-test/TypeScript/build proof; no new frontend
+remain identical to the earlier 225-test/TypeScript/build proof; no new frontend
 run or real-provider result is claimed. Full lint/format/verify outcomes are
 recorded with the immutable candidate proof.
