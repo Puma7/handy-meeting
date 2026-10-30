@@ -507,6 +507,49 @@ class ReferenceVerdicts(unittest.TestCase):
         self.assertEqual(detail["expectedHz"], 440)
         self.assertEqual(detail["toleranceHz"], 40)
 
+    def test_linux_startup_diagnostics_separate_native_padding_and_helper_zeros(self):
+        """Surface only exact source counters without excusing undeclared missing signal."""
+        self.linux_fixture(counts=(144000, 144000))
+        self.rewrite_linux_signal("microphone", lambda data: bytes(910) + data[910:])
+        path = self.root / "result.json"
+        result = json.loads(path.read_text())
+        result["portableStartup"] = [{"source": "microphone", "writtenBeforePadding": 0,
+            "estimatedPaddingSamples": 451, "firstPacketSamples": 1600,
+            "firstPacketLeadingZeroSamples": 4, "ignored": "private fixture content"}]
+        path.write_text(json.dumps(result))
+        with self.assertRaisesRegex(ValueError, "Silent or mixed-up") as raised:
+            audio.verify(self.root)
+        detail = json.loads(str(raised.exception).partition(": ")[2])
+        self.assertEqual(detail["nativeEstimatedPaddingSamples"], 451)
+        self.assertEqual(detail["nativeFirstPacketLeadingZeroSamples"], 4)
+        self.assertEqual(detail["nativeFirstPacketSamples"], 1600)
+        self.assertFalse(detail["declaredStartup"])
+        self.assertNotIn("private fixture", str(raised.exception))
+        self.assertTrue(all(type(value) in (int, float, bool)
+                            for key, value in detail.items() if key != "source"))
+
+    def test_linux_startup_diagnostics_do_not_accept_untrusted_counter_text(self):
+        """Malformed counters fail with fixed text instead of reflecting arbitrary local values."""
+        result = {"portableStartup": [{"source": "system", "writtenBeforePadding": 0,
+            "estimatedPaddingSamples": "private fixture path", "firstPacketSamples": 1600,
+            "firstPacketLeadingZeroSamples": 0}]}
+        with self.assertRaisesRegex(ValueError, "Invalid portable startup counter") as raised:
+            audio.startup_counters(result, "system")
+        self.assertNotIn("private fixture", str(raised.exception))
+
+    def test_linux_startup_diagnostics_are_source_specific_and_optional(self):
+        """Keep older results compatible and never use one track's counters for another."""
+        entry = {"source": "system", "writtenBeforePadding": 0,
+            "estimatedPaddingSamples": 455, "firstPacketSamples": 1600,
+            "firstPacketLeadingZeroSamples": 0}
+        self.assertEqual(audio.startup_counters({}, "system"), {})
+        self.assertEqual(audio.startup_counters({"portableStartup": [entry]}, "microphone"), {})
+        with self.assertRaisesRegex(ValueError, "Duplicate"):
+            audio.startup_counters({"portableStartup": [entry, entry]}, "system")
+        entry["firstPacketLeadingZeroSamples"] = 1601
+        with self.assertRaisesRegex(ValueError, "Inconsistent"):
+            audio.startup_counters({"portableStartup": [entry]}, "system")
+
     def test_linux_repeated_short_silences_cannot_replace_eight_seconds_of_tone(self):
         """Window averages must not turn 7.82 seconds of tone into an eight-second proof."""
         self.linux_fixture()

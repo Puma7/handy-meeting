@@ -36,7 +36,31 @@ def qualified_tone_samples(samples):
     return len(samples) - excluded, excluded
 
 
-def verify_tone(samples, frequency, tolerance, declared_startup, source):
+def startup_counters(result, source):
+    """Expose only bounded native counters for this fixed source; never arbitrary result content."""
+    observations = result.get("portableStartup", [])
+    require(isinstance(observations, list) and len(observations) <= 2,
+            "Invalid portable startup diagnostics")
+    matching = []
+    for entry in observations:
+        require(isinstance(entry, dict) and entry.get("source") in ("system", "microphone"),
+                "Invalid portable startup source")
+        if entry["source"] == source:
+            matching.append(entry)
+    require(len(matching) <= 1, "Duplicate portable startup diagnostics")
+    if not matching:
+        return {}
+    keys = ("writtenBeforePadding", "estimatedPaddingSamples", "firstPacketSamples",
+            "firstPacketLeadingZeroSamples")
+    entry = matching[0]
+    require(all(type(entry.get(key)) is int and 0 <= entry[key] <= 86400 * 16000
+                for key in keys), "Invalid portable startup counter")
+    require(entry["firstPacketLeadingZeroSamples"] <= entry["firstPacketSamples"],
+            "Inconsistent portable startup counters")
+    return {"native" + key[0].upper() + key[1:]: entry[key] for key in keys}
+
+
+def verify_tone(samples, frequency, tolerance, declared_startup, source, startup=None):
     """Check every overlapping window; failures expose only its source and numeric signal evidence."""
     leading_zeros = next((i for i, sample in enumerate(samples) if sample), len(samples))
     start = leading_zeros if declared_startup else 0
@@ -58,7 +82,7 @@ def verify_tone(samples, frequency, tolerance, declared_startup, source):
                   "rms": round(rms, 3), "hz": round(hz, 3), "expectedHz": frequency,
                   "toleranceHz": tolerance, "minimumRmsExclusive": 1000,
                   "declaredStartup": declared_startup, "startupSamples": start,
-                  "leadingZeroSamples": leading_zeros}
+                  "leadingZeroSamples": leading_zeros, **(startup or {})}
         require(rms > 1000 and abs(hz - frequency) < tolerance,
                 "Silent or mixed-up virtual source window: " + json.dumps(detail, sort_keys=True))
         levels.append(rms)
@@ -118,8 +142,9 @@ def verify(root):
                 "Confirmed audio changed or is incomplete")
         require(result[source + "Ms"] == count * 1000 // 16000, "Result duration differs from saved PCM")
         samples = struct.unpack(f"<{count}h", data)
-        tone = verify_tone(samples, frequency, tolerance, source + START in warnings, source)
-        tracks[source] = {"durationMs": result[source + "Ms"], **tone}
+        startup = startup_counters(result, source)
+        tone = verify_tone(samples, frequency, tolerance, source + START in warnings, source, startup)
+        tracks[source] = {"durationMs": result[source + "Ms"], **tone, **startup}
     return {"success": True, "verdict": "passed-with-startup-gaps" if startup_gaps else "passed",
             "completeCapture": not result["captureIncomplete"], "startupGaps": startup_gaps,
             "virtualDevicesOnly": True, "physicalHardware": False,

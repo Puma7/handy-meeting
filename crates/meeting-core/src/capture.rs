@@ -5,6 +5,7 @@ mod controls;
 use controls::CaptureControls;
 pub use controls::{
     read_capture_control_events, CaptureControlEvent, CaptureControlLog, CaptureControlSnapshot,
+    PortableStartupTiming,
 };
 use std::{
     sync::{
@@ -86,6 +87,11 @@ pub struct CaptureController {
 }
 
 impl CaptureController {
+    /// Reads bounded passive portable alignment counters without reading audio or
+    /// changing capture state. Available after stop while this controller is retained.
+    pub fn portable_startup_timing(&self) -> Result<Vec<PortableStartupTiming>> {
+        self.controls.portable_startup_timing()
+    }
     /// A handle that ends a running microphone reconnect at once, so stopping the meeting
     /// never waits for a slow device. The started track is stopped like a missed deadline.
     #[cfg(any(windows, target_os = "linux", target_os = "macos"))]

@@ -190,3 +190,45 @@ failure but does not identify its cause. The next diagnostic additionally
 counts initial exact-zero samples independently of the startup flag, so a
 possible unreported initial padding can be distinguished from other signal
 problems. The count never excuses undeclared silence or changes pass criteria.
+
+## Candidate 17: distinguish inserted startup padding from helper input
+
+Candidate 16's actual Linux job failed at microphone samples 0–4000 with
+888 Hz against 1000 Hz ±60, RMS 5324.608 and 455 leading zero samples, with
+no source-specific startup warning. Those 28.4375 ms explain the window's
+lower zero-crossing estimate numerically, but do not establish whether the
+zeros were inserted by native receipt-time alignment or arrived from the
+helper. No root-cause fix is claimed.
+
+The portable capture path now retains one passive first-packet observation
+per source in memory: samples already written, samples actually inserted by
+the existing alignment, first packet length and that packet's leading zero
+count. Restarts cannot overwrite that first observation. The opt-in device
+diagnostic includes these fixed-source integer counters in its result. Windows
+and tracks without a received portable packet have no observation, rather than
+an invented zero. Only the first packet is measured; a completely silent first
+packet does not establish how long silence in later input packets lasts.
+
+The Linux verifier includes only a validated numeric allowlist of these counters
+in its signal failure. Arbitrary strings, duplicate source records and inconsistent
+counts are rejected without reflecting their contents. Neither counters nor
+estimated padding excuse undeclared silence. Every original tone-duration,
+window, RMS, frequency, hash, receipt-length and track-difference requirement
+remains unchanged. The recording fixture, workflows, locked dependencies and
+complete candidate 16 TEST_REPORT.md remain byte-identical. The alignment target,
+PCM writes, readiness, cancellation and warning threshold are unchanged.
+
+On Windows x64 with Rust 1.91.1 and warnings denied, all 350 Rust all-target
+tests passed, with the same two special credential-provider/crash-writer entries
+regularly ignored. The two new synthetic tests compare the entire saved sample
+sequence for separate native/helper zeros and exercise the actual portable pump
+with an owned synthetic helper. All 123 Python checks ran: 122 passed and the
+same Unix-only case was regularly skipped on Windows. New cases prove that
+diagnostics preserve rejection of undeclared signal loss and cannot expose
+arbitrary result text. The unchanged frontend retains its earlier 225-test
+evidence; it was not rerun for these native diagnostic changes.
+
+An actual new Linux CI run is required to distinguish the observed zero prefix's
+origin. These synthetic tests provide no physical microphone, local text-model,
+GPU, performance or combined two-hour evidence, and do not make the failing
+candidate 16 target run successful.
