@@ -581,12 +581,15 @@ impl Worker {
                     self.service
                         .model_sessions
                         .finish_owner(&crate::model_sessions::Owner::Live(self.meeting_id.clone()));
+                    self.set(|shared| {
+                        shared.status = "failed".into();
+                        shared.error = Some(error.to_string());
+                    });
+                    return;
                 }
-                self.set(|shared| {
-                    shared.status = "failed".into();
-                    shared.error = Some(error.to_string());
-                });
-                return;
+                // Each inference prepares again. Keep the existing update/backoff
+                // loop and retained owner available after a transient load failure.
+                self.set(|shared| shared.error = Some(error.to_string()));
             }
         }
         let mut failures: u32 = 0;
@@ -763,6 +766,106 @@ impl Worker {
 mod tests {
     use super::*;
     use meeting_core::SessionStore;
+
+    /// A transient native preload refusal must leave the worker alive until explicit cancellation.
+    #[test]
+    fn transient_preload_failure_keeps_the_live_loop_and_anchor_available() {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let endpoint = format!("http://{}/v1/", listener.local_addr().unwrap());
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut bytes = Vec::new();
+            let mut buffer = [0; 1024];
+            while !bytes.windows(4).any(|p| p == b"\r\n\r\n") {
+                let n = stream.read(&mut buffer).unwrap();
+                assert!(n > 0 && bytes.len() < 8192);
+                bytes.extend_from_slice(&buffer[..n]);
+            }
+            stream
+                .write_all(
+                    b"HTTP/1.1 503 Synthetic\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
+                )
+                .unwrap();
+        });
+        let root = fixture_root("preload-retry");
+        let service = Arc::new(Service::new(root.clone()).unwrap());
+        let store =
+            SessionStore::create(&root.join("sessions"), "Synthetic preload", "m", "s", None)
+                .unwrap();
+        let id = store.snapshot().unwrap().id;
+        service.lock().unwrap().view = Some(store);
+        let connection = meeting_notes::Connection {
+            endpoint,
+            model: "synthetic".into(),
+            mode: "local".into(),
+            cloud_consent: false,
+            api_key: String::new(),
+        };
+        let work = service
+            .model_sessions
+            .reserve(
+                crate::model_sessions::Owner::Live(id.clone()),
+                &connection,
+                Some(meeting_notes::residency::LocalProvider::Ollama),
+            )
+            .unwrap()
+            .unwrap();
+        let lease = work.lease().unwrap();
+        let runner = LiveRunner::start(&live_root(&service, &id), &id, connection, "de")
+            .unwrap()
+            .with_residency(Arc::clone(&lease))
+            .unwrap();
+        let shared = Arc::new(Mutex::new(Shared {
+            status: "starting".into(),
+            waiting_for_transcript: false,
+            error: None,
+            pending_chars: 0,
+            last_update: Instant::now(),
+            last_trigger: None,
+            retry_at: None,
+            view: None,
+        }));
+        let control = AnalysisControl::default();
+        let worker = Worker {
+            model_work: Some(work.clone()),
+            model_lease: Some(lease),
+            _lease: service
+                .reserve_operation(crate::operations::Kind::LiveNotes)
+                .unwrap(),
+            service: Arc::clone(&service),
+            meeting_id: id,
+            control: control.clone(),
+            manual: Arc::new(AtomicBool::new(false)),
+            interval_ms: Arc::new(AtomicU64::new(DEFAULT_INTERVAL_MS)),
+            shared: Arc::clone(&shared),
+        };
+        let handle = thread::spawn(move || worker.run(runner));
+        server.join().unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while shared.lock().unwrap().status == "starting" && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(10));
+        }
+        let status = shared.lock().unwrap().status.clone();
+        let running = !handle.is_finished();
+        let retained = work.lease().is_ok();
+        control.cancel();
+        handle.join().unwrap();
+        assert_eq!(
+            status, "waiting",
+            "A transient preload refusal ended the live summary"
+        );
+        assert!(running && retained);
+        assert!(
+            work.lease().is_err(),
+            "Explicit stop must release this owner"
+        );
+        drop(service);
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn catching_up_with_recognition_keeps_unrelated_errors() {

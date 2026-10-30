@@ -141,7 +141,7 @@ fn lm(path: &str, body: &Value) -> (u16, Value) {
     match path {
         "/api/v1/models" => (
             200,
-            json!({"models":[{"type":"llm","key":"synthetic","loaded_instances":[{"id":"foreign"}]}]}),
+            json!({"models":[{"type":"llm","key":"synthetic","loaded_instances":[]},{"type":"llm","key":"foreign-key","loaded_instances":[{"id":"foreign"}]}]}),
         ),
         "/api/v1/models/load" => (
             200,
@@ -385,9 +385,9 @@ fn cancellation_before_prepare_does_not_contact_provider_and_failed_load_sends_n
     assert_eq!(server.seen().len(), 2);
 }
 
-/// Makes an unacknowledged release visible rather than silently reusing uncertain ownership.
+/// An idle Ollama route must re-read provider state after a failed finite release.
 #[test]
-fn failed_cleanup_blocks_unconfirmed_reuse_instead_of_claiming_a_fresh_pin() {
+fn review_failed_ollama_cleanup_can_be_reconciled_by_fresh_provider_state() {
     let server = Server::new(|p, b| {
         if p == "/api/generate" && b["keep_alive"] == 0 {
             (500, json!({}))
@@ -400,8 +400,69 @@ fn failed_cleanup_blocks_unconfirmed_reuse_instead_of_claiming_a_fresh_pin() {
     let lease = pool.reserve(&conn, LocalProvider::Ollama).unwrap();
     lease.prepare(&AnalysisControl::default()).unwrap();
     drop(lease);
-    assert!(pool.reserve(&conn, LocalProvider::Ollama).is_err());
-    assert_eq!(server.seen().len(), 3);
+    let retry = pool.reserve(&conn, LocalProvider::Ollama).unwrap();
+    retry.prepare(&AnalysisControl::default()).unwrap();
+    assert_eq!(server.seen()[3].0, "/api/ps");
+    assert_eq!(server.seen().len(), 5);
+    drop(retry);
+}
+
+/// Existing instances of the selected key must never trigger a second weight load.
+#[test]
+fn review_preexisting_lm_instance_blocks_before_load_and_preserves_foreign_state() {
+    let server = Server::new(|path, body| {
+        if path == "/api/v1/models" {
+            (
+                200,
+                json!({"models":[{"type":"llm","key":"synthetic","loaded_instances":[{"id":"foreign"}]}]}),
+            )
+        } else {
+            lm(path, body)
+        }
+    });
+    let pool = LocalModelPool::default();
+    let lease = pool
+        .reserve(&server.connection(), LocalProvider::LmStudio)
+        .unwrap();
+    assert!(
+        lease.prepare(&AnalysisControl::default()).is_err(),
+        "Existing model caused another native load"
+    );
+    drop(lease);
+    assert_eq!(
+        server.seen().len(),
+        1,
+        "A foreign loaded model must receive no load/unload/inference"
+    );
+}
+
+/// An uncertain explicit load must not be submitted again or guessed as owned.
+#[test]
+fn review_uncertain_lm_load_blocks_repeat_submission_without_unloading_guessed_id() {
+    let server = Server::new(|path, body| {
+        if path == "/api/v1/models" {
+            (
+                200,
+                json!({"models":[{"type":"llm","key":"synthetic","loaded_instances":[]}]}),
+            )
+        } else if path == "/api/v1/models/load" {
+            (500, json!({}))
+        } else {
+            lm(path, body)
+        }
+    });
+    let pool = LocalModelPool::default();
+    let lease = pool
+        .reserve(&server.connection(), LocalProvider::LmStudio)
+        .unwrap();
+    assert!(lease.prepare(&AnalysisControl::default()).is_err());
+    assert!(lease.prepare(&AnalysisControl::default()).is_err());
+    drop(lease);
+    assert_eq!(
+        server.seen().len(),
+        2,
+        "An unacknowledged model load was retried automatically"
+    );
 }
 
 /// Exercises route, credential and model boundaries before any provider request.

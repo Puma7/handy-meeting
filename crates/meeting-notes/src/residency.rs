@@ -36,6 +36,8 @@ struct State {
     provider: LocalProvider,
     loaded: Option<Loaded>,
     refresh_failed: bool,
+    /// A submitted LM Studio load without a validated ID cannot be retried or guessed owned.
+    lm_load_uncertain: bool,
 }
 enum Loaded {
     Ollama { release_after: i64 },
@@ -86,6 +88,7 @@ impl LocalModelPool {
                     provider,
                     loaded: None,
                     refresh_failed: false,
+                    lm_load_uncertain: false,
                 }),
             })
         }));
@@ -93,6 +96,11 @@ impl LocalModelPool {
             slot.provider == provider && slot.auth_digest == auth_digest,
             "Die reservierte Modellverbindung wurde geändert. Anwendung vor der neuen Verbindung neu starten."
         );
+        if slot.provider == LocalProvider::Ollama && slot.users.load(Ordering::Acquire) == 0 {
+            // Finite provider TTLs and a fresh /api/ps query permit a new reservation;
+            // no loaded ownership state or inference confirmation is reused.
+            slot.cleanup_failed.store(false, Ordering::Release);
+        }
         ensure!(!slot.cleanup_failed.load(Ordering::Acquire), "Die vorherige Modellfreigabe konnte nicht bestätigt werden. Lokalen Modelldienst prüfen.");
         slot.users
             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
@@ -135,6 +143,7 @@ impl ModelLease {
             .lock()
             .map_err(|_| anyhow::anyhow!("Lokales Modell ist gesperrt."))?;
         control.check()?;
+        ensure!(!state.lm_load_uncertain, "Die vorherige Modellladung wurde nicht eindeutig bestätigt. Keine weitere Instanz wird geladen. In LM Studio den Ladezustand prüfen; erst nach abgeschlossenem oder abgebrochenem Laden und manueller Bereinigung eigener Instanzen die Anwendung neu starten. Fremde Modelle nicht entladen.");
         if state.loaded.is_some() {
             if state.refresh_failed {
                 renew_ollama(&mut state, Duration::from_secs(300))?;
@@ -217,13 +226,20 @@ impl ModelLease {
                     .as_str()
                     .context("Lokale Modellkennung fehlt.")?;
                 valid_model_name(key)?;
+                let selected_instances = model["loaded_instances"].as_array().context(
+                    "Lokale Instanzliste fehlt; keine zusätzliche Modellkopie wird geladen.",
+                )?;
+                ensure!(selected_instances.is_empty(), "Dieses Modell ist in LM Studio bereits geladen. Es wird weder eine weitere Kopie geladen noch die fremde Instanz übernommen oder entladen. Für eine eigene Reservierung zuerst den Ladezustand in LM Studio prüfen.");
                 let existing: Vec<&str> = models
                     .iter()
                     .filter_map(|m| m["loaded_instances"].as_array())
                     .flatten()
                     .filter_map(|i| i["id"].as_str())
                     .collect();
-                let response = client.model_request(
+                // Once submitted, an unknown outcome is sticky: automatic retries
+                // may not create another full model or guess a foreign instance ID.
+                state.lm_load_uncertain = true;
+                let response = state.client.model_request(
                     "api/v1/models/load",
                     Some(&json!({"model":key})),
                     &AnalysisControl::default(),
@@ -244,6 +260,7 @@ impl ModelLease {
             }
         };
         state.loaded = Some(loaded);
+        state.lm_load_uncertain = false;
         state.refresh_failed = false;
         if ollama_keep_alive(&state).is_some_and(|seconds| seconds > 0) {
             self.ensure_refresher()?;

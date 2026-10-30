@@ -202,6 +202,7 @@ fn ollama_root() -> String {
 pub(crate) fn provider_for_endpoint(
     endpoint: &str,
 ) -> Option<meeting_notes::residency::LocalProvider> {
+    /// Extracts only credential-free loopback origins and paths for configured-provider matching.
     fn address(value: &str) -> Option<(String, u16, String)> {
         let url = url::Url::parse(value).ok()?;
         if url.scheme() != "http"

@@ -68,3 +68,67 @@ existing dedicated entry points normally ignored. Strict workspace/all-target
 Clippy passed with warnings as errors. Frontend source bytes are unchanged from
 the prior 225-test proof; no new frontend run is claimed. The final required
 project check and publication fingerprint are recorded with the exact candidate.
+
+
+## Candidate04: provider retry and conservative LM Studio admission
+
+A transient preload failure no longer terminates the live worker. Cancellation
+still releases its owner and stops it; other failures stay visible while the
+existing update loop can prepare again through its normal retry/backoff. A
+synthetic503 provider refusal made the former worker end with failed; the same
+actual worker now stays waiting with its owner retained and ends only after an
+explicit stop. This does not show that an unavailable real server becomes ready.
+
+An idle Ollama route can recover from an unconfirmed finite release. A new
+reservation discards only the idle cleanup-failure latch; prepare must re-read
+/api/ps and obtain a fresh load acknowledgement before inference. LM Studio's
+unconfirmed exact-instance unload remains blocked. The synthetic Ollama retry
+failed with the former permanent latch and now demonstrates the new provider
+state query; foreign indefinite/finite policies remain preserved.
+
+Before native LM Studio loading, the selected catalog entry must have a readable
+empty loaded_instances list. A pre-existing selected-key instance causes a clear
+failure before a load, unload or inference request. It is not borrowed, claimed,
+forcibly evicted or duplicated, and no residency guarantee is made for it. The
+user must resolve that selected model's use in LM Studio before a dedicated app
+reservation is possible. Other catalog keys and foreign instances remain intact.
+The synthetic already-loaded-key regression failed before this preflight check.
+This policy deliberately avoids depending on unverified REST duplicate-load
+semantics; actual provider compatibility remains a draft gate.
+
+A submitted native LM Studio load with no validated new instance acknowledgement
+is now an uncertain outcome, retained on that route. Automatic retry never submits
+a second load and never guesses an instance to unload. A synthetic unacknowledged
+load previously produced two load submissions; it now produces only one. The
+existing bounded300s acknowledgement wait, cancellation handling and exact unload
+identity verification are unchanged. An HTTP error is conservatively uncertain,
+not proof that the provider created nothing.
+
+### Manual recovery of an uncertain LM Studio load
+
+1. Stop initiating further app analyses on that route. Inspect the provider's
+   actual loading status; a client timeout does not prove server-side cancellation.
+2. Wait until LM Studio confirms that pending loading finished or was aborted.
+   Check its instance list and its own operation records. Do not unload an instance
+   merely because it appeared near the failed request or has the same model key.
+3. Remove an instance only when those provider records establish that it belongs
+   to this app's failed operation and no parallel user needs it. If ownership
+   cannot be established, leave it untouched; recovery is not proven safe.
+4. Retry app-owned loading only after the selected key has no loaded instances
+   and the provider confirms no pending load. Restart the app to reset that
+   uncertain route, then prepare and validate a fresh acknowledgement.
+
+This is explicit manual recovery, not an automatic ownership reconstruction or a
+crash-cleanup guarantee. Native provider versions, real idle residency, foreign
+instance preservation, positive/nonbinding content and durable final cleanup
+still need the real local reference test. The P1 remains open and the PR remains
+a draft while both configured services are unreachable. No service, model or
+private meeting was started/used by these protocol regressions.
+
+The corrected candidate passed371 workspace/all-target Rust tests, with the two
+existing special entry points normally ignored. All18 provider protocol cases
+passed, including the actual60-second renewal timers and finite-TTL own-child
+termination test. The exact native preload regression passed. Frontend bytes
+remain identical to the earlier225-test/TypeScript/build proof; no new frontend
+run or real-provider result is claimed. Full lint/format/verify outcomes are
+recorded with the immutable candidate proof.

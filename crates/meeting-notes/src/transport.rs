@@ -22,6 +22,7 @@ const LOCALHOST_ADDRESSES: [SocketAddr; 2] = [
 /// overridden with fixed loopback addresses and every other name fails.
 struct NoDns;
 impl reqwest::dns::Resolve for NoDns {
+    /// Rejects every fallback DNS lookup; validated localhost uses fixed loopback overrides.
     fn resolve(&self, _: reqwest::dns::Name) -> reqwest::dns::Resolving {
         Box::pin(async {
             Err::<reqwest::dns::Addrs, _>(
@@ -49,6 +50,7 @@ pub struct TextClient {
 }
 
 impl TextClient {
+    /// Validates explicit local/cloud consent and endpoint scope, disabling proxies and redirects.
     pub fn new(config: &Connection) -> Result<Self> {
         let mut base = Url::parse(config.endpoint.trim()).context("Ungültige KI-Adresse.")?;
         ensure!(
@@ -171,6 +173,7 @@ impl TextClient {
         self.request(&format!("../{path}"), body, control, timeout)
             .map_err(|error| if crate::is_cancelled(&error) { error } else { anyhow::anyhow!("Lokale Modellverwaltung fehlgeschlagen. Dienst, Modell und native API-Unterstützung prüfen; Audio und gespeicherte Ergebnisse bleiben erhalten.") })
     }
+    /// Sends a bounded JSON request on the validated route, with cancellation and redacted failures.
     fn request(
         &self,
         path: &str,
@@ -228,6 +231,7 @@ impl TextClient {
             value.context("KI-Dienst liefert kein gültiges JSON.")
         })
     }
+    /// Discovers only local model IDs, bounding and deduplicating the provider's untrusted list.
     pub fn models(&self) -> Result<Vec<String>> {
         ensure!(
             self.local,
@@ -256,9 +260,11 @@ impl TextClient {
         result.dedup();
         Ok(result)
     }
+    /// Uses the same source-linked JSON generation contract without an external cancellation owner.
     pub fn generate(&self, sources: &[Source], step: &Step) -> Result<String> {
         self.generate_controlled(sources, step, &AnalysisControl::default())
     }
+    /// Serializes only supplied transcript sources and prompt text; returned claims still need validation.
     pub fn generate_controlled(
         &self,
         sources: &[Source],
@@ -310,10 +316,12 @@ impl TextClient {
         result
     }
 
+    /// Returns scalar request diagnostics, never transcript content or bearer credentials.
     pub(crate) fn diagnostic(&self) -> crate::diagnostics::RequestDiagnostic {
         self.diagnostic.borrow().clone()
     }
 
+    /// Records the caller's validation outcome separately from successful HTTP transport.
     pub(crate) fn diagnostic_stage(&self, stage: crate::diagnostics::RequestResult) {
         self.diagnostic.borrow_mut().result = stage;
     }
@@ -414,6 +422,7 @@ pub(crate) fn item_list_schema() -> serde_json::Value {
     serde_json::json!({"type":"array","items":{"type":"object","additionalProperties":false,"required":["text","owner","due","evidence"],"properties":{"text":{"type":"string"},"owner":{"type":["string","null"]},"due":{"type":["string","null"]},"evidence":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["sourceId","quote"],"properties":{"sourceId":{"type":"string"},"quote":{"type":"string"}}}}}}})
 }
 
+/// Polls the owned HTTP future cooperatively; transport errors never expose server body or secrets.
 async fn await_cancellable<T>(
     future: impl Future<Output = reqwest::Result<T>>,
     control: &AnalysisControl,
