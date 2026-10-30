@@ -38,6 +38,11 @@ fn operation_lock(root: &Path) -> Result<File> {
     metadata::lock_soon(&file)?;
     Ok(file)
 }
+/// Holds process-shared erasure exclusion across a source snapshot, annotation commit
+/// and derived-index refresh. Callers must keep this lease until their entire write ends.
+pub fn source_mutation_lease(root: &Path) -> Result<File> {
+    operation_lock(root)
+}
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ArchivedFile {

@@ -10,6 +10,7 @@ use std::{
 };
 
 const PRIVATE: &str = "syntheticerasurecanaryneverretainthisphrase";
+/// Builds only a fresh synthetic PCM/transcript meeting under the supplied temporary root.
 fn fixture(root: &Path, text: &str, seconds: usize) -> String {
     fs::create_dir_all(root.join("sessions")).unwrap();
     let store = SessionStore::create(
@@ -48,6 +49,7 @@ fn fixture(root: &Path, text: &str, seconds: usize) -> String {
     drop(store);
     id
 }
+/// Snapshots synthetic content bytes for preservation checks, excluding open coordination locks.
 fn tree(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
     fn walk(root: &Path, path: &Path, out: &mut BTreeMap<PathBuf, Vec<u8>>) {
         for entry in fs::read_dir(path).unwrap() {
@@ -69,10 +71,12 @@ fn tree(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
     walk(root, root, &mut result);
     result
 }
+/// Adds one synthetic ordinary file with explicit bytes, never using a real session path.
 fn extra(path: &Path, bytes: &[u8]) {
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     fs::write(path, bytes).unwrap();
 }
+/// Exercises the public preview and exact-meeting confirmation APIs to verified completion.
 fn erase(root: &Path, id: &str) {
     let cancel = AtomicBool::new(false);
     let plan = archive::preview_erasure(root, id, &cancel).unwrap();
@@ -88,6 +92,7 @@ fn erase(root: &Path, id: &str) {
     assert!(result.complete);
 }
 
+/// A short native fixture is erasable directly while automatic retention remains archive-only.
 #[test]
 fn a_new_two_second_meeting_can_be_erased_without_archival_age_or_model_service() {
     let root = tempfile::tempdir().unwrap();
@@ -106,6 +111,7 @@ fn a_new_two_second_meeting_can_be_erased_without_archival_age_or_model_service(
     assert!(archive::pending_erasures(root.path()).unwrap().is_empty());
 }
 
+/// A synthetic content canary disappears from all attributed stores while other originals remain byte-equal.
 #[test]
 fn every_app_managed_source_copy_annotation_and_search_cache_is_removed() {
     let root = tempfile::tempdir().unwrap();
@@ -214,6 +220,7 @@ fn every_app_managed_source_copy_annotation_and_search_cache_is_removed() {
         .all(|hit| hit.id == other));
 }
 
+/// Wrong identity/confirmation and post-preview changes cannot grant destructive authority.
 #[test]
 fn stale_preview_or_wrong_confirmation_preserves_all_original_bytes() {
     let root = tempfile::tempdir().unwrap();
@@ -247,6 +254,7 @@ fn stale_preview_or_wrong_confirmation_preserves_all_original_bytes() {
     assert!(archive::pending_erasures(root.path()).unwrap().is_empty());
 }
 
+/// Cancellation preserves only minimal recovery authority and allows a newly confirmed remaining inventory.
 #[test]
 fn cancellation_leaves_a_minimal_retry_marker_and_remaining_data_can_be_confirmed_again() {
     let root = tempfile::tempdir().unwrap();
@@ -282,6 +290,7 @@ fn cancellation_leaves_a_minimal_retry_marker_and_remaining_data_can_be_confirme
     assert!(archive::pending_erasures(root.path()).unwrap().is_empty());
 }
 
+/// Real filesystem leases exclude a conflicting source reader/writer or SQLite connection.
 #[test]
 fn held_session_or_index_lease_prevents_removal_before_any_data_is_deleted() {
     let root = tempfile::tempdir().unwrap();
@@ -309,6 +318,7 @@ fn held_session_or_index_lease_prevents_removal_before_any_data_is_deleted() {
     erase(root.path(), &id);
 }
 
+/// Unsafe identities, external originals and unknown cache content remain outside erasure authority.
 #[test]
 fn traversal_imports_and_unknown_cache_files_are_refused_without_widening_scope() {
     let root = tempfile::tempdir().unwrap();
@@ -328,6 +338,7 @@ fn traversal_imports_and_unknown_cache_files_are_refused_without_widening_scope(
     assert!(root.path().join("library-index/user-original.txt").exists());
 }
 
+/// Empty/failed source folders are removable without a model service or replayable transcript.
 #[test]
 fn empty_failed_and_corrupt_owned_meetings_need_neither_asr_nor_valid_transcripts() {
     for state in ["recorded", "error", "corrupt"] {
@@ -345,6 +356,7 @@ fn empty_failed_and_corrupt_owned_meetings_need_neither_asr_nor_valid_transcript
     }
 }
 
+/// Every archived file boundary, including lost manifests/receipts, remains recoverable by a fresh preview.
 #[test]
 fn every_archived_removal_boundary_can_be_confirmed_again_after_interruption() {
     // Exercise every file boundary, including the loss of receipts/manifests and
@@ -394,6 +406,7 @@ fn every_archived_removal_boundary_can_be_confirmed_again_after_interruption() {
     assert!(boundary > 10);
 }
 
+/// Concurrent unconfirmed bytes are preserved and prevent a false complete result.
 #[test]
 fn late_files_and_changed_bytes_survive_with_an_explicit_partial_failure() {
     for change in [false, true] {
@@ -427,6 +440,7 @@ fn late_files_and_changed_bytes_survive_with_an_explicit_partial_failure() {
     }
 }
 
+/// Unlinking one app-owned hardlink never overwrites an external copy of its bytes.
 #[test]
 fn deleting_a_link_name_never_overwrites_an_external_hardlink_copy() {
     let root = tempfile::tempdir().unwrap();
@@ -443,6 +457,7 @@ fn deleting_a_link_name_never_overwrites_an_external_hardlink_copy() {
     assert_eq!(fs::read(original).unwrap(), b"external copy retained");
 }
 
+/// Audio-only and independently attributable orphan archives join the same confirmed deletion group.
 #[test]
 fn audio_only_archives_and_unreceipted_source_copies_are_included() {
     for audio_only in [false, true] {
@@ -473,6 +488,7 @@ fn audio_only_archives_and_unreceipted_source_copies_are_included() {
     }
 }
 
+/// Valid foreign identities defeat stale catalog/path attribution before any file is removed.
 #[test]
 fn conflicting_source_and_archive_identities_never_authorize_foreign_data_removal() {
     for archive_conflict in [false, true] {
@@ -507,7 +523,81 @@ fn conflicting_source_and_archive_identities_never_authorize_foreign_data_remova
     }
 }
 
+/// Unpublished atomic-write remnants stay inert while valid continuation markers remain discoverable.
+#[test]
+fn interrupted_marker_temp_files_do_not_hide_valid_pending_erasures() {
+    let root = tempfile::tempdir().unwrap();
+    let id = fixture(root.path(), PRIVATE, 1);
+    let cancel = AtomicBool::new(false);
+    let plan = archive::preview_erasure(root.path(), &id, &cancel).unwrap();
+    assert!(archive::erase_meeting(
+        root.path(),
+        &id,
+        &plan.fingerprint,
+        &format!("DELETE {id}"),
+        &cancel,
+        |n, _| {
+            if n == 1 {
+                cancel.store(true, Ordering::Release)
+            }
+        }
+    )
+    .is_err());
+    let orphan = root.path().join("immediate-deletions/.tmpAbC123");
+    extra(
+        &orphan,
+        b"unfinished atomic marker bytes; never erasure authority",
+    );
+    let pending = archive::pending_erasures(root.path()).unwrap();
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].meeting_id, id);
+    erase(root.path(), &id);
+    assert_eq!(
+        fs::read(&orphan).unwrap(),
+        b"unfinished atomic marker bytes; never erasure authority"
+    );
+    assert!(archive::pending_erasures(root.path()).unwrap().is_empty());
+}
+
+/// Neither attributed nor orphan restore staging may hide a foreign meeting under the selected folder name.
+#[test]
+fn restoration_staging_must_not_contain_a_valid_foreign_meeting_manifest() {
+    for attributed in [false, true] {
+        let root = tempfile::tempdir().unwrap();
+        let id = fixture(root.path(), PRIVATE, 1);
+        let other = fixture(root.path(), "Foreign staged meeting retained", 1);
+        let cancel = AtomicBool::new(false);
+        let aid = if attributed {
+            archive::create(root.path(), &id, 0, "whole-meeting", &cancel, |_, _| {})
+                .unwrap()
+                .archive_id
+        } else {
+            "a".repeat(32)
+        };
+        let stage = root
+            .path()
+            .join("archives")
+            .join(format!("{aid}.restoring-synthetic"))
+            .join(&id);
+        extra(
+            &stage.join("session.json"),
+            &fs::read(
+                root.path()
+                    .join("sessions")
+                    .join(&other)
+                    .join("session.json"),
+            )
+            .unwrap(),
+        );
+        extra(&stage.join("audio/foreign.wav"), b"foreign staged audio");
+        let before = tree(&stage);
+        assert!(archive::preview_erasure(root.path(), &id, &cancel).is_err());
+        assert_eq!(tree(&stage), before);
+    }
+}
+
 #[cfg(windows)]
+/// A real synthetic Windows junction is rejected without touching its external target.
 #[test]
 fn windows_directory_junction_never_authorizes_outside_removal() {
     let root = tempfile::tempdir().unwrap();
@@ -532,6 +622,7 @@ fn windows_directory_junction_never_authorizes_outside_removal() {
 }
 
 #[cfg(unix)]
+/// Unix link fixtures must preserve outside bytes and refuse the entire unsafe preview.
 #[test]
 fn links_inside_a_meeting_never_authorize_removing_outside_files() {
     let root = tempfile::tempdir().unwrap();

@@ -130,6 +130,7 @@ impl Drop for MaintenanceGuard {
     fn drop(&mut self) {
         if let Ok(mut inner) = self.service.lock() {
             inner.transitioning = false;
+            inner.maintenance_reserved = false;
         }
     }
 }
@@ -140,6 +141,7 @@ pub(super) fn reserve(service: &Arc<Service>) -> AppResult<MaintenanceGuard> {
     let mut inner = service.lock()?;
     inner.view = None;
     inner.transitioning = true;
+    inner.maintenance_reserved = true;
     Ok(MaintenanceGuard {
         service: service.clone(),
         _lease: lease,

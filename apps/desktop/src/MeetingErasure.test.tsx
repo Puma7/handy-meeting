@@ -6,6 +6,7 @@ import {
   renderHook,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import EraseMeetingDialog from "./views/EraseMeetingDialog";
@@ -253,6 +254,7 @@ it("clears the deleted meeting and ignores a native state reply that was request
   };
   let erased = false,
     activeJob = "preview-job";
+  let deletionCanComplete = false;
   let stale!: (value: unknown) => void;
   let stateCalls = 0;
   const initial = {
@@ -289,7 +291,10 @@ it("clears the deleted meeting and ignores a native state reply that was request
     }),
     getMaintenanceProgress: vi.fn().mockImplementation(async () => ({
       jobId: activeJob,
-      status: "complete",
+      status:
+        activeJob === "erase-job" && !deletionCanComplete
+          ? "running"
+          : "complete",
       confirmedTasks: 8,
       totalTasks: 8,
       error: null,
@@ -301,10 +306,12 @@ it("clears the deleted meeting and ignores a native state reply that was request
   render(<App api={api} />);
   await waitFor(() => expect(stateCalls).toBeGreaterThanOrEqual(2));
   await userEvent.click(screen.getByRole("button", { name: /Historie/ }));
+  const row = (await screen.findByText(meeting.title)).closest(".session-row")!;
   await userEvent.click(
-    await screen.findByRole("button", {
-      name: `Meeting dauerhaft löschen: ${meeting.title}`,
-    }),
+    within(row as HTMLElement).getByRole("button", { name: "Öffnen" }),
+  );
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Meeting löschen" }),
   );
   await userEvent.type(
     await screen.findByRole("textbox", {
@@ -315,6 +322,12 @@ it("clears the deleted meeting and ignores a native state reply that was request
   await userEvent.click(
     screen.getByRole("button", { name: "Jetzt endgültig löschen" }),
   );
+  const dialog = screen.getByRole("alertdialog");
+  expect(dialog.contains(document.activeElement)).toBe(true);
+  expect((document.querySelector("main") as HTMLElement).inert).toBe(true);
+  await userEvent.tab();
+  expect(dialog.contains(document.activeElement)).toBe(true);
+  deletionCanComplete = true;
   await screen.findByText(
     "Meetinginhalte vollständig aus der HandyMeeting-Ablage entfernt.",
   );

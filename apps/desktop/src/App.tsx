@@ -486,8 +486,9 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     // Background updates must not move the reader.
     main.scrollTop = 0;
     main.scrollLeft = 0;
-    main.querySelector("h1")?.focus({ preventScroll: true });
-  }, [page]);
+    if (!erasureTarget)
+      main.querySelector("h1")?.focus({ preventScroll: true });
+  }, [page, erasureTarget]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -532,12 +533,19 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     [],
   );
   const modalOpen = Boolean(
-    editing || templateAction || cloudRequest || source || resumeAnalysis,
+    editing ||
+      templateAction ||
+      cloudRequest ||
+      source ||
+      resumeAnalysis ||
+      erasureTarget,
   );
   useEffect(() => {
     if (!modalOpen) return;
     const previous = document.activeElement as HTMLElement | null;
-    const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+    const dialog = document.querySelector<HTMLElement>(
+      '[role="dialog"],[role="alertdialog"]',
+    );
     const surfaces = document.querySelectorAll<HTMLElement>(
       ".sidebar, main, .notes-statusbar, .job-status-stack",
     );
@@ -568,16 +576,19 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         return true;
       });
     const initialTargets = focusable();
-    (
-      initialTargets.find((element) => element.matches("input,textarea")) ??
-      initialTargets[0]
-    )?.focus();
+    if (!erasureTarget)
+      (
+        initialTargets.find((element) => element.matches("input,textarea")) ??
+        initialTargets[0]
+      )?.focus();
     /**
      * Keeps keyboard focus inside the modal and handles Escape while retaining an
      * in-progress template save.
      */
     const keydown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       if (event.key === "Escape") {
+        if (erasureTarget) return; // The erasure dialog owns cancellation and terminal recovery.
         if (templatePending.current) {
           event.preventDefault();
           return;
@@ -615,7 +626,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       surfaces.forEach((element) => {
         element.inert = false;
       });
-      previous?.focus();
+      if (previous?.isConnected) previous.focus();
+      else document.querySelector<HTMLElement>("main h1")?.focus();
     };
   }, [modalOpen]);
   useEffect(() => {

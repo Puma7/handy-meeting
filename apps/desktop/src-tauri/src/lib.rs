@@ -145,6 +145,8 @@ struct Inner {
     legacy: HashMap<String, PathBuf>,
     error: Option<String>,
     transitioning: bool,
+    /// Exclusive storage maintenance, independent of capture start/stop/reconnect.
+    maintenance_reserved: bool,
     reconnecting_microphone: bool,
     /// Ends a running microphone reconnect when the user stops the meeting.
     reconnect_cancel: Option<Arc<AtomicBool>>,

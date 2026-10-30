@@ -2,6 +2,140 @@
 use super::*;
 
 #[test]
+fn recording_transitions_keep_saved_text_readable_without_maintenance_admission() {
+    let root = fixture_root("read-during-capture-transition");
+    let service = Service::new(root.clone()).unwrap();
+    let store = SessionStore::create(
+        &root.join("sessions"),
+        "Synthetic readable during stop",
+        "m",
+        "s",
+        None,
+    )
+    .unwrap();
+    let id = store.snapshot().unwrap().id;
+    service.lock().unwrap().view = Some(store);
+    // Models the existing stop/reconnect transition; no device is opened here.
+    service.lock().unwrap().transitioning = true;
+    assert_eq!(
+        service.data(&id).unwrap().title,
+        "Synthetic readable during stop"
+    );
+    service.lock().unwrap().transitioning = false;
+}
+
+#[test]
+fn annotation_commands_fence_the_source_snapshot_and_commit_with_one_os_lease() {
+    for speaker in [false, true] {
+        let root = fixture_root("annotation-erasure-fence");
+        let service = Service::new(root.clone()).unwrap();
+        let store = SessionStore::create(
+            &root.join("sessions"),
+            "Synthetic archived source",
+            "m",
+            "s",
+            None,
+        )
+        .unwrap();
+        let id = store.snapshot().unwrap().id;
+        let mut writer = meeting_core::PcmWriter::new(store.clone(), "system").unwrap();
+        writer.append(&[42; 1600]).unwrap();
+        writer.finish().unwrap();
+        drop(writer);
+        let part = store.snapshot().unwrap().parts[0].clone();
+        store
+            .append_transcript(meeting_core::TranscriptCheckpoint {
+                sequence: 0,
+                at: String::new(),
+                file: part.file,
+                model_id: "m".into(),
+                full: "Synthetic source text".into(),
+                committed: "Synthetic source text".into(),
+                tentative: String::new(),
+                processed_samples: part.confirmed_sample_count,
+                final_text: true,
+                revision_after_restart: false,
+            })
+            .unwrap();
+        store.set_status("complete").unwrap();
+        drop(store);
+        meeting_core::archive::archive_audio(&root, &id, 0, &AtomicBool::new(false), |_, _| {})
+            .unwrap();
+        let parent = root.join(if speaker {
+            "speaker-labels"
+        } else {
+            "user-metadata"
+        });
+        fs::create_dir_all(&parent).unwrap();
+        let annotation = OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .open(parent.join(format!("{id}.lock")))
+            .unwrap();
+        fs2::FileExt::try_lock_exclusive(&annotation).unwrap();
+        let worker_root = root.clone();
+        let worker_id = id.clone();
+        let worker = std::thread::spawn(move || {
+            let remote = Service::new(worker_root).unwrap();
+            if speaker {
+                speaker_commands::save_labels(&remote, &worker_id, 0, false, vec![]).map(|_| ())
+            } else {
+                library_commands::edit_metadata(
+                    &remote,
+                    &worker_id,
+                    0,
+                    Some("Synthetic edited title".into()),
+                    false,
+                )
+                .map(|_| ())
+            }
+        });
+        // The annotation lock pauses the final write. The operation must already
+        // own the process-shared archive lease across its earlier source read.
+        let fence = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(root.join("archive-maintenance.lock"))
+            .unwrap();
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        let mut fenced = false;
+        while std::time::Instant::now() < until && !worker.is_finished() {
+            if fs2::FileExt::try_lock_exclusive(&fence).is_err() {
+                fenced = true;
+                break;
+            }
+            fs2::FileExt::unlock(&fence).unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        drop(fence);
+        drop(annotation);
+        let outcome = worker.join().unwrap();
+        assert!(
+            fenced,
+            "Annotation source read and final write had no OS-level erasure fence"
+        );
+        outcome.unwrap();
+        drop(service);
+        let cancel = AtomicBool::new(false);
+        let preview = meeting_core::archive::preview_erasure(&root, &id, &cancel).unwrap();
+        meeting_core::archive::erase_meeting(
+            &root,
+            &id,
+            &preview.fingerprint,
+            &format!("DELETE {id}"),
+            &cancel,
+            |_, _| {},
+        )
+        .unwrap();
+        assert!(!parent.join(format!("{id}.json")).exists());
+        assert!(!root.join("sessions").join(&id).exists());
+        assert!(!root.join("library-index").exists());
+    }
+}
+
+#[test]
 fn meeting_erasure_reservation_refuses_all_writers_and_releases_only_an_inactive_view() {
     let root = fixture_root("erasure-admission");
     let service = Arc::new(Service::new(root.clone()).unwrap());

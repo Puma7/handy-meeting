@@ -3,6 +3,24 @@
 use super::*;
 use std::collections::BTreeSet;
 
+/// Checks both available manifest generations without requiring incomplete staging
+/// to be replayable. A valid foreign identity always preserves the entire tree.
+pub(super) fn reject_conflicting_identity(folder: &Path, id: &str) -> Result<()> {
+    for name in ["session.json", "session.json.bak"] {
+        let path = folder.join(name);
+        metadata::reject_link_if_present(&path)?;
+        if let Ok(value) = read_record(&path) {
+            if value["id"]
+                .as_str()
+                .is_some_and(|found| native_id(found) && found != id)
+            {
+                return Err("Source manifest belongs to another meeting; erasure blocked".into());
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Reads only identity, without reopening/repairing journals and without imposing
 /// the visible sessions/{id} name on a retained archives/{archive}.source folder.
 pub(super) fn manifest_id(folder: &Path) -> Result<String> {
@@ -183,6 +201,7 @@ pub(super) fn inventory(
                 let inner = path.join(id);
                 metadata::reject_link_if_present(&inner)?;
                 if inner.exists() {
+                    reject_conflicting_identity(&inner, id)?;
                     add_tree(root, &inner, cancel, &mut data.files, &mut data.directories)?;
                 }
                 // Removing the parent is safe only when it is empty; late/foreign files survive.
@@ -195,6 +214,7 @@ pub(super) fn inventory(
             let inner = path.join(id);
             metadata::reject_link_if_present(&inner)?;
             if inner.exists() {
+                reject_conflicting_identity(&inner, id)?;
                 add_tree(root, &inner, cancel, &mut data.files, &mut data.directories)?;
                 data.directories.push(path);
             }

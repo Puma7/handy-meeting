@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { errorMessage } from "../api";
 import { clock } from "../domain";
@@ -48,6 +48,17 @@ export default function EraseMeetingDialog({
     submitting = useRef(false);
   const callbacks = useRef({ onStart, onDeleted, onStopped, onClose });
   callbacks.current = { onStart, onDeleted, onStopped, onClose };
+  const safeAction = useRef<HTMLButtonElement>(null);
+  // Starting removal replaces the focused submit control. Keep focus in the
+  // dialog, including the brief period when cancellation disables all controls.
+  useLayoutEffect(() => {
+    if (!form.current?.contains(document.activeElement)) {
+      const target = safeAction.current?.disabled
+        ? form.current
+        : safeAction.current;
+      target?.focus();
+    }
+  }, [stage, cancelling]);
 
   /** Only an exact current job's completed status may confirm success. */
   async function watch(id: string, deleting: boolean, sequence: number) {
@@ -159,6 +170,7 @@ export default function EraseMeetingDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /** Submits exactly the displayed confirmed capability and observes only its own job. */
   async function remove() {
     if (
       stage !== "ready" ||
@@ -199,6 +211,7 @@ export default function EraseMeetingDialog({
       }
     }
   }
+  /** Requests cancellation without representing an irreversible partial removal as undo. */
   async function stop() {
     if (stage !== "preparing" && stage !== "deleting") {
       callbacks.current.onClose();
@@ -223,6 +236,7 @@ export default function EraseMeetingDialog({
     <div className="modal-backdrop">
       <form
         ref={form}
+        tabIndex={-1}
         className="dialog small erasure-dialog"
         role="alertdialog"
         aria-modal="true"
@@ -245,6 +259,10 @@ export default function EraseMeetingDialog({
             );
             const first = controls[0],
               last = controls[controls.length - 1];
+            if (!controls.length) {
+              event.preventDefault();
+              return;
+            }
             if (event.shiftKey && document.activeElement === first) {
               event.preventDefault();
               last?.focus();
@@ -331,6 +349,7 @@ export default function EraseMeetingDialog({
         )}
         <div className="dialog-actions">
           <button
+            ref={safeAction}
             type="button"
             className="secondary"
             disabled={cancelling}

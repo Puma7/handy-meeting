@@ -10,6 +10,7 @@ import {
 import { errorMessage } from "../api";
 import { clock } from "../domain";
 import type { DesktopApi, Locale, MeetingSummary, SearchPage } from "../types";
+/** Renders source-bound search hits and deletion actions without restoring blocked meeting rows. */
 export default function HistorySearch({
   api,
   locale,

@@ -15,6 +15,7 @@ struct Cached {
 #[derive(Default)]
 pub(crate) struct Previews(Mutex<HashMap<String, Cached>>);
 impl Previews {
+    /// Stores a bounded, short-lived preview capability containing no meeting text.
     fn put(&self, id: &str, preview: ErasurePreview) -> AppResult<()> {
         let mut rows = self.0.lock().map_err(|_| "Löschvorschau ist gesperrt.")?;
         rows.retain(|_, row| row.at.elapsed() < Duration::from_secs(900));
@@ -30,11 +31,13 @@ impl Previews {
         );
         Ok(())
     }
+    /// Reads only the exact unexpired preview capability selected by its native job identity.
     fn get(&self, id: &str) -> AppResult<ErasurePreview> {
         crate::validate_id(id)?;
         let rows = self.0.lock().map_err(|_| "Löschvorschau ist gesperrt.")?;
         rows.get(id).filter(|row|row.at.elapsed()<Duration::from_secs(900)).map(|row|row.preview.clone()).ok_or_else(||"Löschvorschau ist abgelaufen. Bitte erneut prüfen. / Deletion preview expired; create another preview.".into())
     }
+    /// Consumes one matching confirmed capability once; a different meeting or word leaves it intact.
     fn take(&self, id: &str, meeting: &str, confirmation: &str) -> AppResult<ErasurePreview> {
         let preview = self.get(id)?;
         if preview.meeting_id != meeting || !["LÖSCHEN", "DELETE"].contains(&confirmation) {

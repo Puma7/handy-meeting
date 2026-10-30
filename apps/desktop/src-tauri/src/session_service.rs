@@ -11,7 +11,7 @@ impl Service {
     pub(crate) fn data(&self, id: &str) -> AppResult<SessionData> {
         // The reservation is authoritative even before a maintenance worker has
         // published progress. Opening here would recreate and cache a writer lease.
-        if self.lock()?.transitioning {
+        if self.lock()?.maintenance_reserved {
             return Err(
                 "Archive maintenance is running; wait or cancel before opening this meeting".into(),
             );
@@ -59,7 +59,7 @@ impl Service {
         }
         let mut inner = self.lock()?;
         // A read that began before admission must not repopulate the cleared view.
-        if inner.transitioning {
+        if inner.maintenance_reserved {
             return Err("Sitzungsablage wird geprüft oder geändert. Bitte kurz warten. / Session storage is being checked or changed; wait for completion.".into());
         }
         inner.view = Some(store);

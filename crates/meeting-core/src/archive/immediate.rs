@@ -109,13 +109,15 @@ pub fn pending_erasures(root: &Path) -> Result<Vec<PendingErasure>> {
     let mut result = Vec::new();
     for entry in optional_entries(&root.join("immediate-deletions"))? {
         let path = entry?.path();
-        regular(&path)?;
         let Some(name) = path.file_name().and_then(|s| s.to_str()) else {
             return Err("Invalid pending erasure name".into());
         };
-        if name.ends_with(".json.bak") {
+        // An orphan staging file is retained, never promoted to erasure authority.
+        // It must not hide valid markers belonging to other interrupted operations.
+        if name.starts_with('.') || name.ends_with(".json.bak") || !name.ends_with(".json") {
             continue;
         }
+        regular(&path)?;
         let id = name
             .strip_suffix(".json")
             .ok_or("Invalid pending erasure record")?;
@@ -166,14 +168,13 @@ fn source_leases(
         if path.exists() {
             // A corrupt/empty owned meeting is erasable; a valid manifest naming
             // a different meeting is an attribution conflict, never erasure authority.
-            if copies::manifest_id(&path).is_ok_and(|found| found != id) {
-                return Err("Source manifest belongs to another meeting; erasure blocked".into());
-            }
+            copies::reject_conflicting_identity(&path, id)?;
             leases.push(crate::storage::erasure_lease(&path)?);
         }
     }
     Ok(leases)
 }
+/// Erasure authority accepts only fixed native identities, never external legacy references.
 fn native_id(id: &str) -> bool {
     metadata::valid_id(id) && !id.starts_with("legacy-")
 }

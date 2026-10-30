@@ -100,6 +100,7 @@ impl LibraryIndex {
             Err(error) => Err(error.into()),
         }
     }
+    /// Opens the derived cache while holding shared process admission until SQLite closes.
     pub fn open(root: &Path) -> Result<Self> {
         metadata::checked_directory(root)?;
         let lease = index_lease(root, false)?;
@@ -392,8 +393,13 @@ fn index_lease(root: &Path, exclusive: bool) -> Result<std::fs::File> {
     } else {
         fs2::FileExt::try_lock_shared(&file)
     };
-    result
-        .map_err(|_| "The local search index is in use; wait for it before permanently deleting")?;
+    result.map_err(|_| {
+        if exclusive {
+            "The local search index is in use; wait for it to finish before continuing"
+        } else {
+            "The local search index is being updated; try again shortly"
+        }
+    })?;
     Ok(file)
 }
 /// Reserve the rebuildable index against concurrent processes before deleting any source data.

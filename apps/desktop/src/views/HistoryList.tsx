@@ -7,6 +7,7 @@ import type { MessageKey } from "../i18n";
  * Shows fallback history for a core without full-text search. Opening a row passes its
  * original meeting ID, including read-only imports, rather than looking up a title.
  */
+/** Renders explicit native meeting actions while imported originals remain read-only. */
 export default function HistoryList({
   history,
   locale,
