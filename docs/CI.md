@@ -59,9 +59,12 @@ That local mode records the selected Handy executable's SHA-256, but leaves
 an installed Handy release version. CI records the pinned version only after
 verifying the exact release archive; both modes verify the pinned model bytes.
 
-Linux virtual audio now requires both full eight-second tracks, closed PCM with
-matching confirmed hashes, distinct tones and the existing500ms difference
-limit. Unknown warnings or unexplained incomplete capture fail. Known receipt
+Linux virtual audio requests nine-second captures and requires both tracks to be
+8–10 seconds long, with closed PCM, matching confirmed hashes, distinct tones
+and the existing 500 ms difference limit. Only a source-specific declared startup
+zero prefix is excluded from signal windows; at least eight seconds of qualified
+tone must remain, and overlapping 250 ms windows are checked through the final
+sample. Unknown warnings or unexplained incomplete capture fail. Known receipt
 timing and startup-silence warnings remain explicit: startup gaps yield
 `passed-with-startup-gaps`, `completeCapture=false`. This is transport evidence,
 never proof of a gap-free recording.

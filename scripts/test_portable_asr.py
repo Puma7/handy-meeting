@@ -537,6 +537,32 @@ class ReferenceVerdicts(unittest.TestCase):
             audio.startup_counters(result, "system")
         self.assertNotIn("private fixture", str(raised.exception))
 
+    def test_linux_short_native_padding_is_only_accepted_as_declared_incomplete_audio(self):
+        """A truthful short native-start warning keeps all tone limits and the incomplete verdict."""
+        self.linux_fixture(counts=(144922, 144922),
+                           warnings=[audio.TIMING, "microphone" + audio.START])
+        self.rewrite_linux_signal("microphone", lambda data: bytes(1044) + data[:-1044])
+        path = self.root / "result.json"
+        result = json.loads(path.read_text())
+        result["portableStartup"] = [{"source": "microphone", "writtenBeforePadding": 0,
+            "estimatedPaddingSamples": 522, "firstPacketSamples": 200,
+            "firstPacketLeadingZeroSamples": 1}]
+        path.write_text(json.dumps(result))
+        receipt = audio.verify(self.root)
+        self.assertFalse(receipt["completeCapture"])
+        self.assertEqual(receipt["verdict"], "passed-with-startup-gaps")
+        self.assertEqual(receipt["tracks"]["microphone"]["nativeEstimatedPaddingSamples"], 522)
+        self.assertGreaterEqual(receipt["tracks"]["microphone"]["qualifiedToneSamples"], 128000)
+        # Merely supplying native counters never substitutes for the warning/flag.
+        checkpoint = self.root / "checkpoints/checkpoint-000000.json"
+        session = json.loads(checkpoint.read_text())
+        result["warnings"] = session["warnings"] = [audio.TIMING]
+        result["captureIncomplete"] = session["captureIncomplete"] = False
+        path.write_text(json.dumps(result))
+        checkpoint.write_text(json.dumps(session))
+        with self.assertRaisesRegex(ValueError, "Silent or mixed-up"):
+            audio.verify(self.root)
+
     def test_linux_startup_diagnostics_are_source_specific_and_optional(self):
         """Keep older results compatible and never use one track's counters for another."""
         entry = {"source": "system", "writtenBeforePadding": 0,

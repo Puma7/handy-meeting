@@ -1,6 +1,6 @@
 # 30 October 2026 – first real portable-ASR CI outcomes and runtime correction
 
-On PR35 head `b4c6494787d74ccaf846aac369ce35968f47167e`, the complete
+On PR #35 head `b4c6494787d74ccaf846aac369ce35968f47167e`, the complete
 [Mac ARM job](https://github.com/Puma7/meeting-for-handy/actions/runs/41020929728/job/123947869618)
 passed the real Handy 0.9.8/Q8 CPU test: 45.133471083 seconds, 31 reference words per
 track and zero word errors on either, owned worker restart, audio hashes, confirmed
@@ -32,7 +32,7 @@ All 110 local Python guards ran (109 passed; one Unix-link case skipped on
 Windows). The required project check passed. The Rust/frontend product code
 retains its previously checked bytes apart from the documented diagnostic input.
 These new notes contain only public CI references and synthetic checks. The
-previously published full PR35 report is unchanged.
+previously published full PR #35 report is unchanged.
 
 
 ## Linux runtime dependency follow-up
@@ -88,42 +88,42 @@ two-hour meeting. Subsequent commits still require their own current CI result.
 
 ## Entire-track virtual tone verification
 
-Full review on2fedecfb reproduced a silent final two seconds passing the former
+Full review on 2fedecfb reproduced a silent final two seconds passing the former
 middle-half-only signal check despite matching PCM duration and hashes. The
-verifier now checks overlapping250ms windows from the start through the final
+verifier now checks overlapping 250 ms windows from the start through the final
 sample. Only a source-specific declared zero prefix is excluded and reported
 separately; it must still leave eight seconds of tone. Startup gaps retain the
 incomplete verdict and never excuse silence in the other track or later audio.
-The existing RMS>1000,440Hz±40,1000Hz±60,PCM/hash and500ms track-difference
+The existing RMS >1000, 440 Hz ±40, 1000 Hz ±60, PCM/hash and 500 ms track-difference
 criteria are unchanged.
 
 Three meaningful pre-fix regressions failed: trailing silence, unexcused leading
-silence and a declared prefix replacing required tone. All115Python guards now
-run with114passes and one Unix-only skip onWindows. A positive fixture retains
-a declared500ms prefix and checks the rest of the track. These are synthetic
+silence and a declared prefix replacing required tone. All 115 Python guards now
+run with 114 passes and one Unix-only skip on Windows. A positive fixture retains
+a declared 500 ms prefix and checks the rest of the track. These are synthetic
 verifier fixtures; fresh real Linux virtual-device CI remains required on the
 new head. No physical, GPU or long-duration claim follows from them.
 
 
-## Candidate14: enough fixture tone after startup
+## Candidate 14: enough fixture tone after startup
 
-Candidate13's stricter whole-track signal verifier correctly rejected current
-Linux job124164329203: the declared startup prefix left less than eight seconds
+Candidate 13's stricter whole-track signal verifier correctly rejected current
+Linux job 124164329203: the declared startup prefix left less than eight seconds
 of actual tone. The separate generated-speech ASR check in that same job passed
 with zero/31 and one/31 word errors, worker restart and unchanged journals/audio;
 this does not make the failed virtual-device step or overall CI successful.
 No raw PCM artifact was uploaded, so playback buffering versus capture-helper
 startup cannot be separated conclusively from that log.
 
-Before the next actual Linux run, the private fixture now requests50ms playback
+Before the next actual Linux run, the private fixture now requests 50 ms playback
 latency, warms its own sources for three seconds and requests nine seconds of
 recording. Recorder readiness can precede receipt of real PCM. This changes only
-the supplied fixture within the existing8–10second receipt window. The verifier
+the supplied fixture within the existing 8–10 second receipt window. The verifier
 still requires at least eight seconds of tone after a source-specific declared
-zero prefix, all overlapping250ms signal windows, the same RMS/frequency limits,
-confirmed hashes/counts and at most500ms between tracks. A new boundary test
+zero prefix, all overlapping 250 ms signal windows, the same RMS/frequency limits,
+confirmed hashes/counts and at most 500 ms between tracks. A new boundary test
 accepts one second of declared prefix plus eight seconds of tone in a nine-second
-receipt, and rejects1.25seconds prefix at that same length. Startup gaps remain
+receipt, and rejects 1.25 seconds prefix at that same length. Startup gaps remain
 explicitly incomplete audio. The actual new Linux CI is required; no physical
 microphone, performance, GPU or endurance result is implied.
 
@@ -232,3 +232,49 @@ An actual new Linux CI run is required to distinguish the observed zero prefix's
 origin. These synthetic tests provide no physical microphone, local text-model,
 GPU, performance or combined two-hour evidence, and do not make the failing
 candidate 16 target run successful.
+
+## Candidate 18: declare every estimated initial prefix truthfully
+
+The actual [candidate 17 Linux job](https://github.com/Puma7/meeting-for-handy/actions/runs/41110229620/job/124250502899)
+identified the zero prefix's origin. The first microphone window failed at
+870 Hz with 523 leading zero samples. Its passive native counters recorded
+522 inserted alignment samples, one leading zero in the first 200-sample helper
+packet and no previously written samples. The native alignment therefore
+accounts for the estimated prefix; the incoming helper did not supply those
+522 samples. The previous >8000-sample initial-warning threshold left this short
+estimated prefix undeclared and reported completeCapture=true.
+
+The native initial path now declares any nonzero estimated alignment prefix
+with its existing source-specific startup warning. This deliberately makes the
+capture-integrity flag more conservative, including short prefixes; it does not
+prove that audible speech was lost. Intentional privacy-control resumes retain
+their existing notice policy. Alignment targets, saved PCM, timing origin,
+readiness, cancellation, privacy gates and the passive counters are unchanged.
+Incoming zeros without native padding receive no estimated-start declaration.
+
+The verifier is byte-identical to candidate 17: it gets no undeclared-padding
+allowance, and counters alone never excuse silence. Its existing declared-prefix
+path still requires eight seconds of qualified tone and every overlapping
+250 ms window through the final sample, with unchanged RMS/frequency, receipt
+length, hashes and 500 ms track-difference limits. A source with declared startup
+silence remains passed-with-startup-gaps and completeCapture=false. A new Python
+case reproduces the observed short-prefix shape and verifies that removing the
+warning/flag fails even when the same native counters remain present.
+
+The deterministic native before case failed because a known short estimated
+alignment was not declared, while the incoming-zero negative case passed. After
+correction all 351 Rust workspace/all-target tests pass with warnings denied;
+the same two special entry points are regularly ignored. All 124 Python checks
+ran: 123 passed and the same Unix-only case was regularly skipped on Windows.
+Those Python fixture checks overlapped native compilation, not a performance or
+endurance measurement. The unchanged frontend retains earlier 225-test evidence
+and was not rerun. The complete candidate 17 TEST_REPORT.md, locked dependencies,
+recording fixture, workflows and verifier remain byte-identical. The CI guide
+now precisely distinguishes nine-second requests, 8–10-second saved tracks and
+the eight-second qualified-tone minimum; evidence prose spacing is corrected.
+
+The failed candidate 17 run remains evidence of the diagnosed issue, not a
+passing run. Fresh target CI on this correction is required. Physical recording,
+permissions, GPU, text-model and combined two-hour reference limits remain open;
+no gap-free device or delivery-readiness claim follows from these synthetic
+tests or the new warning.

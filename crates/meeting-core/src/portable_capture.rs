@@ -273,19 +273,14 @@ pub(super) fn record_controlled(
                                                 * f64::from(SAMPLE_RATE))
                                                 as u64;
                                         let target = lead.saturating_sub(pcm.len() as u64);
-                                        if target.saturating_sub(writer.written_samples()) > 8000 {
-                                            if epoch == 0 {
-                                                let _ = store.warn(&format!("{source}: the source started late; leading silence is estimated and can contain missing audio."));
-                                            } else {
-                                                let _ = store.notice(&format!("{source}: capture resumed with estimated startup silence. This silence is intentional control timing, not recovered speech."));
-                                            }
-                                        }
                                         align_first_packet(
                                             &mut writer,
                                             target,
                                             source,
                                             &pcm,
                                             &controls,
+                                            &store,
+                                            epoch,
                                         )?;
                                         received = true;
                                     }
@@ -429,6 +424,8 @@ fn align_first_packet(
     source: &str,
     pcm: &[i16],
     controls: &CaptureControls,
+    store: &SessionStore,
+    epoch: u64,
 ) -> Result<()> {
     let source = match source {
         "system" => "system",
@@ -436,6 +433,14 @@ fn align_first_packet(
         _ => return Err("Invalid audio track".into()),
     };
     let before = writer.written_samples();
+    let padding = target.saturating_sub(before);
+    // Even a short estimated initial prefix is not confirmed received audio.
+    // Intentional privacy-control resumes retain their existing notice policy.
+    if epoch == 0 && padding > 0 {
+        let _ = store.warn(&format!("{source}: the source started late; leading silence is estimated and can contain missing audio."));
+    } else if padding > 8000 {
+        let _ = store.notice(&format!("{source}: capture resumed with estimated startup silence. This silence is intentional control timing, not recovered speech."));
+    }
     pad_estimated(writer, target)?;
     controls.note_portable_startup(PortableStartupTiming {
         source,
@@ -463,7 +468,7 @@ mod tests {
         let mut writer = PcmWriter::new(store.clone(), "system").unwrap();
         writer.append(&[19, -19]).unwrap();
         let packet = [0, 0, 0, 11, -12];
-        align_first_packet(&mut writer, 457, "system", &packet, &controls).unwrap();
+        align_first_packet(&mut writer, 457, "system", &packet, &controls, &store, 0).unwrap();
         writer.append(&packet).unwrap();
         writer.finish().unwrap();
         let observations = controls.portable_startup_timing().unwrap();
@@ -487,12 +492,44 @@ mod tests {
         expected.extend(packet);
         assert_eq!(actual, expected);
         // A later restart must not replace the first observation with unrelated data.
-        align_first_packet(&mut writer, 0, "system", &[33], &controls).unwrap();
+        align_first_packet(&mut writer, 0, "system", &[33], &controls, &store, 0).unwrap();
         assert_eq!(controls.portable_startup_timing().unwrap(), observations);
         assert!(
-            !data.capture_incomplete,
-            "The existing warning policy is unchanged"
+            data.capture_incomplete,
+            "Estimated startup silence must be declared even below half a second"
         );
+        assert!(data
+            .warnings
+            .iter()
+            .any(|warning| warning.starts_with("system: the source started late;")));
+    }
+
+    #[test]
+    /// Incoming silence is not native padding and cannot obtain an estimated
+    /// startup-gap declaration that would excuse a failing synthetic signal.
+    fn incoming_zero_samples_without_native_padding_get_no_startup_gap_declaration() {
+        let root = tempfile::tempdir().unwrap();
+        let store = SessionStore::create(root.path(), "Synthetic incoming silence", "m", "s", None)
+            .unwrap();
+        let controls = CaptureControls::uncontrolled();
+        let mut writer = PcmWriter::new(store.clone(), "system").unwrap();
+        let mut packet = vec![0; 523];
+        packet.extend([23, -24]);
+        align_first_packet(&mut writer, 0, "system", &packet, &controls, &store, 0).unwrap();
+        writer.append(&packet).unwrap();
+        writer.finish().unwrap();
+        let data = store.snapshot().unwrap();
+        assert!(!data.capture_incomplete);
+        assert!(data.warnings.is_empty());
+        let observed = controls.portable_startup_timing().unwrap();
+        assert_eq!(observed[0].estimated_padding_samples, 0);
+        assert_eq!(observed[0].first_packet_leading_zero_samples, 523);
+        let actual: Vec<i16> = hound::WavReader::open(store.audio_path(&data.parts[0]).unwrap())
+            .unwrap()
+            .samples::<i16>()
+            .map(std::result::Result::unwrap)
+            .collect();
+        assert_eq!(actual, packet);
     }
 
     #[test]
