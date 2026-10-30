@@ -46,6 +46,52 @@ function childPolicy() {
   };
 }
 
+it("keeps an interrupted deletion and its typed continuation visible outside closed maintenance", async () => {
+  const meeting = "c".repeat(32);
+  const resume = vi.fn().mockResolvedValue("synthetic-resumed-job");
+  const api = {
+    getRetentionPolicy: vi.fn().mockResolvedValue(childPolicy()),
+    getMaintenanceProgress: vi.fn().mockResolvedValue(null),
+    listArchives: vi.fn().mockResolvedValue({ items: [], more: false }),
+    listUnfinishedDeletions: vi.fn().mockResolvedValue([
+      {
+        logId: "synthetic-log",
+        meetingId: meeting,
+        deletedFiles: 1,
+        totalFiles: 3,
+        confirmedAt: "2026-01-01T00:00:00Z",
+      },
+    ]),
+    resumePermanentDeletion: resume,
+  } as unknown as DesktopApi;
+  const disclosure = renderChildMaintenance(api);
+  const warning = await screen.findByText("Unterbrochene endgültige Löschung");
+  expect(disclosure.open).toBe(false);
+  expect(warning.closest("details")).toBeNull();
+  expect(screen.getByText(meeting).closest("details")).toBeNull();
+  expect(resume).not.toHaveBeenCalled();
+  await userEvent.click(
+    screen.getByRole("button", { name: "Fortsetzen prüfen" }),
+  );
+  const button = screen.getByRole("button", {
+    name: "Löschung fortsetzen",
+  }) as HTMLButtonElement;
+  expect(button.closest("details")).toBeNull();
+  expect(button.disabled).toBe(true);
+  await userEvent.type(
+    screen.getByRole("textbox", {
+      name: `Zur Bestätigung „DELETE ${meeting}“ eingeben`,
+    }),
+    `DELETE ${meeting}`,
+  );
+  await userEvent.click(button);
+  expect(resume).toHaveBeenCalledExactlyOnceWith(
+    "synthetic-log",
+    `DELETE ${meeting}`,
+  );
+  expect(disclosure.open).toBe(false);
+});
+
 it.each(["restore", "compact"] as const)(
   "keeps a rejected archive %s visible after maintenance closes",
   async (operation) => {

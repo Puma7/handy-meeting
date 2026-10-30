@@ -2164,26 +2164,29 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
           <SettingsView
             textModelSettings={textModelSettings}
             speakerModelSettings={
-              api.checkSpeakerModel && (
-                <SpeakerExperiments
-                  setupOnly
-                  embedded
-                  api={api}
-                  locale={locale}
-                  models={app?.handy?.models ?? []}
-                  recording={
-                    recording || catchingUp || Boolean(app?.transitioning)
-                  }
-                  checkedModels={speakerChecks}
-                  selectedModelId={speakerModelId}
-                  onSelectedModelChange={setSpeakerModelId}
-                  onModelChecked={onSpeakerModelChecked}
-                  onCheckingChange={onSpeakerCheckingChange}
-                  checkingBlocked={
-                    speakerChecking || notesBusy || busy || refreshingHandy
-                  }
-                />
-              )
+              api.checkSpeakerModel
+                ? (statusContainer) => (
+                    <SpeakerExperiments
+                      setupOnly
+                      embedded
+                      statusContainer={statusContainer}
+                      api={api}
+                      locale={locale}
+                      models={app?.handy?.models ?? []}
+                      recording={
+                        recording || catchingUp || Boolean(app?.transitioning)
+                      }
+                      checkedModels={speakerChecks}
+                      selectedModelId={speakerModelId}
+                      onSelectedModelChange={setSpeakerModelId}
+                      onModelChecked={onSpeakerModelChecked}
+                      onCheckingChange={onSpeakerCheckingChange}
+                      checkingBlocked={
+                        speakerChecking || notesBusy || busy || refreshingHandy
+                      }
+                    />
+                  )
+                : undefined
             }
             api={api}
             app={app}

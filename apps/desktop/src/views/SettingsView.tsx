@@ -50,11 +50,14 @@ export default function SettingsView({
   onLocale: (locale: Locale) => void;
   onTheme: (theme: Theme) => void;
   textModelSettings?: ReactNode;
-  speakerModelSettings?: ReactNode;
+  /** Renders persistent setup with its asynchronous alerts outside the disclosure. */
+  speakerModelSettings?: (statusContainer: HTMLElement | null) => ReactNode;
 }) {
   const de = locale === "de";
   const unavailable = busy || blocked || !connected;
   const [maintenanceStatusRoot, setMaintenanceStatusRoot] =
+    useState<HTMLDivElement | null>(null);
+  const [speakerStatusRoot, setSpeakerStatusRoot] =
     useState<HTMLDivElement | null>(null);
   return (
     <>
@@ -111,14 +114,17 @@ export default function SettingsView({
           </section>
         )}
         {speakerModelSettings && (
-          <details className="settings-disclosure">
-            <summary>
-              {de
-                ? "Sprecherfunktionen · optional"
-                : "Speaker features · optional"}
-            </summary>
-            {speakerModelSettings}
-          </details>
+          <>
+            <div ref={setSpeakerStatusRoot} />
+            <details className="settings-disclosure">
+              <summary>
+                {de
+                  ? "Sprecherfunktionen · optional"
+                  : "Speaker features · optional"}
+              </summary>
+              {speakerModelSettings(speakerStatusRoot)}
+            </details>
+          </>
         )}
         <section>
           <h2>{t.theme}</h2>

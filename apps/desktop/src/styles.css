@@ -2228,6 +2228,10 @@ p {
   max-width: 76ch;
   line-height: 1.6;
 }
+.archive-interruption {
+  display: block;
+}
+
 .settings-disclosure {
   border-bottom: 1px solid var(--color-line);
   padding: 18px 0;

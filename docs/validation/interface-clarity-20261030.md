@@ -98,8 +98,10 @@ and provider behavior, dependencies, review rules and runtime limits are unchang
 
 All 230 frontend tests, TypeScript, the production build, frontend formatting
 and the required `./verify.ps1` passed for these corrections. Full byte comparison
-against the previously published candidate confirms every native source file and
-the historical report are unchanged. Target CI and both providers must review the
+against the previously published candidate confirms every native source file is
+unchanged. The pre-existing historical report sections remain byte-identical;
+later validation sections were appended under explicit publication approval.
+Target CI and both providers must review the
 new head before its review rounds can be complete.
 
 
@@ -160,3 +162,38 @@ with TypeScript/production build. Native source and dependency bytes are unchang
 A rendered synthetic 600px check confirmed the regular facts hidden while the
 opened disclosure showed CPU 28%, memory amounts and the unmeasured-GPU limitation,
 with no horizontal document overflow. No real hardware reading is claimed.
+
+## Candidate 11: asynchronous setup errors and unfinished deletion
+
+Speaker setup keeps its component mounted when its optional disclosure closes.
+The settings view now supplies an alert container outside that disclosure; a
+later model-check failure is rendered there without reopening the optional
+controls or duplicating the alert. A full-App regression starts a deferred
+synthetic check, closes the disclosure and rejects the check. The exact former
+published speaker component fails the corrected test at its collapsed alert
+ancestor; the new component passes. An earlier version of that fixture lacked
+the optional start-speaker capability and is retained as a fixture failure,
+not presented as proof of the application defect.
+
+Successfully loaded unfinished permanent deletions also use the visible
+maintenance status area, including their meeting identities, progress and
+continuation controls. The typed confirmation stays with that visible notice;
+loading a record never starts deletion. A synthetic regression loads a stopped
+record while maintenance is closed, checks its visible identity, then requires
+the exact typed confirmation before invoking its mocked continuation command.
+The former notice failed the collapsed-ancestor assertion. The warning uses a
+stacked layout so its heading, explanation and confirmation remain readable at
+narrow widths instead of competing as flex-row columns.
+
+The previous documentation statement now explicitly applies only to pre-existing
+historical report sections; later sections were appended under the user's
+publication approval. Every native source remains byte-identical, and candidate
+11 also leaves the complete candidate 10 TEST_REPORT.md byte-identical.
+
+The full frontend suite passes 242 tests. TypeScript/production build and frontend
+formatting pass. Rendered checks with synthetic IPC at 1280 px and 390 px show
+the late error and unfinished-deletion controls outside closed settings, with
+no horizontal document overflow or browser console errors. The final destructive
+action remains disabled without typed confirmation; no native deletion, model
+check, real meeting or audio device is invoked by this browser fixture. Native,
+physical-device, model-provider, GPU and endurance evidence is unchanged.
