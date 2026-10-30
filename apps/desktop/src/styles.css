@@ -284,7 +284,7 @@ label {
   font-style: italic;
   overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
 }
 /* Short windows keep every sidebar control reachable: a compact card, and scrolling. */
 @media (max-height: 720px) {
@@ -2245,12 +2245,6 @@ p {
 }
 .settings-disclosure > section {
   margin-top: 20px;
-}
-.sidebar-recording-text {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
 }
 .sidebar-recording-facts dd {
   flex-wrap: wrap;

@@ -76,3 +76,28 @@ the correction. All 229 frontend tests, TypeScript, the production build and the
 required `./verify.ps1` check pass for these additions. Provider transport, output
 limits and incomplete-response validation are unchanged. No private provider logs
 or meeting diagnostics are part of the public source evidence.
+
+## Compact status and legacy import visibility
+
+Full review 5711425553 identified two further UI issues. The normal two-line
+sidebar excerpt is now declared with its base styles, before the one-line
+short-window and hidden compact-sidebar rules. Synthetic browser checks reproduce
+the previous two-line excerpt at both 1280×600 and 600×900; the corrected layout
+keeps one line in a short window and hides it in the compact sidebar.
+
+The legacy import control remains outside collapsible maintenance settings,
+including its busy/disabled state. Explanatory prose stays under optional opening
+guidance, so progress visibility does not require restoring all help text to the
+default settings view. A new synthetic regression starts the exact import
+callback, closes maintenance settings while busy and verifies that its control
+has no collapsed ancestor. It failed before the correction. No actual legacy
+file is selected or modified by this test.
+
+These changes affect only React/CSS and this sanitized note. Existing native
+and provider behavior, dependencies, review rules and runtime limits are unchanged.
+
+All 230 frontend tests, TypeScript, the production build, frontend formatting
+and the required `./verify.ps1` passed for these corrections. Full byte comparison
+against the previously published candidate confirms every native source file and
+the historical report are unchanged. Target CI and both providers must review the
+new head before its review rounds can be complete.

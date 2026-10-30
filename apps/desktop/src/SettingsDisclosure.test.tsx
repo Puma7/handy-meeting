@@ -75,3 +75,43 @@ it("keeps a running maintenance job and cancellation outside collapsed settings"
   expect(cancel).toHaveBeenCalledExactlyOnceWith("synthetic-running-archive");
   expect(disclosure.open).toBe(false);
 });
+
+it("keeps the exact legacy import control visible when settings collapse during an import", async () => {
+  const importLegacy = vi.fn();
+  const noop = () => undefined;
+  const props = {
+    api: { chooseLegacyManifest: vi.fn() } as unknown as DesktopApi,
+    app: null,
+    locale: "de" as const,
+    theme: "system" as const,
+    t: de,
+    busy: false,
+    blocked: false,
+    connected: true,
+    refreshingHandy: false,
+    preferencesPersistable: true,
+    handyPath: "",
+    onChooseHandy: noop,
+    onRefreshHandy: noop,
+    onRefreshDevices: noop,
+    onImportLegacy: importLegacy,
+    onRebuildIndex: noop,
+    onLocale: noop,
+    onTheme: noop,
+  };
+  const view = render(<SettingsView {...props} />);
+  const disclosure = screen.getByText("Daten und Wartung").closest("details")!;
+  await userEvent.click(disclosure.querySelector("summary")!);
+  const button = screen.getByRole("button", {
+    name: "Sitzungsdatei auswählen und nur lesbar öffnen …",
+  });
+  await userEvent.click(button);
+  expect(importLegacy).toHaveBeenCalledOnce();
+  view.rerender(<SettingsView {...props} busy />);
+  await userEvent.click(disclosure.querySelector("summary")!);
+  expect(disclosure.open).toBe(false);
+  expect((button as HTMLButtonElement).disabled).toBe(true);
+  // Unlike jsdom's partial details rendering, actual DOM ancestry is decisive:
+  // closing any disclosure must not hide the only in-progress import control.
+  expect(button.closest("details")).toBeNull();
+});

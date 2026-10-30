@@ -197,26 +197,29 @@ export default function SettingsView({
           models={app?.handy?.models ?? []}
           statusContainer={maintenanceStatusRoot}
         />
-        <section className="legacy-panel">
-          <h2>{t.legacy}</h2>
+      </details>
+      <section className="legacy-panel">
+        <h2>{t.legacy}</h2>
+        <button
+          className="secondary"
+          disabled={unavailable || !api.chooseLegacyManifest}
+          onClick={onImportLegacy}
+        >
+          <FolderOpen size={15} />
+          {de
+            ? "Sitzungsdatei auswählen und nur lesbar öffnen …"
+            : "Choose session file and open read-only …"}
+        </button>
+        <details className="help-disclosure">
+          <summary>{de ? "Hinweise zum Öffnen" : "Opening guidance"}</summary>
           <p className="muted">{t.legacyHelp}</p>
-          <button
-            className="secondary"
-            disabled={unavailable || !api.chooseLegacyManifest}
-            onClick={onImportLegacy}
-          >
-            <FolderOpen size={15} />
-            {de
-              ? "Sitzungsdatei auswählen und nur lesbar öffnen …"
-              : "Choose session file and open read-only …"}
-          </button>
           <p className="muted">
             {de
               ? "Wähle die vorhandene session.json im Dateidialog. Abbrechen verändert nichts; die Originaldateien bleiben erhalten."
               : "Choose the existing session.json in the file dialog. Cancelling changes nothing; original files are preserved."}
           </p>
-        </section>
-      </details>
+        </details>
+      </section>
     </>
   );
 }
