@@ -188,9 +188,17 @@ export default function NotesView({
       )}
       <section className="notes-config">
         {!setupOpen && !notesBusy && modelDiscoveryError && (
-          <p role="alert" className="notice warning">
-            {modelDiscoveryError}
-          </p>
+          <div role="alert" className="notice warning analysis-discovery-error">
+            <p>{modelDiscoveryError}</p>
+            <p>
+              {locale === "de"
+                ? "Starte deinen lokalen Modelldienst und aktualisiere die Liste."
+                : "Start your local model server and refresh the list."}
+            </p>
+            <button className="secondary" onClick={() => setSetupOpen(true)}>
+              {locale === "de" ? "Einrichtung öffnen" : "Open setup"}
+            </button>
+          </div>
         )}
         <details
           className="analysis-setup"

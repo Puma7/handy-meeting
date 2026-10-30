@@ -226,3 +226,36 @@ overflow or browser console errors. They invoke only a mock archive callback.
 Native sources, dependencies, review rules and the complete candidate 11
 TEST_REPORT.md remain byte-identical. No real meeting, check archive, model
 service or audio device is opened or changed by these fixtures.
+
+## Candidate 13: visible recovery controls and polite live warning additions
+
+Closed analysis setup now keeps the local discovery error, a short next action
+and an explicit setup-opening button together. Only the click opens setup. An
+invalid cloud endpoint keeps the existing text-model settings action beside the
+visible model status while Start remains disabled; the same action is moved
+out of the closed options rather than duplicated. No model request or provider
+change is triggered by either recovery control.
+
+The live recording view opts into a persistent polite, atomic warning region.
+It announces only added warnings after initial render, not the initial warning
+list or unchanged polling arrays. Empty polls keep the region mounted, removals
+clear the old announcement, and historical meeting warnings do not opt in.
+Existing disclosure reopening, deduplication, literal text rendering and manual
+closure are retained. This validates DOM accessibility semantics, not actual
+screen-reader speech or a real driver event.
+
+All three focused regressions fail on the prior candidate 12: absent discovery
+remedy, settings action inside closed cloud options and absent warning live region.
+After correction all 246 frontend tests and TypeScript/production build pass.
+The complete-App recording regression also verifies the live-view opt-in. Native
+sources, dependencies, protection/review settings and the entire published
+candidate 12 TEST_REPORT.md remain byte-identical; native suites were not rerun.
+
+Synthetic browser checks confirm the cloud action at 1280 px and the discovery
+error/remedy outside closed setup at 390 px, with no horizontal overflow. A
+synthetic polling addition populates only the new warning in the polite region;
+initial warnings leave it empty. These controls use mocked callbacks and no
+real provider, audio device, archive, deletion, filesystem or clipboard action.
+Physical recording, permissions, provider, GPU and combined endurance limits
+remain open. Current target CI and two fresh clean reviews per provider on this
+same final head remain required.

@@ -368,6 +368,9 @@ main {
 .notice p {
   margin-top: 4px;
 }
+.analysis-discovery-error {
+  display: block;
+}
 .notice strong {
   font-weight: 600;
 }

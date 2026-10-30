@@ -86,6 +86,33 @@ it("reopens capture warnings only when a new warning arrives", async () => {
   expect(detail.open).toBe(false);
 });
 
+it("announces only new live capture warnings without reannouncing unchanged polls or history", () => {
+  const warnings = ["Synthetic initial warning"];
+  const view = render(
+    <SessionWarnings warnings={warnings} locale="de" t={de} announceNew />,
+  );
+  const region = screen.getByRole("status");
+  expect(region.textContent).toBe("");
+  const next = [...warnings, "Synthetic added warning <img src=x>"];
+  view.rerender(
+    <SessionWarnings warnings={next} locale="de" t={de} announceNew />,
+  );
+  expect(region.textContent).toBe("Synthetic added warning <img src=x>");
+  expect(region.querySelector("img")).toBeNull();
+  view.rerender(
+    <SessionWarnings warnings={[...next]} locale="de" t={de} announceNew />,
+  );
+  expect(screen.getByRole("status")).toBe(region);
+  expect(region.textContent).toBe("Synthetic added warning <img src=x>");
+  view.rerender(
+    <SessionWarnings warnings={[]} locale="de" t={de} announceNew />,
+  );
+  expect(screen.getByRole("status")).toBe(region);
+  expect(region.textContent).toBe("");
+  view.rerender(<SessionWarnings warnings={[...next]} locale="de" t={de} />);
+  expect(screen.queryByRole("status")).toBeNull();
+});
+
 describe("recording status in the sidebar (synthetic IPC)", () => {
   it.each([
     { value: 94.6, expected: "CPU: 95 % · hohe Auslastung", high: true },
@@ -274,6 +301,16 @@ describe("recording status in the sidebar (synthetic IPC)", () => {
       name: "Aufnahmestatus",
     });
     await within(region).findByText("„Zuletzt gesagter Satz“");
+    // The live MeetingView opts into announcements; historical MeetingDetail does not.
+    expect(
+      screen
+        .getAllByRole("status")
+        .some(
+          (node) =>
+            node.classList.contains("sr-only") &&
+            node.getAttribute("aria-live") === "polite",
+        ),
+    ).toBe(true);
     await userEvent.click(
       screen.getByRole("button", { name: "Einstellungen" }),
     );

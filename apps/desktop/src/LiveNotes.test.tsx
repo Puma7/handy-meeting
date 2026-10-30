@@ -261,6 +261,40 @@ it("never sends cloud text without the per-start release and never auto-starts c
   ).toBe(false);
 });
 
+it("keeps the cloud-settings remedy visible while an invalid endpoint disables start", async () => {
+  const onOpenTextModelSettings = vi.fn();
+  const start = vi.fn();
+  setup(
+    {
+      getLiveNotes: vi.fn().mockResolvedValue(status()),
+      startLiveNotes: start,
+    },
+    {
+      connection: {
+        ...local,
+        mode: "cloud",
+        endpoint: "http://invalid.example/v1/",
+        model: "synthetic-cloud",
+      },
+      onOpenTextModelSettings,
+    },
+  );
+  const button = (await screen.findByRole("button", {
+    name: "Live-Zusammenfassung starten",
+  })) as HTMLButtonElement;
+  expect(button.disabled).toBe(true);
+  const remedy = screen.getByRole("button", {
+    name: "Alle Textmodell-Einstellungen",
+  });
+  expect(remedy.closest("details")).toBeNull();
+  expect(
+    screen.getByText("Optionen und Hinweise").closest("details")!.open,
+  ).toBe(false);
+  await userEvent.click(remedy);
+  expect(onOpenTextModelSettings).toHaveBeenCalledOnce();
+  expect(start).not.toHaveBeenCalled();
+});
+
 it("auto-starts once for a local model while the meeting is recording", async () => {
   const start = vi
     .fn()

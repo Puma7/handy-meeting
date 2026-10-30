@@ -115,6 +115,35 @@ it("keeps idle model discovery failures outside collapsed analysis setup", async
   expect(api.generateNotes).not.toHaveBeenCalled();
 });
 
+it("opens analysis setup only from the visible discovery-error remedy", async () => {
+  const api = fixture();
+  vi.mocked(api.listTextModels).mockRejectedValue(
+    new Error("Synthetic discovery unavailable"),
+  );
+  render(<App api={api} />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: de.analyzeMeeting }),
+  );
+  const message = (
+    await screen.findAllByText("Synthetic discovery unavailable")
+  ).find((element) => !element.closest("details"))!;
+  expect(message).toBeDefined();
+  const details = screen.getByText(de.analysisSetup).closest("details")!;
+  expect(details.open).toBe(false);
+  const remedy = screen.getByRole("button", { name: "Einrichtung öffnen" });
+  expect(remedy.closest("details")).toBeNull();
+  expect(
+    screen
+      .getByText(
+        "Starte deinen lokalen Modelldienst und aktualisiere die Liste.",
+      )
+      .closest("details"),
+  ).toBeNull();
+  await userEvent.click(remedy);
+  expect(details.open).toBe(true);
+  expect(api.generateNotes).not.toHaveBeenCalled();
+});
+
 it("does not claim a backend job is unstarted when its progress cannot be read", async () => {
   const api = fixture();
   vi.mocked(api.getAppState).mockResolvedValue({
