@@ -217,6 +217,96 @@ it("paginates authoritative history without an index and clamps a removed final 
   expect(api.searchMeetings).not.toHaveBeenCalled();
 });
 
+it("keeps an older VIP on the first history page before newer unpinned meetings", async () => {
+  const recent = Array.from({ length: 26 }, (_, i) => ({
+    ...meeting,
+    id: (i + 1).toString(16).padStart(32, "0"),
+    title: `Synthetic recent ${i + 1}`,
+  }));
+  const vip = {
+    ...meeting,
+    id: "e".repeat(32),
+    title: "Synthetic older VIP",
+    startedAt: "2026-10-29T07:00:00Z",
+    userMetadata: {
+      revision: 1,
+      title: null,
+      pinned: true,
+      audioRemoved: false,
+    },
+  };
+  const native = [...recent, vip];
+  const originalIds = native.map((item) => item.id);
+  Object.freeze(native);
+  const api = { searchMeetings: vi.fn() } as unknown as DesktopApi;
+  const view = render(
+    <HistorySearch
+      api={api}
+      locale="de"
+      nativeMeetings={native}
+      onOpen={vi.fn()}
+    />,
+  );
+  expect(await screen.findByText(vip.title)).toBeTruthy();
+  expect(
+    Array.from(
+      view.container.querySelectorAll(".session-row strong"),
+      (node) => node.textContent,
+    )[0],
+  ).toBe(vip.title);
+  expect(screen.getByLabelText("VIP")).toBeTruthy();
+  await userEvent.click(screen.getByRole("button", { name: "Weiter" }));
+  expect(screen.queryByText(vip.title)).toBeNull();
+  expect(screen.getByText(recent[24].title)).toBeTruthy();
+  expect(screen.getByText(recent[25].title)).toBeTruthy();
+  expect(native.map((item) => item.id)).toEqual(originalIds);
+  expect(api.searchMeetings).not.toHaveBeenCalled();
+});
+
+it("uses the index's date and ID tie order within each VIP group without mutating summaries", () => {
+  const row = (id: string, title: string, date: string, pinned: boolean) => ({
+    ...meeting,
+    id: id.repeat(32),
+    title,
+    startedAt: date,
+    userMetadata: { revision: 1, title: null, pinned, audioRemoved: false },
+  });
+  const older = "2026-10-29T07:00:00Z",
+    newer = "2026-10-30T07:00:00Z";
+  const native = [
+    row("d", "Synthetic unpinned tie D", newer, false),
+    row("b", "Synthetic VIP tie B", older, true),
+    row("e", "Synthetic oldest ordinary", older, false),
+    row("a", "Synthetic VIP tie A", older, true),
+    row("c", "Synthetic unpinned tie C", newer, false),
+    row("f", "Synthetic newest VIP", newer, true),
+  ];
+  const original = JSON.stringify(native);
+  Object.freeze(native);
+  const view = render(
+    <HistorySearch
+      api={{ searchMeetings: vi.fn() } as unknown as DesktopApi}
+      locale="de"
+      nativeMeetings={native}
+      onOpen={vi.fn()}
+    />,
+  );
+  expect(
+    Array.from(
+      view.container.querySelectorAll(".session-row strong"),
+      (node) => node.textContent,
+    ),
+  ).toEqual([
+    "Synthetic newest VIP",
+    "Synthetic VIP tie A",
+    "Synthetic VIP tie B",
+    "Synthetic unpinned tie C",
+    "Synthetic unpinned tie D",
+    "Synthetic oldest ordinary",
+  ]);
+  expect(JSON.stringify(native)).toBe(original);
+});
+
 it("keeps observing a started deletion when delayed cancellation rejects", async () => {
   const props = fixture();
   let resolve!: (id: string) => void;

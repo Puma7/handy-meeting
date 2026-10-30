@@ -340,3 +340,30 @@ removal are not atomic object binding against a hostile filesystem writer;
 older or external programs that ignore the shared leases remain outside the
 guarantee. No physical or forensic erasure guarantee is added. All earlier
 external-copy boundaries and pending model-residency integration still apply.
+
+## Candidate 09: retain VIP ordering in authoritative history
+
+The unfiltered native History list preserves the previous SQLite ordering before
+pagination: pinned meetings first, then descending stored start date and ascending
+native identity for equal dates. The comparator uses ordinary string ordering,
+matching the index without depending on the browser locale. It sorts a filtered
+copy and never mutates the summaries supplied by the parent. Transcript queries
+keep their existing indexed ordering; the native list is not sorted during them.
+
+Both new regressions failed on candidate 08: an older VIP behind 26 recent
+ordinary meetings was missing from the first page, and mixed pinned groups with
+equal dates retained the wrong order. Both now pass. The cases also verify the
+VIP indicator, the later page, exact identity tie order and unchanged frozen
+input arrays. All 243 frontend tests, TypeScript and production build pass.
+The synthetic browser component shows an older pinned meeting before newer
+ordinary meetings, including after Refresh, a transcript query and clearing that
+query. Desktop and 390-pixel views have no horizontal overflow or console errors.
+This is component/IPC simulation, not native E2E, real erasure or device evidence.
+
+All native source files are byte-identical to published candidate 08. Its 386
+Rust tests (two existing special entry points normally ignored), 26 core erasure
+cases, formatting and Clippy results remain prior evidence for unchanged native
+bytes and were not rerun for this frontend correction. Locked dependencies,
+protection and review rules, application version, primary session format and the
+entire historical TEST_REPORT.md remain unchanged. All existing deletion limits
+and the model-residency integration requirement still apply.

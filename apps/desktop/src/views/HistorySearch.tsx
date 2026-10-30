@@ -10,6 +10,18 @@ import {
 import { errorMessage } from "../api";
 import { clock } from "../domain";
 import type { DesktopApi, Locale, MeetingSummary, SearchPage } from "../types";
+
+/** Preserve SQLite's pinned-descending, stored-date-descending, ID-ascending
+ * order without locale-dependent collation or changing the supplied summaries. */
+function historyOrder(a: MeetingSummary, b: MeetingSummary): number {
+  const pinned =
+    Number(b.userMetadata?.pinned ?? false) -
+    Number(a.userMetadata?.pinned ?? false);
+  if (pinned) return pinned;
+  if (a.startedAt !== b.startedAt) return a.startedAt > b.startedAt ? -1 : 1;
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+}
+
 /** Renders source-bound search hits and deletion actions without restoring blocked meeting rows. */
 export default function HistorySearch({
   api,
@@ -41,8 +53,11 @@ export default function HistorySearch({
     [refresh, setRefresh] = useState(0);
   const generation = useRef(0);
   const authoritative = !query.trim() && nativeMeetings !== undefined;
-  const native =
-    nativeMeetings?.filter((item) => !hiddenMeetingIds?.has(item.id)) ?? [];
+  const native = authoritative
+    ? (nativeMeetings ?? [])
+        .filter((item) => !hiddenMeetingIds?.has(item.id))
+        .sort(historyOrder)
+    : [];
   const viewOffset = authoritative
     ? Math.min(offset, Math.max(0, Math.floor((native.length - 1) / 25) * 25))
     : offset;
