@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Fail closed on unexpected virtual-capture failures; retain known startup gaps."""
 import hashlib
+from itertools import pairwise
 import json
 import math
 from pathlib import Path
@@ -18,6 +19,31 @@ def require(condition, message):
     """Fail closed on missing capture evidence or mismatched saved audio."""
     if not condition:
         raise ValueError(message)
+
+
+def verify_tone(samples, frequency, tolerance, declared_startup):
+    """Check overlapping250ms windows through the final sample; skip only declared zero prefix."""
+    start = next((i for i, sample in enumerate(samples) if sample), len(samples)) if declared_startup else 0
+    # The capture is8–10seconds including its estimated startup padding. Even a
+    # declared gap must leave eight seconds of tone, allowing its first phase-zero sample.
+    require(start <= len(samples) - 8 * 16000 + 1, "Declared startup silence leaves less than eight seconds of tone")
+    size = 4000
+    offsets = list(range(start, len(samples) - size + 1, size // 2))
+    if not offsets or offsets[-1] != len(samples) - size:
+        offsets.append(len(samples) - size)
+    levels, frequencies = [], []
+    for offset in offsets:
+        window = samples[offset:offset + size]
+        rms = math.sqrt(sum(s * s for s in window) / len(window))
+        crossings = sum((a < 0) != (b < 0) for a, b in pairwise(window))
+        hz = crossings * 16000 / 2 / len(window)
+        require(rms > 1000 and abs(hz - frequency) < tolerance, "Silent or mixed-up virtual source window")
+        levels.append(rms)
+        frequencies.append(hz)
+    return {"rms": round(sum(levels) / len(levels)), "hz": round(sum(frequencies) / len(frequencies)),
+            "minimumRms": round(min(levels)), "minimumHz": round(min(frequencies)),
+            "maximumHz": round(max(frequencies)), "toneWindows": len(offsets),
+            "windowSamples": size, "startupSilenceMs": start * 1000 // 16000}
 
 
 def verify(root):
@@ -57,12 +83,9 @@ def verify(root):
                 and part["confirmedSha256"] == hashlib.sha256(data).hexdigest(),
                 "Confirmed audio changed or is incomplete")
         require(result[source + "Ms"] == count * 1000 // 16000, "Result duration differs from saved PCM")
-        samples = struct.unpack(f"<{count}h", data)[count // 4: count * 3 // 4]
-        rms = math.sqrt(sum(s * s for s in samples) / len(samples))
-        crossings = sum((a < 0) != (b < 0) for a, b in zip(samples, samples[1:]))
-        hz = crossings * 16000 / 2 / len(samples)
-        require(rms > 1000 and abs(hz - frequency) < tolerance, "Silent or mixed-up virtual source")
-        tracks[source] = {"durationMs": result[source + "Ms"], "rms": round(rms), "hz": round(hz)}
+        samples = struct.unpack(f"<{count}h", data)
+        tone = verify_tone(samples, frequency, tolerance, source + START in warnings)
+        tracks[source] = {"durationMs": result[source + "Ms"], **tone}
     return {"success": True, "verdict": "passed-with-startup-gaps" if startup_gaps else "passed",
             "completeCapture": not result["captureIncomplete"], "startupGaps": startup_gaps,
             "virtualDevicesOnly": True, "physicalHardware": False,

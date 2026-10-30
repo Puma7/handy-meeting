@@ -441,6 +441,50 @@ class ReferenceVerdicts(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Silent or mixed-up"):
                 audio.verify(self.root)
 
+    def rewrite_linux_signal(self, source, transform):
+        """Change only synthetic PCM and its matching confirmation, preserving duration."""
+        checkpoint = self.root / "checkpoints/checkpoint-000000.json"
+        session = json.loads(checkpoint.read_text())
+        part = next(p for p in session["parts"] if p["source"] == source)
+        file = self.root / "sessions" / session["id"] / "audio" / part["file"]
+        with wave.open(str(file), "rb") as saved:
+            data = transform(saved.readframes(saved.getnframes()))
+        with wave.open(str(file), "wb") as saved:
+            saved.setparams((1, 2, 16000, 0, "NONE", "not compressed"))
+            saved.writeframes(data)
+        part["confirmedSha256"] = hashlib.sha256(data).hexdigest()
+        checkpoint.write_text(json.dumps(session))
+
+    def test_linux_late_player_exit_cannot_pass_middle_only_tone_check(self):
+        """A full-length/hash-consistent track still fails when its last two seconds are silent."""
+        self.linux_fixture()
+        self.rewrite_linux_signal("system", lambda data: data[:-64000] + bytes(64000))
+        with self.assertRaisesRegex(ValueError, "Silent or mixed-up"):
+            audio.verify(self.root)
+
+    def test_linux_early_silence_without_its_own_startup_warning_fails(self):
+        """Another track's startup warning cannot excuse missing microphone signal."""
+        self.linux_fixture(warnings=[audio.TIMING, "system" + audio.START])
+        self.rewrite_linux_signal("microphone", lambda data: bytes(64000) + data[64000:])
+        with self.assertRaisesRegex(ValueError, "Silent or mixed-up"):
+            audio.verify(self.root)
+
+    def test_linux_declared_startup_silence_is_separate_from_eight_seconds_of_tone(self):
+        """A declared half-second prefix leaves eight real seconds for window verification."""
+        self.linux_fixture(warnings=[audio.TIMING, "system" + audio.START])
+        self.rewrite_linux_signal("system", lambda data: bytes(16000) + data[16000:])
+        receipt = audio.verify(self.root)
+        self.assertFalse(receipt["completeCapture"])
+        self.assertEqual(receipt["tracks"]["system"]["startupSilenceMs"], 500)
+        self.assertGreater(receipt["tracks"]["system"]["toneWindows"], 20)
+
+    def test_linux_declared_startup_cannot_replace_required_tone_duration(self):
+        """A warning never lowers the eight-second signal duration requirement."""
+        self.linux_fixture(warnings=[audio.TIMING, "system" + audio.START])
+        self.rewrite_linux_signal("system", lambda data: bytes(64000) + data[64000:])
+        with self.assertRaisesRegex(ValueError, "startup"):
+            audio.verify(self.root)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -84,3 +84,22 @@ the real generated-speech CPU recognition, preservation/restart checks and nativ
 credential-store checks. These are CI results for that exact head, not physical
 microphone/loopback capture, permission-dialog interaction, GPU or a combined
 two-hour meeting. Subsequent commits still require their own current CI result.
+
+
+## Entire-track virtual tone verification
+
+Full review on2fedecfb reproduced a silent final two seconds passing the former
+middle-half-only signal check despite matching PCM duration and hashes. The
+verifier now checks overlapping250ms windows from the start through the final
+sample. Only a source-specific declared zero prefix is excluded and reported
+separately; it must still leave eight seconds of tone. Startup gaps retain the
+incomplete verdict and never excuse silence in the other track or later audio.
+The existing RMS>1000,440Hz±40,1000Hz±60,PCM/hash and500ms track-difference
+criteria are unchanged.
+
+Three meaningful pre-fix regressions failed: trailing silence, unexcused leading
+silence and a declared prefix replacing required tone. All115Python guards now
+run with114passes and one Unix-only skip onWindows. A positive fixture retains
+a declared500ms prefix and checks the rest of the track. These are synthetic
+verifier fixtures; fresh real Linux virtual-device CI remains required on the
+new head. No physical, GPU or long-duration claim follows from them.

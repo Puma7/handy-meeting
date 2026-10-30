@@ -928,7 +928,7 @@ Auf 9658735 waren alle 21 Check-Runs erfolgreich, neutral oder regulär
 waren ohne neue Befunde; die [öffentliche Abschlussnotiz](https://github.com/Puma7/meeting-for-handy/pull/35#issuecomment-6524952535)
 ordnet die tatsächlichen Links zu. Diese Ergebnisse gelten für 9658735; eine
 nachfolgende reine Berichtsergänzung benötigt erneut aktuelle CI und Reviews.
-Lokal waren zuletzt 110 von 111 Pythonprüfungen erfolgreich, der reine Unix-Fall unter
+Für Kandidat12 waren zuletzt 110 von 111 Pythonprüfungen erfolgreich, der reine Unix-Fall unter
 Windows regulär übersprungen. Der frische erforderliche ./verify.ps1-Check
 besteht auch mit dieser Berichtsergänzung. Produktcode und Prüfgrenzen bleiben
 gegenüber 9658735 unverändert.
@@ -938,3 +938,16 @@ Zweistundenlauf, der echte lokale Textmodell-Referenzlauf sowie Signatur und
 Notarisierung für eine Auslieferung. Es wurde weder zusammengeführt noch eine
 Version veröffentlicht oder ein Programm installiert. Weitere Einzelheiten:
 [docs/validation/portable-asr-20261030.md](docs/validation/portable-asr-20261030.md).
+
+
+### Vollständige Prüfung virtueller Tonsignale (Kandidat13)
+
+Der Linux-Prüfer prüft das Tonsignal jetzt in überlappenden 250ms-Fenstern über
+die gesamte Spur bis zum letzten Sample. Ein gemeldeter Nullpräfix beim
+Spurstart wird getrennt ausgewiesen; danach müssen acht Sekunden Tonsignal
+vorliegen. Eine Startwarnung erlaubt keine spätere Stille oder fehlenden Ton
+in der anderen Spur. Die bisherigen RMS-, Frequenz-, Hash-, PCM- und
+500ms-Spurdifferenzgrenzen bleiben bestehen. Drei reproduzierte Vorherfehler
+werden erkannt; die vollständigen 115 Pythonprüfungen enden mit 114 Erfolgen
+und einem regulär übersprungenen Unix-Fall unter Windows. Dies sind
+synthetische Prüferfixtures. Der echte Linux-CI-Lauf muss den neuen Head prüfen.
