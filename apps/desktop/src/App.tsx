@@ -149,6 +149,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
+    // A pending microphone reconnect blocks other controls but never Stop, which cancels it.
+    [reconnecting, setReconnecting] = useState(false),
     [isStopping, setIsStopping] = useState(false),
     [refreshingHandy, setRefreshingHandy] = useState(false),
     [handyRefreshFailure, setHandyRefreshFailure] = useState<string | null>(
@@ -339,6 +341,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     null,
   );
   const requestSequence = useRef(0),
+    // Counts stop requests; a reconnect answer from before a stop is outdated.
+    stopEpoch = useRef(0),
     mainRef = useRef<HTMLElement>(null),
     previousPage = useRef(page),
     selectedRef = useRef<string | null>(null),
@@ -1286,7 +1290,9 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
    * while keeping the stopping state visible.
    */
   async function stop() {
-    await action(async () => {
+    const work = async () => {
+      // A reconnect answer created before this stop must not restore the recording.
+      stopEpoch.current++;
       setIsStopping(true);
       try {
         const item = await api.stopMeeting();
@@ -1300,7 +1306,16 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       } finally {
         setIsStopping(false);
       }
-    });
+    };
+    // During a reconnect Stop must reach the native cancellation even when an unrelated
+    // foreground action (such as a history refresh) holds the busy state.
+    if (busy && reconnecting) {
+      if (isStopping) return;
+      setError(null);
+      await work().catch((failure) => setError(errorMessage(failure)));
+      return;
+    }
+    await action(work);
   }
   /**
    * Reloads the bound meeting before copying every original section, bypassing the bounded
@@ -1963,15 +1978,44 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             recording={recording}
             busy={
               busy ||
+              reconnecting ||
               speakerChecking ||
               refreshingHandy ||
               catchingUp ||
               (app?.transitioning ?? false)
             }
+            reconnecting={reconnecting}
             controlsAvailable={Boolean(
               api.setCapturePaused && api.setMicrophoneMuted,
             )}
             getAudioLevels={api.getAudioLevels}
+            onReconnectMicrophone={
+              api.reconnectMicrophone
+                ? () => {
+                    const id = app?.activeMeeting?.id;
+                    if (!id || busy || reconnecting) return;
+                    const epoch = stopEpoch.current;
+                    setReconnecting(true);
+                    setError(null);
+                    void api.reconnectMicrophone!(id)
+                      .then((state) => {
+                        if (epoch !== stopEpoch.current) return;
+                        requestSequence.current++;
+                        setApp(state);
+                      })
+                      .catch((failure) => {
+                        // Stopping cancels the reconnect; that is not a device error,
+                        // also when the stop has already finished.
+                        if (
+                          epoch === stopEpoch.current &&
+                          !latestRuntime.current.isStopping
+                        )
+                          setError(errorMessage(failure));
+                      })
+                      .finally(() => setReconnecting(false));
+                  }
+                : undefined
+            }
             onPause={(paused) => {
               const id = app?.activeMeeting?.id;
               if (!id || !api.setCapturePaused) return;

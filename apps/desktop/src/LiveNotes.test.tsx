@@ -92,6 +92,44 @@ const local: LiveConnection = {
   useSavedKey: false,
 };
 
+it("does not call a finished run complete while its overview still covers only the first window", async () => {
+  const start = vi
+    .fn()
+    .mockResolvedValue(status({ status: "updating", running: true }));
+  setup({
+    getLiveNotes: vi.fn().mockResolvedValue(
+      status({
+        status: "finished",
+        view: { ...view, windows: 10, overviewWindow: 1 },
+      }),
+    ),
+    startLiveNotes: start,
+  });
+  await waitFor(() =>
+    expect(
+      screen.getAllByText(/Kurzfassung ist noch nicht vollständig/).length,
+    ).toBeGreaterThan(0),
+  );
+  expect(
+    screen.queryByText("Abgeschlossen: das ganze Meeting ist zusammengefasst."),
+  ).toBeNull();
+  expect(screen.getByText("Kurzfassung: 1 von 10 Textfenstern")).toBeTruthy();
+  await userEvent.click(
+    screen.getByRole("button", { name: "Auswertung erneuern" }),
+  );
+  await waitFor(() => expect(start).toHaveBeenCalledTimes(1));
+});
+
+it("exports the incomplete overview coverage instead of presenting a newer window as its date", () => {
+  const text = liveNotesText(
+    { ...view, windows: 10, overviewWindow: 1 },
+    "Synthetic",
+    "de",
+  );
+  expect(text).toContain("Kurzfassung: 1 von 10 Textfenstern");
+  expect(text).toContain("Zweiter Punkt");
+});
+
 function setup(
   api: Partial<DesktopApi>,
   props: Partial<Parameters<typeof LiveNotesPanel>[0]> = {},

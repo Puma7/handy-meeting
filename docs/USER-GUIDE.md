@@ -1,6 +1,6 @@
 # Meeting for Handy user guide
 
-This guide describes the released [1.0.7 controls](https://github.com/Puma7/meeting-for-handy/releases/tag/v1.0.7) and marks later changes as unreleased; the filename is retained for existing links. AI notes and speaker results remain reviewable drafts with original section references. Installation checks do not establish recording reliability on every device. See the [English](../README.md) or [German README](../README.de.md) for packages, prerequisites and the first meeting.
+This guide describes the released [1.0.7 controls](https://github.com/Puma7/meeting-for-handy/releases/tag/v1.0.7) and marks later changes as unreleased, such as the microphone reconnection and live-overview recovery below; the filename is retained for existing links. AI notes and speaker results remain reviewable drafts with original section references. Installation checks do not establish recording reliability on every device. See the [English](../README.md) or [German README](../README.de.md) for packages, prerequisites and the first meeting.
 
 ## Recording controls and transcript files
 
@@ -18,7 +18,15 @@ If the audio driver reports an interruption, **Check the recording** names the t
 
 ## Audio devices
 
-While the app window is visible, connected or removed devices appear automatically within a few seconds; the refresh button next to **System audio** reads the list at once. If a selected device disappears, a notice names the device chosen instead. During a recording, a red warning names the track whose device left the list, and says the track stopped once the microphone capture confirms it; audio saved so far is kept. End the recording and start a new one once the device is back.
+While the app window is visible, connected or removed devices appear automatically within a few seconds; the refresh button next to **System audio** reads the list at once. If a selected device disappears, a notice names the device chosen instead. During a recording, a red warning names the track whose device left the list, and says the track stopped once the microphone capture confirms it; audio saved so far is kept. The released 1.0.7 app requires ending the recording and starting a new one once the device is back.
+
+## Microphone reconnection and overview recovery (unreleased)
+
+If the microphone track has actually ended while system audio still records, **Reconnect microphone** retries only the originally selected device. Device-list refresh alone does not reconnect capture. No replacement microphone is selected during recording. The action waits for native acknowledgement; pause and app mute remain in effect. Previously closed audio is verified and retained, and missing microphone time is recorded as silence with a gap event. Missing speech is never recovered. If the device or saved audio cannot be verified, the retry fails while the system track stays owned. Agent-owned recordings require revoking agent control first. A maximum of 32 explicit retries per recording bounds diagnostic generations. Ordinary recording startup still refuses to reuse an existing audio track.
+
+The rolling overview now has its own coverage and update time. Newer individual notes do not make an older overview complete. **Retry summary** resumes the matching saved run after a failure, or begins a separate run when the model, mode, endpoint, prompt version or language changed; earlier windows and overview versions stay on disk. Copied notes include overview coverage and the incomplete warning. A long recognition backlog produces a visible waiting notice after two minutes; it does not terminate audio capture. Stop live notes and retry later if necessary. Cloud processing continues to require a fresh explicit text release.
+
+Bounded local diagnostic files distinguish connection, HTTP, incomplete response, validation and persistence failures without saving prompts, replies, transcript text, keys or endpoint paths. New number and nonbinding-task checks are conservative filters, not proof that a model interpretation is correct; always inspect original quotes. Older saved analyses remain readable under their original evidence contract.
 
 ## Live input levels
 

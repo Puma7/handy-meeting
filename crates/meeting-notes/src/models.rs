@@ -75,6 +75,10 @@ pub enum RejectionReason {
     UnverifiedOwnerOrDue,
     /// The dedicated name-candidate rules are not met.
     InvalidNameCandidate,
+    /// A newly generated numeric token is absent from its literal quotes.
+    NumberNotQuoted,
+    /// Every cited passage explicitly marks this proposed task as nonbinding or negated.
+    NonbindingTask,
     /// A valid statement beyond the per-answer limit of 20.
     ItemLimit,
 }

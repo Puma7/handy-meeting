@@ -89,6 +89,8 @@ export const desktopApi: DesktopApi = {
   getAppState: () => desktopInvoke("get_app_state"),
   getAudioLevels: () => desktopInvoke("get_audio_levels"),
   getSystemLoad: () => desktopInvoke("get_system_load"),
+  reconnectMicrophone: (meetingId) =>
+    desktopInvoke("reconnect_microphone", { meetingId }),
   setCapturePaused: (meetingId, paused) =>
     desktopInvoke("set_capture_paused", { meetingId, paused }),
   setMicrophoneMuted: (meetingId, muted) =>

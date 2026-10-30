@@ -17,6 +17,9 @@ struct Server {
 }
 impl Server {
     fn start(answers: Vec<String>) -> Self {
+        Self::with_finish(answers, "stop")
+    }
+    fn with_finish(answers: Vec<String>, finish: &'static str) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let endpoint = format!("http://{}/v1/", listener.local_addr().unwrap());
         let bodies = Arc::new(Mutex::new(Vec::new()));
@@ -52,7 +55,7 @@ impl Server {
                     .lock()
                     .unwrap()
                     .push(serde_json::from_slice(&request[header_end..]).unwrap());
-                let body = serde_json::json!({"choices":[{"finish_reason":"stop","message":{"content":answer}}]}).to_string();
+                let body = serde_json::json!({"choices":[{"finish_reason":finish,"message":{"content":answer}}],"usage":{"prompt_tokens":31,"completion_tokens":17}}).to_string();
                 write!(
                     stream,
                     "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
@@ -186,8 +189,18 @@ fn windows_and_overview_are_source_checked_stored_and_shown_with_their_tracks() 
     let server = Server::start(vec![
         window_answer(
             vec![
-                fact("Budget Q3 wird besprochen", None, "C0", BUDGET),
-                fact("Budget Q3 wird besprochen", None, "C0", BUDGET),
+                fact(
+                    "Budget des dritten Quartals wird besprochen",
+                    None,
+                    "C0",
+                    BUDGET,
+                ),
+                fact(
+                    "Budget des dritten Quartals wird besprochen",
+                    None,
+                    "C0",
+                    BUDGET,
+                ),
                 fact("Erfunden", None, "C0", "Das Budget wurde verdoppelt."),
             ],
             vec![fact("Günstigerer Anbieter gewählt", None, "M30", DECISION)],
@@ -562,11 +575,25 @@ fn a_large_statement_backlog_is_covered_batch_by_batch_and_never_skipped() {
     let root = dir.path().join("live-notes");
     let full = |prefix: &str| -> Vec<serde_json::Value> {
         (0..20)
-            .map(|i| fact(&format!("{prefix} {i}"), None, "C0", BUDGET))
+            .map(|i| {
+                fact(
+                    &format!("{prefix} {}", char::from(b'a' + i)),
+                    None,
+                    "C0",
+                    BUDGET,
+                )
+            })
             .collect()
     };
     let tasks: Vec<_> = (0..20)
-        .map(|i| fact(&format!("Aufgabe {i}"), Some("Anna"), "C30", TASK))
+        .map(|i| {
+            fact(
+                &format!("Aufgabe {}", char::from(b'a' + i)),
+                Some("Anna"),
+                "C30",
+                TASK,
+            )
+        })
         .collect();
     let server = Server::start(vec![
         // Window 1 holds the maximum of 80 statements; its overview fails at first.
@@ -575,7 +602,14 @@ fn a_large_statement_backlog_is_covered_batch_by_batch_and_never_skipped() {
         // Window 2 adds ten more statements while the first overview is still missing.
         window_answer(
             (0..10)
-                .map(|i| fact(&format!("Später {i}"), None, "C60", DECISION))
+                .map(|i| {
+                    fact(
+                        &format!("Später {}", char::from(b'a' + i)),
+                        None,
+                        "C60",
+                        DECISION,
+                    )
+                })
                 .collect(),
             vec![],
             vec![],
@@ -618,4 +652,256 @@ fn a_large_statement_backlog_is_covered_batch_by_batch_and_never_skipped() {
     let stored = load_run(&root.join(&runner.run().id)).unwrap();
     let coverage: Vec<u32> = stored.overviews.iter().map(|o| o.window).collect();
     assert_eq!(coverage, [1, 2]);
+}
+
+#[test]
+fn failed_overview_is_durable_and_retry_keeps_windows_and_the_previous_overview() {
+    let dir = tempfile::tempdir().unwrap();
+    let server = Server::start(vec![
+        window_answer(
+            vec![fact("Budget", None, "C0", BUDGET)],
+            vec![],
+            vec![],
+            vec![],
+        ),
+        overview_answer(vec![fact("Budget", None, "C0", BUDGET)]),
+        window_answer(
+            vec![fact("Anbieter", None, "C30", DECISION)],
+            vec![],
+            vec![],
+            vec![],
+        ),
+        "not valid JSON: PRIVATE_SYNTHETIC_RESPONSE".into(),
+        overview_answer(vec![fact("Anbieter", None, "C30", DECISION)]),
+    ]);
+    let connection = server.connection("synthetic");
+    let mut runner = LiveRunner::start(
+        dir.path(),
+        "synthetic",
+        server.connection("synthetic"),
+        "de",
+    )
+    .unwrap();
+    let mut texts = vec![part("system-0", "system", 0, BUDGET)];
+    runner
+        .update(
+            &runner.pending(&texts),
+            Trigger::Manual,
+            &AnalysisControl::default(),
+        )
+        .unwrap();
+    let folder = dir.path().join(&runner.run().id);
+    let overview = std::fs::read(folder.join("overview-000001.json")).unwrap();
+    texts.push(part("system-30", "system", 30, DECISION));
+    runner
+        .update(
+            &runner.pending(&texts),
+            Trigger::Manual,
+            &AnalysisControl::default(),
+        )
+        .unwrap();
+    let window = std::fs::read(folder.join("window-000002.json")).unwrap();
+    let saved = read_latest(dir.path(), "synthetic").unwrap().unwrap();
+    assert!(saved.overview_pending);
+    assert_eq!(saved.overview_window, 1);
+    assert_eq!(
+        saved.last_request.unwrap().request.result,
+        RequestResult::Validation
+    );
+    let diagnostic = std::fs::read_to_string(folder.join("diagnostic-000004.json")).unwrap();
+    assert!(!diagnostic.contains("PRIVATE_SYNTHETIC_RESPONSE"));
+    assert!(!diagnostic.contains(BUDGET));
+    let mut resumed = LiveRunner::start(dir.path(), "synthetic", connection, "de").unwrap();
+    assert!(resumed.pending(&texts).is_empty());
+    resumed
+        .update(&[], Trigger::Manual, &AnalysisControl::default())
+        .unwrap();
+    assert!(!resumed.view().overview_pending);
+    assert_eq!(resumed.view().overview_window, 2);
+    assert_eq!(
+        std::fs::read(folder.join("overview-000001.json")).unwrap(),
+        overview
+    );
+    assert_eq!(
+        std::fs::read(folder.join("window-000002.json")).unwrap(),
+        window
+    );
+    server.finish();
+}
+
+#[test]
+fn transport_diagnostics_do_not_copy_free_form_finish_reasons_or_model_content() {
+    let dir = tempfile::tempdir().unwrap();
+    let server = Server::with_finish(
+        vec!["PRIVATE_SYNTHETIC_REPLY".into()],
+        "PRIVATE_SYNTHETIC_FINISH",
+    );
+    let mut runner = LiveRunner::start(
+        dir.path(),
+        "synthetic",
+        server.connection("synthetic"),
+        "de",
+    )
+    .unwrap();
+    let texts = [part("system-0", "system", 0, BUDGET)];
+    assert!(runner
+        .update(
+            &runner.pending(&texts),
+            Trigger::Manual,
+            &AnalysisControl::default()
+        )
+        .is_err());
+    let folder = dir.path().join(&runner.run().id);
+    let raw = std::fs::read_to_string(folder.join("diagnostic-000001.json")).unwrap();
+    assert!(!raw.contains("PRIVATE_SYNTHETIC"));
+    assert!(!raw.contains(BUDGET));
+    let value: serde_json::Value = serde_json::from_str(&raw).unwrap();
+    assert_eq!(value["request"]["finish"], "other");
+    assert_eq!(value["request"]["result"], "incomplete");
+    assert_eq!(value["request"]["httpStatus"], 200);
+    assert_eq!(value["request"]["promptTokens"], 31);
+    assert_eq!(value["request"]["completionTokens"], 17);
+    assert_eq!(value["request"]["outputLimit"], 4096);
+    server.finish();
+}
+
+#[test]
+fn an_interrupted_answer_after_http_200_is_reported_as_a_connection_failure() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let endpoint = format!("http://{}/v1/", listener.local_addr().unwrap());
+    let server = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(10)))
+            .unwrap();
+        let mut request = Vec::new();
+        let mut buffer = [0_u8; 8192];
+        while !request.windows(4).any(|w| w == b"\r\n\r\n") {
+            let count = stream.read(&mut buffer).unwrap();
+            assert!(count > 0);
+            request.extend_from_slice(&buffer[..count]);
+        }
+        // Promise a long body, send only its start and close the connection.
+        stream
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 4000\r\nConnection: close\r\n\r\n{\"choices\":[")
+            .unwrap();
+    });
+    let dir = tempfile::tempdir().unwrap();
+    let connection = Connection {
+        endpoint,
+        model: "synthetic".into(),
+        mode: "local".into(),
+        cloud_consent: false,
+        api_key: String::new(),
+    };
+    let mut runner = LiveRunner::start(dir.path(), "synthetic", connection, "de").unwrap();
+    let texts = [part("system-0", "system", 0, BUDGET)];
+    assert!(runner
+        .update(
+            &runner.pending(&texts),
+            Trigger::Manual,
+            &AnalysisControl::default()
+        )
+        .is_err());
+    let folder = dir.path().join(&runner.run().id);
+    let request = diagnostics::latest(&folder).unwrap().request;
+    assert_eq!(request.result, RequestResult::Transport);
+    assert_eq!(request.http_status, Some(200));
+    server.join().unwrap();
+}
+
+#[test]
+fn a_diagnostic_storage_warning_describes_only_the_update_that_failed_to_save() {
+    let dir = tempfile::tempdir().unwrap();
+    let server = Server::start(vec![
+        window_answer(
+            vec![fact("Budget", None, "C0", BUDGET)],
+            vec![],
+            vec![],
+            vec![],
+        ),
+        overview_answer(vec![fact("Budget", None, "C0", BUDGET)]),
+        window_answer(
+            vec![fact("Anbieter", None, "C30", DECISION)],
+            vec![],
+            vec![],
+            vec![],
+        ),
+        overview_answer(vec![fact("Anbieter", None, "C30", DECISION)]),
+    ]);
+    let mut runner = LiveRunner::start(
+        dir.path(),
+        "synthetic",
+        server.connection("synthetic"),
+        "de",
+    )
+    .unwrap();
+    let folder = dir.path().join(&runner.run().id);
+    // Synthetic exhaustion: every bounded diagnostic slot is already taken.
+    let taken: Vec<_> = (1..=1024)
+        .map(|index| folder.join(format!("diagnostic-{index:06}.json")))
+        .collect();
+    for path in &taken {
+        std::fs::write(path, b"").unwrap();
+    }
+    let mut texts = vec![part("system-0", "system", 0, BUDGET)];
+    let first = runner
+        .update(
+            &runner.pending(&texts),
+            Trigger::Manual,
+            &AnalysisControl::default(),
+        )
+        .unwrap();
+    assert!(first.window.is_some());
+    assert!(first.diagnostic_warning.is_some());
+    for path in &taken {
+        std::fs::remove_file(path).unwrap();
+    }
+    texts.push(part("system-30", "system", 30, DECISION));
+    let second = runner
+        .update(
+            &runner.pending(&texts),
+            Trigger::Manual,
+            &AnalysisControl::default(),
+        )
+        .unwrap();
+    assert!(second.window.is_some());
+    assert_eq!(second.diagnostic_warning, None);
+    server.finish();
+}
+
+#[test]
+fn a_failed_window_commit_is_distinguished_from_a_model_validation_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let server = Server::start(vec![window_answer(
+        vec![fact("Budget", None, "C0", BUDGET)],
+        vec![],
+        vec![],
+        vec![],
+    )]);
+    let mut runner = LiveRunner::start(
+        dir.path(),
+        "synthetic",
+        server.connection("synthetic"),
+        "de",
+    )
+    .unwrap();
+    let folder = dir.path().join(&runner.run().id);
+    let occupied = folder.join("window-000001.json");
+    std::fs::create_dir(&occupied).unwrap();
+    let texts = [part("system-0", "system", 0, BUDGET)];
+    assert!(runner
+        .update(
+            &runner.pending(&texts),
+            Trigger::Manual,
+            &AnalysisControl::default()
+        )
+        .is_err());
+    assert_eq!(runner.pending(&texts).len(), 1);
+    assert_eq!(
+        diagnostics::latest(&folder).unwrap().request.result,
+        RequestResult::Persistence
+    );
+    assert!(occupied.is_dir());
+    server.finish();
 }

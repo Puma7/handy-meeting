@@ -13,6 +13,7 @@ pub use store::{
 };
 pub use trigger::{decide, Trigger, MAX_INTERVAL_MS, MIN_INTERVAL_MS};
 
+use crate::diagnostics::{self, LiveDiagnostic, Operation, RequestResult};
 use crate::service::create_json;
 use crate::validation::screen_facts;
 use crate::{
@@ -53,6 +54,7 @@ pub struct UpdateOutcome {
     pub overview: Option<u32>,
     /// The window was saved but the overview could not be rebuilt; it is retried later.
     pub overview_error: Option<String>,
+    pub diagnostic_warning: Option<String>,
 }
 
 fn add_rejections(total: &mut Rejections, more: &Rejections) {
@@ -80,6 +82,8 @@ pub struct LiveRunner {
     folder: PathBuf,
     state: LoadedRun,
     damaged_runs: usize,
+    diagnostic_warning: std::cell::RefCell<Option<String>>,
+    overview_attempt: std::cell::Cell<(u32, usize, usize)>,
 }
 
 impl LiveRunner {
@@ -125,6 +129,8 @@ impl LiveRunner {
             folder: root.join(&state.run.id),
             state,
             damaged_runs,
+            diagnostic_warning: Default::default(),
+            overview_attempt: Default::default(),
         })
     }
 
@@ -156,6 +162,8 @@ impl LiveRunner {
         control: &AnalysisControl,
     ) -> Result<UpdateOutcome> {
         let mut outcome = UpdateOutcome::default();
+        // The warning describes this update only; a later successful save clears it.
+        self.diagnostic_warning.replace(None);
         if !pending.is_empty() {
             let window = self.summarize_window(pending, trigger, control)?;
             outcome.window = Some(window.index);
@@ -174,6 +182,7 @@ impl LiveRunner {
                 }
             }
         }
+        outcome.diagnostic_warning = self.diagnostic_warning.borrow().clone();
         Ok(outcome)
     }
 
@@ -181,6 +190,55 @@ impl LiveRunner {
     /// Task deduplication includes owner and due date; every retained fact still needs
     /// an existing source ID and literal quote from this window's original sources.
     fn summarize_window(
+        &self,
+        pending: &[LiveSource],
+        trigger: Trigger,
+        control: &AnalysisControl,
+    ) -> Result<LiveWindow> {
+        let result = self.summarize_window_inner(pending, trigger, control);
+        let (accepted, rejected) = result
+            .as_ref()
+            .map(|w| (w.statement_count(), rejected_total(&w.rejected)))
+            .unwrap_or_default();
+        self.record_diagnostic(
+            Operation::Window,
+            self.state.windows.len() as u32 + 1,
+            accepted,
+            rejected,
+            result.is_ok(),
+        );
+        result
+    }
+
+    fn record_diagnostic(
+        &self,
+        operation: Operation,
+        window: u32,
+        accepted: usize,
+        rejected: usize,
+        success: bool,
+    ) {
+        let mut request = self.client.diagnostic();
+        if success {
+            request.result = RequestResult::Stored;
+        } else if request.result == RequestResult::Envelope {
+            request.result = RequestResult::Validation;
+        }
+        let value = LiveDiagnostic {
+            operation,
+            window,
+            accepted,
+            rejected,
+            request,
+        };
+        if diagnostics::save(&self.folder, &value).is_err() {
+            *self.diagnostic_warning.borrow_mut() = Some(
+                "Diagnose konnte nicht gespeichert werden; Ergebnisdaten bleiben erhalten.".into(),
+            );
+        }
+    }
+
+    fn summarize_window_inner(
         &self,
         pending: &[LiveSource],
         trigger: Trigger,
@@ -242,11 +300,27 @@ impl LiveRunner {
             rejected,
         };
         control.check()?;
+        self.client.diagnostic_stage(RequestResult::Persistence);
         create_json(&store::window_path(&self.folder, window.index), &window)?;
         Ok(window)
     }
 
     fn rebuild_overview(&mut self, control: &AnalysisControl) -> Result<Option<u32>> {
+        self.overview_attempt
+            .set((self.state.windows.len() as u32, 0, 0));
+        let result = self.rebuild_overview_inner(control);
+        let (window, accepted, rejected) = self.overview_attempt.get();
+        self.record_diagnostic(
+            Operation::Overview,
+            window,
+            accepted,
+            rejected,
+            result.is_ok(),
+        );
+        result
+    }
+
+    fn rebuild_overview_inner(&mut self, control: &AnalysisControl) -> Result<Option<u32>> {
         let previous = self.state.overviews.last();
         let covered = previous.map_or(0, |o| o.window as usize);
         // Whole windows in order, as many as fit into one request (at least one). Only the
@@ -273,6 +347,7 @@ impl LiveRunner {
         let previous_items = previous.map_or(&[][..], |o| o.items.as_slice());
         let (system, user) =
             prompt::overview_request(&self.state.run.language, previous_items, &statements)?;
+        self.overview_attempt.set((batch_end as u32, 0, 0));
         let answer = self.client.chat_json(
             &system,
             &user,
@@ -296,6 +371,11 @@ impl LiveRunner {
             "",
             MAX_OVERVIEW_ITEMS,
         );
+        self.overview_attempt.set((
+            batch_end as u32,
+            checked.items.len(),
+            rejected_total(&checked.rejected),
+        ));
         if checked.items.is_empty() {
             // An empty answer must not replace a verified overview; the next update retries.
             anyhow::bail!("Die Kurzfassung konnte nicht belegt aktualisiert werden. Die bisherige Fassung bleibt sichtbar.");
@@ -308,6 +388,7 @@ impl LiveRunner {
             rejected: checked.rejected,
         };
         control.check()?;
+        self.client.diagnostic_stage(RequestResult::Persistence);
         create_json(
             &store::overview_path(&self.folder, overview.index),
             &overview,
@@ -318,7 +399,9 @@ impl LiveRunner {
     }
 
     pub fn view(&self) -> LiveView {
-        LiveView::from_run(&self.state, self.damaged_runs)
+        let mut view = LiveView::from_run(&self.state, self.damaged_runs);
+        view.last_request = diagnostics::latest(&self.folder);
+        view
     }
 }
 
@@ -334,7 +417,11 @@ pub fn read_latest(root: &Path, meeting_id: &str) -> Result<Option<LiveView>> {
     });
     Ok(runs
         .first()
-        .map(|run| LiveView::from_run(run, damaged))
+        .map(|run| {
+            let mut view = LiveView::from_run(run, damaged);
+            view.last_request = diagnostics::latest(&root.join(&run.run.id));
+            view
+        })
         .or_else(|| (damaged > 0).then(|| LiveView::damaged_only(damaged))))
 }
 
@@ -376,6 +463,9 @@ pub struct LiveView {
     pub summarized_sections: usize,
     pub overview: Vec<LiveItem>,
     pub overview_window: u32,
+    pub overview_updated_at: Option<String>,
+    pub overview_pending: bool,
+    pub last_request: Option<LiveDiagnostic>,
     pub points: Vec<LiveItem>,
     pub decisions: Vec<LiveItem>,
     pub tasks: Vec<LiveItem>,
@@ -399,6 +489,9 @@ impl LiveView {
             summarized_sections: 0,
             overview: Vec::new(),
             overview_window: 0,
+            overview_updated_at: None,
+            overview_pending: false,
+            last_request: None,
             points: Vec::new(),
             decisions: Vec::new(),
             tasks: Vec::new(),
@@ -470,6 +563,11 @@ impl LiveView {
                 .map(|o| o.items.iter().map(|f| item(f, o.window)).collect())
                 .unwrap_or_default(),
             overview_window: latest.map_or(0, |o| o.window),
+            overview_updated_at: latest.map(|o| o.created_at.clone()),
+            last_request: None,
+            overview_pending: state.windows[latest.map_or(0, |o| o.window as usize)..]
+                .iter()
+                .any(|w| w.statement_count() > 0),
             points,
             decisions,
             tasks,

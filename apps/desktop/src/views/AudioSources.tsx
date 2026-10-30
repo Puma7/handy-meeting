@@ -26,6 +26,8 @@ type Props = {
   compact?: boolean;
   /** Re-reads the device list; shown beside the system-audio choice. */
   onRefresh?: () => void;
+  canReconnectMicrophone?: boolean;
+  onReconnectMicrophone?: () => void;
 };
 
 /** The source controls and their meters stay visible when title/model setup collapses. */
@@ -49,6 +51,8 @@ export default function AudioSources({
   setMicEnabled,
   compact = false,
   onRefresh,
+  canReconnectMicrophone,
+  onReconnectMicrophone,
 }: Props) {
   const levelExplanation = useId();
   const bound =
@@ -170,6 +174,24 @@ export default function AudioSources({
             locale={locale}
             descriptionId={levelExplanation}
           />
+          {bound && canReconnectMicrophone && onReconnectMicrophone && (
+            <button
+              type="button"
+              className="secondary"
+              disabled={busy || !connected || isStopping}
+              title={
+                locale === "de"
+                  ? "Verbindet ausschließlich das ursprünglich gewählte Mikrofon. Fehlender Ton bleibt fehlend; Pause und App-Stummschaltung bleiben erhalten."
+                  : "Reconnects only the original microphone. Missing audio stays missing; pause and app mute remain in effect."
+              }
+              onClick={onReconnectMicrophone}
+            >
+              <RefreshCw size={15} />
+              {locale === "de"
+                ? "Mikrofon erneut verbinden"
+                : "Reconnect microphone"}
+            </button>
+          )}
         </div>
       </div>
       <p className={compact ? "sr-only" : "audio-level-help"}>

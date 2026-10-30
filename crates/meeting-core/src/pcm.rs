@@ -44,6 +44,51 @@ pub struct PcmWriter {
 }
 
 impl PcmWriter {
+    /// Capture-controller-only continuation of a closed microphone track. Existing WAVs
+    /// are read and verified, never reopened for writing. Normal `new` still refuses reuse.
+    /// `progress` is called after each verified section so the caller can tell a long
+    /// verification from a stalled device.
+    pub(crate) fn for_capture(
+        store: SessionStore,
+        source: &str,
+        progress: &dyn Fn(),
+    ) -> Result<Self> {
+        let snapshot = store.snapshot()?;
+        let mut parts: Vec<_> = snapshot
+            .parts
+            .iter()
+            .filter(|p| p.source == source)
+            .collect();
+        if parts.is_empty() {
+            return Self::new(store, source);
+        }
+        if source != "microphone" {
+            return Err("Only an ended microphone may reconnect in a running capture".into());
+        }
+        parts.sort_by_key(|p| p.start_sample);
+        let mut end = 0;
+        for part in parts {
+            if !part.audio_closed
+                || part.sample_count != part.confirmed_sample_count
+                || part.start_sample != end
+            {
+                return Err("Microphone audio is not completely closed and contiguous; original files are retained".into());
+            }
+            verify_confirmed(&store.audio_path(part)?, part)?;
+            progress();
+            end = end
+                .checked_add(part.confirmed_sample_count)
+                .ok_or("Microphone timeline overflow")?;
+        }
+        Ok(Self {
+            chunk_samples: u64::from(snapshot.chunk_seconds) * u64::from(SAMPLE_RATE),
+            store,
+            source: source.into(),
+            written: end,
+            chunk: None,
+            last_flush: Instant::now(),
+        })
+    }
     pub fn new(store: SessionStore, source: &str) -> Result<Self> {
         if !["system", "microphone"].contains(&source) {
             return Err("Invalid audio source".into());

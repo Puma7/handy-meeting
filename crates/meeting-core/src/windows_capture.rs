@@ -54,6 +54,8 @@ impl PacketReader for AudioCaptureClient {
 #[serde(rename_all = "camelCase")]
 struct CaptureDiagnostics {
     schema_version: u32,
+    application_version: &'static str,
+    start_sample: u64,
     source: String,
     packets: u64,
     received_samples: u64,
@@ -62,7 +64,12 @@ struct CaptureDiagnostics {
     discontinuities: u64,
     timestamp_errors: u64,
     first_events: Vec<serde_json::Value>,
+    recent_events: VecDeque<serde_json::Value>,
+    event_count: u64,
     omitted_events: u64,
+    drain: DrainMetrics,
+    end_reason: Option<&'static str>,
+    hresult: Option<i32>,
     elapsed_ms: u128,
     written_samples: u64,
     gap_silence_samples: u64,
@@ -71,7 +78,9 @@ impl CaptureDiagnostics {
     /// Initializes bounded diagnostic counters for one independently captured track.
     fn new(source: &str) -> Self {
         Self {
-            schema_version: 1,
+            schema_version: 2,
+            application_version: env!("CARGO_PKG_VERSION"),
+            start_sample: 0,
             source: source.into(),
             packets: 0,
             received_samples: 0,
@@ -80,7 +89,12 @@ impl CaptureDiagnostics {
             discontinuities: 0,
             timestamp_errors: 0,
             first_events: Vec::with_capacity(64),
+            recent_events: VecDeque::with_capacity(64),
+            event_count: 0,
             omitted_events: 0,
+            drain: DrainMetrics::default(),
+            end_reason: None,
+            hresult: None,
             elapsed_ms: 0,
             written_samples: 0,
             gap_silence_samples: 0,
@@ -95,11 +109,16 @@ impl CaptureDiagnostics {
         self.discontinuities += u64::from(info.discontinuity);
         self.timestamp_errors += u64::from(info.timestamp_error);
         if info.discontinuity || info.timestamp_error {
-            if self.first_events.len() < 64 {
-                self.first_events.push(serde_json::json!({"packet": self.packets, "elapsedMs": elapsed_ms, "savedStartSample": start_sample, "samples": count, "device": info}));
-            } else {
-                self.omitted_events += 1;
+            self.event_count += 1;
+            let event = serde_json::json!({"packet": self.packets, "elapsedMs": elapsed_ms, "savedStartSample": start_sample, "samples": count, "device": info});
+            if self.recent_events.len() == 64 {
+                self.recent_events.pop_front();
             }
+            self.recent_events.push_back(event.clone());
+            if self.first_events.len() < 64 {
+                self.first_events.push(event);
+            }
+            self.omitted_events = self.event_count.saturating_sub(128);
         }
     }
 }
@@ -162,35 +181,76 @@ enum DrainState {
     More,
 }
 
-/// Drain a bounded turn before checking Stop/privacy controls again. Packets can arrive
-/// while durable writes run: five seconds processed is not five seconds of queued backlog.
-/// A single oversized packet is still refused before it is read or acknowledged.
+#[derive(Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DrainMetrics {
+    turns: u64,
+    yields: u64,
+    next_frames: u32,
+    processed_samples: u64,
+    max_turn_samples: u64,
+    max_turn_ms: u128,
+    failure: Option<&'static str>,
+    hresult: Option<i32>,
+}
+
+fn hresult(error: &(dyn std::error::Error + Send + Sync + 'static)) -> Option<i32> {
+    match error.downcast_ref::<wasapi::WasapiError>() {
+        Some(wasapi::WasapiError::Windows(error)) => Some(error.code().0),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
 fn drain_packets(
     capture: &impl PacketReader,
     queue: &mut VecDeque<u8>,
     pcm: &mut Vec<i16>,
+    consume: impl FnMut(PacketInfo, &[i16]) -> Result<()>,
+) -> Result<DrainState> {
+    drain_measured(capture, queue, pcm, &mut DrainMetrics::default(), consume)
+}
+
+/// Drain a bounded turn before checking Stop/privacy controls again. Packets can arrive
+/// while durable writes run: five seconds processed is not five seconds of queued backlog.
+/// A single oversized packet is still refused before it is read or acknowledged.
+fn drain_measured(
+    capture: &impl PacketReader,
+    queue: &mut VecDeque<u8>,
+    pcm: &mut Vec<i16>,
+    metrics: &mut DrainMetrics,
     mut consume: impl FnMut(PacketInfo, &[i16]) -> Result<()>,
 ) -> Result<DrainState> {
     let mut drained = 0usize;
     loop {
-        let frames = capture.next_frames()?;
+        let frames = capture.next_frames().inspect_err(|error| {
+            metrics.failure = Some("packetQuery");
+            metrics.hresult = hresult(error.as_ref());
+        })?;
+        metrics.next_frames = frames;
         if frames == 0 {
             return Ok(DrainState::Empty);
         }
         if frames > SAMPLE_RATE * 5 {
+            metrics.failure = Some("oversizedPacket");
             return Err(
                 "Audio device packet exceeded five seconds; saved audio remains available".into(),
             );
         }
         if drained.saturating_add(frames as usize) > SAMPLE_RATE as usize * 5 {
+            metrics.yields += 1;
             return Ok(DrainState::More);
         }
         queue.clear();
-        let info = capture.read_packet(queue)?;
+        let info = capture.read_packet(queue).inspect_err(|error| {
+            metrics.failure = Some("packetRead");
+            metrics.hresult = hresult(error.as_ref());
+        })?;
         if queue.is_empty()
             || !queue.len().is_multiple_of(2)
             || queue.len() > SAMPLE_RATE as usize * 2 * 5
         {
+            metrics.failure = Some("invalidPacket");
             return Err(
                 "Audio device returned an invalid packet; saved audio remains available".into(),
             );
@@ -205,7 +265,11 @@ fn drain_packets(
             });
         }
         drained += pcm.len();
-        consume(info, pcm)?;
+        metrics.processed_samples += pcm.len() as u64;
+        consume(info, pcm).inspect_err(|error| {
+            metrics.failure = Some("timelineControlOrStorage");
+            metrics.hresult = hresult(error.as_ref());
+        })?;
     }
 }
 
@@ -235,7 +299,9 @@ fn drain_track_controlled(
     store: &SessionStore,
     mut control: Option<(&CaptureControls, u64, &mut PacketTimeline)>,
 ) -> Result<DrainState> {
-    drain_packets(capture, queue, pcm, |info, samples| {
+    let mut turn = DrainMetrics::default();
+    let turn_started = Instant::now();
+    let result = drain_measured(capture, queue, pcm, &mut turn, |info, samples| {
         diagnostics.observe(
             info,
             samples.len(),
@@ -277,7 +343,24 @@ fn drain_track_controlled(
         } else {
             writer.append(samples)
         }
-    })
+    });
+    diagnostics.drain.turns += 1;
+    diagnostics.drain.yields += turn.yields;
+    diagnostics.drain.next_frames = turn.next_frames;
+    diagnostics.drain.processed_samples += turn.processed_samples;
+    diagnostics.drain.max_turn_samples = diagnostics
+        .drain
+        .max_turn_samples
+        .max(turn.processed_samples);
+    diagnostics.drain.max_turn_ms = diagnostics
+        .drain
+        .max_turn_ms
+        .max(turn_started.elapsed().as_millis());
+    if turn.failure.is_some() {
+        diagnostics.drain.failure = turn.failure;
+        diagnostics.drain.hresult = turn.hresult;
+    }
+    result
 }
 
 /// Disk syncs while draining the tail may take time after the device has
@@ -375,19 +458,46 @@ pub(super) fn record(
         client.initialize_client(&desired, &Direction::Capture, &mode)?;
         let handle = client.set_get_eventhandle()?;
         let capture = client.get_audiocaptureclient()?;
-        let mut writer = PcmWriter::new(store.clone(), source)?;
+        let mut writer =
+            PcmWriter::for_capture(store.clone(), source, &|| controls.note_startup_progress())?;
         let mut queue = VecDeque::with_capacity(SAMPLE_RATE as usize * 2);
         let mut pcm = Vec::with_capacity(SAMPLE_RATE as usize / 10);
         let mut diagnostics = CaptureDiagnostics::new(source);
         let start = Instant::now();
-        writer.pad_to(controls.elapsed_samples())?;
-        client.start_stream()?;
-        let mut stream_running = true;
+        let previous_end = writer.written_samples();
+        diagnostics.start_sample = previous_end;
+        let mut stream_running = false;
+        // Gap silence may already be on disk when a later startup step fails or the
+        // controller gave up waiting. Close it, so a later reconnect can verify and
+        // continue this track instead of finding an unclosed section.
+        let startup = (|| -> Result<()> {
+            // Re-reads the clock while the gap is written, right before the stream starts, so
+            // resumed speech is not placed early relative to system audio.
+            let resumed_at =
+                super::pad_to_clock(&mut writer, &|| controls.elapsed_samples(), &stop, &|| {
+                    controls.note_startup_progress()
+                })?;
+            if source == "microphone" && previous_end > 0 && resumed_at > previous_end {
+                controls.record_microphone_gap(previous_end, resumed_at - previous_end)?;
+            }
+            client.start_stream()?;
+            stream_running = true;
+            ready
+                .send(Ok(()))
+                .map_err(|_| "Capture controller was closed")?;
+            Ok(())
+        })();
+        if let Err(error) = startup {
+            if stream_running {
+                let _ = client.stop_stream();
+            }
+            if let Err(finish) = writer.finish() {
+                return Err(format!("{error}; gap silence could not be closed: {finish}").into());
+            }
+            return Err(error);
+        }
         let mut epoch = controls.epoch(source);
         let mut timeline = PacketTimeline::default();
-        ready
-            .send(Ok(()))
-            .map_err(|_| "Capture controller was closed")?;
         started = true;
         let loop_result = (|| -> Result<()> {
             let mut drain_again = false;
@@ -490,29 +600,63 @@ pub(super) fn record(
         let finish_result = writer.finish();
         diagnostics.elapsed_ms = start.elapsed().as_millis();
         diagnostics.written_samples = writer.written_samples();
-        let diagnostic_result = (|| -> Result<()> {
-            let path = store.folder().join(format!("capture-{source}.json"));
-            let mut file = std::fs::OpenOptions::new()
-                .create_new(true)
-                .write(true)
-                .open(path)?;
-            file.write_all(&serde_json::to_vec_pretty(&diagnostics)?)?;
-            file.sync_all()?;
-            Ok(())
-        })();
+        diagnostics.end_reason = Some(if loop_result.is_err() {
+            "captureFailure"
+        } else if stop_result.is_err() {
+            "stopFailure"
+        } else if tail_result.is_err() {
+            "tailFailure"
+        } else if finish_result.is_err() || pad_result.is_err() {
+            "storageFailure"
+        } else {
+            "stopped"
+        });
+        diagnostics.hresult = stop_result.as_ref().err().and_then(|e| hresult(e));
+        if save_diagnostics(&store, source, &diagnostics).is_err() {
+            let _ = store.notice(
+                "Capture diagnostics could not be saved; audio finalization was still attempted.",
+            );
+        }
         finish_result?;
         stop_result?;
         tail_result?;
         pad_result?;
-        diagnostic_result?;
         loop_result
     })();
     if !started {
         if let Err(error) = &result {
+            let mut diagnostics = CaptureDiagnostics::new(source);
+            diagnostics.end_reason = Some("startupFailure");
+            diagnostics.hresult = hresult(error.as_ref());
+            let _ = save_diagnostics(&store, source, &diagnostics);
             let _ = ready.send(Err(error.to_string()));
         }
     }
     result
+}
+
+/// Keeps earlier capture generations immutable, including failed reconnect attempts.
+fn save_diagnostics(
+    store: &SessionStore,
+    source: &str,
+    diagnostics: &CaptureDiagnostics,
+) -> Result<()> {
+    let first = store.folder().join(format!("capture-{source}.json"));
+    let path = if std::fs::symlink_metadata(&first).is_ok() {
+        store.folder().join(format!(
+            "capture-{source}-{}.json",
+            uuid::Uuid::new_v4().simple()
+        ))
+    } else {
+        first
+    };
+    let mut file = std::fs::OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(path)?;
+    file.write_all(&serde_json::to_vec_pretty(diagnostics)?)?;
+    file.sync_all()?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -955,8 +1099,92 @@ mod tests {
         }
         assert_eq!(diagnostic.discontinuities, 100);
         assert_eq!(diagnostic.first_events.len(), 64);
-        assert_eq!(diagnostic.omitted_events, 36);
+        assert_eq!(
+            diagnostic.omitted_events, 0,
+            "The union of first and recent events still contains all 100 events"
+        );
         assert_eq!(diagnostic.received_samples, 32000);
+    }
+
+    #[test]
+    fn late_driver_events_and_oversized_packet_context_remain_diagnosable() {
+        let mut diagnostic = CaptureDiagnostics::new("microphone");
+        for index in 0..200 {
+            let mut p = info(false);
+            p.discontinuity = true;
+            diagnostic.observe(p, 320, index * 20, index as u64 * 320);
+        }
+        let serialized = serde_json::to_value(&diagnostic).unwrap();
+        assert_eq!(serialized["recentEvents"].as_array().unwrap().len(), 64);
+        assert_eq!(serialized["recentEvents"][63]["packet"], 200);
+        assert_eq!(diagnostic.omitted_events, 72);
+        let root = tempfile::tempdir().unwrap();
+        let store =
+            SessionStore::create(root.path(), "Synthetic packet context", "m", "s", None).unwrap();
+        let packets = Packets(RefCell::new(VecDeque::from([(
+            vec![1; SAMPLE_RATE as usize * 5 + 1],
+            info(false),
+        )])));
+        let mut writer = PcmWriter::new(store.clone(), "microphone").unwrap();
+        assert!(drain_track(
+            &packets,
+            &mut VecDeque::new(),
+            &mut vec![],
+            &mut writer,
+            &mut diagnostic,
+            Instant::now(),
+            &store
+        )
+        .is_err());
+        let serialized = serde_json::to_value(&diagnostic).unwrap();
+        assert_eq!(serialized["drain"]["nextFrames"], SAMPLE_RATE * 5 + 1);
+        assert_eq!(serialized["drain"]["failure"], "oversizedPacket");
+        assert_eq!(packets.0.borrow().len(), 1);
+    }
+
+    #[test]
+    fn reconnect_after_more_than_five_minutes_keeps_original_audio_and_explicit_silence() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = SessionStore::create(
+            dir.path(),
+            "Synthetic long reconnect gap",
+            "m",
+            "s",
+            Some("mic"),
+        )
+        .unwrap();
+        let mut writer = PcmWriter::new(store.clone(), "microphone").unwrap();
+        writer.append(&[91, -92]).unwrap();
+        writer.finish().unwrap();
+        let first = store.snapshot().unwrap().parts[0].clone();
+        let path = store.audio_path(&first).unwrap();
+        let original = std::fs::read(&path).unwrap();
+        let mut resumed = PcmWriter::for_capture(store.clone(), "microphone", &|| {}).unwrap();
+        let target = u64::from(SAMPLE_RATE) * 301;
+        let controls = CaptureControls::uncontrolled();
+        super::super::pad_to_clock(&mut resumed, &|| target, &AtomicBool::new(false), &|| {
+            controls.note_startup_progress()
+        })
+        .unwrap();
+        // Each bounded five-second step counts as startup progress for the readiness wait.
+        assert_eq!(controls.startup_progress(), 61);
+        resumed.append(&[93, -94]).unwrap();
+        resumed.finish().unwrap();
+        assert_eq!(resumed.written_samples(), target + 2);
+        assert_eq!(std::fs::read(path).unwrap(), original);
+        assert!(
+            PcmWriter::new(store.clone(), "microphone").is_err(),
+            "Ordinary writers still refuse resumption"
+        );
+        let mut diagnostic = CaptureDiagnostics::new("microphone");
+        save_diagnostics(&store, "microphone", &diagnostic).unwrap();
+        let prior = std::fs::read(store.folder().join("capture-microphone.json")).unwrap();
+        diagnostic.end_reason = Some("startupFailure");
+        save_diagnostics(&store, "microphone", &diagnostic).unwrap();
+        assert_eq!(
+            std::fs::read(store.folder().join("capture-microphone.json")).unwrap(),
+            prior
+        );
     }
 
     #[test]

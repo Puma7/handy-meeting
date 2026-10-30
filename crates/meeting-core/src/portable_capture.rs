@@ -115,12 +115,54 @@ pub(super) fn record_controlled(
         if !["system", "microphone"].contains(&source) {
             return Err("Invalid audio track".into());
         }
-        let mut writer = PcmWriter::new(store.clone(), source)?;
+        let mut writer =
+            PcmWriter::for_capture(store.clone(), source, &|| controls.note_startup_progress())?;
+        let previous_end = writer.written_samples();
+        let resumed_at = controls.elapsed_samples();
+        // Close any gap silence already written when this startup step fails, so a later
+        // reconnect can verify and continue the track.
+        let startup = (|| -> Result<()> {
+            if source == "microphone" && previous_end > 0 && resumed_at > previous_end {
+                if resumed_at - previous_end > u64::from(SAMPLE_RATE) * 86400 {
+                    return Err(
+                        "Audio receipt clock gap exceeds one day; check the recording timeline"
+                            .into(),
+                    );
+                }
+                while writer.written_samples() < resumed_at {
+                    if stop.load(Ordering::Acquire) {
+                        return Err(
+                            "Capture stopped while aligning the reconnected microphone".into()
+                        );
+                    }
+                    let step =
+                        resumed_at.min(writer.written_samples() + u64::from(SAMPLE_RATE) * 300);
+                    pad_estimated(&mut writer, step)?;
+                    controls.note_startup_progress();
+                }
+                controls.record_microphone_gap(previous_end, resumed_at - previous_end)?;
+            }
+            Ok(())
+        })();
+        if let Err(error) = startup {
+            if let Err(finish) = writer.finish() {
+                return Err(format!("{error}; gap silence could not be closed: {finish}").into());
+            }
+            return Err(error);
+        }
         // Diagnostic failures remain visible in the live store and never gate PCM.
         let _ = store.notice("Portable audio track ranges use approximate receipt timing, not exact device or word timestamps.");
         let epochs_result = (|| -> Result<()> {
             while !stop.load(Ordering::Acquire) {
                 while controls.suppressed(source) && !stop.load(Ordering::Acquire) {
+                    // A reconnected track can be ready in a privacy-gated state. Do not
+                    // open a helper or wait for speech before acknowledging this gate.
+                    if !announced {
+                        ready
+                            .send(Ok(()))
+                            .map_err(|_| "Capture controller closed")?;
+                        announced = true;
+                    }
                     pad_estimated(&mut writer, controls.elapsed_samples())?;
                     writer.checkpoint_if_due()?;
                     thread::sleep(Duration::from_millis(50));
@@ -375,6 +417,45 @@ fn pad_estimated(writer: &mut PcmWriter, target: u64) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_paused_reconnect_acknowledges_without_starting_a_helper() {
+        let root = tempfile::tempdir().unwrap();
+        let store = SessionStore::create(
+            root.path(),
+            "Synthetic paused reconnect",
+            "m",
+            "s",
+            Some("mic"),
+        )
+        .unwrap();
+        let mut original = PcmWriter::new(store.clone(), "microphone").unwrap();
+        original.append(&[13, -14]).unwrap();
+        original.finish().unwrap();
+        let controls = Arc::new(CaptureControls::new(&store).unwrap());
+        controls.set_paused(true).unwrap();
+        let stop = Arc::new(AtomicBool::new(false));
+        let worker_stop = stop.clone();
+        let (ready, acknowledged) = mpsc::sync_channel(1);
+        let worker = thread::spawn(move || {
+            record_controlled(
+                store,
+                "microphone",
+                worker_stop,
+                ready,
+                HelperSpec {
+                    command: Command::new("synthetic-helper-must-never-run"),
+                    readiness_marker: true,
+                    graceful_stdin: false,
+                },
+                controls,
+            )
+        });
+        let ready = acknowledged.recv_timeout(Duration::from_secs(2));
+        stop.store(true, Ordering::Release);
+        assert!(worker.join().unwrap().is_ok());
+        assert!(ready.unwrap().is_ok());
+    }
 
     #[test]
     /// Checks synthetic helper restarts discard muted speech while keeping explicit silent timeline sections.

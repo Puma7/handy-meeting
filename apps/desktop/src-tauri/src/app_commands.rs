@@ -93,6 +93,15 @@ pub(crate) async fn set_microphone_muted(
 }
 /// Apply a visible approval or denial to the matching pending agent request on a worker.
 #[tauri::command]
+pub(crate) async fn reconnect_microphone(
+    service: State<'_, Arc<Service>>,
+    meeting_id: String,
+) -> AppResult<AppView> {
+    let service = Arc::clone(&service);
+    blocking(move || service.reconnect_microphone(&meeting_id)).await
+}
+/// Apply a visible approval or denial to the matching pending agent request on a worker.
+#[tauri::command]
 pub(crate) async fn agent_decide_recording(
     service: State<'_, Arc<Service>>,
     request_id: String,

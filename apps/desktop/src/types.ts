@@ -109,6 +109,7 @@ export interface LibraryProgress {
 }
 export type MeetingSummary = Omit<Meeting, "parts" | "warnings">;
 export interface AppState {
+  microphoneReconnectAvailable?: boolean;
   version: string;
   handy: HandyStatus | null;
   activeMeeting: Meeting | null;
@@ -187,6 +188,8 @@ export type RejectionReason =
   | "ownerOrDueOutsideTasks"
   | "unverifiedOwnerOrDue"
   | "invalidNameCandidate"
+  | "numberNotQuoted"
+  | "nonbindingTask"
   | "itemLimit";
 export interface AnalysisResult {
   id: string;
@@ -280,6 +283,28 @@ export interface LiveItem {
   evidence: LiveEvidence[];
 }
 export interface LiveView {
+  lastRequest?: {
+    operation: "window" | "overview";
+    window: number;
+    request: {
+      result:
+        | "transport"
+        | "http"
+        | "envelope"
+        | "incomplete"
+        | "validation"
+        | "persistence"
+        | "stored"
+        | "cancelled";
+      httpStatus: number | null;
+      finish: "stop" | "length" | "filtered" | "other" | null;
+      elapsedMs: number;
+      outputLimit: number;
+    };
+  } | null;
+  /** Independent coverage and timestamp of the rolling overview; older backends omit them. */
+  overviewPending?: boolean;
+  overviewUpdatedAt?: string | null;
   runId: string | null;
   model: string;
   mode: string;
@@ -308,6 +333,7 @@ export interface LiveNotesStatus {
     | "waiting"
     | "updating"
     | "finished"
+    | "partial"
     | "stopped"
     | "failed";
   running: boolean;
@@ -450,6 +476,7 @@ export interface DesktopApi {
   setCapturePaused?(meetingId: string, paused: boolean): Promise<AppState>;
   /** Mutes only this app's microphone track for the bound meeting, retaining system audio. */
   setMicrophoneMuted?(meetingId: string, muted: boolean): Promise<AppState>;
+  reconnectMicrophone?(meetingId: string): Promise<AppState>;
   /** Opens native selection/confirmation; cancellation returns null and grants no new path. */
   chooseHandyExecutable?(): Promise<string | null>;
   /** Returns an approved canonical FFmpeg path; its native grant lasts for this app session. */
