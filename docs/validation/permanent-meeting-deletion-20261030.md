@@ -14,7 +14,7 @@ Native and React state drop the selected inactive meeting's cached view/results/
 
 ## Explicit limits
 
-Imported legacy originals are read in place outside app-owned storage; this action does not delete those originals and is not offered on legacy rows. External exports, hardlink copies, clipboard, backups, cloud/provider histories and OS/device forensic traces are outside this operation. No overwrite/free-space wiping or forensic secure-erasure guarantee is made. No real user meeting was deleted during development. No capture, ASR algorithm, model endpoint or prompt was changed. PR37 model-residency coordination is a separate draft change; integration must release its retained meeting reservations if both changes are combined. This PR makes no claim of clearing a model server's memory/history.
+Imported legacy originals are read in place outside app-owned storage; this action does not delete those originals and is not offered on legacy rows. External exports, hardlink copies, clipboard, external backups, cloud/provider histories and OS/device forensic traces are outside this operation. App-managed transcript backups are included in removal. No overwrite/free-space wiping or forensic secure-erasure guarantee is made. No real user meeting was deleted during development. No capture, ASR algorithm, model endpoint or prompt was changed. PR37 model-residency coordination is a separate draft change; integration must release its retained meeting reservations if both changes are combined. This PR makes no claim of clearing a model server's memory/history.
 
 ## Validation
 
@@ -524,3 +524,28 @@ Application version, primary session format and whole historical TEST_REPORT.md
 remain unchanged. Fresh candidate 12 target CI and final-head reviews are still
 required; all earlier distribution, independent-process, hardware, provider,
 external-copy and model-residency integration limits remain in force.
+
+## Candidate 13: distinguish transcript backups from external backups
+
+The second full candidate 12 review found ambiguous scope wording: the README
+and both dialog languages said that backups remain outside removal, although
+app-managed transcript backups are included in the existing file inventory.
+They now explicitly say those transcript backups are also removed and identify
+only external backups as outside the operation. The scope and limits above use
+the same distinction. This corrects the information given before confirmation;
+it changes no inventory, permission, confirmation, cancellation or removal logic.
+The original wording is preserved privately as evidence, without inventing a
+runtime failure for this text-only correction.
+
+Fresh frontend validation on Windows, with application version 1.0.7, passes all
+247 existing tests, TypeScript, the production build and the changed component's
+format check. Required repository verification is performed on the final source
+before export. No new test merely matching the replacement sentence is added.
+All native code is byte-identical to candidate 12: its 389 Rust workspace and
+all-target tests, 27 core erasure cases, two regularly ignored special entrypoints,
+Rust format and Clippy with warnings denied remain earlier evidence and were not
+rerun for candidate 13. Dependencies, protection and reviewer rules, the primary
+session format, version and whole historical TEST_REPORT.md remain unchanged.
+New candidate 13 target CI and final-head review rounds are still required.
+No real meeting or external backup was accessed or removed; independent-process,
+installed-app, hardware, provider and combined model-residency limits remain open.

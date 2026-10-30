@@ -356,8 +356,8 @@ export default function EraseMeetingDialog({
         </p>
         <p className="muted">
           {de
-            ? "Externe Exporte, Zwischenablage und Backups werden nicht gelöscht. Physische Datenträgerspuren lassen sich hier nicht garantiert beseitigen."
-            : "External exports, clipboard and backups are not erased. Physical storage traces cannot be guaranteed erased here."}
+            ? "Appverwaltete Transkript-Sicherungskopien werden mitgelöscht. Externe Exporte, Zwischenablage und externe Sicherungskopien werden nicht gelöscht. Physische Datenträgerspuren lassen sich hier nicht garantiert beseitigen."
+            : "App-managed transcript backups are also erased. External exports, clipboard and external backups are not erased. Physical storage traces cannot be guaranteed erased here."}
         </p>
         {stage === "ready" && preview && (
           <>
