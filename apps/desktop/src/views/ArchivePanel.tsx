@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { errorMessage } from "../api";
 import type {
   ArchiveEntry,
@@ -12,10 +13,13 @@ export default function ArchivePanel({
   api,
   locale,
   job,
+  statusContainer,
 }: {
   api: DesktopApi;
   locale: Locale;
   job: LibraryProgress | null;
+  /** Keeps asynchronous command and catalog failures visible outside collapsed settings. */
+  statusContainer?: HTMLElement | null;
 }) {
   const de = locale === "de";
   const [page, setPage] = useState<ArchivePage | null>(null),
@@ -96,8 +100,18 @@ export default function ArchivePanel({
           ? "Wiederherstellung prüft alle Dateien erneut und überschreibt keine vorhandene Sitzung. Die Archivkopie bleibt erhalten. Endgültiges Löschen ist ausschließlich über eine neue Aufräumvorschau möglich."
           : "Restoration verifies every file again and never overwrites an existing meeting. The archive copy is retained. Permanent deletion is available only through a fresh retention preview."}
       </p>
-      {error && <p role="alert">{error}</p>}
-      {logError && <p role="alert">{logError}</p>}
+      {error &&
+        (statusContainer ? (
+          createPortal(<p role="alert">{error}</p>, statusContainer)
+        ) : (
+          <p role="alert">{error}</p>
+        ))}
+      {logError &&
+        (statusContainer ? (
+          createPortal(<p role="alert">{logError}</p>, statusContainer)
+        ) : (
+          <p role="alert">{logError}</p>
+        ))}
       {unfinished.length > 0 && api.resumePermanentDeletion && (
         <div className="notice warning">
           <strong>

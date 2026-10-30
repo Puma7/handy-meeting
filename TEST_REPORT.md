@@ -863,7 +863,7 @@ Wartungsfehler bleiben auch bei geschlossener Einrichtung sichtbar. Rechnerdetai
 sind bei schmalem Fenster erreichbar; RAM-Mengen und die nicht gemessene
 GPU-Auslastung werden erklärt.
 
-Der aktuelle lokale Stand besteht 233 Frontendtests, TypeScript,
+Der lokale Kandidat08 bestand 233 Frontendtests, TypeScript,
 Produktionsbuild, Formatierung und ./verify.ps1. Aussagekräftige synthetische
 Vorher-/Nachher-Prüfungen sichern die behobenen Reviewbefunde ab. Sichtbare
 Browserprüfungen verwenden ausschließlich künstliche IPC-Beispieldaten. Sie
@@ -874,3 +874,16 @@ Die einzelnen Prüfstände und Grenzen sind in
 [docs/validation/interface-clarity-20261030.md](docs/validation/interface-clarity-20261030.md)
 zugeordnet. Neue CI-Ergebnisse und saubere Reviews müssen sich auf den tatsächlich
 veröffentlichten neuen Head beziehen; frühere Ergebnisse ersetzen sie nicht.
+
+
+### Weitere Reviewkorrekturen (Kandidat09)
+
+Auch bei einer vorhandenen Auswertung bleibt ein Fehler der lokalen
+Modellerkennung sichtbar. Fehler aus Wiederherstellung, Archivkompaktierung und
+Audiokopien werden außerhalb geschlossener Wartungseinstellungen angezeigt.
+Die schmale Seitenleiste liegt über dem normalen Inhalt, aber unter Dialogen.
+Vier neue synthetische Regressionen scheiterten vorher und bestehen nachher.
+Alle 237 Frontendtests sowie TypeScript und Produktionsbuild bestehen lokal.
+Eine sichtbare 600px-Prüfung belegt die korrigierte Ebenenfolge ohne seitlichen
+Überlauf. Native Quellen und Abhängigkeiten bleiben unverändert; dies ist kein
+Hardware-, Modellserver-, GPU- oder Langzeitnachweis.

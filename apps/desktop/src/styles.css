@@ -2273,7 +2273,8 @@ p {
 }
 @media (max-width: 740px) {
   .sidebar {
-    z-index: 20;
+    /* Above ordinary content, below the shared modal backdrop at layer10. */
+    z-index: 2;
   }
   .sidebar-recording {
     flex-direction: column;

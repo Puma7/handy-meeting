@@ -748,8 +748,19 @@ export default function RetentionPanel({
           </button>
         </section>
       )}
-      <ArchivePanel api={api} locale={locale} job={job} />
-      <AudioCopiesPanel api={api} locale={locale} models={models} job={job} />
+      <ArchivePanel
+        api={api}
+        locale={locale}
+        job={job}
+        statusContainer={statusContainer}
+      />
+      <AudioCopiesPanel
+        api={api}
+        locale={locale}
+        models={models}
+        job={job}
+        statusContainer={statusContainer}
+      />
     </section>
   );
 }

@@ -113,7 +113,7 @@ respect a user's decision to close it. Computer details remain accessible at
 600px through a labeled icon and an expanded card above the main content.
 
 Three new synthetic regressions and a strengthened resource-details assertion
-fail on the previous implementation and pass after these corrections. All 233
+fail on the previous implementation and pass after these corrections. For candidate08, all 233
 frontend tests, TypeScript, the production build, frontend formatting and the
 required ./verify.ps1 pass locally. Browser checks use only synthetic IPC data:
 the 600px details card visibly paints RAM amounts and the unmeasured-GPU caveat
@@ -127,3 +127,22 @@ are unchanged. The historical full report is now accompanied by this current
 summary under the user's explicit permission to publish the complete report for
 PR36. No private meeting text, session identity or provider diagnostic is added.
 Fresh reviews and CI are still required on the new published head.
+
+
+## Existing results, nested maintenance failures and dialog layering
+
+The next full review identified discovery failures hidden beside an existing
+analysis, child archive/audio-copy errors hidden after maintenance closed, and
+the compact sidebar painting above modal dialogs. Discovery errors now remain
+visible with a retained result. Archive restore/compaction, catalog failures and
+audio-copy errors use the same outside status outlet; standalone panels retain
+an inline fallback. The compact sidebar stays above ordinary content at layer2
+and below the existing modal layer10.
+
+Four new synthetic assertions failed on candidate08 and pass after these fixes.
+All 237 frontend tests and TypeScript/production build pass locally. A 600px
+rendered check reproduces the card and sidebar obscuring a modal before the
+change, then verifies the dialog paints above them and the open card still
+paints above ordinary content after the dialog closes, without horizontal
+overflow. The browser and IPC data are synthetic; no real maintenance or model
+operation is performed. Native code, dependencies and deadlines are unchanged.

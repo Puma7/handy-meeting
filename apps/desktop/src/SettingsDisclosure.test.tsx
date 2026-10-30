@@ -5,6 +5,124 @@ import { de } from "./i18n";
 import SettingsView from "./views/SettingsView";
 import type { DesktopApi, RetentionPolicy } from "./types";
 
+// Real SettingsView wiring with synthetic callbacks only; no archive or audio is opened.
+function renderChildMaintenance(api: DesktopApi) {
+  const noop = () => undefined;
+  render(
+    <SettingsView
+      api={api}
+      app={null}
+      locale="de"
+      theme="system"
+      t={de}
+      busy={false}
+      blocked={false}
+      connected
+      refreshingHandy={false}
+      preferencesPersistable
+      handyPath=""
+      onChooseHandy={noop}
+      onRefreshHandy={noop}
+      onRefreshDevices={noop}
+      onImportLegacy={noop}
+      onRebuildIndex={noop}
+      onLocale={noop}
+      onTheme={noop}
+    />,
+  );
+  return screen.getByText("Daten und Wartung").closest("details")!;
+}
+function childPolicy() {
+  return {
+    revision: 0,
+    untouchedDays: 30,
+    audioArchiveAfterDays: null,
+    archiveAfterDays: null,
+    convertAfterDays: null,
+    maxVisibleMeetings: null,
+    deleteArchivesAfterDays: null,
+    codec: "flac",
+    ffmpegExecutable: null,
+  };
+}
+
+it.each(["restore", "compact"] as const)(
+  "keeps a rejected archive %s visible after maintenance closes",
+  async (operation) => {
+    let reject!: (error: unknown) => void;
+    const command = vi.fn().mockImplementation(
+      () =>
+        new Promise((_, fail) => {
+          reject = fail;
+        }),
+    );
+    const entry = {
+      archiveId: "a".repeat(32),
+      title: "Synthetic archive",
+      sessionPresent: false,
+      sourceCopyRetained: true,
+      receipt: {
+        archiveId: "a".repeat(32),
+        meetingId: "b".repeat(32),
+        kind: "whole-meeting",
+        archiveBytes: 1000,
+        originalBytes: 2000,
+        createdAt: "2026-01-01",
+      },
+    };
+    const api = {
+      getRetentionPolicy: vi.fn().mockResolvedValue(childPolicy()),
+      getMaintenanceProgress: vi.fn().mockResolvedValue(null),
+      listArchives: vi.fn().mockResolvedValue({ items: [entry], more: false }),
+      restoreArchive: command,
+      compactArchive: command,
+    } as unknown as DesktopApi;
+    const detail = renderChildMaintenance(api);
+    await userEvent.click(detail.querySelector("summary")!);
+    await userEvent.click(
+      await screen.findByRole("button", {
+        name:
+          operation === "restore"
+            ? "Wiederherstellung prüfen"
+            : "Archiv platzsparend aufbewahren",
+      }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", {
+        name:
+          operation === "restore"
+            ? "Geprüfte Kopie wiederherstellen"
+            : "Geprüftes ZIP behalten, Rohkopie entfernen",
+      }),
+    );
+    expect(command).toHaveBeenCalledOnce();
+    await userEvent.click(detail.querySelector("summary")!);
+    await act(async () => reject(new Error(`Synthetic ${operation} failed`)));
+    const message = await screen.findByText(`Synthetic ${operation} failed`);
+    expect(message.closest("details")).toBeNull();
+    expect(detail.open).toBe(false);
+  },
+);
+
+it("keeps an audio-copy catalog error visible outside closed maintenance settings", async () => {
+  let reject!: (error: unknown) => void;
+  const api = {
+    getRetentionPolicy: vi.fn().mockResolvedValue(childPolicy()),
+    getMaintenanceProgress: vi.fn().mockResolvedValue(null),
+    listAudioCopies: vi.fn().mockImplementation(
+      () =>
+        new Promise((_, fail) => {
+          reject = fail;
+        }),
+    ),
+  } as unknown as DesktopApi;
+  const detail = renderChildMaintenance(api);
+  await act(async () => reject(new Error("Synthetic audio copy failed")));
+  const message = await screen.findByText("Synthetic audio copy failed");
+  expect(message.closest("details")).toBeNull();
+  expect(detail.open).toBe(false);
+});
+
 it("keeps a rejected maintenance save visible after its settings close", async () => {
   const policy: RetentionPolicy = {
     revision: 0,

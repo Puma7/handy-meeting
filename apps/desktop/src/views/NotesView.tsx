@@ -187,7 +187,7 @@ export default function NotesView({
         </div>
       )}
       <section className="notes-config">
-        {!setupOpen && !notesBusy && !result && modelDiscoveryError && (
+        {!setupOpen && !notesBusy && modelDiscoveryError && (
           <p role="alert" className="notice warning">
             {modelDiscoveryError}
           </p>
