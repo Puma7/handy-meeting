@@ -2,7 +2,7 @@ import { FolderOpen, RefreshCw } from "lucide-react";
 import type { AppState, DesktopApi, Locale, Theme } from "../types";
 import type { MessageKey } from "../i18n";
 import RetentionPanel from "./RetentionPanel";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import UpdatePanel from "./UpdatePanel";
 
 /**
@@ -54,6 +54,8 @@ export default function SettingsView({
 }) {
   const de = locale === "de";
   const unavailable = busy || blocked || !connected;
+  const [maintenanceStatusRoot, setMaintenanceStatusRoot] =
+    useState<HTMLDivElement | null>(null);
   return (
     <>
       <div className="settings-sections">
@@ -168,6 +170,7 @@ export default function SettingsView({
         locale={locale}
         blocked={blocked || Boolean(app?.notesRunning)}
       />
+      <div ref={setMaintenanceStatusRoot} />
       <details className="settings-disclosure">
         <summary>{de ? "Daten und Wartung" : "Data and maintenance"}</summary>
         {api.rebuildSearchIndex && (
@@ -192,6 +195,7 @@ export default function SettingsView({
           api={api}
           locale={locale}
           models={app?.handy?.models ?? []}
+          statusContainer={maintenanceStatusRoot}
         />
         <section className="legacy-panel">
           <h2>{t.legacy}</h2>

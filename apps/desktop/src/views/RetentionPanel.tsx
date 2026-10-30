@@ -7,6 +7,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { Archive } from "lucide-react";
+import { createPortal } from "react-dom";
 import { errorMessage } from "../api";
 import AudioCopiesPanel from "./AudioCopiesPanel";
 import ArchivePanel from "./ArchivePanel";
@@ -75,10 +76,13 @@ export default function RetentionPanel({
   api,
   locale,
   models = [],
+  statusContainer,
 }: {
   api: DesktopApi;
   locale: Locale;
   models?: HandyModel[];
+  /** Shows the same single job observer outside an ancestor's collapsed settings. */
+  statusContainer?: HTMLElement | null;
 }) {
   const de = locale === "de";
   const latestJob = useRef<string | null>(null);
@@ -583,7 +587,14 @@ export default function RetentionPanel({
           )}
         </>
       )}
-      <MaintenanceStatus api={api} locale={locale} onProgress={progress} />
+      {statusContainer === null ? null : statusContainer ? (
+        createPortal(
+          <MaintenanceStatus api={api} locale={locale} onProgress={progress} />,
+          statusContainer,
+        )
+      ) : (
+        <MaintenanceStatus api={api} locale={locale} onProgress={progress} />
+      )}
       {plan && (
         <div className="retention-preview">
           <h3>

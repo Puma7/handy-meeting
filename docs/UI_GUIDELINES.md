@@ -7,6 +7,7 @@ apply to recording, history, live summaries, post-meeting analysis and settings.
   per task. Use secondary buttons for alternatives and text buttons for setup.
 - Keep frequent controls visible. Put explanations, optional automation, template
   editing and maintenance in named native disclosures. They must work by keyboard.
+- Keep running maintenance progress/cancellation outside collapsed settings.
 - Keep errors, capture warnings, unconfirmed results and per-run cloud consent
   visible at their decision point. A collapsed help section must never grant consent.
 - Use short source names (System audio / Microphone). Give both source cards the
@@ -15,7 +16,7 @@ apply to recording, history, live summaries, post-meeting analysis and settings.
 - A digital level is neither calibrated loudness nor proof that audio was saved.
   Preserve clipping and unavailable/stale states. Never turn unknown readings into zero.
 - Show whole-computer CPU/RAM percentages, with used/total memory in GiB available
-  on the RAM reading. GPU usage is currently unmeasured; do not invent a percentage.
+  in keyboard-accessible computer details. GPU usage is currently unmeasured; do not invent a percentage.
   Positive transcription backlog remains pending even below the high-load threshold.
 - A driver discontinuity is a capture warning. It does not prove an audible gap or
   an uninterrupted recording. Preserve the original warning and direct the user to

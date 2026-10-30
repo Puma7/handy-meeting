@@ -2262,3 +2262,16 @@ p {
 .template-editor .step-actions {
   margin-top: 10px;
 }
+
+.sidebar-resource-details {
+  flex-basis: 100%;
+  margin-top: 4px;
+}
+.sidebar-resource-details > summary {
+  cursor: pointer;
+  color: var(--color-ink-2);
+}
+.sidebar-resource-details p {
+  margin: 6px 0 0;
+  line-height: 1.5;
+}

@@ -159,26 +159,33 @@ export default function RecordingStatus({
             <span
               data-high={(memoryPercent ?? 0) >= HIGH_LOAD_PERCENT || undefined}
             >
-              <span
-                title={
-                  used === null || !total
-                    ? undefined
-                    : `${gb(used)}/${gb(total)} GiB`
-                }
-              >
+              <span>
                 RAM{" "}
                 {memoryPercent === null ? "—" : `${number(memoryPercent, 0)} %`}
               </span>
             </span>
-            <span
-              title={
-                de
+            <span>GPU —</span>
+            <details className="sidebar-resource-details">
+              <summary>{de ? "Rechnerdetails" : "Computer details"}</summary>
+              <p>
+                {de
+                  ? "Auslastung des ganzen Computers"
+                  : "Load of the whole computer"}
+              </p>
+              <p>
+                {de ? "Arbeitsspeicher" : "Memory"}:{" "}
+                {used === null || !total
+                  ? de
+                    ? "nicht gemessen"
+                    : "not measured"
+                  : `${gb(used)}/${gb(total)} GiB`}
+              </p>
+              <p>
+                {de
                   ? "GPU-Auslastung wird derzeit nicht gemessen"
-                  : "GPU usage is currently not measured"
-              }
-            >
-              GPU —
-            </span>
+                  : "GPU usage is currently not measured"}
+              </p>
+            </details>
           </dd>
         </div>
         <div>

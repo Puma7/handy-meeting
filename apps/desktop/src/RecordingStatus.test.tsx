@@ -99,10 +99,8 @@ describe("recording status in the sidebar (synthetic IPC)", () => {
     expect(cpu.hasAttribute("data-high")).toBe(true);
     const ram = within(region).getByText("RAM 96 %");
     expect(ram.parentElement!.hasAttribute("data-high")).toBe(true);
-    expect(ram.getAttribute("title")).toBe("15,4/16,0 GiB");
-    expect(within(region).getByText("GPU —").getAttribute("title")).toMatch(
-      /nicht gemessen/,
-    );
+    expect(within(region).getByText("GPU —")).toBeTruthy();
+    expect(within(region).getByText("Rechnerdetails").tagName).toBe("SUMMARY");
     expect(within(region).getByText("1 Hinweis zur Aufnahme")).toBeTruthy();
     expect(within(region).getByText("01:35 noch offen")).toBeTruthy();
     expect(within(region).getByText("„Zuletzt gesagter Satz“")).toBeTruthy();
@@ -156,9 +154,7 @@ describe("recording status in the sidebar (synthetic IPC)", () => {
     );
     expect(screen.getByText("00:02 noch offen")).toBeTruthy();
     expect(screen.queryByText("Aktuell")).toBeNull();
-    expect(screen.getByText("GPU —").getAttribute("title")).toMatch(
-      /nicht gemessen/,
-    );
+    expect(screen.getByText("GPU —")).toBeTruthy();
     view.rerender(
       <RecordingStatus
         locale="de"
@@ -173,6 +169,36 @@ describe("recording status in the sidebar (synthetic IPC)", () => {
       />,
     );
     expect(screen.getByText("Aktuell")).toBeTruthy();
+  });
+
+  it("offers RAM amounts and the GPU limitation in accessible computer details", async () => {
+    render(
+      <RecordingStatus
+        locale="de"
+        paused={false}
+        durationMs={30_000}
+        parts={[]}
+        warningCount={0}
+        microphoneSilent={false}
+        microphoneMuted={false}
+        backlogMs={0}
+        getSystemLoad={vi.fn().mockResolvedValue(load)}
+        onOpen={() => undefined}
+      />,
+    );
+    await screen.findByText("RAM 96 %");
+    const summary = screen.getByText("Rechnerdetails");
+    expect(summary.tagName).toBe("SUMMARY");
+    const details = summary.closest("details")!;
+    expect(details.open).toBe(false);
+    await userEvent.click(summary);
+    expect(details.open).toBe(true);
+    expect(
+      within(details).getByText("Arbeitsspeicher: 15,4/16,0 GiB"),
+    ).toBeTruthy();
+    expect(
+      within(details).getByText("GPU-Auslastung wird derzeit nicht gemessen"),
+    ).toBeTruthy();
   });
 
   it("stays visible on other pages while recording and leads back to the recording", async () => {

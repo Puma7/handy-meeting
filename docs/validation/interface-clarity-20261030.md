@@ -27,3 +27,19 @@ The analysis page exposes one start action at a time. The persistent status
 bar remains the place for progress, cancellation and errors. The original full
 report is retained without modification in this interface change.
 
+
+## Follow-up after the first review
+
+CodeRabbit correctly found that RAM amounts and the GPU limitation were exposed
+only through pointer tooltips. They now appear in a keyboard-accessible native
+computer-details disclosure. A separate review reproduced a running archive job
+and its cancellation control disappearing inside collapsed maintenance settings.
+The same single job observer now renders outside that disclosure, retaining its
+existing callbacks and cancellation path without duplicate initial polling.
+Both new synthetic regressions failed against the previous UI implementation.
+These checks do not perform a real archive operation or measure GPU usage.
+
+All 228 frontend tests, TypeScript, the production build and the required
+`./verify.ps1` passed after these fixes. A synthetic browser check opened
+computer details with Enter, kept the running job outside closed settings,
+and observed cancellation acknowledgement. No real archive was started.
