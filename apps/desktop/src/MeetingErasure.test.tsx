@@ -19,8 +19,23 @@ import { testServices } from "./test-services";
 import { useNotesJob } from "./useNotesJob";
 import type { DesktopApi, ErasurePreview, MeetingSummary } from "./types";
 
+const dialogTargets = vi.hoisted(() => [] as MeetingSummary[]);
+vi.mock("./views/EraseMeetingDialog", async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import("./views/EraseMeetingDialog")>();
+  return {
+    default: (props: Parameters<typeof original.default>[0]) => {
+      dialogTargets.push(props.meeting);
+      return <original.default {...props} />;
+    },
+  };
+});
+
 afterEach(cleanup);
 afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  dialogTargets.length = 0;
+});
 const meeting: MeetingSummary = {
   id: "b".repeat(32),
   title: "Synthetic two-second meeting",
@@ -36,6 +51,106 @@ const plan: ErasurePreview = {
   bytes: 128000,
   rebuildSearch: true,
 };
+
+it.each(["failed", "cancelled"])(
+  "keeps only confirmation metadata at the dialog boundary after %s detail erasure",
+  async (outcome) => {
+    localStorage.clear();
+    const full = Object.freeze({
+      ...meeting,
+      parts: Object.freeze([
+        {
+          source: "microphone",
+          startSample: 0,
+          sampleCount: 16000,
+          text: "Synthetic transcript must not be owned by confirmation",
+          status: "complete",
+        },
+      ]),
+      warnings: Object.freeze(["Synthetic private recording warning"]),
+      metadataError: "Synthetic content-bearing diagnostic",
+    });
+    let deleting = false;
+    const props = fixture();
+    const api = {
+      ...testServices(),
+      ...props.api,
+      getAppState: vi.fn().mockResolvedValue({
+        version: "synthetic",
+        handy: null,
+        recording: false,
+        activeMeeting: null,
+      }),
+      listDevices: vi.fn().mockResolvedValue([]),
+      listMeetings: vi.fn().mockResolvedValue([meeting]),
+      getMeeting: vi.fn().mockResolvedValue(full),
+      listAnalyses: vi.fn().mockResolvedValue({ analyses: [], skipped: [] }),
+      getNotesProgress: vi.fn().mockResolvedValue(null),
+      listPendingErasures: vi.fn().mockResolvedValue([]),
+      eraseMeetingNow: vi.fn(async () => {
+        deleting = true;
+        return "erase-job";
+      }),
+      getMaintenanceProgress: vi.fn(async () => ({
+        jobId: deleting ? "erase-job" : "preview-job",
+        kind: "meeting-erasure",
+        status: deleting ? outcome : "complete",
+        confirmedTasks: 0,
+        totalTasks: 8,
+        elapsedMs: 1,
+        skipped: 0,
+        error: deleting ? "Synthetic erasure terminal" : null,
+        cancelRequested: outcome === "cancelled",
+      })),
+    } as unknown as DesktopApi;
+    render(<App api={api} />);
+    await userEvent.click(
+      await screen.findByRole("button", { name: /Historie/ }),
+    );
+    const row = (await screen.findByText(meeting.title)).closest(
+      ".session-row",
+    )!;
+    await userEvent.click(
+      within(row as HTMLElement).getByRole("button", { name: "Öffnen" }),
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Meeting löschen" }),
+    );
+    await userEvent.type(
+      await screen.findByRole("textbox", {
+        name: "Zur Bestätigung LÖSCHEN eingeben",
+      }),
+      "LÖSCHEN",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Jetzt endgültig löschen" }),
+    );
+    await screen.findByText("Synthetic erasure terminal");
+    expect(screen.getByRole("alertdialog")).toBeTruthy();
+    expect(
+      screen.queryByText(
+        "Meetinginhalte vollständig aus der HandyMeeting-Ablage entfernt.",
+      ),
+    ).toBeNull();
+    expect(dialogTargets.length).toBeGreaterThan(0);
+    for (const target of dialogTargets) {
+      expect(Object.keys(target).sort()).toEqual([
+        "durationMs",
+        "id",
+        "modelId",
+        "startedAt",
+        "status",
+        "title",
+      ]);
+      expect(target).not.toBe(full);
+    }
+    expect(full.parts[0].text).toBe(
+      "Synthetic transcript must not be owned by confirmation",
+    );
+    expect(full.warnings).toEqual(["Synthetic private recording warning"]);
+    expect(api.eraseMeetingNow).toHaveBeenCalledOnce();
+  },
+);
 
 it.each(["close button", "Escape"])(
   "returns focus to the History erasure opener after closing with %s",

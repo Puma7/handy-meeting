@@ -1167,6 +1167,17 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       setBusy(false);
     }
   }
+  /** Own only the fields displayed by confirmation, never a full runtime Meeting. */
+  function openMeetingErasure(target: MeetingSummary) {
+    setErasureTarget({
+      id: target.id,
+      title: target.title,
+      startedAt: target.startedAt,
+      durationMs: target.durationMs,
+      status: target.status,
+      modelId: target.modelId,
+    });
+  }
   /** Invalidate pending reads and discard only the explicitly selected meeting's cached content. */
   function beginMeetingErasure(id: string) {
     notesJob.forget(id);
@@ -1907,7 +1918,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             api={api}
             locale={locale}
             revision={erasureRevision}
-            onResume={setErasureTarget}
+            onResume={openMeetingErasure}
           />
         )}
         <header className="page-header">
@@ -2264,7 +2275,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
           <MeetingDetail
             meeting={meeting}
             onErase={
-              canEraseMeeting ? () => setErasureTarget(meeting) : undefined
+              canEraseMeeting ? () => openMeetingErasure(meeting) : undefined
             }
             selectedFile={
               searchSource?.meetingId === meeting.id ? searchSource.file : null
@@ -2307,7 +2318,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
               (item) => !item.id.startsWith("legacy-"),
             )}
             onRefresh={() => void action(refreshHistory)}
-            onErase={canEraseMeeting ? setErasureTarget : undefined}
+            onErase={canEraseMeeting ? openMeetingErasure : undefined}
             hiddenMeetingIds={erasureBlocked.current}
             onOpen={(id, file) => {
               void openMeeting(id, "detail", file);
@@ -2319,7 +2330,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             history={history.filter(
               (item) => !erasureBlocked.current.has(item.id),
             )}
-            onErase={canEraseMeeting ? setErasureTarget : undefined}
+            onErase={canEraseMeeting ? openMeetingErasure : undefined}
             locale={locale}
             t={t}
             busy={busy}

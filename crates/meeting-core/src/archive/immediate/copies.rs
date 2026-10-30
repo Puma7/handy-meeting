@@ -4,16 +4,14 @@ use super::*;
 use std::collections::BTreeSet;
 
 /// Checks both available manifest generations without requiring incomplete staging
-/// to be replayable. A valid foreign identity always preserves the entire tree.
+/// to be replayable. A readable foreign identity always preserves the entire tree,
+/// even when that identity is ineligible to authorize native erasure itself.
 pub(super) fn reject_conflicting_identity(folder: &Path, id: &str) -> Result<()> {
     for name in ["session.json", "session.json.bak"] {
         let path = folder.join(name);
         metadata::reject_link_if_present(&path)?;
         if let Ok(value) = read_record(&path) {
-            if value["id"]
-                .as_str()
-                .is_some_and(|found| native_id(found) && found != id)
-            {
+            if value["id"].as_str().is_some_and(|found| found != id) {
                 return Err("Source manifest belongs to another meeting; erasure blocked".into());
             }
         }
@@ -88,10 +86,7 @@ fn reject_conflicting_zip_identity(path: &Path, id: &str, cancel: &AtomicBool) -
         }
         if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes) {
             for found in [&value["meetingId"], &value["session"]["id"], &value["id"]] {
-                if found
-                    .as_str()
-                    .is_some_and(|found| native_id(found) && found != id)
-                {
+                if found.as_str().is_some_and(|found| found != id) {
                     return Err(
                         "Archive ZIP conflicts with its attributed meeting; erasure blocked".into(),
                     );

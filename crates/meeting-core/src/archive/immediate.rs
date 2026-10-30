@@ -67,7 +67,7 @@ fn references(value: &serde_json::Value, ids: &mut BTreeSet<String>, depth: usiz
         serde_json::Value::Object(rows) => {
             for (key, row) in rows {
                 if key == "meetingId" {
-                    if let Some(id) = row.as_str().filter(|id| native_id(id)) {
+                    if let Some(id) = row.as_str() {
                         ids.insert(id.to_owned());
                         if ids.len() > MAX_FILES {
                             return Err("Too many retained record identities".into());

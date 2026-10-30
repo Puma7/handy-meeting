@@ -29,7 +29,7 @@ impl<'de> Visitor<'de> for Identities<'_> {
         f.write_str("bounded atomic JSON with complete meetingId string fields")
     }
     fn visit_str<E: serde::de::Error>(self, value: &str) -> std::result::Result<(), E> {
-        if self.identity && native_id(value) {
+        if self.identity {
             self.found.insert(value.into());
         }
         Ok(())
@@ -49,7 +49,8 @@ impl<'de> Visitor<'de> for Identities<'_> {
     fn visit_unit<E: serde::de::Error>(self) -> std::result::Result<(), E> {
         Ok(())
     }
-    /// Only map keys named meetingId authorize attribution, including plan candidate rows.
+    /// Only meetingId fields contribute identity evidence, including plan candidate rows.
+    /// Foreign identity evidence does not grant permission to erase that foreign meeting.
     fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> std::result::Result<(), A::Error> {
         let mut identity_seen = false;
         while let Some(key) = map.next_key::<String>()? {

@@ -549,3 +549,54 @@ session format, version and whole historical TEST_REPORT.md remain unchanged.
 New candidate 13 target CI and final-head review rounds are still required.
 No real meeting or external backup was accessed or removed; independent-process,
 installed-app, hardware, provider and combined model-residency limits remain open.
+
+## Candidate 14: confirmation ownership, readable contention and foreign evidence
+
+The complete candidate 13 review found that opening erasure from meeting details
+put the full runtime Meeting into summary-typed confirmation state. TypeScript
+did not remove its transcript parts, recording warnings or diagnostic fields.
+All erasure entry points now construct a new object containing only the identity,
+title, start time, duration, status and model identifier needed by confirmation.
+Two full-App regressions reach failed and cancelled erasure with synthetic
+transcript/warning data and inspect the actual dialog component boundary. They
+failed before the correction because the full object was still owned by that
+state, and now pass with only the six confirmation fields. The original frozen
+meeting remains unchanged. This verifies object ownership, not forensic clearing
+of the renderer heap, physical memory or another process.
+
+Exclusive publication contention now reports a bilingual wait-and-retry action
+after the same bounded lock retries. The platform's actual lock-contended error
+and WouldBlock are mapped; unrelated I/O errors keep their original cause.
+Shared publication behavior and retry limits are unchanged. A held pair of real
+shared filesystem leases reproduced the former raw Windows error 33 through
+the public preview API. The strengthened test now checks readable rejection of
+both preview and confirmed erasure, preserved source bytes and successful erasure
+only after both publishers release their leases. This uses one process with
+independent file handles, not two installed application processes.
+
+The architecture text's additional identity proposal was also validated against
+the code. Foreign identity evidence had been filtered by eligibility to authorize
+native deletion. Six synthetic orphan-source and ordinary/EOF maintenance-log
+variants therefore accepted a conflicting legacy or otherwise ineligible string
+identity; a separate hash-valid ZIP regression also failed before correction.
+Every readable competing string identity now blocks source/ZIP attribution, and
+complete structured meetingId fields remain evidence in ordinary and temporary
+records even when they cannot authorize native deletion themselves. Target
+eligibility stays strict. All six variants now block before removal and preserve
+every pre-existing byte. Verified and orphan ZIPs, primary and backup generations,
+and the earlier eligible-identity controls remain covered. Rebuildable shared
+retention plans retain their separate policy. This prevents silent filtering of
+foreign evidence; it grants no authority to erase imported or invalid identities.
+
+Fresh validation on Windows at unchanged application version 1.0.7 passes 249
+frontend tests, TypeScript, production build and frontend formatting. The final
+Rust workspace/all-target run passes 390 tests, including all 28 core erasure
+cases; the same two separate special entrypoints remain regularly ignored.
+Rust formatting and Clippy with warnings denied are checked on that final code,
+and repository verification is required before export. Earlier intermediate
+checks and genuine before-failure logs remain preserved privately. No existing
+assertion, retry budget, confirmation rule or protection threshold is relaxed.
+Dependencies, primary session format, version and whole historical TEST_REPORT.md
+remain unchanged. No new browser, installed E2E, independent-process, hardware,
+provider or physical-memory proof is claimed. Fresh candidate 14 target CI and
+final-head review rounds are still required.

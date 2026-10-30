@@ -56,7 +56,18 @@ fn publication_lease(root: &Path, exclusive: bool) -> Result<File> {
     metadata::checked_directory(root)?;
     let file = metadata::open_lock_file(&root.join("content-publication.lock"))?;
     if exclusive {
-        metadata::lock_soon(&file)?;
+        if let Err(error) = metadata::lock_soon(&file) {
+            let contended = error.kind() == std::io::ErrorKind::WouldBlock
+                || matches!(
+                    (error.raw_os_error(), fs2::lock_contended_error().raw_os_error()),
+                    (Some(actual), Some(expected)) if actual == expected
+                );
+            if contended {
+                return Err("Meeting content is being analysed, exported or published; wait for it to finish and try again. / Meetinginhalte werden gerade verarbeitet; bitte den Abschluss abwarten und erneut versuchen.".into());
+            }
+            // An unrelated I/O failure is not evidence of a competing publisher.
+            return Err(error.into());
+        }
     } else {
         fs2::FileExt::try_lock_shared(&file)?;
     }

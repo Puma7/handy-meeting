@@ -11,6 +11,65 @@ use std::{
 
 const PRIVATE: &str = "syntheticerasurecanaryneverretainthisphrase";
 
+/// A readable competing identity is a conflict even if it cannot be a native
+/// deletion target. Ignoring it must not authorize removal of foreign evidence.
+#[test]
+fn ineligible_competing_identities_block_erasure_and_preserve_all_bytes() {
+    let mut accepted = Vec::new();
+    for foreign in ["legacy-synthetic-other", "not/a/native/id"] {
+        for kind in ["orphan-source", "maintenance-log", "temporary-log"] {
+            let root = tempfile::tempdir().unwrap();
+            let id = fixture(root.path(), PRIVATE, 1);
+            if kind == "orphan-source" {
+                let folder = root
+                    .path()
+                    .join("archives")
+                    .join(format!("{}.source", "a".repeat(32)));
+                extra(
+                    &folder.join("session.json"),
+                    &fs::read(root.path().join("sessions").join(&id).join("session.json")).unwrap(),
+                );
+                extra(
+                    &folder.join("session.json.bak"),
+                    &serde_json::to_vec(
+                        &serde_json::json!({"id":foreign,"title":"Foreign backup evidence"}),
+                    )
+                    .unwrap(),
+                );
+            } else {
+                let mut bytes = serde_json::to_vec(&serde_json::json!({"meetingId":id,"records":[{"meetingId":foreign,"title":"Foreign retained evidence"}]})).unwrap();
+                if kind == "temporary-log" {
+                    bytes.pop();
+                }
+                extra(
+                    &root
+                        .path()
+                        .join("maintenance-log")
+                        .join(if kind == "temporary-log" {
+                            ".tmpMixed"
+                        } else {
+                            "mixed.json"
+                        }),
+                    &bytes,
+                );
+            }
+            let before = tree(root.path());
+            if archive::preview_erasure(root.path(), &id, &AtomicBool::new(false)).is_ok() {
+                accepted.push(format!("{kind}:{foreign}"));
+            }
+            let after = tree(root.path());
+            for (path, bytes) in before {
+                assert_eq!(after.get(&path), Some(&bytes));
+            }
+            assert!(!root.path().join("immediate-deletions").exists());
+        }
+    }
+    assert!(
+        accepted.is_empty(),
+        "Competing readable identities were ignored: {accepted:?}"
+    );
+}
+
 /// Ambiguous shared logs are not single-meeting deletion authority, even at EOF.
 /// Rebuildable multi-meeting retention plans remain disposable derived previews.
 #[test]
@@ -140,12 +199,46 @@ fn publication_leases_allow_parallel_writers_and_exclude_erasure_until_all_end()
     let root = tempfile::tempdir().unwrap();
     let id = fixture(root.path(), PRIVATE, 1);
     let cancel = AtomicBool::new(false);
+    let preview = archive::preview_erasure(root.path(), &id, &cancel).unwrap();
     let first = archive::source_publication_lease(root.path()).unwrap();
     let second = archive::source_publication_lease(root.path()).unwrap();
     let before = tree(&root.path().join("sessions").join(&id));
-    assert!(archive::preview_erasure(root.path(), &id, &cancel).is_err());
+    let assert_readable = |message: String| {
+        assert!(
+            message.contains("wait") && message.contains("bitte"),
+            "No actionable bilingual contention message: {message}"
+        );
+        assert!(
+            !message.contains("os error"),
+            "Raw OS contention leaked: {message}"
+        );
+    };
+    assert_readable(
+        archive::preview_erasure(root.path(), &id, &cancel)
+            .err()
+            .unwrap()
+            .to_string(),
+    );
+    assert_readable(
+        archive::erase_meeting(
+            root.path(),
+            &id,
+            &preview.fingerprint,
+            &format!("DELETE {id}"),
+            &cancel,
+            |_, _| panic!("Blocked erasure must not start removal"),
+        )
+        .err()
+        .unwrap()
+        .to_string(),
+    );
     drop(first);
-    assert!(archive::preview_erasure(root.path(), &id, &cancel).is_err());
+    assert_readable(
+        archive::preview_erasure(root.path(), &id, &cancel)
+            .err()
+            .unwrap()
+            .to_string(),
+    );
     assert_eq!(tree(&root.path().join("sessions").join(&id)), before);
     drop(second);
     erase(root.path(), &id);
@@ -486,77 +579,85 @@ fn incomplete_zip_identity_conflicts_and_missing_attribution_still_block_erasure
 fn verified_and_orphan_zips_reject_foreign_embedded_session_identities() {
     use sha2::{Digest, Sha256};
     use std::io::{Read, Write};
-    for orphan in [false, true] {
-        for name in ["session/session.json", "session/session.json.bak"] {
-            let root = tempfile::tempdir().unwrap();
-            let id = fixture(root.path(), PRIVATE, 1);
-            let foreign = fixture(root.path(), "Foreign ZIP contents preserved", 1);
-            let cancel = AtomicBool::new(false);
-            let receipt =
-                archive::create(root.path(), &id, 0, "whole-meeting", &cancel, |_, _| {}).unwrap();
-            let archives = root.path().join("archives");
-            let path = archives.join(format!("{}.zip", receipt.archive_id));
-            let mut entries = BTreeMap::new();
-            {
-                let mut reader = zip::ZipArchive::new(fs::File::open(&path).unwrap()).unwrap();
-                for n in 0..reader.len() {
-                    let mut entry = reader.by_index(n).unwrap();
-                    let mut bytes = Vec::new();
-                    entry.read_to_end(&mut bytes).unwrap();
-                    entries.insert(entry.name().unwrap().into_owned(), bytes);
-                }
-            }
-            let mut embedded: serde_json::Value = serde_json::from_slice(&entries[name]).unwrap();
-            embedded["id"] = foreign.into();
-            let bytes = serde_json::to_vec(&embedded).unwrap();
-            let mut manifest: serde_json::Value =
-                serde_json::from_slice(&entries["ARCHIVE_MANIFEST.json"]).unwrap();
-            let item = manifest["files"]
-                .as_array_mut()
-                .unwrap()
-                .iter_mut()
-                .find(|item| item["name"] == name)
-                .unwrap();
-            item["bytes"] = (bytes.len() as u64).into();
-            item["sha256"] = format!("{:x}", Sha256::digest(&bytes)).into();
-            entries.insert(name.into(), bytes);
-            entries.insert(
-                "ARCHIVE_MANIFEST.json".into(),
-                serde_json::to_vec(&manifest).unwrap(),
-            );
-            let mut writer = zip::ZipWriter::new(fs::File::create(&path).unwrap());
-            for (name, bytes) in entries {
-                if name.ends_with('/') {
-                    writer
-                        .add_directory(name, zip::write::SimpleFileOptions::default())
-                        .unwrap();
+    for ineligible in [false, true] {
+        for orphan in [false, true] {
+            for name in ["session/session.json", "session/session.json.bak"] {
+                let root = tempfile::tempdir().unwrap();
+                let id = fixture(root.path(), PRIVATE, 1);
+                let foreign = if ineligible {
+                    "legacy-synthetic-foreign".to_string()
                 } else {
-                    writer
-                        .start_file(name, zip::write::SimpleFileOptions::default())
+                    fixture(root.path(), "Foreign ZIP contents preserved", 1)
+                };
+                let cancel = AtomicBool::new(false);
+                let receipt =
+                    archive::create(root.path(), &id, 0, "whole-meeting", &cancel, |_, _| {})
                         .unwrap();
-                    writer.write_all(&bytes).unwrap();
+                let archives = root.path().join("archives");
+                let path = archives.join(format!("{}.zip", receipt.archive_id));
+                let mut entries = BTreeMap::new();
+                {
+                    let mut reader = zip::ZipArchive::new(fs::File::open(&path).unwrap()).unwrap();
+                    for n in 0..reader.len() {
+                        let mut entry = reader.by_index(n).unwrap();
+                        let mut bytes = Vec::new();
+                        entry.read_to_end(&mut bytes).unwrap();
+                        entries.insert(entry.name().unwrap().into_owned(), bytes);
+                    }
                 }
-            }
-            writer.finish().unwrap();
-            assert!(
-                archive::verify(&path, Some(&cancel), |_, _| {}).is_ok(),
-                "Fixture must pass full inventory/hash verification"
-            );
-            if orphan {
-                for suffix in ["pending.json", "receipt.json"] {
-                    fs::remove_file(archives.join(format!("{}.{suffix}", receipt.archive_id)))
-                        .unwrap();
-                }
-            }
-            let before = tree(root.path());
-            assert!(archive::preview_erasure(root.path(), &id, &cancel).is_err(), "Hash-valid ZIP concealed a foreign embedded identity: orphan={orphan}, record={name}");
-            let after = tree(root.path());
-            for (path, bytes) in before {
-                assert!(
-                    after.get(&path) == Some(&bytes),
-                    "Existing synthetic file changed: {}",
-                    path.display()
+                let mut embedded: serde_json::Value =
+                    serde_json::from_slice(&entries[name]).unwrap();
+                embedded["id"] = foreign.into();
+                let bytes = serde_json::to_vec(&embedded).unwrap();
+                let mut manifest: serde_json::Value =
+                    serde_json::from_slice(&entries["ARCHIVE_MANIFEST.json"]).unwrap();
+                let item = manifest["files"]
+                    .as_array_mut()
+                    .unwrap()
+                    .iter_mut()
+                    .find(|item| item["name"] == name)
+                    .unwrap();
+                item["bytes"] = (bytes.len() as u64).into();
+                item["sha256"] = format!("{:x}", Sha256::digest(&bytes)).into();
+                entries.insert(name.into(), bytes);
+                entries.insert(
+                    "ARCHIVE_MANIFEST.json".into(),
+                    serde_json::to_vec(&manifest).unwrap(),
                 );
+                let mut writer = zip::ZipWriter::new(fs::File::create(&path).unwrap());
+                for (name, bytes) in entries {
+                    if name.ends_with('/') {
+                        writer
+                            .add_directory(name, zip::write::SimpleFileOptions::default())
+                            .unwrap();
+                    } else {
+                        writer
+                            .start_file(name, zip::write::SimpleFileOptions::default())
+                            .unwrap();
+                        writer.write_all(&bytes).unwrap();
+                    }
+                }
+                writer.finish().unwrap();
+                assert!(
+                    archive::verify(&path, Some(&cancel), |_, _| {}).is_ok(),
+                    "Fixture must pass full inventory/hash verification"
+                );
+                if orphan {
+                    for suffix in ["pending.json", "receipt.json"] {
+                        fs::remove_file(archives.join(format!("{}.{suffix}", receipt.archive_id)))
+                            .unwrap();
+                    }
+                }
+                let before = tree(root.path());
+                assert!(archive::preview_erasure(root.path(), &id, &cancel).is_err(), "Hash-valid ZIP concealed a foreign embedded identity: orphan={orphan}, record={name}");
+                let after = tree(root.path());
+                for (path, bytes) in before {
+                    assert!(
+                        after.get(&path) == Some(&bytes),
+                        "Existing synthetic file changed: {}",
+                        path.display()
+                    );
+                }
             }
         }
     }
