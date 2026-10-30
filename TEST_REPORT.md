@@ -928,7 +928,7 @@ Auf 9658735 waren alle 21 Check-Runs erfolgreich, neutral oder regulär
 waren ohne neue Befunde; die [öffentliche Abschlussnotiz](https://github.com/Puma7/meeting-for-handy/pull/35#issuecomment-6524952535)
 ordnet die tatsächlichen Links zu. Diese Ergebnisse gelten für 9658735; eine
 nachfolgende reine Berichtsergänzung benötigt erneut aktuelle CI und Reviews.
-Lokal waren 109 von 110 Pythonprüfungen erfolgreich, der reine Unix-Fall unter
+Lokal waren zuletzt 110 von 111 Pythonprüfungen erfolgreich, der reine Unix-Fall unter
 Windows regulär übersprungen. Der frische erforderliche ./verify.ps1-Check
 besteht auch mit dieser Berichtsergänzung. Produktcode und Prüfgrenzen bleiben
 gegenüber 9658735 unverändert.
