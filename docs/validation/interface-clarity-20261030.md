@@ -40,6 +40,22 @@ Both new synthetic regressions failed against the previous UI implementation.
 These checks do not perform a real archive operation or measure GPU usage.
 
 All 228 frontend tests, TypeScript, the production build and the required
-`./verify.ps1` passed after these fixes. A synthetic browser check opened
+`./verify.ps1` check passed after these fixes. A synthetic browser check opened
 computer details with Enter, kept the running job outside closed settings,
 and observed cancellation acknowledgement. No real archive was started.
+
+## Visible local-model warning
+
+Review 5710641785 identified the local-model memory warning inside closed
+options. A short warning now remains visible before starting: extra memory use
+can affect audio, so analysis can wait until recording has ended. The longer
+explanation remains under options. The visibility regression failed before the
+fix; all 229 frontend tests, TypeScript, the production build and the required
+`./verify.ps1` check pass afterward. A synthetic browser check confirmed the
+warning is outside the still-closed options.
+
+The historical [macOS ARM job on ea1e080](https://github.com/Puma7/meeting-for-handy/actions/runs/41035957251/job/123996754171)
+failed the synthetic reconnect-progress test's 150-ms test deadline. The actual
+macOS application uses a 60-second no-progress readiness limit. Neither deadline
+was changed or skipped. Fresh complete target CI remains required; this report
+does not turn the historical failure into a success or establish hardware quality.

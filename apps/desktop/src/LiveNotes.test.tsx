@@ -166,6 +166,29 @@ function setup(
   return { setPreferences, onUseLocalModel };
 }
 
+it("keeps the local memory warning visible before starting with options closed", async () => {
+  setup({
+    getLiveNotes: vi.fn().mockResolvedValue(status()),
+    startLiveNotes: vi.fn().mockResolvedValue(status()),
+  });
+  const start = await screen.findByRole("button", {
+    name: "Live-Zusammenfassung starten",
+  });
+  const warning = screen
+    .getAllByText(
+      /Lokales Textmodell benötigt zusätzlichen Arbeitsspeicher|Das lokale Textmodell läuft neben der Aufnahme/,
+    )
+    .find((node) => node.closest("details") === null);
+  expect(warning).toBeDefined();
+  expect(
+    warning!.compareDocumentPosition(start) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  expect(
+    screen.getByText("Optionen und Hinweise").closest("details")?.open,
+  ).toBe(false);
+  expect(start.hasAttribute("disabled")).toBe(false);
+});
+
 it("starts a local live summary with the chosen model, interval and language", async () => {
   const start = vi
     .fn()

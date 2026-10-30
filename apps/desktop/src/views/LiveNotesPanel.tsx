@@ -602,6 +602,13 @@ export default function LiveNotesPanel({
         </label>
       )}
 
+      {connection.mode === "local" && (
+        <p className="muted live-memory-note">
+          {de
+            ? "Lokales Textmodell benötigt zusätzlichen Arbeitsspeicher. Bei knappem Speicher kann der Ton stocken – dann erst nach der Aufnahme auswerten."
+            : "A local text model needs additional memory. Low memory can make audio stutter; run analysis after recording if memory is tight."}
+        </p>
+      )}
       <div className="live-controls">
         {running ? (
           <>
@@ -672,7 +679,7 @@ export default function LiveNotesPanel({
         </div>
 
         {connection.mode === "local" && (
-          <p className="muted live-memory-note">
+          <p className="muted live-memory-detail">
             {de
               ? "Das lokale Textmodell läuft neben der Aufnahme und belegt auch in kleinen Größen (etwa 4B) mehrere GB Arbeitsspeicher. Wird der Speicher knapp, werden Zusammenfassung und Erkennung langsam und der Ton kann stocken; die Auslastung zeigt die Seitenleiste. Bei wenig Arbeitsspeicher die Auswertung besser nach der Aufnahme starten."
               : "The local text model runs next to the recording and takes several GB of memory even in small sizes (around 4B). When memory runs short, the summary and recognition slow down and the audio can stutter; the sidebar shows the load. With little memory, run the analysis after the recording instead."}
