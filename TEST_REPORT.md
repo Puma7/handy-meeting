@@ -896,3 +896,45 @@ Ergänzung noch offen und werden am PR mit Laufverweisen dokumentiert. Physische
 Geräte, Mac-Aufnahmefreigaben, PipeWire, kombinierte Zweistundenläufe, GPU,
 Signatur/Notarisierung und der frühere lokale Textmodell-Referenztest bleiben
 getrennte offene Nachweise. Keine neue Programmversion wird hier freigegeben.
+
+
+## Plattformübergreifende Transkriptionsprüfung vom 30.10.2026 (PR35)
+
+Frühere Plattformangaben und Prüflücken oben beschreiben ihren historischen
+Stand. Auf PR35-Head 9658735c8831202a913d6d86cb522b2ef372705e sind die realen
+CPU-Transkriptionsprüfungen mit erzeugter Sprache und dem festgelegten Handy-
+Modell auf Linux, Mac Intel und Mac ARM erfolgreich ausgeführt worden. Sie
+prüfen vollständige unterschiedliche Audiodateien, Modellidentität,
+Quellenanker, höchstens 15 Prozent Wortfehler, gezielten Workerabbruch mit
+Neustart sowie den Erhalt von Audio, Journal und wieder geöffnetem Transkript.
+Zeit-, Inhalts- und Erhaltungsgrenzen wurden nicht abgeschwächt.
+
+Aktuelle Zieljobs auf genau diesem Head:
+- [Linux](https://github.com/Puma7/meeting-for-handy/actions/runs/41065615358/job/124096150255)
+- [Mac Intel](https://github.com/Puma7/meeting-for-handy/actions/runs/41065615358/job/124096150169)
+- [Mac ARM](https://github.com/Puma7/meeting-for-handy/actions/runs/41065615358/job/124096150151)
+- [Windows Rust und Paketprüfung](https://github.com/Puma7/meeting-for-handy/actions/runs/41065615423/job/124096140911)
+
+Linux prüft zusätzlich zwei virtuelle PulseAudio-Spuren und Paketinstallation
+in isolierten Debian-12/13-Prüfumgebungen. Mac prüft App-Start, Paketierung,
+Relokation und den nativen Schlüsselprovider. Diese CI-Nachweise ersetzen keine
+physische Aufnahme- und Berechtigungsprüfung auf einem Nutzergerät. Die aktuelle
+verteilte Mac-App verlangt macOS 15.0; die historische Beta2-Angabe macOS 13 gilt
+nicht für diese aktuellen Pakete. Die Mindestversion wurde am tatsächlichen
+Intel-DMG und dessen Info.plist gelesen, ohne Installation oder Ausführung.
+
+Auf 9658735 waren alle 21 Check-Runs erfolgreich, neutral oder regulär
+übersprungen. Codex-Codeprüfung und vollständiger CodeRabbit-Review dieses Heads
+waren ohne neue Befunde; die [öffentliche Abschlussnotiz](https://github.com/Puma7/meeting-for-handy/pull/35#issuecomment-6524952535)
+ordnet die tatsächlichen Links zu. Diese Ergebnisse gelten für 9658735; eine
+nachfolgende reine Berichtsergänzung benötigt erneut aktuelle CI und Reviews.
+Lokal waren 109 von 110 Pythonprüfungen erfolgreich, der reine Unix-Fall unter
+Windows regulär übersprungen. Der frische erforderliche ./verify.ps1-Check
+besteht auch mit dieser Berichtsergänzung. Produktcode und Prüfgrenzen bleiben
+gegenüber 9658735 unverändert.
+
+Offen bleiben physische Aufnahme/Berechtigungen, GPU, ein kombinierter
+Zweistundenlauf, der echte lokale Textmodell-Referenzlauf sowie Signatur und
+Notarisierung für eine Auslieferung. Es wurde weder zusammengeführt noch eine
+Version veröffentlicht oder ein Programm installiert. Weitere Einzelheiten:
+[docs/validation/portable-asr-20261030.md](docs/validation/portable-asr-20261030.md).
