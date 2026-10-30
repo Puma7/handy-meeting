@@ -385,11 +385,13 @@ fn unreadable_database(error: &(dyn std::error::Error + 'static)) -> bool {
 }
 /// Every index reader/writer holds shared admission; explicit erasure holds exclusive
 /// admission across complete cache removal, including retained unreadable database copies.
+/// Exclusive admission tolerates only the existing bounded lock-retry budget;
+/// shared readers still fail immediately when erasure owns the index.
 fn index_lease(root: &Path, exclusive: bool) -> Result<std::fs::File> {
     metadata::checked_directory(root)?;
     let file = metadata::open_lock_file(&root.join("library-index.lock"))?;
     let result = if exclusive {
-        fs2::FileExt::try_lock_exclusive(&file)
+        metadata::lock_soon(&file)
     } else {
         fs2::FileExt::try_lock_shared(&file)
     };
@@ -401,6 +403,58 @@ fn index_lease(root: &Path, exclusive: bool) -> Result<std::fs::File> {
         }
     })?;
     Ok(file)
+}
+
+#[cfg(test)]
+mod index_admission_tests {
+    use super::*;
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    };
+
+    #[test]
+    /// Release an actual shared OS lease only after exclusive admission observes
+    /// contention. This requires the retry without a sleeping/probing race.
+    fn exclusive_erasure_admission_retries_a_transient_index_reader() {
+        let root = tempfile::tempdir().unwrap();
+        let reader = index_lease(root.path(), false).unwrap();
+        let observed = Arc::new(AtomicBool::new(false));
+        let marker = observed.clone();
+        let exclusive = metadata::observe_lock_retry(
+            move || {
+                marker.store(true, Ordering::Release);
+                drop(reader);
+            },
+            || erasure_index_lock(root.path()),
+        );
+        assert!(
+            observed.load(Ordering::Acquire),
+            "A real held reader must cause contention"
+        );
+        let exclusive =
+            exclusive.expect("Brief reader must not force another deletion confirmation");
+        assert!(
+            index_lease(root.path(), false).is_err(),
+            "Shared admission remains fail-fast while erasure owns the lease"
+        );
+        drop(exclusive);
+        assert!(index_lease(root.path(), false).is_ok());
+    }
+
+    #[test]
+    /// A sustained reader still prevents destructive admission; no cache or
+    /// source file is removed merely because bounded retries were exhausted.
+    fn exclusive_erasure_admission_stays_closed_for_a_retained_reader() {
+        let root = tempfile::tempdir().unwrap();
+        let sentinel = root.path().join("synthetic-index-sentinel.txt");
+        fs::write(&sentinel, b"retained synthetic content").unwrap();
+        let reader = index_lease(root.path(), false).unwrap();
+        assert!(erasure_index_lock(root.path()).is_err());
+        assert_eq!(fs::read(&sentinel).unwrap(), b"retained synthetic content");
+        drop(reader);
+        assert!(erasure_index_lock(root.path()).is_ok());
+    }
 }
 /// Reserve the rebuildable index against concurrent processes before deleting any source data.
 pub(crate) fn erasure_index_lock(root: &Path) -> Result<std::fs::File> {

@@ -219,3 +219,35 @@ verify.ps1 run also passed 47 PCM, 35 notes, 28 template and 8 agent checks plus
 monitor. Earlier restricted temporary-folder access and an invalid status in a
 new completion fixture are retained as infrastructure/fixture failures; neither
 is reported as a failing application regression or a successful verification.
+
+## Candidate 06: bounded exclusive index admission
+
+Exclusive erasure admission now uses the existing metadata lock helper instead
+of a single try-lock attempt. It retains that helper's 25 retries with 10 ms
+delays; no wait or test limit is increased. Shared index readers still fail
+immediately while erasure owns the lock. A sustained reader still prevents
+erasure admission, before any destructive operation. The branch results remain
+io::Result values before the existing user-facing error mapping; no error is
+converted to an uninformative unit value.
+
+The new synthetic regression holds an actual shared OS file lease and releases
+it only after the exclusive path has observed contention. A scoped, one-shot,
+thread-local test observer makes that ordering deterministic without sleeping
+or competing probe loops. The old single-attempt path failed this test; the
+corrected path acquires admission after the reader ends. The same fixture checks
+that new shared admission remains blocked until the exclusive lease is dropped.
+A second case keeps its reader throughout the bounded attempts: erasure remains
+blocked and its synthetic content file is byte-identical. These are two file
+handles in one process, not a separate-process erasure or physical-device test.
+The observer is compiled only for tests and restores prior thread state even
+during unwinding.
+
+All 382 Rust workspace/all-target tests pass with warnings denied and the same
+two existing special entry points regularly ignored. The 24 core erasure cases
+are retained alongside the two new index-admission cases. Frontend sources,
+dependencies, protection/review rules and the entire historical TEST_REPORT.md
+remain byte-identical to published candidate 05. The earlier 238 frontend tests
+and TypeScript/production build apply to those unchanged bytes and were not
+rerun here. No real user meeting, external export, provider or installed program
+was changed. All previously documented erasure and model-residency integration
+limits remain in force.
