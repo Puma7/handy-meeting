@@ -10,6 +10,8 @@ import userEvent from "@testing-library/user-event";
 import App from "./App";
 import RecordingStatus, { recentText } from "./views/RecordingStatus";
 import { testServices } from "./test-services";
+import SessionWarnings from "./views/SessionWarnings";
+import { de } from "./i18n";
 import type { AppState, AudioPart, DesktopApi, Meeting } from "./types";
 vi.setConfig({ testTimeout: 15_000 });
 configure({ asyncUtilTimeout: 5000 });
@@ -63,6 +65,26 @@ const load = {
 };
 
 beforeEach(() => localStorage.clear());
+
+it("reopens capture warnings only when a new warning arrives", async () => {
+  const warnings = [live.warnings[0]];
+  const view = render(
+    <SessionWarnings warnings={warnings} locale="de" t={de} />,
+  );
+  const detail = screen.getByText(de.audioQuality).closest("details")!;
+  await userEvent.click(detail.querySelector("summary")!);
+  expect(detail.open).toBe(false);
+  view.rerender(
+    <SessionWarnings warnings={[...warnings]} locale="de" t={de} />,
+  );
+  expect(detail.open).toBe(false);
+  const next = [...warnings, "Synthetic newly reported capture warning"];
+  view.rerender(<SessionWarnings warnings={next} locale="de" t={de} />);
+  expect(detail.open).toBe(true);
+  await userEvent.click(detail.querySelector("summary")!);
+  view.rerender(<SessionWarnings warnings={[...next]} locale="de" t={de} />);
+  expect(detail.open).toBe(false);
+});
 
 describe("recording status in the sidebar (synthetic IPC)", () => {
   it("names the newest recognized words and cuts long text at a word", () => {
@@ -190,6 +212,7 @@ describe("recording status in the sidebar (synthetic IPC)", () => {
     const summary = screen.getByText("Rechnerdetails");
     expect(summary.tagName).toBe("SUMMARY");
     const details = summary.closest("details")!;
+    expect(details.closest(".sidebar-recording-facts")).toBeNull();
     expect(details.open).toBe(false);
     await userEvent.click(summary);
     expect(details.open).toBe(true);

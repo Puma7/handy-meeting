@@ -438,7 +438,12 @@ export default function RetentionPanel({
           ? "Alle Regeln beginnen ausgeschaltet. Eine Vorschau ändert keine Dateien. VIP-, laufende, unvollständige oder nicht sicher lesbare Meetings bleiben geschützt. Das endgültige Löschen eines Archivs braucht eine zusätzliche ausdrückliche Bestätigung."
           : "Every rule starts disabled. A preview changes no files. VIP, active, incomplete and unreadable meetings are protected. Permanent archive deletion requires a separate explicit confirmation."}
       </p>
-      {error && <p role="alert">{error}</p>}
+      {error &&
+        (statusContainer ? (
+          createPortal(<p role="alert">{error}</p>, statusContainer)
+        ) : (
+          <p role="alert">{error}</p>
+        ))}
       {draft && (
         <>
           <label>

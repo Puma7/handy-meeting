@@ -2296,6 +2296,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             meetingLoading={notesMeetingLoading}
             selectMeeting={(id) => void selectNotesMeeting(id)}
             modelReady={notesModelReady}
+            modelDiscoveryError={localTextModels.error}
             libraryInvalid={!templateStore.ready}
             libraryPending={templateStore.pending}
             libraryError={templateStore.error ?? templateStore.migrationError}

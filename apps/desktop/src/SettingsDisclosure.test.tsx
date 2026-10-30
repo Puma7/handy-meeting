@@ -1,9 +1,73 @@
 import { expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { de } from "./i18n";
 import SettingsView from "./views/SettingsView";
 import type { DesktopApi, RetentionPolicy } from "./types";
+
+it("keeps a rejected maintenance save visible after its settings close", async () => {
+  const policy: RetentionPolicy = {
+    revision: 0,
+    untouchedDays: 30,
+    audioArchiveAfterDays: null,
+    archiveAfterDays: null,
+    convertAfterDays: null,
+    maxVisibleMeetings: null,
+    deleteArchivesAfterDays: null,
+    codec: "flac",
+    ffmpegExecutable: null,
+  };
+  let reject!: (e: unknown) => void;
+  const api = {
+    getRetentionPolicy: vi.fn().mockResolvedValue(policy),
+    getMaintenanceProgress: vi.fn().mockResolvedValue(null),
+    saveRetentionPolicy: vi.fn().mockImplementation(
+      () =>
+        new Promise((_, fail) => {
+          reject = fail;
+        }),
+    ),
+  } as unknown as DesktopApi;
+  const noop = () => undefined;
+  render(
+    <SettingsView
+      api={api}
+      app={null}
+      locale="de"
+      theme="system"
+      t={de}
+      busy={false}
+      blocked={false}
+      connected
+      refreshingHandy={false}
+      preferencesPersistable
+      handyPath=""
+      onChooseHandy={noop}
+      onRefreshHandy={noop}
+      onRefreshDevices={noop}
+      onImportLegacy={noop}
+      onRebuildIndex={noop}
+      onLocale={noop}
+      onTheme={noop}
+    />,
+  );
+  const detail = screen.getByText("Daten und Wartung").closest("details")!;
+  await userEvent.click(detail.querySelector("summary")!);
+  const days = await screen.findByLabelText(
+    "Meetings zunächst unangetastet lassen · Tage",
+  );
+  await userEvent.clear(days);
+  await userEvent.type(days, "31");
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Regeln speichern" }),
+  );
+  expect(api.saveRetentionPolicy).toHaveBeenCalledOnce();
+  await userEvent.click(detail.querySelector("summary")!);
+  await act(async () => reject(new Error("Synthetic maintenance save failed")));
+  const message = await screen.findByText("Synthetic maintenance save failed");
+  expect(message.closest("details")).toBeNull();
+  expect(detail.open).toBe(false);
+});
 
 // Synthetic IPC only: this does not open, archive, remove or restore any file.
 it("keeps a running maintenance job and cancellation outside collapsed settings", async () => {

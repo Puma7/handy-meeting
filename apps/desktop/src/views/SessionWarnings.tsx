@@ -1,4 +1,5 @@
 import { describeWarning } from "../domain";
+import { useLayoutEffect, useRef } from "react";
 import type { Locale } from "../types";
 import type { MessageKey } from "../i18n";
 
@@ -11,6 +12,19 @@ export default function SessionWarnings({
   locale: Locale;
   t: Record<MessageKey, string>;
 }) {
+  const detail = useRef<HTMLDetailsElement>(null);
+  const previous = useRef(new Set<string>());
+  // New raw warnings reopen once; fresh polling arrays with identical warnings
+  // preserve the user's closed disclosure and never steal focus.
+  useLayoutEffect(() => {
+    const current = new Set(warnings);
+    if (
+      [...current].some((warning) => !previous.current.has(warning)) &&
+      detail.current
+    )
+      detail.current.open = true;
+    previous.current = current;
+  }, [warnings]);
   const originals = [...new Set(warnings)];
   if (!originals.length) return null;
   const descriptions = [
@@ -21,7 +35,12 @@ export default function SessionWarnings({
   );
   // Capture caveats start visible; the original technical text stays in its disclosure.
   return (
-    <details open className="session-warnings" aria-label={t.warnings}>
+    <details
+      ref={detail}
+      open
+      className="session-warnings"
+      aria-label={t.warnings}
+    >
       <summary>
         <strong>{technical.length ? t.audioQuality : t.warnings}</strong>
         {descriptions.length > 1 && ` (${descriptions.length})`}

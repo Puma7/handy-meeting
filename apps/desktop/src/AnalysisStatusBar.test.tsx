@@ -47,6 +47,26 @@ function fixture() {
 }
 beforeEach(() => localStorage.clear());
 
+it("keeps idle model discovery failures outside collapsed analysis setup", async () => {
+  const api = fixture();
+  vi.mocked(api.listTextModels).mockRejectedValue(
+    new Error("Synthetic model discovery failed"),
+  );
+  render(<App api={api} />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: de.analyzeMeeting }),
+  );
+  await waitFor(() => expect(api.listTextModels).toHaveBeenCalled());
+  const messages = await screen.findAllByText(
+    /Synthetic model discovery failed/,
+  );
+  expect(messages.some((message) => !message.closest("details"))).toBe(true);
+  expect(screen.getByText(de.analysisSetup).closest("details")!.open).toBe(
+    false,
+  );
+  expect(api.generateNotes).not.toHaveBeenCalled();
+});
+
 it("does not claim a backend job is unstarted when its progress cannot be read", async () => {
   const api = fixture();
   vi.mocked(api.getAppState).mockResolvedValue({

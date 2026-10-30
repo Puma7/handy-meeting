@@ -101,3 +101,29 @@ and the required `./verify.ps1` passed for these corrections. Full byte comparis
 against the previously published candidate confirms every native source file and
 the historical report are unchanged. Target CI and both providers must review the
 new head before its review rounds can be complete.
+
+
+## Review follow-up: errors, new warnings and compact computer details
+
+Full CodeRabbit review 5713217416 found four visibility defects in candidate07.
+Idle local-model discovery failures now remain visible while setup is closed.
+Maintenance save/apply errors use the existing status outlet outside collapsed
+settings. New capture warnings reopen their disclosure; identical polling updates
+respect a user's decision to close it. Computer details remain accessible at
+600px through a labeled icon and an expanded card above the main content.
+
+Three new synthetic regressions and a strengthened resource-details assertion
+fail on the previous implementation and pass after these corrections. All 233
+frontend tests, TypeScript, the production build, frontend formatting and the
+required ./verify.ps1 pass locally. Browser checks use only synthetic IPC data:
+the 600px details card visibly paints RAM amounts and the unmeasured-GPU caveat
+without horizontal overflow, and a local-model error is visible outside closed
+setup in light and dark views. An initial browser check exposed a stacking-order
+mistake; the corrected sidebar layer was checked again visibly. These are UI
+checks, not physical capture, local model, GPU or endurance evidence.
+
+Native source, provider transport, prompts, dependencies and review thresholds
+are unchanged. The historical full report is now accompanied by this current
+summary under the user's explicit permission to publish the complete report for
+PR36. No private meeting text, session identity or provider diagnostic is added.
+Fresh reviews and CI are still required on the new published head.

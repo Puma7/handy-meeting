@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Cpu } from "lucide-react";
 import { clock } from "../domain";
 import type { AudioPart, DesktopApi, Locale, SystemLoad } from "../types";
 
@@ -165,27 +166,6 @@ export default function RecordingStatus({
               </span>
             </span>
             <span>GPU —</span>
-            <details className="sidebar-resource-details">
-              <summary>{de ? "Rechnerdetails" : "Computer details"}</summary>
-              <p>
-                {de
-                  ? "Auslastung des ganzen Computers"
-                  : "Load of the whole computer"}
-              </p>
-              <p>
-                {de ? "Arbeitsspeicher" : "Memory"}:{" "}
-                {used === null || !total
-                  ? de
-                    ? "nicht gemessen"
-                    : "not measured"
-                  : `${gb(used)}/${gb(total)} GiB`}
-              </p>
-              <p>
-                {de
-                  ? "GPU-Auslastung wird derzeit nicht gemessen"
-                  : "GPU usage is currently not measured"}
-              </p>
-            </details>
           </dd>
         </div>
         <div>
@@ -209,6 +189,35 @@ export default function RecordingStatus({
           </dd>
         </div>
       </dl>
+      <details className="sidebar-resource-details">
+        <summary
+          aria-label={de ? "Rechnerdetails" : "Computer details"}
+          title={de ? "Rechnerdetails" : "Computer details"}
+        >
+          <Cpu size={17} aria-hidden="true" />
+          {de ? "Rechnerdetails" : "Computer details"}
+        </summary>
+        <div className="sidebar-resource-content">
+          <p>
+            {de
+              ? "Auslastung des ganzen Computers"
+              : "Load of the whole computer"}
+          </p>
+          <p>
+            {de ? "Arbeitsspeicher" : "Memory"}:{" "}
+            {used === null || !total
+              ? de
+                ? "nicht gemessen"
+                : "not measured"
+              : `${gb(used)}/${gb(total)} GiB`}
+          </p>
+          <p>
+            {de
+              ? "GPU-Auslastung wird derzeit nicht gemessen"
+              : "GPU usage is currently not measured"}
+          </p>
+        </div>
+      </details>
       <p className="sidebar-recording-text">
         {text
           ? de

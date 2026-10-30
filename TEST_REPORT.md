@@ -849,3 +849,28 @@ Lokal bestanden: `makensis -WX` ohne Warnung und 72 Release-Skripttests.
 - **Frühere Ordnerverknüpfung (Minor):** Die Verknüpfung `Meeting for Handy\Meeting for Handy.lnk` aus dem Versionsordner-Layout wird nur noch gelöscht, wenn der Eigentumseintrag des 1.0.5-Helfers (`HKCU\Software\HandyMeeting\BrandedStartMenuLink`, Werte `Link` und `Target`) sie nennt und ihr Ziel noch dem vermerkten Programm entspricht. Der Eintrag wird mit ihr entfernt. Eine Endung auf `HandyMeeting.exe` allein genügt nicht mehr. `-RunChecks` legt die synthetische frühere Verknüpfung jetzt mit diesem Eintrag an und prüft, dass beide verschwinden. Mit Wine 9 ist zusätzlich nachgestellt: eine nicht vermerkte und eine fremde Verknüpfung bleiben erhalten.
 
 Lokal bestanden: 168 Vitest-Fälle, `tsc`, `prettier`, 72 Release-Skripttests, `makensis -WX`.
+
+
+## Oberflächen-Nacharbeit vom 30.10.2026 (PR36)
+
+Dieser Abschnitt beschreibt die gesonderte Oberflächen-Nacharbeit; frühere
+Prüfstände oben bleiben historische Nachweise. Pegelanzeigen stehen auf gleicher
+Höhe. Hinweise, Einrichtung und Optionen öffnen sich schrittweise; die
+Nachbearbeitung zeigt jeweils einen Startknopf und die Laufzeit einmal. Neue
+Aufnahmewarnungen werden sichtbar, identische Statusabfragen öffnen bewusst
+geschlossene Hinweise nicht erneut. Fehler der lokalen Modellerkennung und
+Wartungsfehler bleiben auch bei geschlossener Einrichtung sichtbar. Rechnerdetails
+sind bei schmalem Fenster erreichbar; RAM-Mengen und die nicht gemessene
+GPU-Auslastung werden erklärt.
+
+Der aktuelle lokale Stand besteht 233 Frontendtests, TypeScript,
+Produktionsbuild, Formatierung und ./verify.ps1. Aussagekräftige synthetische
+Vorher-/Nachher-Prüfungen sichern die behobenen Reviewbefunde ab. Sichtbare
+Browserprüfungen verwenden ausschließlich künstliche IPC-Beispieldaten. Sie
+belegen keine echte Aufnahme, Textmodellqualität, GPU-Messung oder Langzeitlast.
+Native Aufnahme, Transportschicht, Prompts und Abhängigkeiten sind unverändert.
+
+Die einzelnen Prüfstände und Grenzen sind in
+[docs/validation/interface-clarity-20261030.md](docs/validation/interface-clarity-20261030.md)
+zugeordnet. Neue CI-Ergebnisse und saubere Reviews müssen sich auf den tatsächlich
+veröffentlichten neuen Head beziehen; frühere Ergebnisse ersetzen sie nicht.

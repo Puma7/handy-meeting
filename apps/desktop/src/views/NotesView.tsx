@@ -31,6 +31,8 @@ type Props = {
   meetingLoading: boolean;
   selectMeeting: (id: string) => void;
   modelReady: boolean;
+  /** Local discovery failure remains visible while optional setup is collapsed. */
+  modelDiscoveryError?: string | null;
   libraryInvalid: boolean;
   libraryPending: boolean;
   libraryError: string | null;
@@ -83,6 +85,7 @@ export default function NotesView({
   meetingLoading,
   selectMeeting,
   modelReady,
+  modelDiscoveryError,
   libraryInvalid,
   libraryPending,
   libraryError,
@@ -184,6 +187,11 @@ export default function NotesView({
         </div>
       )}
       <section className="notes-config">
+        {!setupOpen && !notesBusy && !result && modelDiscoveryError && (
+          <p role="alert" className="notice warning">
+            {modelDiscoveryError}
+          </p>
+        )}
         <details
           className="analysis-setup"
           open={setupOpen}
