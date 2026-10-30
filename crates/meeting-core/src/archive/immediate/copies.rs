@@ -165,6 +165,15 @@ pub(super) fn targets(
                 .or_else(|| ids.contains(aid).then_some(id))
             {
                 if expected != id {
+                    // A foreign receipt or earlier orphan is not permission to
+                    // skip a contradictory copy. Reconcile readable identities
+                    // before filtering, without requiring unrelated ZIP data to replay.
+                    if name.ends_with(".zip") {
+                        reject_conflicting_zip_identity(&path, expected, cancel)?;
+                    } else {
+                        metadata::checked_directory(&path)?;
+                        reject_conflicting_identity(&path, expected)?;
+                    }
                     continue;
                 }
                 if name.ends_with(".zip") {
@@ -237,6 +246,15 @@ pub(super) fn inventory(
                 push_delete_file(root, &path, cancel, &mut data.files)?;
             }
         }
+        // These legacy atomic payloads have no meeting identity field. Guessing
+        // ownership from their titles or quotes could delete another meeting's data.
+        for entry in optional_entries(&root.join(parent))? {
+            let path = entry?.path();
+            if records::is_temporary(&path)? {
+                regular(&path)?;
+                data.preserved_atomic_remnants += 1;
+            }
+        }
     }
     let archives = root.join("archives");
     for entry in optional_entries(&archives)? {
@@ -245,6 +263,39 @@ pub(super) fn inventory(
             .file_name()
             .and_then(|s| s.to_str())
             .ok_or("Invalid archive name")?;
+        if name == ".leases" {
+            // Relocation leases are a stable coordination directory, not an
+            // interrupted JSON file. Preserve only its documented empty locks;
+            // unknown content must never be hidden by this namespace exception.
+            metadata::checked_directory(&path)?;
+            for entry in fs::read_dir(&path)? {
+                let lock = entry?.path();
+                let stem = lock
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .and_then(|s| s.strip_suffix(".lock"))
+                    .ok_or("Unknown archive lease content; erasure blocked")?;
+                if stem.len() != 64
+                    || !stem
+                        .bytes()
+                        .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+                    || regular(&lock)?.len() != 0
+                {
+                    return Err("Unknown archive lease content; erasure blocked".into());
+                }
+            }
+            continue;
+        }
+        if records::is_temporary(&path)? {
+            match records::temporary_identities(&path, true)? {
+                Some(ids) if ids.len() == 1 && ids.contains(id) => {
+                    push_delete_file(root, &path, cancel, &mut data.files)?;
+                }
+                Some(ids) if ids.len() == 1 => (),
+                _ => data.preserved_atomic_remnants += 1,
+            }
+            continue;
+        }
         if let Some(aid) = data
             .archive_ids
             .iter()

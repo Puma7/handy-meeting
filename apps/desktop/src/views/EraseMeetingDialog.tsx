@@ -25,7 +25,7 @@ export default function EraseMeetingDialog({
   meeting: MeetingSummary;
   locale: Locale;
   onStart: () => void;
-  onDeleted: () => void;
+  onDeleted: (preservedAtomicRemnants: number) => void;
   onStopped: () => void;
   onClose: () => void;
 }) {
@@ -108,7 +108,7 @@ export default function EraseMeetingDialog({
         );
       if (deleting) {
         destructive.current = false;
-        callbacks.current.onDeleted();
+        callbacks.current.onDeleted(preview?.preservedAtomicRemnants ?? 0);
       } else {
         const value = await api.getMeetingErasurePreview!(id);
         if (!alive.current || generation.current !== sequence) return;
@@ -149,6 +149,25 @@ export default function EraseMeetingDialog({
       }
     }
   }
+  /** A failed cancellation acknowledgement never ends observation of an existing job. */
+  async function cancelAndObserve(
+    id: string,
+    deleting: boolean,
+    sequence: number,
+  ) {
+    try {
+      await api.cancelMaintenance?.(id);
+    } catch (failure) {
+      if (alive.current && generation.current === sequence) {
+        setError(errorMessage(failure));
+        setCancelling(false);
+      }
+    }
+    if (alive.current && generation.current === sequence) {
+      setStatusUnavailable(false);
+      void watch(id, deleting, sequence);
+    }
+  }
   /** Cancels the native job even if its ID arrives after the dialog was closed. */
   async function startPreview() {
     const sequence = ++generation.current;
@@ -168,8 +187,8 @@ export default function EraseMeetingDialog({
       }
       job.current = id;
       submitting.current = false;
-      if (cancelRequested.current) await api.cancelMaintenance?.(id);
-      void watch(id, false, sequence);
+      if (cancelRequested.current) await cancelAndObserve(id, false, sequence);
+      else void watch(id, false, sequence);
     } catch (failure) {
       if (alive.current && generation.current === sequence) {
         submitting.current = false;
@@ -225,8 +244,8 @@ export default function EraseMeetingDialog({
       }
       job.current = id;
       submitting.current = false;
-      if (cancelRequested.current) await api.cancelMaintenance?.(id);
-      void watch(id, true, sequence);
+      if (cancelRequested.current) await cancelAndObserve(id, true, sequence);
+      else void watch(id, true, sequence);
     } catch (failure) {
       if (alive.current && generation.current === sequence) {
         submitting.current = false;
@@ -249,22 +268,10 @@ export default function EraseMeetingDialog({
       if (!submitting.current) callbacks.current.onClose();
       return;
     }
-    try {
-      const id = job.current;
-      const sequence = ++generation.current;
-      clearTimeout(timer.current);
-      await api.cancelMaintenance?.(id);
-      if (alive.current && generation.current === sequence) {
-        setStatusUnavailable(false);
-        void watch(id, stage === "deleting", sequence);
-      }
-    } catch (failure) {
-      if (alive.current) {
-        setError(errorMessage(failure));
-        setCancelling(false);
-        if (stage === "deleting") setStatusUnavailable(true);
-      }
-    }
+    const id = job.current;
+    const sequence = ++generation.current;
+    clearTimeout(timer.current);
+    await cancelAndObserve(id, stage === "deleting", sequence);
   }
   /** Reinspect the existing native job without releasing admission or starting another erasure. */
   function retryStatus() {

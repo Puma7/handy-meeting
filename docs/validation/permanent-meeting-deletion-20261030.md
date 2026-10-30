@@ -106,7 +106,7 @@ bytes intact; both succeed after release. This removes the competing lock probe
 and scheduler-dependent two-second fixture deadline. It remains synthetic
 two-Service/OS-lock coverage, without a separate-process runtime claim.
 
-The current corrected source passed 371 Rust workspace/all-target tests (the two
+The preceding candidate03 passed 371 Rust workspace/all-target tests (the two
 existing explicit special entry points normally ignored), 236 frontend tests,
 TypeScript/production build, Rust/frontend formatting and Clippy with warnings
 as errors. Eighteen synthetic core erasure tests passed. A sequential verify.ps1
@@ -115,3 +115,48 @@ The real rendered dialog was checked with synthetic IPC at 1280px and 390px,
 including light/dark warning disclosure, bounded status failure and a later known
 cancellation. Neither viewport overflowed. No real meeting or native application
 was erased; these are not hardware, separate-process or endurance results.
+
+
+## Candidate04 review corrections
+
+Retention preview construction and the atomic publication of its content-bearing
+plan now share erasure's process-shared archive lease. A delayed cooperating app
+cannot write an old title-bearing plan after successful erasure. A deterministic
+two-Service fixture holds the real OS lease, checks refusal without publication,
+then verifies normal publication and removal after release. This is not a
+separate-process runtime test. The former publisher failed that exclusion check.
+
+Archive attribution now reconciles readable ZIP, primary and backup source
+identities before a foreign receipt or earlier orphan can filter a copy out.
+Contradictory attribution blocks removal before any source bytes change. Synthetic
+ZIP/source fixtures with a foreign receipt failed before the correction and
+preserve all original bytes after refusal. Incomplete unreadable ZIP bytes still
+require explicit pending attribution; no guessed foreign ownership is introduced.
+
+Shared archive receipt staging files use the same bounded exact meetingId parser.
+Unassignable metadata/speaker staging files have no trustworthy meeting ID, so
+they remain untouched and contribute to the disclosed remnant count. The final
+success notice also retains that warning: such files can still contain meeting
+data and need manual inspection. Titles, quotes and embedded IDs never authorize
+their deletion. Stable archives/.leases coordination remains, accepting only
+ordinary empty SHA-256-named lock files. Unexpected or nonempty entries block the
+operation. Existing archive recovery tests caught a temporary misclassification
+of that directory; the corrected full recovery suite passes without weaker rules.
+
+A rejected cancellation request after the native destructive job ID arrives no
+longer ends observation or clears destructive admission. The dialog continues
+watching that exact job until its terminal status is established; it never offers
+a new erasure merely because cancellation failed. The delayed-ID/cancel-failure
+regression failed with the former handler. A separate full-App test verifies both
+normal completion and the surviving-remnant warning after clearing stale replies.
+
+This candidate passed 375 Rust workspace/all-target tests, with the two existing
+special entry points normally ignored; 21 synthetic core erasure cases; 238
+frontend tests; TypeScript and production build. Rust/frontend formatting and Clippy with warnings as errors also passed. A fresh
+verify.ps1 passed 47 PCM, 35 notes, 28 template and 8 agent checks plus monitor.
+Its build briefly overlapped the tail of an additional filtered native test
+invocation; the complete earlier Rust run and Clippy had already finished. That
+filtered invocation selected no case because its module prefix was omitted; it
+is retained as such, and a corrected exact-name rerun is recorded separately. No real user meeting, provider service, audio device or
+external export was deleted. Hardware, separate-process, Linux/macOS runtime,
+GPU, physical/forensic erasure and endurance claims remain outside this proof.

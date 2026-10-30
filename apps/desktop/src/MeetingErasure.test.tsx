@@ -66,6 +66,50 @@ function fixture() {
   };
 }
 
+it("keeps observing a started deletion when delayed cancellation rejects", async () => {
+  const props = fixture();
+  let resolve!: (id: string) => void;
+  let started = false;
+  props.api.eraseMeetingNow = vi.fn().mockImplementation(
+    () =>
+      new Promise<string>((done) => {
+        resolve = done;
+      }),
+  );
+  props.api.cancelMaintenance = vi
+    .fn()
+    .mockRejectedValue(new Error("Synthetic cancellation IPC failure"));
+  props.api.getMaintenanceProgress = vi.fn().mockImplementation(async () => ({
+    jobId: started ? "erase-job" : "preview-job",
+    status: "complete",
+    confirmedTasks: 8,
+    totalTasks: 8,
+    elapsedMs: 0,
+    skipped: 0,
+    error: null,
+    cancelRequested: false,
+  }));
+  render(<EraseMeetingDialog {...props} meeting={meeting} locale="en" />);
+  await userEvent.type(
+    await screen.findByRole("textbox", { name: "Type DELETE to confirm" }),
+    "DELETE",
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "Permanently delete now" }),
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "Stop remaining deletion" }),
+  );
+  started = true;
+  await act(async () => resolve("erase-job"));
+  await waitFor(() =>
+    expect(props.api.cancelMaintenance).toHaveBeenCalledWith("erase-job"),
+  );
+  expect(props.onStopped).not.toHaveBeenCalled();
+  await waitFor(() => expect(props.onDeleted).toHaveBeenCalledOnce());
+  expect(props.api.eraseMeetingNow).toHaveBeenCalledOnce();
+});
+
 it("bounds failed deletion status polls, keeps admission and can inspect cancellation later", async () => {
   vi.useFakeTimers();
   const props = fixture();
@@ -324,98 +368,113 @@ it("can resume an interrupted erasure even when the original meeting title is al
   );
 });
 
-it("clears the deleted meeting and ignores a native state reply that was requested before erasure", async () => {
-  localStorage.clear();
-  const full = { ...meeting, parts: [], warnings: [] };
-  const other = {
-    ...meeting,
-    id: "c".repeat(32),
-    title: "Other meeting retained",
-  };
-  let erased = false,
-    activeJob = "preview-job";
-  let deletionCanComplete = false;
-  let stale!: (value: unknown) => void;
-  let stateCalls = 0;
-  const initial = {
-    version: "synthetic",
-    handy: null,
-    recording: false,
-    activeMeeting: full,
-  };
-  const api = {
-    ...testServices(),
-    getAppState: vi.fn().mockImplementation(() => {
-      stateCalls++;
-      if (stateCalls === 2)
-        return new Promise((done) => {
-          stale = done;
-        });
-      return Promise.resolve(
-        erased ? { ...initial, activeMeeting: null } : initial,
+it.each([0, 2])(
+  "clears deleted state and retains the final warning for %s ambiguous records",
+  async (remnants) => {
+    localStorage.clear();
+    const full = { ...meeting, parts: [], warnings: [] };
+    const other = {
+      ...meeting,
+      id: "c".repeat(32),
+      title: "Other meeting retained",
+    };
+    let erased = false,
+      activeJob = "preview-job";
+    let deletionCanComplete = false;
+    let stale!: (value: unknown) => void;
+    let stateCalls = 0;
+    const initial = {
+      version: "synthetic",
+      handy: null,
+      recording: false,
+      activeMeeting: full,
+    };
+    const api = {
+      ...testServices(),
+      getAppState: vi.fn().mockImplementation(() => {
+        stateCalls++;
+        if (stateCalls === 2)
+          return new Promise((done) => {
+            stale = done;
+          });
+        return Promise.resolve(
+          erased ? { ...initial, activeMeeting: null } : initial,
+        );
+      }),
+      listDevices: vi.fn().mockResolvedValue([]),
+      listMeetings: vi
+        .fn()
+        .mockImplementation(async () => (erased ? [other] : [meeting, other])),
+      getMeeting: vi.fn().mockResolvedValue(full),
+      listAnalyses: vi.fn().mockResolvedValue({ analyses: [], skipped: [] }),
+      getNotesProgress: vi.fn().mockResolvedValue(null),
+      previewMeetingErasure: vi.fn().mockResolvedValue("preview-job"),
+      getMeetingErasurePreview: vi
+        .fn()
+        .mockResolvedValue({ ...plan, preservedAtomicRemnants: remnants }),
+      eraseMeetingNow: vi.fn().mockImplementation(async () => {
+        erased = true;
+        activeJob = "erase-job";
+        return activeJob;
+      }),
+      getMaintenanceProgress: vi.fn().mockImplementation(async () => ({
+        jobId: activeJob,
+        status:
+          activeJob === "erase-job" && !deletionCanComplete
+            ? "running"
+            : "complete",
+        confirmedTasks: 8,
+        totalTasks: 8,
+        error: null,
+      })),
+      cancelMaintenance: vi.fn().mockResolvedValue(true),
+      listPendingErasures: vi.fn().mockResolvedValue([]),
+      rebuildSearchIndex: vi.fn().mockResolvedValue("index-job"),
+    } as unknown as DesktopApi;
+    render(<App api={api} />);
+    await waitFor(() => expect(stateCalls).toBeGreaterThanOrEqual(2));
+    await userEvent.click(screen.getByRole("button", { name: /Historie/ }));
+    const row = (await screen.findByText(meeting.title)).closest(
+      ".session-row",
+    )!;
+    await userEvent.click(
+      within(row as HTMLElement).getByRole("button", { name: "Öffnen" }),
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Meeting löschen" }),
+    );
+    await userEvent.type(
+      await screen.findByRole("textbox", {
+        name: "Zur Bestätigung LÖSCHEN eingeben",
+      }),
+      "LÖSCHEN",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Jetzt endgültig löschen" }),
+    );
+    const dialog = screen.getByRole("alertdialog");
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    expect((document.querySelector("main") as HTMLElement).inert).toBe(true);
+    await userEvent.tab();
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    deletionCanComplete = true;
+    const notice = await screen.findByText(
+      /Meetinginhalte vollständig aus der HandyMeeting-Ablage entfernt|unterbrochene Dateien sind nicht sicher zuordenbar/,
+    );
+    if (remnants)
+      expect(notice.textContent).toMatch(
+        /2 unterbrochene Dateien sind nicht sicher zuordenbar und bleiben erhalten/,
       );
-    }),
-    listDevices: vi.fn().mockResolvedValue([]),
-    listMeetings: vi
-      .fn()
-      .mockImplementation(async () => (erased ? [other] : [meeting, other])),
-    getMeeting: vi.fn().mockResolvedValue(full),
-    listAnalyses: vi.fn().mockResolvedValue({ analyses: [], skipped: [] }),
-    getNotesProgress: vi.fn().mockResolvedValue(null),
-    previewMeetingErasure: vi.fn().mockResolvedValue("preview-job"),
-    getMeetingErasurePreview: vi.fn().mockResolvedValue(plan),
-    eraseMeetingNow: vi.fn().mockImplementation(async () => {
-      erased = true;
-      activeJob = "erase-job";
-      return activeJob;
-    }),
-    getMaintenanceProgress: vi.fn().mockImplementation(async () => ({
-      jobId: activeJob,
-      status:
-        activeJob === "erase-job" && !deletionCanComplete
-          ? "running"
-          : "complete",
-      confirmedTasks: 8,
-      totalTasks: 8,
-      error: null,
-    })),
-    cancelMaintenance: vi.fn().mockResolvedValue(true),
-    listPendingErasures: vi.fn().mockResolvedValue([]),
-    rebuildSearchIndex: vi.fn().mockResolvedValue("index-job"),
-  } as unknown as DesktopApi;
-  render(<App api={api} />);
-  await waitFor(() => expect(stateCalls).toBeGreaterThanOrEqual(2));
-  await userEvent.click(screen.getByRole("button", { name: /Historie/ }));
-  const row = (await screen.findByText(meeting.title)).closest(".session-row")!;
-  await userEvent.click(
-    within(row as HTMLElement).getByRole("button", { name: "Öffnen" }),
-  );
-  await userEvent.click(
-    await screen.findByRole("button", { name: "Meeting löschen" }),
-  );
-  await userEvent.type(
-    await screen.findByRole("textbox", {
-      name: "Zur Bestätigung LÖSCHEN eingeben",
-    }),
-    "LÖSCHEN",
-  );
-  await userEvent.click(
-    screen.getByRole("button", { name: "Jetzt endgültig löschen" }),
-  );
-  const dialog = screen.getByRole("alertdialog");
-  expect(dialog.contains(document.activeElement)).toBe(true);
-  expect((document.querySelector("main") as HTMLElement).inert).toBe(true);
-  await userEvent.tab();
-  expect(dialog.contains(document.activeElement)).toBe(true);
-  deletionCanComplete = true;
-  await screen.findByText(
-    "Meetinginhalte vollständig aus der HandyMeeting-Ablage entfernt.",
-  );
-  await act(async () => stale(initial));
-  expect(screen.queryByText(meeting.title)).toBeNull();
-  expect(screen.getByText(other.title)).toBeTruthy();
-  expect(api.rebuildSearchIndex).toHaveBeenCalledOnce();
-});
+    else
+      expect(notice.textContent).toBe(
+        "Meetinginhalte vollständig aus der HandyMeeting-Ablage entfernt.",
+      );
+    await act(async () => stale(initial));
+    expect(screen.queryByText(meeting.title)).toBeNull();
+    expect(screen.getByText(other.title)).toBeTruthy();
+    expect(api.rebuildSearchIndex).toHaveBeenCalledOnce();
+  },
+);
 
 it("a confirmed erasure discards delayed analysis results and its saved retry request", async () => {
   let reply!: (value: unknown) => void;

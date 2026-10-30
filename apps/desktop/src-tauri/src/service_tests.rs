@@ -1,6 +1,68 @@
 //! Synthetic service-state regressions; ordinary tests never open audio devices.
 use super::*;
 
+/// A second Service's erasure lease must fence both the title snapshot and plan publication.
+#[test]
+fn retention_plan_publication_obeys_cross_service_erasure_exclusion() {
+    let root = fixture_root("retention-publication-erasure");
+    let service = Service::new(root.clone()).unwrap();
+    let other = Service::new(root.clone()).unwrap();
+    let store = SessionStore::create(
+        &root.join("sessions"),
+        "Synthetic retention title canary",
+        "m",
+        "s",
+        None,
+    )
+    .unwrap();
+    let id = store.snapshot().unwrap().id;
+    store.set_status("complete").unwrap();
+    drop(store);
+    let manifest = root.join("sessions").join(&id).join("session.json");
+    let mut value: serde_json::Value =
+        serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    value["startedAt"] = "2020-01-01T00:00:00Z".into();
+    value["endedAt"] = "2020-01-01T00:01:00Z".into();
+    fs::write(&manifest, serde_json::to_vec(&value).unwrap()).unwrap();
+    let policy = meeting_core::retention::Policy {
+        archive_after_days: Some(365),
+        ..Default::default()
+    };
+    meeting_core::retention::save_policy(&root, 0, policy).unwrap();
+    let job = "d".repeat(32);
+    let plan = root.join("retention-plans").join(format!("{job}.json"));
+    let cancel = AtomicBool::new(false);
+    let fence = meeting_core::archive::source_mutation_lease(&other.root).unwrap();
+    assert!(
+        retention_commands::publish_preview(&service.root, &job, &cancel, |_, _| {}).is_err(),
+        "A content-bearing retention plan bypassed another Service's erasure exclusion"
+    );
+    assert!(!plan.exists());
+    drop(fence);
+    retention_commands::publish_preview(&service.root, &job, &cancel, |_, _| {}).unwrap();
+    let value: serde_json::Value = serde_json::from_slice(&fs::read(&plan).unwrap()).unwrap();
+    assert!(value["candidates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|candidate| candidate["meetingId"] == id
+            && candidate["title"] == "Synthetic retention title canary"));
+    let preview = meeting_core::archive::preview_erasure(&root, &id, &cancel).unwrap();
+    meeting_core::archive::erase_meeting(
+        &root,
+        &id,
+        &preview.fingerprint,
+        &format!("DELETE {id}"),
+        &cancel,
+        |_, _| {},
+    )
+    .unwrap();
+    assert!(
+        !plan.exists(),
+        "Completed erasure left the title-bearing retention preview"
+    );
+}
+
 /// A maintenance snapshot delayed until after erasure must not reinsert its saved text.
 #[test]
 fn delayed_maintenance_snapshots_cannot_repopulate_an_erased_index() {

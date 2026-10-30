@@ -59,16 +59,25 @@ pub(crate) fn preview_retention(service: State<'_, Arc<Service>>) -> AppResult<S
         .maintenance_jobs
         .start_work("cleanup-preview", move |id, jobs, cancel| {
             let _lease = lease;
-            let mut plan = meeting_core::retention::preview(
-                &owned.root,
-                chrono_now(),
-                cancel,
-                |done, total| jobs.update_work(id, done, total),
-            )?;
-            plan.id = id.to_owned();
-            crate::create_json(&plans(&owned.root)?.join(format!("{id}.json")), &plan)
-                .map_err(|e| e.into())
+            publish_preview(&owned.root, id, cancel, |done, total| {
+                jobs.update_work(id, done, total)
+            })
         })
+}
+/// Keeps construction and publication in one native operation; plans contain original titles.
+pub(crate) fn publish_preview(
+    root: &Path,
+    id: &str,
+    cancel: &std::sync::atomic::AtomicBool,
+    progress: impl FnMut(u64, u64),
+) -> meeting_core::Result<()> {
+    crate::validate_id(id)?;
+    // Erasure takes this same process-shared lease. Retain it through the final
+    // atomic publication so an old title snapshot cannot appear after deletion.
+    let _source = meeting_core::archive::source_mutation_lease(root)?;
+    let mut plan = meeting_core::retention::preview(root, chrono_now(), cancel, progress)?;
+    plan.id = id.to_owned();
+    crate::create_json(&plans(root)?.join(format!("{id}.json")), &plan).map_err(|e| e.into())
 }
 fn chrono_now() -> chrono::DateTime<chrono::Utc> {
     chrono::Utc::now()

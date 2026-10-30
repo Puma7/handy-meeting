@@ -76,6 +76,112 @@ fn extra(path: &Path, bytes: &[u8]) {
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     fs::write(path, bytes).unwrap();
 }
+
+/// A foreign receipt cannot mask this meeting's ZIP or retained-source identity.
+#[test]
+fn reverse_archive_assignment_conflicts_block_before_any_erasure() {
+    for source_copy in [false, true] {
+        let root = tempfile::tempdir().unwrap();
+        let id = fixture(root.path(), PRIVATE, 1);
+        let other = fixture(root.path(), "Foreign preserved meeting", 1);
+        let cancel = AtomicBool::new(false);
+        let receipt =
+            archive::create(root.path(), &id, 0, "whole-meeting", &cancel, |_, _| {}).unwrap();
+        let folder = root.path().join("archives");
+        // A completed/recovered archive can retain its receipt after creation's
+        // transient pending record is gone; that receipt alone must not mask a copy.
+        fs::remove_file(folder.join(format!("{}.pending.json", receipt.archive_id))).unwrap();
+        if source_copy {
+            fs::remove_file(folder.join(format!("{}.zip", receipt.archive_id))).unwrap();
+            let source = folder.join(format!("{}.source", receipt.archive_id));
+            fs::create_dir(&source).unwrap();
+            fs::copy(
+                root.path().join("sessions").join(&id).join("session.json"),
+                source.join("session.json"),
+            )
+            .unwrap();
+            extra(&source.join("retained.txt"), PRIVATE.as_bytes());
+        }
+        let path = folder.join(format!("{}.receipt.json", receipt.archive_id));
+        let mut value: serde_json::Value =
+            serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        value["meetingId"] = other.into();
+        fs::write(&path, serde_json::to_vec(&value).unwrap()).unwrap();
+        let before = tree(root.path());
+        assert!(
+            archive::preview_erasure(root.path(), &id, &cancel).is_err(),
+            "A foreign receipt masked selected-meeting content in an archive copy"
+        );
+        let after = tree(root.path());
+        for (path, bytes) in &before {
+            assert!(
+                after.get(path) == Some(bytes),
+                "Existing file changed: {}",
+                path.display()
+            );
+        }
+        assert!(
+            after.iter().all(|(path, bytes)| before.contains_key(path)
+                || (bytes.is_empty() && path.extension().is_some_and(|ext| ext == "lock"))),
+            "Preview created non-coordination data"
+        );
+    }
+}
+
+/// Shared atomic catalogs must remove exact receipt identities and disclose unassignable annotations.
+#[test]
+fn archive_and_annotation_atomic_remnants_are_inventoried_or_disclosed() {
+    let root = tempfile::tempdir().unwrap();
+    let id = fixture(root.path(), PRIVATE, 1);
+    let other = fixture(root.path(), "Foreign retained meeting", 1);
+    let owned = root.path().join("archives/.tmpOwned");
+    extra(
+        &owned,
+        format!("{{\"meetingId\":\"{id}\",\"title\":\"{PRIVATE}").as_bytes(),
+    );
+    let foreign = root.path().join("archives/.tmpForeign");
+    let foreign_bytes = format!("{{\"meetingId\":\"{other}\",\"title\":\"Foreign\"}}").into_bytes();
+    extra(&foreign, &foreign_bytes);
+    let unknown = [
+        ("archives/.tmpUnknown", format!("{{\"title\":\"{PRIVATE}\"}}")),
+        ("user-metadata/.tmpUnknown", format!("{{\"revision\":0,\"title\":\"{PRIVATE}\",\"pinned\":false}}")),
+        ("speaker-labels/.tmpUnknown", format!("{{\"revision\":0,\"enabled\":true,\"assignments\":[{{\"evidence\":\"{PRIVATE}\"}}]}}")),
+    ];
+    for (name, bytes) in &unknown {
+        extra(&root.path().join(name), bytes.as_bytes());
+    }
+    let preview = archive::preview_erasure(root.path(), &id, &AtomicBool::new(false)).unwrap();
+    assert_eq!(
+        preview.preserved_atomic_remnants, 3,
+        "Unknown shared-catalog contents were omitted from the disclosure"
+    );
+    erase(root.path(), &id);
+    assert!(
+        !owned.exists(),
+        "A structurally attributed receipt retained meeting content"
+    );
+    assert_eq!(fs::read(foreign).unwrap(), foreign_bytes);
+    for (name, bytes) in &unknown {
+        assert_eq!(fs::read(root.path().join(name)).unwrap(), bytes.as_bytes());
+    }
+}
+
+/// Only documented empty relocation locks may remain in the shared coordination directory.
+#[test]
+fn archive_coordination_namespace_cannot_hide_unknown_or_nonempty_content() {
+    for (name, bytes) in [
+        ("unexpected.txt".to_owned(), PRIVATE.as_bytes()),
+        (format!("{}.lock", "a".repeat(64)), PRIVATE.as_bytes()),
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        let id = fixture(root.path(), PRIVATE, 1);
+        let path = root.path().join("archives/.leases").join(name);
+        extra(&path, bytes);
+        assert!(archive::preview_erasure(root.path(), &id, &AtomicBool::new(false)).is_err());
+        assert_eq!(fs::read(path).unwrap(), bytes);
+        assert!(root.path().join("sessions").join(id).exists());
+    }
+}
 /// Exercises the public preview and exact-meeting confirmation APIs to verified completion.
 fn erase(root: &Path, id: &str) {
     let cancel = AtomicBool::new(false);

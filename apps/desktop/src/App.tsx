@@ -1219,7 +1219,7 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     window.dispatchEvent(new Event("library-index-updated"));
   }
   /** File erasure is already confirmed; index rebuilding has its own subsequent outcome. */
-  function completeMeetingErasure(id: string) {
+  function completeMeetingErasure(id: string, preservedAtomicRemnants = 0) {
     notesJob.forget(id, true);
     ++erasureEpoch.current;
     ++requestSequence.current;
@@ -1228,9 +1228,13 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     setErasureTarget(null);
     setErasureRevision((value) => value + 1);
     setErasureNotice(
-      locale === "de"
-        ? "Meetinginhalte vollständig aus der HandyMeeting-Ablage entfernt."
-        : "Meeting contents completely removed from HandyMeeting storage.",
+      preservedAtomicRemnants > 0
+        ? locale === "de"
+          ? `Zugeordnete Meetinginhalte entfernt. ${preservedAtomicRemnants} unterbrochene Dateien sind nicht sicher zuordenbar und bleiben erhalten. Sie können weiterhin Meetingdaten enthalten; bitte die Ablage manuell prüfen.`
+          : `Attributed meeting contents removed. ${preservedAtomicRemnants} interrupted files cannot be assigned safely and are preserved. They may still contain meeting data; inspect storage manually.`
+        : locale === "de"
+          ? "Meetinginhalte vollständig aus der HandyMeeting-Ablage entfernt."
+          : "Meeting contents completely removed from HandyMeeting storage.",
     );
     void refreshHistory().catch((failure) => setError(errorMessage(failure)));
     void api
@@ -2762,7 +2766,9 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
           meeting={erasureTarget}
           locale={locale}
           onStart={() => beginMeetingErasure(erasureTarget.id)}
-          onDeleted={() => completeMeetingErasure(erasureTarget.id)}
+          onDeleted={(remnants) =>
+            completeMeetingErasure(erasureTarget.id, remnants)
+          }
           onStopped={() => stopMeetingErasure(erasureTarget.id)}
           onClose={() => setErasureTarget(null)}
         />
