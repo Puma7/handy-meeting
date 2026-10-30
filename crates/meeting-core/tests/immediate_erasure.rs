@@ -1,0 +1,551 @@
+//! Synthetic erasure fixtures only. These tests never inspect real sessions or audio devices.
+use meeting_core::{
+    archive, library::LibraryIndex, metadata, PcmWriter, SessionStore, TranscriptCheckpoint,
+};
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::{Path, PathBuf},
+    sync::atomic::{AtomicBool, Ordering},
+};
+
+const PRIVATE: &str = "syntheticerasurecanaryneverretainthisphrase";
+fn fixture(root: &Path, text: &str, seconds: usize) -> String {
+    fs::create_dir_all(root.join("sessions")).unwrap();
+    let store = SessionStore::create(
+        &root.join("sessions"),
+        text,
+        "synthetic-model",
+        "synthetic-output",
+        Some("synthetic-input"),
+    )
+    .unwrap();
+    let id = store.snapshot().unwrap().id;
+    for track in ["system", "microphone"] {
+        let mut writer = PcmWriter::new(store.clone(), track).unwrap();
+        writer.append(&vec![42; seconds * 16000]).unwrap();
+        writer.finish().unwrap();
+        drop(writer);
+    }
+    for part in store.snapshot().unwrap().parts {
+        store
+            .append_transcript(TranscriptCheckpoint {
+                sequence: 0,
+                at: String::new(),
+                file: part.file,
+                model_id: "synthetic-model".into(),
+                full: text.into(),
+                committed: text.into(),
+                tentative: String::new(),
+                processed_samples: part.confirmed_sample_count,
+                final_text: true,
+                revision_after_restart: false,
+            })
+            .unwrap();
+    }
+    store.set_status("recorded").unwrap();
+    store.set_status("complete").unwrap();
+    drop(store);
+    id
+}
+fn tree(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
+    fn walk(root: &Path, path: &Path, out: &mut BTreeMap<PathBuf, Vec<u8>>) {
+        for entry in fs::read_dir(path).unwrap() {
+            let path = entry.unwrap().path();
+            if path.file_name().is_some_and(|name| name == "session.lock") {
+                continue;
+            }
+            if path.is_dir() {
+                walk(root, &path, out);
+            } else {
+                out.insert(
+                    path.strip_prefix(root).unwrap().to_owned(),
+                    fs::read(path).unwrap(),
+                );
+            }
+        }
+    }
+    let mut result = BTreeMap::new();
+    walk(root, root, &mut result);
+    result
+}
+fn extra(path: &Path, bytes: &[u8]) {
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(path, bytes).unwrap();
+}
+fn erase(root: &Path, id: &str) {
+    let cancel = AtomicBool::new(false);
+    let plan = archive::preview_erasure(root, id, &cancel).unwrap();
+    let result = archive::erase_meeting(
+        root,
+        id,
+        &plan.fingerprint,
+        &format!("DELETE {id}"),
+        &cancel,
+        |_, _| {},
+    )
+    .unwrap();
+    assert!(result.complete);
+}
+
+#[test]
+fn a_new_two_second_meeting_can_be_erased_without_archival_age_or_model_service() {
+    let root = tempfile::tempdir().unwrap();
+    let id = fixture(root.path(), PRIVATE, 2);
+    let other = fixture(root.path(), "synthetic other retained", 1);
+    let other_folder = root.path().join("sessions").join(&other);
+    let before = tree(&other_folder);
+    let cancel = AtomicBool::new(false);
+    assert!(
+        archive::deletion_fingerprint(root.path(), &id, &cancel).is_err(),
+        "Automatic retention must remain archive-only"
+    );
+    erase(root.path(), &id);
+    assert!(!root.path().join("sessions").join(&id).exists());
+    assert_eq!(tree(&other_folder), before);
+    assert!(archive::pending_erasures(root.path()).unwrap().is_empty());
+}
+
+#[test]
+fn every_app_managed_source_copy_annotation_and_search_cache_is_removed() {
+    let root = tempfile::tempdir().unwrap();
+    let id = fixture(root.path(), PRIVATE, 2);
+    let other = fixture(root.path(), "other original preserved", 1);
+    let folder = root.path().join("sessions").join(&id);
+    let other_folder = root.path().join("sessions").join(&other);
+    let other_before = tree(&other_folder);
+    for name in [
+        "analyses/run/result.json",
+        "analyses/run/snapshot.json",
+        "live-notes/run/window.json",
+        "speaker-experiments/result.json",
+        "converted-audio/run/audio.flac",
+        "exports/transcript.html",
+        "extra-user-notes.txt",
+    ] {
+        extra(&folder.join(name), PRIVATE.as_bytes());
+    }
+    let cancel = AtomicBool::new(false);
+    let receipt =
+        archive::create(root.path(), &id, 0, "whole-meeting", &cancel, |_, _| {}).unwrap();
+    metadata::edit(root.path(), &id, 0, Some(PRIVATE.into()), false).unwrap();
+    metadata::edit(
+        root.path(),
+        &id,
+        1,
+        Some(format!("{PRIVATE} revised")),
+        true,
+    )
+    .unwrap();
+    extra(
+        &root
+            .path()
+            .join("speaker-labels")
+            .join(format!("{id}.json")),
+        format!("{{\"meetingId\":\"{id}\",\"quote\":\"{PRIVATE}\"}}").as_bytes(),
+    );
+    let run = "a".repeat(32);
+    extra(
+        &root.path().join("audio-copies").join(format!("{run}.json")),
+        format!("{{\"meetingId\":\"{id}\",\"runId\":\"{run}\",\"title\":\"{PRIVATE}\"}}")
+            .as_bytes(),
+    );
+    for parent in ["retention-plans", "maintenance-log"] {
+        extra(
+            &root.path().join(parent).join("synthetic.json"),
+            format!("{{\"meetingId\":\"{id}\",\"title\":\"{PRIVATE}\"}}").as_bytes(),
+        );
+    }
+    let data = meeting_core::inspect_manifest(&folder).unwrap();
+    {
+        let mut index = LibraryIndex::open(root.path()).unwrap();
+        index
+            .upsert(
+                &data,
+                &metadata::read(root.path(), &id).unwrap(),
+                "synthetic",
+            )
+            .unwrap();
+        assert!(index.search(PRIVATE, 0, 10).unwrap().total > 0);
+    }
+    extra(
+        &root
+            .path()
+            .join("library-index/unreadable-synthetic/library.sqlite3"),
+        PRIVATE.as_bytes(),
+    );
+    extra(
+        &root.path().join("settings.json"),
+        b"other settings unchanged",
+    );
+    let settings = fs::read(root.path().join("settings.json")).unwrap();
+    erase(root.path(), &id);
+    assert!(!folder.exists());
+    assert!(!root
+        .path()
+        .join("archives")
+        .join(format!("{}.zip", receipt.archive_id))
+        .exists());
+    assert!(!root.path().join("library-index").exists());
+    assert_eq!(tree(&other_folder), other_before);
+    assert_eq!(
+        fs::read(root.path().join("settings.json")).unwrap(),
+        settings
+    );
+    for (path, bytes) in tree(root.path()) {
+        assert!(
+            !bytes
+                .windows(PRIVATE.len())
+                .any(|part| part == PRIVATE.as_bytes()),
+            "Retained private content: {path:?}"
+        );
+    }
+    let other_data = meeting_core::inspect_manifest(&other_folder).unwrap();
+    let mut index = LibraryIndex::open(root.path()).unwrap();
+    index
+        .upsert(&other_data, &Default::default(), "other")
+        .unwrap();
+    assert_eq!(index.search(PRIVATE, 0, 10).unwrap().total, 0);
+    assert!(index
+        .search("other", 0, 10)
+        .unwrap()
+        .items
+        .iter()
+        .all(|hit| hit.id == other));
+}
+
+#[test]
+fn stale_preview_or_wrong_confirmation_preserves_all_original_bytes() {
+    let root = tempfile::tempdir().unwrap();
+    let id = fixture(root.path(), PRIVATE, 1);
+    let folder = root.path().join("sessions").join(&id);
+    let cancel = AtomicBool::new(false);
+    let plan = archive::preview_erasure(root.path(), &id, &cancel).unwrap();
+    let before = tree(&folder);
+    assert!(archive::erase_meeting(
+        root.path(),
+        &id,
+        &plan.fingerprint,
+        "DELETE another",
+        &cancel,
+        |_, _| {}
+    )
+    .is_err());
+    assert_eq!(tree(&folder), before);
+    extra(&folder.join("new-user-data.txt"), b"Added after preview");
+    let changed = tree(&folder);
+    assert!(archive::erase_meeting(
+        root.path(),
+        &id,
+        &plan.fingerprint,
+        &format!("DELETE {id}"),
+        &cancel,
+        |_, _| {}
+    )
+    .is_err());
+    assert_eq!(tree(&folder), changed);
+    assert!(archive::pending_erasures(root.path()).unwrap().is_empty());
+}
+
+#[test]
+fn cancellation_leaves_a_minimal_retry_marker_and_remaining_data_can_be_confirmed_again() {
+    let root = tempfile::tempdir().unwrap();
+    let id = fixture(root.path(), PRIVATE, 1);
+    let cancel = AtomicBool::new(false);
+    let plan = archive::preview_erasure(root.path(), &id, &cancel).unwrap();
+    assert!(archive::erase_meeting(
+        root.path(),
+        &id,
+        &plan.fingerprint,
+        &format!("DELETE {id}"),
+        &cancel,
+        |n, _| {
+            if n == 1 {
+                cancel.store(true, Ordering::Release);
+            }
+        }
+    )
+    .is_err());
+    let pending = archive::pending_erasures(root.path()).unwrap();
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].meeting_id, id);
+    let marker = fs::read_to_string(
+        root.path()
+            .join("immediate-deletions")
+            .join(format!("{id}.json")),
+    )
+    .unwrap();
+    assert!(!marker.contains(PRIVATE));
+    assert!(!marker.contains("inventory"));
+    erase(root.path(), &id);
+    assert!(!root.path().join("sessions").join(id).exists());
+    assert!(archive::pending_erasures(root.path()).unwrap().is_empty());
+}
+
+#[test]
+fn held_session_or_index_lease_prevents_removal_before_any_data_is_deleted() {
+    let root = tempfile::tempdir().unwrap();
+    let id = fixture(root.path(), PRIVATE, 1);
+    let folder = root.path().join("sessions").join(&id);
+    let cancel = AtomicBool::new(false);
+    let writer = SessionStore::open(&folder).unwrap();
+    let before = tree(&folder);
+    assert!(archive::preview_erasure(root.path(), &id, &cancel).is_err());
+    assert_eq!(tree(&folder), before);
+    drop(writer);
+    let plan = archive::preview_erasure(root.path(), &id, &cancel).unwrap();
+    let index = LibraryIndex::open(root.path()).unwrap();
+    assert!(archive::erase_meeting(
+        root.path(),
+        &id,
+        &plan.fingerprint,
+        &format!("DELETE {id}"),
+        &cancel,
+        |_, _| {}
+    )
+    .is_err());
+    assert!(folder.exists());
+    drop(index);
+    erase(root.path(), &id);
+}
+
+#[test]
+fn traversal_imports_and_unknown_cache_files_are_refused_without_widening_scope() {
+    let root = tempfile::tempdir().unwrap();
+    let id = fixture(root.path(), PRIVATE, 1);
+    let folder = root.path().join("sessions").join(&id);
+    let before = tree(&folder);
+    let cancel = AtomicBool::new(false);
+    for value in ["../outside", "legacy-0123456789abcdef", "", "/absolute"] {
+        assert!(archive::preview_erasure(root.path(), value, &cancel).is_err());
+    }
+    extra(
+        &root.path().join("library-index/user-original.txt"),
+        b"Do not delete an unrecognized cache entry",
+    );
+    assert!(archive::preview_erasure(root.path(), &id, &cancel).is_err());
+    assert_eq!(tree(&folder), before);
+    assert!(root.path().join("library-index/user-original.txt").exists());
+}
+
+#[test]
+fn empty_failed_and_corrupt_owned_meetings_need_neither_asr_nor_valid_transcripts() {
+    for state in ["recorded", "error", "corrupt"] {
+        let root = tempfile::tempdir().unwrap();
+        let id = fixture(root.path(), PRIVATE, 0);
+        let folder = root.path().join("sessions").join(&id);
+        if state == "corrupt" {
+            fs::write(folder.join("session.json"), b"broken JSON").unwrap();
+        } else {
+            let store = SessionStore::open(&folder).unwrap();
+            store.set_status(state).unwrap();
+        }
+        erase(root.path(), &id);
+        assert!(!folder.exists());
+    }
+}
+
+#[test]
+fn every_archived_removal_boundary_can_be_confirmed_again_after_interruption() {
+    // Exercise every file boundary, including the loss of receipts/manifests and
+    // the last file before empty-directory cleanup. Every case is a new fixture.
+    let mut boundary = 1;
+    loop {
+        let root = tempfile::tempdir().unwrap();
+        let id = fixture(root.path(), PRIVATE, 1);
+        let cancel = AtomicBool::new(false);
+        let receipt =
+            archive::create(root.path(), &id, 0, "whole-meeting", &cancel, |_, _| {}).unwrap();
+        let retained =
+            archive::move_source_into_archive(root.path(), &receipt, 0, &cancel).unwrap();
+        extra(&retained.join("later-analysis.json"), PRIVATE.as_bytes());
+        let plan = archive::preview_erasure(root.path(), &id, &cancel).unwrap();
+        if boundary > plan.files {
+            break;
+        }
+        let result = archive::erase_meeting(
+            root.path(),
+            &id,
+            &plan.fingerprint,
+            &format!("DELETE {id}"),
+            &cancel,
+            |n, _| {
+                if n == boundary as u64 {
+                    cancel.store(true, Ordering::Release);
+                }
+            },
+        );
+        assert!(result.is_err(), "boundary {boundary}");
+        assert_eq!(archive::pending_erasures(root.path()).unwrap().len(), 1);
+        erase(root.path(), &id);
+        assert!(!retained.exists(), "boundary {boundary}");
+        assert!(!root
+            .path()
+            .join("archives")
+            .join(format!("{}.zip", receipt.archive_id))
+            .exists());
+        for (_, bytes) in tree(root.path()) {
+            assert!(!bytes
+                .windows(PRIVATE.len())
+                .any(|p| p == PRIVATE.as_bytes()));
+        }
+        boundary += 1;
+    }
+    assert!(boundary > 10);
+}
+
+#[test]
+fn late_files_and_changed_bytes_survive_with_an_explicit_partial_failure() {
+    for change in [false, true] {
+        let root = tempfile::tempdir().unwrap();
+        let id = fixture(root.path(), PRIVATE, 1);
+        let folder = root.path().join("sessions").join(&id);
+        extra(&folder.join("zz-late.txt"), b"original");
+        let cancel = AtomicBool::new(false);
+        let plan = archive::preview_erasure(root.path(), &id, &cancel).unwrap();
+        let path = folder.join(if change {
+            "zz-late.txt"
+        } else {
+            "new-after-start.txt"
+        });
+        assert!(archive::erase_meeting(
+            root.path(),
+            &id,
+            &plan.fingerprint,
+            &format!("DELETE {id}"),
+            &cancel,
+            |n, _| {
+                if n == 1 {
+                    fs::write(&path, b"late bytes must survive").unwrap();
+                }
+            }
+        )
+        .is_err());
+        assert_eq!(fs::read(&path).unwrap(), b"late bytes must survive");
+        erase(root.path(), &id);
+        assert!(!folder.exists());
+    }
+}
+
+#[test]
+fn deleting_a_link_name_never_overwrites_an_external_hardlink_copy() {
+    let root = tempfile::tempdir().unwrap();
+    let external = tempfile::tempdir().unwrap();
+    let id = fixture(root.path(), PRIVATE, 1);
+    let original = external.path().join("external-copy.txt");
+    fs::write(&original, b"external copy retained").unwrap();
+    fs::hard_link(
+        &original,
+        root.path().join("sessions").join(&id).join("shared.txt"),
+    )
+    .unwrap();
+    erase(root.path(), &id);
+    assert_eq!(fs::read(original).unwrap(), b"external copy retained");
+}
+
+#[test]
+fn audio_only_archives_and_unreceipted_source_copies_are_included() {
+    for audio_only in [false, true] {
+        let root = tempfile::tempdir().unwrap();
+        let id = fixture(root.path(), PRIVATE, 1);
+        let cancel = AtomicBool::new(false);
+        if audio_only {
+            archive::archive_audio(root.path(), &id, 0, &cancel, |_, _| {}).unwrap();
+        } else {
+            let receipt =
+                archive::create(root.path(), &id, 0, "whole-meeting", &cancel, |_, _| {}).unwrap();
+            archive::move_source_into_archive(root.path(), &receipt, 0, &cancel).unwrap();
+            // Simulate a recovered retained source whose creation receipt is absent.
+            fs::remove_file(
+                root.path()
+                    .join("archives")
+                    .join(format!("{}.receipt.json", receipt.archive_id)),
+            )
+            .unwrap();
+        }
+        erase(root.path(), &id);
+        assert!(!root.path().join("sessions").join(&id).exists());
+        for (_, bytes) in tree(root.path()) {
+            assert!(!bytes
+                .windows(PRIVATE.len())
+                .any(|p| p == PRIVATE.as_bytes()));
+        }
+    }
+}
+
+#[test]
+fn conflicting_source_and_archive_identities_never_authorize_foreign_data_removal() {
+    for archive_conflict in [false, true] {
+        let root = tempfile::tempdir().unwrap();
+        let id = fixture(root.path(), PRIVATE, 1);
+        let other = fixture(root.path(), "Other meeting stays", 1);
+        let cancel = AtomicBool::new(false);
+        if archive_conflict {
+            let receipt =
+                archive::create(root.path(), &other, 0, "whole-meeting", &cancel, |_, _| {})
+                    .unwrap();
+            let path = root
+                .path()
+                .join("archives")
+                .join(format!("{}.receipt.json", receipt.archive_id));
+            let mut record: serde_json::Value =
+                serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+            record["meetingId"] = serde_json::json!(id);
+            fs::write(path, serde_json::to_vec(&record).unwrap()).unwrap();
+        } else {
+            let path = root.path().join("sessions").join(&id).join("session.json");
+            let mut data: serde_json::Value =
+                serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+            data["id"] = serde_json::json!(other);
+            fs::write(path, serde_json::to_vec(&data).unwrap()).unwrap();
+        }
+        let before = tree(root.path());
+        assert!(archive::preview_erasure(root.path(), &id, &cancel).is_err());
+        for (path, bytes) in before {
+            assert_eq!(fs::read(root.path().join(path)).unwrap(), bytes);
+        }
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_directory_junction_never_authorizes_outside_removal() {
+    let root = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let id = fixture(root.path(), PRIVATE, 1);
+    let link = root.path().join("sessions").join(&id).join("junction");
+    fs::write(outside.path().join("secret.txt"), b"external retained").unwrap();
+    let result = std::process::Command::new("cmd")
+        .args(["/C", "mklink", "/J"])
+        .arg(&link)
+        .arg(outside.path())
+        .output()
+        .unwrap();
+    assert!(result.status.success());
+    assert!(archive::preview_erasure(root.path(), &id, &AtomicBool::new(false)).is_err());
+    assert_eq!(
+        fs::read(outside.path().join("secret.txt")).unwrap(),
+        b"external retained"
+    );
+    // Remove only our synthetic junction itself; never traverse its target.
+    fs::remove_dir(link).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn links_inside_a_meeting_never_authorize_removing_outside_files() {
+    let root = tempfile::tempdir().unwrap();
+    let id = fixture(root.path(), PRIVATE, 1);
+    let outside = tempfile::tempdir().unwrap();
+    extra(&outside.path().join("secret.txt"), b"outside retained");
+    std::os::unix::fs::symlink(
+        outside.path(),
+        root.path().join("sessions").join(&id).join("linked"),
+    )
+    .unwrap();
+    assert!(archive::preview_erasure(root.path(), &id, &AtomicBool::new(false)).is_err());
+    assert_eq!(
+        fs::read(outside.path().join("secret.txt")).unwrap(),
+        b"outside retained"
+    );
+}

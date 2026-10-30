@@ -120,7 +120,7 @@ pub(crate) fn cancel_maintenance(service: State<'_, Arc<Service>>, job_id: Strin
     service.maintenance_jobs.cancel(&job_id)
 }
 /// Reserve all operations that could move sources before starting the background job.
-struct MaintenanceGuard {
+pub(super) struct MaintenanceGuard {
     service: Arc<Service>,
     _lease: crate::operations::Lease,
 }
@@ -135,7 +135,7 @@ impl Drop for MaintenanceGuard {
 }
 /// Acquire exclusive maintenance admission, release the cached session view and mark its
 /// transition.
-fn reserve(service: &Arc<Service>) -> AppResult<MaintenanceGuard> {
+pub(super) fn reserve(service: &Arc<Service>) -> AppResult<MaintenanceGuard> {
     let lease = service.reserve_operation(crate::operations::Kind::Maintenance)?;
     let mut inner = service.lock()?;
     inner.view = None;

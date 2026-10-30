@@ -2,6 +2,53 @@
 use super::*;
 
 #[test]
+fn meeting_erasure_reservation_refuses_all_writers_and_releases_only_an_inactive_view() {
+    let root = fixture_root("erasure-admission");
+    let service = Arc::new(Service::new(root.clone()).unwrap());
+    let store = SessionStore::create(
+        &root.join("sessions"),
+        "Synthetic retained original",
+        "m",
+        "s",
+        None,
+    )
+    .unwrap();
+    let id = store.snapshot().unwrap().id;
+    let path = store.folder().join("session.json");
+    let before = fs::read(&path).unwrap();
+    service.lock().unwrap().view = Some(store);
+    for kind in [
+        operations::Kind::Recording,
+        operations::Kind::Analysis,
+        operations::Kind::Speakers,
+        operations::Kind::Index,
+        operations::Kind::Export,
+        operations::Kind::Mutation,
+        operations::Kind::LiveNotes,
+    ] {
+        let writer = service.reserve_operation(kind).unwrap();
+        assert!(retention_commands::reserve(&service).is_err());
+        assert!(service.lock().unwrap().view.is_some());
+        assert_eq!(fs::read(&path).unwrap(), before);
+        drop(writer);
+    }
+    let maintenance = retention_commands::reserve(&service).unwrap();
+    assert!(service.lock().unwrap().view.is_none());
+    assert!(service.data(&id).is_err());
+    assert!(service
+        .reserve_operation(operations::Kind::Recording)
+        .is_err());
+    assert!(meeting_core::archive::preview_erasure(&root, &id, &AtomicBool::new(false)).is_ok());
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        before,
+        "A preview must never erase original content"
+    );
+    drop(maintenance);
+    assert!(service.data(&id).is_ok());
+}
+
+#[test]
 fn audio_level_poll_is_idle_without_capture_and_never_waits_for_app_state() {
     let root = fixture_root("idle-meter");
     let service = Service::new(root.clone()).unwrap();

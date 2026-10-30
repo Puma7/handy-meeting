@@ -323,6 +323,27 @@ pub(super) struct Jobs {
     inner: Mutex<Option<Job>>,
 }
 impl Jobs {
+    /// Discards finished section text for exactly the explicitly erased meeting.
+    pub(crate) fn forget(&self, meeting: &str) -> AppResult<()> {
+        let mut state = self
+            .inner
+            .lock()
+            .map_err(|_| "Sprechersteuerung ist gesperrt.")?;
+        if state
+            .as_ref()
+            .is_some_and(|job| job.view.meeting_id == meeting && job.view.status == "running")
+        {
+            return Err("Sprecherprüfung läuft noch. / Speaker analysis is still running.".into());
+        }
+        if state
+            .as_ref()
+            .is_some_and(|job| job.view.meeting_id == meeting)
+        {
+            *state = None;
+        }
+        Ok(())
+    }
+
     pub fn snapshot(&self) -> Option<Progress> {
         let state = self.inner.lock().ok()?;
         let job = state.as_ref()?;

@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { FolderClock, RefreshCw, Search, Pin, ArrowRight } from "lucide-react";
+import {
+  FolderClock,
+  RefreshCw,
+  Search,
+  Pin,
+  ArrowRight,
+  Trash2,
+} from "lucide-react";
 import { errorMessage } from "../api";
 import { clock } from "../domain";
 import type { DesktopApi, Locale, MeetingSummary, SearchPage } from "../types";
@@ -8,8 +15,12 @@ export default function HistorySearch({
   locale,
   onOpen,
   imported = [],
+  onErase,
+  hiddenMeetingIds,
 }: {
   api: DesktopApi;
+  onErase?: (meeting: MeetingSummary) => void;
+  hiddenMeetingIds?: ReadonlySet<string>;
   locale: Locale;
   onOpen: (id: string, sourceId: string | null) => void;
   /** Imported legacy meetings are read in place and are not part of the search index. */
@@ -103,37 +114,58 @@ export default function HistorySearch({
         </p>
       )}
       <div className="session-list" aria-busy={busy}>
-        {page?.items.map((item, i) => (
-          <article
-            className="session-row search-result"
-            key={item.id + ":" + item.sourceId + ":" + i}
-          >
-            <div>
-              <strong>
-                {item.pinned && <Pin size={14} aria-label="VIP" />}
-                {item.title}
-              </strong>
-              <p>
-                {new Date(item.startedAt).toLocaleString(locale)} ·{" "}
-                {clock(item.durationMs)}
-              </p>
-              {item.excerpt && <p className="search-excerpt">{item.excerpt}</p>}
-              {item.sourceId && (
-                <small>
-                  {de ? "Originalabschnitt" : "Original section"}:{" "}
-                  {clock(item.startMs ?? 0)}–{clock(item.endMs ?? 0)}
-                </small>
-              )}
-            </div>
-            <button
-              className="secondary"
-              onClick={() => onOpen(item.id, item.sourceId)}
+        {page?.items
+          .filter((item) => !hiddenMeetingIds?.has(item.id))
+          .map((item, i) => (
+            <article
+              className="session-row search-result"
+              key={item.id + ":" + item.sourceId + ":" + i}
             >
-              <ArrowRight size={15} />
-              {de ? "Öffnen" : "Open"}
-            </button>
-          </article>
-        ))}
+              <div>
+                <strong>
+                  {item.pinned && <Pin size={14} aria-label="VIP" />}
+                  {item.title}
+                </strong>
+                <p>
+                  {new Date(item.startedAt).toLocaleString(locale)} ·{" "}
+                  {clock(item.durationMs)}
+                </p>
+                {item.excerpt && (
+                  <p className="search-excerpt">{item.excerpt}</p>
+                )}
+                {item.sourceId && (
+                  <small>
+                    {de ? "Originalabschnitt" : "Original section"}:{" "}
+                    {clock(item.startMs ?? 0)}–{clock(item.endMs ?? 0)}
+                  </small>
+                )}
+              </div>
+              <div className="session-row-actions">
+                {onErase && !item.id.startsWith("legacy-") && (
+                  <button
+                    type="button"
+                    className="icon-button erasure-button"
+                    aria-label={`${de ? "Meeting dauerhaft löschen" : "Permanently delete meeting"}: ${item.title}`}
+                    title={
+                      de
+                        ? "Meeting dauerhaft löschen"
+                        : "Permanently delete meeting"
+                    }
+                    onClick={() => onErase(item)}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
+                <button
+                  className="secondary"
+                  onClick={() => onOpen(item.id, item.sourceId)}
+                >
+                  <ArrowRight size={15} />
+                  {de ? "Öffnen" : "Open"}
+                </button>
+              </div>
+            </article>
+          ))}
         {!busy && page?.total === 0 && (
           <p className="empty">
             {query

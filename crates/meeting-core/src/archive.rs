@@ -15,11 +15,15 @@ use std::{
 };
 mod audio;
 mod deletion;
+mod immediate;
 mod restore;
 pub use audio::{archive_audio, read_archived_transcript, restore_audio};
 pub use deletion::{
     delete_archived_meeting, deletion_fingerprint, resume_deletion, unfinished_deletions,
     UnfinishedDeletion,
+};
+pub use immediate::{
+    erase_meeting, pending_erasures, preview_erasure, ErasurePreview, ErasureResult, PendingErasure,
 };
 use restore::placement_attempt;
 pub use restore::{move_source_into_archive, restore_new};

@@ -21,6 +21,8 @@ const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS meetings (
 
 pub struct LibraryIndex {
     db: Connection,
+    // Declared after the connection: close SQLite before releasing cross-process admission.
+    _lease: std::fs::File,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -74,7 +76,9 @@ impl LibraryIndex {
             Err(error) if unreadable_database(error.as_ref()) => (),
             Err(error) => return Err(error),
         }
+        let lease = erasure_index_lock(root)?;
         let aside = set_aside_unreadable(root)?;
+        drop(lease);
         Ok((Self::open(root)?, Some(aside)))
     }
     /// SQLite's quick check plus the FTS5 integrity check. Only corruption reports `true`.
@@ -98,6 +102,7 @@ impl LibraryIndex {
     }
     pub fn open(root: &Path) -> Result<Self> {
         metadata::checked_directory(root)?;
+        let lease = index_lease(root, false)?;
         let folder = root.join("library-index");
         match fs::create_dir(&folder) {
             Ok(()) => (),
@@ -118,7 +123,7 @@ impl LibraryIndex {
         if version != SCHEMA_VERSION {
             Self::upgrade(&db)?;
         }
-        Ok(Self { db })
+        Ok(Self { db, _lease: lease })
     }
     /// The index is derived from the session folders. An index of version 2 or older is
     /// converted row by row (title context added to section rows; older layouts also get
@@ -376,6 +381,24 @@ fn unreadable_database(error: &(dyn std::error::Error + 'static)) -> bool {
             Some(rusqlite::ErrorCode::NotADatabase | rusqlite::ErrorCode::DatabaseCorrupt)
         )
     })
+}
+/// Every index reader/writer holds shared admission; explicit erasure holds exclusive
+/// admission across complete cache removal, including retained unreadable database copies.
+fn index_lease(root: &Path, exclusive: bool) -> Result<std::fs::File> {
+    metadata::checked_directory(root)?;
+    let file = metadata::open_lock_file(&root.join("library-index.lock"))?;
+    let result = if exclusive {
+        fs2::FileExt::try_lock_exclusive(&file)
+    } else {
+        fs2::FileExt::try_lock_shared(&file)
+    };
+    result
+        .map_err(|_| "The local search index is in use; wait for it before permanently deleting")?;
+    Ok(file)
+}
+/// Reserve the rebuildable index against concurrent processes before deleting any source data.
+pub(crate) fn erasure_index_lock(root: &Path) -> Result<std::fs::File> {
+    index_lease(root, true)
 }
 const INDEX_FILES: [&str; 3] = [
     "library.sqlite3",

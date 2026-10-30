@@ -9,12 +9,9 @@ impl Service {
     /// Resolve known legacy references or validated Rust identities into snapshots; reuse owned
     /// stores and verified archive markers, rejecting folder/manifest identity mismatches.
     pub(crate) fn data(&self, id: &str) -> AppResult<SessionData> {
-        if self
-            .maintenance_jobs
-            .snapshot()
-            .is_some_and(|p| p.status == "running" && p.kind != "cleanup-preview")
-            && self.lock()?.transitioning
-        {
+        // The reservation is authoritative even before a maintenance worker has
+        // published progress. Opening here would recreate and cache a writer lease.
+        if self.lock()?.transitioning {
             return Err(
                 "Archive maintenance is running; wait or cancel before opening this meeting".into(),
             );
@@ -60,7 +57,12 @@ impl Service {
         if data.id != id {
             return Err("Sitzungskennung und Ordner stimmen nicht überein. Die Originaldateien bleiben erhalten.".into());
         }
-        self.lock()?.view = Some(store);
+        let mut inner = self.lock()?;
+        // A read that began before admission must not repopulate the cleared view.
+        if inner.transitioning {
+            return Err("Sitzungsablage wird geprüft oder geändert. Bitte kurz warten. / Session storage is being checked or changed; wait for completion.".into());
+        }
+        inner.view = Some(store);
         Ok(data)
     }
     /// Hold mutation admission while verifying native manifest approval and reading a legacy

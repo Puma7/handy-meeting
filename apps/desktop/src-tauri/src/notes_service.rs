@@ -37,6 +37,27 @@ struct JobsState {
 #[derive(Default)]
 pub(crate) struct NotesJobs(Mutex<JobsState>);
 impl NotesJobs {
+    /// Discards only a finished job's in-memory copy after explicit meeting erasure.
+    pub(crate) fn forget(&self, meeting: &str) -> AppResult<()> {
+        let mut state = self
+            .0
+            .lock()
+            .map_err(|_| "Auswertungssteuerung ist gesperrt.")?;
+        if state.last.as_ref().is_some_and(|job| {
+            job.progress.meeting_id == meeting && job.progress.status == "running"
+        }) {
+            return Err("Auswertung läuft noch. / Analysis is still running.".into());
+        }
+        if state
+            .last
+            .as_ref()
+            .is_some_and(|job| job.progress.meeting_id == meeting)
+        {
+            state.last = None;
+        }
+        Ok(())
+    }
+
     fn begin(&self, request: &NotesRequest) -> AppResult<(String, AnalysisControl)> {
         let id = request
             .job_id

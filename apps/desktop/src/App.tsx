@@ -1,3 +1,5 @@
+import EraseMeetingDialog from "./views/EraseMeetingDialog";
+import PendingErasures from "./views/PendingErasures";
 import MeetingLabels from "./views/MeetingLabels";
 import SpeakerLabels from "./views/SpeakerLabels";
 import SpeakerExperiments from "./views/SpeakerExperiments";
@@ -132,6 +134,13 @@ function loadLivePreferences(): LivePreferences & {
  * feedback. Child actions are bound to meeting IDs rather than display titles.
  */
 export default function App({ api = desktopApi }: { api?: DesktopApi }) {
+  const [erasureTarget, setErasureTarget] = useState<MeetingSummary | null>(
+    null,
+  );
+  const [erasureRevision, setErasureRevision] = useState(0);
+  const [erasureNotice, setErasureNotice] = useState<string | null>(null);
+  const erasureBlocked = useRef(new Set<string>()),
+    erasureEpoch = useRef(0);
   const [preferences] = useState(loadPreferences);
   const [savedLive] = useState(loadLivePreferences);
   const [livePreferences, setLivePreferences] = useState<LivePreferences>({
@@ -175,7 +184,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
   } | null>(null);
   const loadLiveTranscript = useCallback(async () => {
     const id = liveMeeting?.id;
-    if (!id) return;
+    if (!id || erasureBlocked.current.has(id)) return;
+    const epoch = erasureEpoch.current;
     let read = transcriptRead.current;
     if (!read || read.id !== id) {
       read = { id, promise: api.getMeeting(id) };
@@ -184,6 +194,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     setTranscriptLoading(true);
     try {
       const full = await read.promise;
+      if (epoch !== erasureEpoch.current || erasureBlocked.current.has(id))
+        return;
       if (full.id !== id)
         throw new Error(
           "Das geladene Transkript gehört zu einem anderen Meeting.",
@@ -370,6 +382,13 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     (item) =>
       item.isDownloaded && item.supportsStreaming && !item.compatibilityError,
   );
+  const canEraseMeeting = Boolean(
+    api.previewMeetingErasure &&
+      api.getMeetingErasurePreview &&
+      api.eraseMeetingNow &&
+      api.getMaintenanceProgress &&
+      api.cancelMaintenance,
+  );
   const recording = app?.recording ?? false;
   const catchingUp =
     !recording &&
@@ -400,7 +419,11 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
    * corresponding resumable placeholder.
    */
   const onNotesResult = useCallback((next: AnalysisResult) => {
-    if (notesSelectionRef.current !== next.meetingId) return;
+    if (
+      notesSelectionRef.current !== next.meetingId ||
+      erasureBlocked.current.has(next.meetingId)
+    )
+      return;
     setAnalyses((items) => [
       next,
       ...items.filter((item) => item.id !== next.id),
@@ -763,7 +786,16 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
    * or opening its source files.
    */
   const refreshHistory = useCallback(async () => {
-    setHistory(await api.listMeetings());
+    const epoch = erasureEpoch.current;
+    try {
+      const items = await api.listMeetings();
+      if (epoch === erasureEpoch.current)
+        setHistory(
+          items.filter((item) => !erasureBlocked.current.has(item.id)),
+        );
+    } catch (failure) {
+      if (epoch === erasureEpoch.current) throw failure;
+    }
   }, [api]);
   useEffect(() => {
     /**
@@ -868,9 +900,16 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
    */
   const poll = useCallback(async () => {
     const seq = ++requestSequence.current;
+    const epoch = erasureEpoch.current;
     try {
       const state = await api.getAppState();
-      if (seq !== requestSequence.current) return;
+      if (
+        seq !== requestSequence.current ||
+        epoch !== erasureEpoch.current ||
+        (state.activeMeeting &&
+          erasureBlocked.current.has(state.activeMeeting.id))
+      )
+        return;
       setApp(state);
       setConnected(true);
       setLoading(false);
@@ -893,7 +932,12 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             fullMeetingRef.current !== active.id)
         ) {
           const full = await api.getMeeting(active.id);
-          if (seq !== requestSequence.current) return;
+          if (
+            seq !== requestSequence.current ||
+            epoch !== erasureEpoch.current ||
+            erasureBlocked.current.has(full.id)
+          )
+            return;
           liveFullRef.current = full.id;
           setLiveMeeting(full);
           if (!selectedRef.current || selectedRef.current === active.id) {
@@ -1111,6 +1155,83 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       setBusy(false);
     }
   }
+  /** Invalidate pending reads and discard only the explicitly selected meeting's cached content. */
+  function beginMeetingErasure(id: string) {
+    notesJob.forget(id);
+    erasureBlocked.current.add(id);
+    ++erasureEpoch.current;
+    ++requestSequence.current;
+    ++notesLoadSequence.current;
+    if (transcriptRead.current?.id === id) {
+      transcriptRead.current = null;
+      setTranscriptLoading(false);
+    }
+    if (selectedRef.current === id) {
+      selectedRef.current = null;
+      fullMeetingRef.current = null;
+      setMeeting(null);
+      setSource(null);
+      setFileExport(null);
+      setCopied(null);
+    }
+    if (liveFullRef.current === id) liveFullRef.current = null;
+    setLiveMeeting((current) => (current?.id === id ? null : current));
+    setApp((current) =>
+      current?.activeMeeting?.id === id
+        ? { ...current, activeMeeting: null, recording: false }
+        : current,
+    );
+    if (notesSelectionRef.current === id) {
+      notesSelectionRef.current = "";
+      setNotesMeetingId("");
+      setAnalyses([]);
+      setResultId("");
+      setPendingAnalyses([]);
+      setSkippedResults([]);
+      setSkippedPending([]);
+      setResumeAnalysis(null);
+    }
+    setCloudRequest((current) => (current?.meetingId === id ? null : current));
+    setSearchSource((current) => (current?.meetingId === id ? null : current));
+    setError(null);
+    setErasureNotice(null);
+    setPage("history");
+  }
+  /** Keep stopped partial erasure visible for a new preview; stale replies remain invalidated. */
+  function stopMeetingErasure(id: string) {
+    ++erasureEpoch.current;
+    ++requestSequence.current;
+    erasureBlocked.current.delete(id);
+    setErasureRevision((value) => value + 1);
+    void refreshHistory().catch((failure) => setError(errorMessage(failure)));
+    window.dispatchEvent(new Event("library-index-updated"));
+  }
+  /** File erasure is already confirmed; index rebuilding has its own subsequent outcome. */
+  function completeMeetingErasure(id: string) {
+    notesJob.forget(id, true);
+    ++erasureEpoch.current;
+    ++requestSequence.current;
+    erasureBlocked.current.add(id);
+    setHistory((current) => current.filter((item) => item.id !== id));
+    setErasureTarget(null);
+    setErasureRevision((value) => value + 1);
+    setErasureNotice(
+      locale === "de"
+        ? "Meetinginhalte vollständig aus der HandyMeeting-Ablage entfernt."
+        : "Meeting contents completely removed from HandyMeeting storage.",
+    );
+    void refreshHistory().catch((failure) => setError(errorMessage(failure)));
+    void api
+      .rebuildSearchIndex?.()
+      .catch(() =>
+        setError(
+          locale === "de"
+            ? "Meeting gelöscht. Der Suchindex muss unter Einstellungen neu aufgebaut werden."
+            : "Meeting deleted. Rebuild the search index in Settings.",
+        ),
+      );
+    window.dispatchEvent(new Event("library-index-updated"));
+  }
   /**
    * Loads the exact requested meeting before switching its detail or analysis view; a
    * search-source highlight stays bound to that meeting ID.
@@ -1125,7 +1246,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
       return;
     }
     await action(async () => {
+      const epoch = erasureEpoch.current;
       const item = await api.getMeeting(id);
+      if (epoch !== erasureEpoch.current || erasureBlocked.current.has(id))
+        return;
       // A search hit applies only to the meeting it opened; other opens clear it.
       setSearchSource(source ? { meetingId: item.id, file: source } : null);
       selectedRef.current = item.id;
@@ -1150,7 +1274,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     const isCurrentSelection = () =>
       mounted.current &&
       sequence === notesLoadSequence.current &&
-      notesSelectionRef.current === id;
+      notesSelectionRef.current === id &&
+      !erasureBlocked.current.has(id);
     notesSelectionRef.current = id;
     setNotesMeetingId(id);
     setAnalyses([]);
@@ -1325,7 +1450,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
     if (!target) return;
     const id = target.id;
     await action(async () => {
+      const epoch = erasureEpoch.current;
       const full = await api.getMeeting(id);
+      if (epoch !== erasureEpoch.current || erasureBlocked.current.has(id))
+        return;
       await api.copyText(renderTranscript(full, locale));
       setCopied("transcript");
       if (copyTimer.current) clearTimeout(copyTimer.current);
@@ -1753,6 +1881,19 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         }
       />
       <main ref={mainRef}>
+        {erasureNotice && (
+          <p role="status" className="notice">
+            {erasureNotice}
+          </p>
+        )}
+        {page === "history" && canEraseMeeting && (
+          <PendingErasures
+            api={api}
+            locale={locale}
+            revision={erasureRevision}
+            onResume={setErasureTarget}
+          />
+        )}
         <header className="page-header">
           <div>
             <h1 tabIndex={-1}>
@@ -2106,6 +2247,9 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         {page === "detail" && meeting && (
           <MeetingDetail
             meeting={meeting}
+            onErase={
+              canEraseMeeting ? () => setErasureTarget(meeting) : undefined
+            }
             selectedFile={
               searchSource?.meetingId === meeting.id ? searchSource.file : null
             }
@@ -2143,6 +2287,8 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             api={api}
             locale={locale}
             imported={history.filter((item) => item.id.startsWith("legacy-"))}
+            onErase={canEraseMeeting ? setErasureTarget : undefined}
+            hiddenMeetingIds={erasureBlocked.current}
             onOpen={(id, file) => {
               void openMeeting(id, "detail", file);
             }}
@@ -2150,7 +2296,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
         )}
         {page === "history" && !api.searchMeetings && (
           <HistoryList
-            history={history}
+            history={history.filter(
+              (item) => !erasureBlocked.current.has(item.id),
+            )}
+            onErase={canEraseMeeting ? setErasureTarget : undefined}
             locale={locale}
             t={t}
             busy={busy}
@@ -2593,6 +2742,18 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             </div>
           </section>
         </div>
+      )}
+      {erasureTarget && canEraseMeeting && (
+        <EraseMeetingDialog
+          key={erasureTarget.id}
+          api={api}
+          meeting={erasureTarget}
+          locale={locale}
+          onStart={() => beginMeetingErasure(erasureTarget.id)}
+          onDeleted={() => completeMeetingErasure(erasureTarget.id)}
+          onStopped={() => stopMeetingErasure(erasureTarget.id)}
+          onClose={() => setErasureTarget(null)}
+        />
       )}
       {source && (
         <SourceDialog

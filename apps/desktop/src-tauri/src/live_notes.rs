@@ -291,6 +291,32 @@ impl Service {
 }
 
 impl LiveNotes {
+    /// Forget a finished live view and join only its already admitted, ended own worker.
+    pub(crate) fn forget(&self, meeting: &str) -> AppResult<()> {
+        let mut state = self
+            .0
+            .lock()
+            .map_err(|_| "Live-Zusammenfassung ist gesperrt.")?;
+        if state
+            .as_ref()
+            .is_some_and(|job| job.meeting_id == meeting && job.running())
+        {
+            return Err("Live-Zusammenfassung läuft noch. / Live summary is still running.".into());
+        }
+        let old = if state.as_ref().is_some_and(|job| job.meeting_id == meeting) {
+            state.take()
+        } else {
+            None
+        };
+        drop(state);
+        if let Some(mut job) = old {
+            if let Some(handle) = job.worker.take() {
+                let _ = handle.join();
+            }
+        }
+        Ok(())
+    }
+
     fn lock(&self) -> AppResult<std::sync::MutexGuard<'_, Option<Job>>> {
         self.0
             .lock()
