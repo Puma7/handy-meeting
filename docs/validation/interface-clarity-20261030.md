@@ -59,3 +59,20 @@ failed the synthetic reconnect-progress test's 150-ms test deadline. The actual
 macOS application uses a 60-second no-progress readiness limit. Neither deadline
 was changed or skipped. Fresh complete target CI remains required; this report
 does not turn the historical failure into a success or establish hardware quality.
+
+## Single analysis duration and visible capture caveats
+
+The analysis status bar now shows elapsed time once in clock format, retaining
+the accessible label, stopped-state duration, error, progress and resume controls.
+The duplicate spelled-out seconds row and its unused translation keys/styles are
+removed. The existing failure/progress regression was strengthened and failed on
+the duplicate display before the fix. A synthetic browser case shows one `00:15`
+value alongside a failed analysis and preserved partial progress.
+
+Review 5710797020 also identified capture caveats hidden behind the outer warning
+disclosure. That disclosure now starts open; nested original technical messages
+remain collapsed. The corresponding existing synthetic regression failed before
+the correction. All 229 frontend tests, TypeScript, the production build and the
+required `./verify.ps1` check pass for these additions. Provider transport, output
+limits and incomplete-response validation are unchanged. No private provider logs
+or meeting diagnostics are part of the public source evidence.

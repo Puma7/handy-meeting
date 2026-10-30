@@ -171,7 +171,7 @@ it("starts from the bottom bar and retains a failed job's message, partial progr
     within(status).queryByRole("button", { name: de.cancelAnalysis }),
   ).toBeNull();
   expect(within(status).getByLabelText(de.elapsed).textContent).toMatch(
-    /\d+:\d+/,
+    /^\d+(?::\d{2}){1,2}$/,
   );
 });
 

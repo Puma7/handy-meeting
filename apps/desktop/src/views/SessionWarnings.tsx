@@ -19,9 +19,9 @@ export default function SessionWarnings({
   const technical = originals.filter(
     (value) => describeWarning(value, locale) !== value,
   );
-  // Collapsed by default: the notice stays available without taking space in the view.
+  // Capture caveats start visible; the original technical text stays in its disclosure.
   return (
-    <details className="session-warnings" aria-label={t.warnings}>
+    <details open className="session-warnings" aria-label={t.warnings}>
       <summary>
         <strong>{technical.length ? t.audioQuality : t.warnings}</strong>
         {descriptions.length > 1 && ` (${descriptions.length})`}
