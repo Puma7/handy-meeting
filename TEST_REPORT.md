@@ -951,3 +951,18 @@ in der anderen Spur. Die bisherigen RMS-, Frequenz-, Hash-, PCM- und
 werden erkannt; die vollständigen 115 Pythonprüfungen enden mit 114 Erfolgen
 und einem regulär übersprungenen Unix-Fall unter Windows. Dies sind
 synthetische Prüferfixtures. Der echte Linux-CI-Lauf muss den neuen Head prüfen.
+
+
+### Portable CI candidate14 follow-up, 2026-10-30
+
+The stricter full-track verifier correctly failed the candidate13 Linux virtual
+capture: declared startup silence left less than eight seconds of actual tone.
+The separate generated-speech ASR check passed0/31 and1/31 word errors with owned
+worker restart and preserved audio/journals. Overall Linux CI was not green.
+Candidate14 warms only its private synthetic players for three seconds with
+requested50ms playback latency and records for nine seconds. Existing8–10second
+receipt, eight-second actual-tone,250ms-window, RMS/frequency and500ms difference
+limits are unchanged. The nine-second positive/negative boundary regression and
+full Python guards passed locally; fresh actual Linux/macOS CI remains required.
+No private meeting, physical device, local text model, GPU or endurance proof is
+added. The approved historical report prefix remains byte-identical.

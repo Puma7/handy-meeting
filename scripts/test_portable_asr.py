@@ -485,6 +485,17 @@ class ReferenceVerdicts(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "startup"):
             audio.verify(self.root)
 
+    def test_linux_nine_second_fixture_keeps_eight_seconds_of_tone(self):
+        """A nine-second receipt may contain a declared one-second prefix, never less tone."""
+        self.linux_fixture(counts=(144000, 144000), warnings=[audio.TIMING, "system" + audio.START])
+        self.rewrite_linux_signal("system", lambda data: bytes(32000) + data[32000:])
+        receipt = audio.verify(self.root)
+        self.assertFalse(receipt["completeCapture"])
+        self.assertEqual(receipt["tracks"]["system"]["startupSilenceMs"], 1000)
+        self.rewrite_linux_signal("system", lambda data: bytes(40000) + data[40000:])
+        with self.assertRaisesRegex(ValueError, "startup"):
+            audio.verify(self.root)
+
 
 if __name__ == "__main__":
     unittest.main()

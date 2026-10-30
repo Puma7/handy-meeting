@@ -103,3 +103,26 @@ run with114passes and one Unix-only skip onWindows. A positive fixture retains
 a declared500ms prefix and checks the rest of the track. These are synthetic
 verifier fixtures; fresh real Linux virtual-device CI remains required on the
 new head. No physical, GPU or long-duration claim follows from them.
+
+
+## Candidate14: enough fixture tone after startup
+
+Candidate13's stricter whole-track signal verifier correctly rejected current
+Linux job124164329203: the declared startup prefix left less than eight seconds
+of actual tone. The separate generated-speech ASR check in that same job passed
+with zero/31 and one/31 word errors, worker restart and unchanged journals/audio;
+this does not make the failed virtual-device step or overall CI successful.
+No raw PCM artifact was uploaded, so playback buffering versus capture-helper
+startup cannot be separated conclusively from that log.
+
+Before the next actual Linux run, the private fixture now requests50ms playback
+latency, warms its own sources for three seconds and requests nine seconds of
+recording. Recorder readiness can precede receipt of real PCM. This changes only
+the supplied fixture within the existing8–10second receipt window. The verifier
+still requires at least eight seconds of tone after a source-specific declared
+zero prefix, all overlapping250ms signal windows, the same RMS/frequency limits,
+confirmed hashes/counts and at most500ms between tracks. A new boundary test
+accepts one second of declared prefix plus eight seconds of tone in a nine-second
+receipt, and rejects1.25seconds prefix at that same length. Startup gaps remain
+explicitly incomplete audio. The actual new Linux CI is required; no physical
+microphone, performance, GPU or endurance result is implied.
