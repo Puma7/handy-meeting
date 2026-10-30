@@ -2321,6 +2321,9 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             recording={recording}
             busy={busy || notesMeetingLoading}
             beginNotes={beginNotes}
+            showStart={Boolean(
+              (notesJob.progress || notesJob.feedback) && !notesBusy,
+            )}
             result={result}
             resultSection={resultSection}
             selectedStep={selectedStep}

@@ -1186,14 +1186,14 @@ describe("migration frontend boundaries (synthetic IPC)", () => {
       { target: { value: "synthetic-secret-do-not-save" } },
     );
     await userEvent.click(
-      screen.getByRole("button", { name: "Auswertung erstellen" }),
+      screen.getByRole("button", { name: "Auswertung starten" }),
     );
     expect(await screen.findByRole("dialog")).toBeTruthy();
     expect(api.generateNotes).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: "Abbrechen" }));
     expect(api.generateNotes).not.toHaveBeenCalled();
     await userEvent.click(
-      screen.getByRole("button", { name: "Auswertung erstellen" }),
+      screen.getByRole("button", { name: "Auswertung starten" }),
     );
     await userEvent.click(
       screen.getByRole("button", { name: "Text senden und auswerten" }),
@@ -1215,7 +1215,7 @@ describe("migration frontend boundaries (synthetic IPC)", () => {
     ).not.toContain("synthetic-secret");
     await screen.findByText("Synthetic provider failure");
     await userEvent.click(
-      screen.getByRole("button", { name: "Auswertung erstellen" }),
+      screen.getByRole("button", { name: "Auswertung starten" }),
     );
     expect(screen.getByRole("dialog")).toBeTruthy();
     expect(api.generateNotes).toHaveBeenCalledTimes(1);

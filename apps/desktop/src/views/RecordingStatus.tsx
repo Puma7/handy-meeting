@@ -159,8 +159,25 @@ export default function RecordingStatus({
             <span
               data-high={(memoryPercent ?? 0) >= HIGH_LOAD_PERCENT || undefined}
             >
-              RAM{" "}
-              {used === null || !total ? "—" : `${gb(used)}/${gb(total)} GB`}
+              <span
+                title={
+                  used === null || !total
+                    ? undefined
+                    : `${gb(used)}/${gb(total)} GiB`
+                }
+              >
+                RAM{" "}
+                {memoryPercent === null ? "—" : `${number(memoryPercent, 0)} %`}
+              </span>
+            </span>
+            <span
+              title={
+                de
+                  ? "GPU-Auslastung wird derzeit nicht gemessen"
+                  : "GPU usage is currently not measured"
+              }
+            >
+              GPU —
             </span>
           </dd>
         </div>
@@ -171,14 +188,14 @@ export default function RecordingStatus({
           </dd>
         </div>
         <div>
-          <dt>{de ? "Erkennung" : "Recognition"}</dt>
+          <dt>{de ? "Transkript" : "Transcript"}</dt>
           <dd data-high={behind || undefined}>
             {backlogMs === null
               ? "—"
-              : behind
+              : backlogMs > 0
                 ? de
-                  ? `${clock(backlogMs)} im Rückstand`
-                  : `${clock(backlogMs)} behind`
+                  ? `${clock(Math.ceil(backlogMs / 1000) * 1000)} noch offen`
+                  : `${clock(Math.ceil(backlogMs / 1000) * 1000)} pending`
                 : de
                   ? "Aktuell"
                   : "Up to date"}

@@ -1,0 +1,29 @@
+# 30 October 2026 – separate interface clarity follow-up
+
+The recording source cards now share one heading/control/meter structure. In a
+rendered synthetic recording the prior 7 px meter offset became 0 px at 1025 px and
+800 px viewport widths. At 600 px the sources intentionally stack; no horizontal
+page overflow was observed. Both light and dark views were inspected with synthetic
+IPC and text only: no actual capture, transcript, model server or credentials.
+
+Audio-level guidance and live-summary options are named disclosures. Model setup,
+per-run cloud consent, capture warnings and incomplete-result notices retain their
+gates. Post-meeting configuration and step editing start collapsed; settings group
+optional setup and maintenance. Original warning text remains available, with an
+explanation that a driver flag proves neither an audible gap nor uninterrupted
+capture. CPU/RAM use whole-computer percentages, RAM exposes used/total GiB, and
+GPU usage remains unmeasured. Positive transcription backlog is no longer labeled
+up to date merely because it is below 30 seconds. Existing transcript order and
+30-second recording/section behavior are unchanged.
+
+All 226 frontend tests and TypeScript passed. The production frontend build and
+`./verify.ps1` passed locally; final source-bound checks are recorded with the PR.
+This is presentation work, not a new physical audio, text-model quality, GPU or
+endurance proof. Native recording recovery, provider transport, prompts and model
+selection policy are unchanged. `docs/UI_GUIDELINES.md` records the shared layout,
+action hierarchy, progressive help and honest status conventions.
+
+The analysis page exposes one start action at a time. The persistent status
+bar remains the place for progress, cancellation and errors. The original full
+report is retained without modification in this interface change.
+

@@ -60,8 +60,8 @@ export default function SettingsView({
         {!preferencesPersistable && (
           <div className="notice warning">{t.preferencesError}</div>
         )}
-        <section>
-          <h2>{t.installation}</h2>
+        <details className="settings-disclosure" open={!app?.handy?.executable}>
+          <summary>{t.installation}</summary>
           <p>{t.executableHelp}</p>
           <label>
             {t.executable}
@@ -101,7 +101,7 @@ export default function SettingsView({
               ? "Eine andere Programmdatei wird im Dateidialog des Betriebssystems gewählt und geprüft. Manuelle Freigaben gelten für diesen App-Start; ein eingetippter Pfad erteilt keine Freigabe."
               : "Choose another program in the operating system's file dialog. Manual approvals last for this app session; a typed path does not grant permission to start it."}
           </p>
-        </section>
+        </details>
         {textModelSettings && (
           <section id="text-model-settings" tabIndex={-1}>
             <h2>{de ? "Textmodelle" : "Text models"}</h2>
@@ -109,14 +109,14 @@ export default function SettingsView({
           </section>
         )}
         {speakerModelSettings && (
-          <section>
-            <h2>
+          <details className="settings-disclosure">
+            <summary>
               {de
                 ? "Sprecherfunktionen · optional"
                 : "Speaker features · optional"}
-            </h2>
+            </summary>
             {speakerModelSettings}
-          </section>
+          </details>
         )}
         <section>
           <h2>{t.theme}</h2>
@@ -144,8 +144,8 @@ export default function SettingsView({
             </label>
           </div>
         </section>
-        <section>
-          <h2>{t.system}</h2>
+        <details className="settings-disclosure">
+          <summary>{de ? "Audiogeräte" : "Audio devices"}</summary>
           <button
             className="secondary"
             disabled={unavailable}
@@ -154,62 +154,65 @@ export default function SettingsView({
             <RefreshCw size={15} />
             {t.refreshDevices}
           </button>
-        </section>
-        <section>
-          <h2>{t.storage}</h2>
+        </details>
+        <details className="settings-disclosure">
+          <summary>{t.storage}</summary>
           <p>{t.legacyHelp}</p>
           {app?.dataDirectory && (
             <code className="storage-path">{app.dataDirectory}</code>
           )}
-        </section>
+        </details>
       </div>
       <UpdatePanel
         api={api}
         locale={locale}
         blocked={blocked || Boolean(app?.notesRunning)}
       />
-      {api.rebuildSearchIndex && (
+      <details className="settings-disclosure">
+        <summary>{de ? "Daten und Wartung" : "Data and maintenance"}</summary>
+        {api.rebuildSearchIndex && (
+          <section className="legacy-panel">
+            <h2>{de ? "Lokaler Suchindex" : "Local search index"}</h2>
+            <p className="muted">
+              {de
+                ? "Der Suchindex beschleunigt große Historien. Er wird lokal aus deinen Sitzungen aufgebaut; Originale werden nicht geändert."
+                : "The local index speeds up large histories. Rebuilding never changes original sessions."}
+            </p>
+            <button
+              className="secondary"
+              disabled={unavailable}
+              onClick={onRebuildIndex}
+            >
+              <RefreshCw size={15} />
+              {de ? "Suchindex aktualisieren" : "Update search index"}
+            </button>
+          </section>
+        )}
+        <RetentionPanel
+          api={api}
+          locale={locale}
+          models={app?.handy?.models ?? []}
+        />
         <section className="legacy-panel">
-          <h2>{de ? "Lokaler Suchindex" : "Local search index"}</h2>
-          <p className="muted">
-            {de
-              ? "Der Suchindex beschleunigt große Historien. Er wird lokal aus deinen Sitzungen aufgebaut; Originale werden nicht geändert."
-              : "The local index speeds up large histories. Rebuilding never changes original sessions."}
-          </p>
+          <h2>{t.legacy}</h2>
+          <p className="muted">{t.legacyHelp}</p>
           <button
             className="secondary"
-            disabled={unavailable}
-            onClick={onRebuildIndex}
+            disabled={unavailable || !api.chooseLegacyManifest}
+            onClick={onImportLegacy}
           >
-            <RefreshCw size={15} />
-            {de ? "Suchindex aktualisieren" : "Update search index"}
+            <FolderOpen size={15} />
+            {de
+              ? "Sitzungsdatei auswählen und nur lesbar öffnen …"
+              : "Choose session file and open read-only …"}
           </button>
+          <p className="muted">
+            {de
+              ? "Wähle die vorhandene session.json im Dateidialog. Abbrechen verändert nichts; die Originaldateien bleiben erhalten."
+              : "Choose the existing session.json in the file dialog. Cancelling changes nothing; original files are preserved."}
+          </p>
         </section>
-      )}
-      <RetentionPanel
-        api={api}
-        locale={locale}
-        models={app?.handy?.models ?? []}
-      />
-      <section className="legacy-panel">
-        <h2>{t.legacy}</h2>
-        <p className="muted">{t.legacyHelp}</p>
-        <button
-          className="secondary"
-          disabled={unavailable || !api.chooseLegacyManifest}
-          onClick={onImportLegacy}
-        >
-          <FolderOpen size={15} />
-          {de
-            ? "Sitzungsdatei auswählen und nur lesbar öffnen …"
-            : "Choose session file and open read-only …"}
-        </button>
-        <p className="muted">
-          {de
-            ? "Wähle die vorhandene session.json im Dateidialog. Abbrechen verändert nichts; die Originaldateien bleiben erhalten."
-            : "Choose the existing session.json in the file dialog. Cancelling changes nothing; original files are preserved."}
-        </p>
-      </section>
+      </details>
     </>
   );
 }

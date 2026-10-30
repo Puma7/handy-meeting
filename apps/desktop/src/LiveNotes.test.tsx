@@ -1,4 +1,11 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { StrictMode } from "react";
 import App from "./App";
 import { testServices } from "./test-services";
@@ -646,11 +653,10 @@ it("never sends a key typed for another route to a local model chosen from the p
   });
 });
 
-it("shows the detected local servers on the analysis page when the configured endpoint has no model", async () => {
+it("offers explicit local server setup when the configured endpoint has no model", async () => {
   // Earlier tests remember a local endpoint; this case starts from the default port.
   localStorage.clear();
-  // 1.0.5 feedback: LM Studio/Ollama were installed but the analysis page only showed an
-  // error at the default port; the detection was hidden behind a collapsed section.
+  // Keep setup available without expanding installation guidance automatically.
   const meeting: Meeting = {
     id: "d".repeat(32),
     title: "Synthetic analysis",
@@ -688,6 +694,11 @@ it("shows the detected local servers on the analysis page when the configured en
   render(<App api={api} />);
   await userEvent.click(
     await screen.findByRole("button", { name: "Nachbearbeitung" }),
+  );
+  fireEvent.click(screen.getByText("Auswertung einrichten"));
+  expect(api.localModelSetup).not.toHaveBeenCalled();
+  await userEvent.click(
+    screen.getByRole("button", { name: "Ollama / LM Studio erkennen" }),
   );
   await userEvent.click(
     await screen.findByRole("button", { name: "Verwenden: gemma4:e4b" }),
@@ -821,7 +832,12 @@ it("reloads the model list after Use even when the address stays the same", asyn
   await userEvent.click(
     await screen.findByRole("button", { name: "Nachbearbeitung" }),
   );
-  // No model yet: the detection opens; the user then loads one in LM Studio.
+  fireEvent.click(screen.getByText("Auswertung einrichten"));
+  expect(api.localModelSetup).not.toHaveBeenCalled();
+  await userEvent.click(
+    screen.getByRole("button", { name: "Ollama / LM Studio erkennen" }),
+  );
+  // The user requests setup, then loads a model in LM Studio.
   await screen.findByText("LM Studio");
   loaded = ["gemma-4-e4b"];
   await userEvent.click(screen.getByRole("button", { name: "Erneut prüfen" }));

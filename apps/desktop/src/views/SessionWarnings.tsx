@@ -30,6 +30,13 @@ export default function SessionWarnings({
         <p key={value}>{value}</p>
       ))}
       {!!technical.length && (
+        <p className="muted">
+          {locale === "de"
+            ? "Das Treibersignal belegt keine hörbare Lücke; lückenlose Aufnahme ist damit aber auch nicht bestätigt. Höre die betroffene Stelle ab. Fehlender Ton wird nicht wiederhergestellt."
+            : "The driver signal does not prove an audible gap or confirm uninterrupted capture. Listen to the affected range. Missing audio is not restored."}
+        </p>
+      )}
+      {!!technical.length && (
         <details>
           <summary>{t.technicalDetails}</summary>
           <p className="muted">{t.audioQualityHelp}</p>

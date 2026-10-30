@@ -97,10 +97,14 @@ describe("recording status in the sidebar (synthetic IPC)", () => {
     expect(within(region).getByText("08:06")).toBeTruthy();
     const cpu = await within(region).findByText("CPU 95 %");
     expect(cpu.hasAttribute("data-high")).toBe(true);
-    const ram = within(region).getByText("RAM 15,4/16,0 GB");
-    expect(ram.hasAttribute("data-high")).toBe(true);
+    const ram = within(region).getByText("RAM 96 %");
+    expect(ram.parentElement!.hasAttribute("data-high")).toBe(true);
+    expect(ram.getAttribute("title")).toBe("15,4/16,0 GiB");
+    expect(within(region).getByText("GPU —").getAttribute("title")).toMatch(
+      /nicht gemessen/,
+    );
     expect(within(region).getByText("1 Hinweis zur Aufnahme")).toBeTruthy();
-    expect(within(region).getByText("01:35 im Rückstand")).toBeTruthy();
+    expect(within(region).getByText("01:35 noch offen")).toBeTruthy();
     expect(within(region).getByText("„Zuletzt gesagter Satz“")).toBeTruthy();
     await userEvent.click(
       within(region).getByRole("button", { name: /Aufnahme läuft/ }),
@@ -134,6 +138,41 @@ describe("recording status in the sidebar (synthetic IPC)", () => {
     expect(screen.getByText("RAM —")).toBeTruthy();
     expect(screen.getByText("Microphone is not recording")).toBeTruthy();
     expect(screen.getByText("No text recognized yet.")).toBeTruthy();
+  });
+
+  it("does not label a short positive transcription backlog as up to date", () => {
+    const view = render(
+      <RecordingStatus
+        locale="de"
+        paused={false}
+        durationMs={30_000}
+        parts={[]}
+        warningCount={0}
+        microphoneSilent={false}
+        microphoneMuted={false}
+        backlogMs={1500}
+        onOpen={() => undefined}
+      />,
+    );
+    expect(screen.getByText("00:02 noch offen")).toBeTruthy();
+    expect(screen.queryByText("Aktuell")).toBeNull();
+    expect(screen.getByText("GPU —").getAttribute("title")).toMatch(
+      /nicht gemessen/,
+    );
+    view.rerender(
+      <RecordingStatus
+        locale="de"
+        paused={false}
+        durationMs={30_000}
+        parts={[]}
+        warningCount={0}
+        microphoneSilent={false}
+        microphoneMuted={false}
+        backlogMs={0}
+        onOpen={() => undefined}
+      />,
+    );
+    expect(screen.getByText("Aktuell")).toBeTruthy();
   });
 
   it("stays visible on other pages while recording and leads back to the recording", async () => {
