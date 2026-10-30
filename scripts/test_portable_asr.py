@@ -214,6 +214,20 @@ class ReferenceVerdicts(unittest.TestCase):
         self.assertNotIn("private", json.dumps(summary))
         self.assertNotIn("arbitrary", json.dumps(summary))
 
+    def test_catalog_failure_exposes_only_known_missing_runtime_libraries(self):
+        """Keep a declared runtime dependency actionable without exposing private paths."""
+        def query(command, **kwargs):
+            """Model a loader failure including an untrusted path and unknown library."""
+            kwargs["stderr"].write(b"/private/session: error while loading shared libraries: libopenblas.so.0: cannot open shared object file\nunknown-private.so")
+            return types.SimpleNamespace(returncode=127)
+        with mock.patch.object(asr.subprocess, "run", side_effect=query), \
+             mock.patch("builtins.print") as printed:
+            with self.assertRaisesRegex(ValueError, "catalog preflight failed"):
+                asr.check_handy_catalog(self.root / "handy", self.root, self.manifest, {})
+        summary = json.loads(printed.call_args.args[0])["handyPreflight"]
+        self.assertEqual(summary["missingKnownLibraries"], ["libopenblas.so.0"])
+        self.assertNotIn("private", json.dumps(summary))
+
     def test_process_error_never_echoes_raw_transcript_or_path(self):
         """Expose a known static error while keeping raw process output private."""
         def failed(command, **kwargs):

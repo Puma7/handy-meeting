@@ -140,6 +140,10 @@ def check_handy_catalog(handy, root, manifest, env):
                "missingSharedLibrary": "error while loading shared libraries" in errors,
                "glibcVersionMismatch": "GLIBC_" in errors and "not found" in errors,
                "displayUnavailable": "cannot open display" in errors.lower()}
+    missing = re.search(r"error while loading shared libraries: ([A-Za-z0-9_.+-]+):", errors)
+    known_libraries = {"libopenblas.so.0", "libgtk-layer-shell.so.0", "libappindicator3.so.1",
+                       "libtranscribe.so.0.2", "libonnxruntime.so.1", "libggml.so.0", "libggml-base.so.0"}
+    summary["missingKnownLibraries"] = [missing[1]] if missing and missing[1] in known_libraries else []
     try:
         catalog = json.loads(stdout.read_text(encoding="utf-8"))
         require(isinstance(catalog, list), "Handy catalog must be an array")

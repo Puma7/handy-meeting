@@ -34,3 +34,18 @@ retains its previously checked bytes apart from the documented diagnostic input.
 These new notes contain only public CI references and synthetic checks. The
 previously published full PR35 report is unchanged.
 
+
+## Linux runtime dependency follow-up
+
+The [Linux job on25aad](https://github.com/Puma7/meeting-for-handy/actions/runs/41031813793/job/123983123795)
+reached the real catalog preflight but failed with a missing shared-library flag.
+Reading the actual pinned DEB control file and ELF dependencies showed the remaining
+external requirements: libopenblas0 and libappindicator3-1, in addition to the
+already installed gtk-layer-shell/GTK/WebKit dependencies. The CI installation
+list now covers these declared requirements. The private preflight can expose
+only explicitly allowlisted missing-library names, never arbitrary paths/errors.
+The new Linux run still has to pass; no deadline or success criterion was changed.
+
+Both macOS jobs on historical head `25aad484` completed successfully: [ARM](https://github.com/Puma7/meeting-for-handy/actions/runs/41031813793/job/123983123654) and [Intel](https://github.com/Puma7/meeting-for-handy/actions/runs/41031813793/job/123983123681). The real pinned CPU recognizer took 30.663633958 seconds on ARM and 24.841663909 seconds on Intel. Each generated track had 31 reference words and zero word errors; both checks preserved audio hashes and journals through the owned-worker restart. These are accelerated generated-speech checks, without physical capture, GPU or endurance claims. They do not prove the next head.
+
+After the dependency/diagnostic correction, all 111 local Python guards ran (110 passed; one Unix-only case skipped on Windows), and `./verify.ps1` passed. The missing-library diagnostic regression failed before the fix.

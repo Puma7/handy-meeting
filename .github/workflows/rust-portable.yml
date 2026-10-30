@@ -79,7 +79,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libwebkit2gtk-4.1-dev libgtk-layer-shell0 libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libvulkan1 pulseaudio-utils dbus gnome-keyring pulseaudio xvfb x11-utils espeak-ng
+          sudo apt-get install -y build-essential pkg-config libwebkit2gtk-4.1-dev libgtk-layer-shell0 libopenblas0 libappindicator3-1 libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libvulkan1 pulseaudio-utils dbus gnome-keyring pulseaudio xvfb x11-utils espeak-ng
       - name: Install pinned Rust tooling
         run: |
           set -euo pipefail
