@@ -11,6 +11,87 @@ use std::{
 
 const PRIVATE: &str = "syntheticerasurecanaryneverretainthisphrase";
 
+/// An orphan retained source has no receipt to arbitrate two contradictory
+/// readable generations. Preserve both identities and all original bytes.
+#[test]
+fn orphan_source_reconciles_both_manifest_generations_before_filtering() {
+    for selected_primary in [false, true] {
+        let root = tempfile::tempdir().unwrap();
+        let id = fixture(root.path(), PRIVATE, 1);
+        let other = fixture(root.path(), "Foreign original must remain", 1);
+        let source = root
+            .path()
+            .join("archives")
+            .join(format!("{}.source", "a".repeat(32)));
+        fs::create_dir_all(&source).unwrap();
+        for (name, owner) in [
+            ("session.json", if selected_primary { &id } else { &other }),
+            (
+                "session.json.bak",
+                if selected_primary { &other } else { &id },
+            ),
+        ] {
+            fs::copy(
+                root.path()
+                    .join("sessions")
+                    .join(owner)
+                    .join("session.json"),
+                source.join(name),
+            )
+            .unwrap();
+        }
+        extra(&source.join("retained.txt"), PRIVATE.as_bytes());
+        let before = tree(root.path());
+        assert!(
+            archive::preview_erasure(root.path(), &id, &AtomicBool::new(false)).is_err(),
+            "An orphan source hid a conflicting readable manifest generation"
+        );
+        let after = tree(root.path());
+        for (path, bytes) in before {
+            assert_eq!(after.get(&path), Some(&bytes));
+        }
+    }
+}
+
+/// Matching orphan generations are attributable; consistent foreign generations
+/// remain unrelated and must survive the confirmed selected-meeting erasure.
+#[test]
+fn consistent_orphan_sources_are_erased_or_preserved_by_exact_identity() {
+    for selected in [false, true] {
+        let root = tempfile::tempdir().unwrap();
+        let id = fixture(root.path(), PRIVATE, 1);
+        let other = fixture(root.path(), "Foreign original must remain", 1);
+        let source = root
+            .path()
+            .join("archives")
+            .join(format!("{}.source", "a".repeat(32)));
+        fs::create_dir_all(&source).unwrap();
+        for name in ["session.json", "session.json.bak"] {
+            fs::copy(
+                root.path()
+                    .join("sessions")
+                    .join(if selected { &id } else { &other })
+                    .join("session.json"),
+                source.join(name),
+            )
+            .unwrap();
+        }
+        extra(&source.join("retained.txt"), b"synthetic retained source");
+        let before = tree(&source);
+        let foreign_before = tree(&root.path().join("sessions").join(&other));
+        erase(root.path(), &id);
+        if selected {
+            assert!(!source.exists());
+        } else {
+            assert_eq!(tree(&source), before);
+        }
+        assert_eq!(
+            tree(&root.path().join("sessions").join(&other)),
+            foreign_before
+        );
+    }
+}
+
 /// Shared publication does not serialize independent writers, but erasure cannot
 /// inspect/remove content until every publisher's final write has finished.
 #[test]

@@ -2303,6 +2303,10 @@ export default function App({ api = desktopApi }: { api?: DesktopApi }) {
             api={api}
             locale={locale}
             imported={history.filter((item) => item.id.startsWith("legacy-"))}
+            nativeMeetings={history.filter(
+              (item) => !item.id.startsWith("legacy-"),
+            )}
+            onRefresh={() => void action(refreshHistory)}
             onErase={canEraseMeeting ? setErasureTarget : undefined}
             hiddenMeetingIds={erasureBlocked.current}
             onOpen={(id, file) => {

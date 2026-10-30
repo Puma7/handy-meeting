@@ -35,6 +35,121 @@ const plan: ErasurePreview = {
   bytes: 128000,
   rebuildSearch: true,
 };
+
+it.each(["failed", "cancelled"] as const)(
+  "keeps all retained meetings in desktop history after a %s post-erasure rebuild",
+  async (outcome) => {
+    let erased = false;
+    let job = "preview-job";
+    const retained = [
+      { ...meeting, id: "c".repeat(32), title: "Synthetic retained first" },
+      { ...meeting, id: "d".repeat(32), title: "Synthetic retained second" },
+    ];
+    const hit = (item: MeetingSummary, sourceId: string | null = null) => ({
+      ...item,
+      pinned: false,
+      audioRemoved: false,
+      metadataRevision: 0,
+      sourceId,
+      startMs: sourceId ? 0 : null,
+      endMs: sourceId ? 1000 : null,
+      excerpt: sourceId ? "Synthetic indexed needle quote" : "",
+    });
+    const api = {
+      ...testServices(),
+      getAppState: vi.fn(async () => ({
+        version: "synthetic",
+        handy: null,
+        recording: false,
+        activeMeeting: null,
+      })),
+      listDevices: vi.fn().mockResolvedValue([]),
+      listMeetings: vi.fn(async () =>
+        erased ? retained : [meeting, ...retained],
+      ),
+      searchMeetings: vi.fn(async (query: string) => {
+        const items = query.trim()
+          ? [hit(retained[0], "section-one")]
+          : erased
+            ? outcome === "failed"
+              ? []
+              : [hit(retained[0])]
+            : [meeting, ...retained].map((item) => hit(item));
+        return { items, total: items.length, offset: 0, limit: 25 };
+      }),
+      previewMeetingErasure: vi.fn(async () => (job = "preview-job")),
+      getMeetingErasurePreview: vi.fn().mockResolvedValue(plan),
+      eraseMeetingNow: vi.fn(async () => {
+        erased = true;
+        return (job = "erase-job");
+      }),
+      getMaintenanceProgress: vi.fn(async () => ({
+        jobId: job,
+        kind: "meeting-erasure",
+        status: "complete",
+        confirmedTasks: 8,
+        totalTasks: 8,
+        elapsedMs: 1,
+        skipped: 0,
+        error: null,
+        cancelRequested: false,
+      })),
+      listPendingErasures: vi.fn().mockResolvedValue([]),
+      rebuildSearchIndex:
+        outcome === "failed"
+          ? vi
+              .fn()
+              .mockRejectedValue(new Error("Synthetic index rebuild failure"))
+          : vi.fn().mockResolvedValue("cancelled-index-job"),
+      getLibraryProgress: vi.fn(async () => ({
+        jobId: "cancelled-index-job",
+        kind: "search-index",
+        status: outcome,
+        confirmedTasks: 1,
+        totalTasks: 2,
+        elapsedMs: 1,
+        skipped: 0,
+        error: null,
+        cancelRequested: outcome === "cancelled",
+      })),
+      cancelMaintenance: vi.fn().mockResolvedValue(true),
+    } as unknown as DesktopApi;
+    render(<App api={api} />);
+    await userEvent.click(
+      await screen.findByRole("button", { name: /Historie/ }),
+    );
+    await userEvent.click(
+      await screen.findByRole("button", {
+        name: `Meeting dauerhaft löschen: ${meeting.title}`,
+      }),
+    );
+    await userEvent.type(
+      await screen.findByRole("textbox", {
+        name: "Zur Bestätigung LÖSCHEN eingeben",
+      }),
+      "LÖSCHEN",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Jetzt endgültig löschen" }),
+    );
+    await screen.findByText(
+      "Meetinginhalte vollständig aus der HandyMeeting-Ablage entfernt.",
+    );
+    expect(api.rebuildSearchIndex).toHaveBeenCalledOnce();
+    const query = screen.getByRole("searchbox");
+    await userEvent.type(query, "needle");
+    await screen.findByText("Synthetic indexed needle quote");
+    expect(screen.queryByText(retained[1].title)).toBeNull();
+    await userEvent.clear(query);
+    expect(await screen.findByText(retained[0].title)).toBeTruthy();
+    expect(await screen.findByText(retained[1].title)).toBeTruthy();
+    expect(screen.queryByText(meeting.title)).toBeNull();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Aktualisieren" }),
+    );
+    expect(await screen.findByText(retained[1].title)).toBeTruthy();
+  },
+);
 function fixture() {
   let active = "preview-job";
   const api = {
@@ -65,6 +180,42 @@ function fixture() {
     onClose: vi.fn(),
   };
 }
+
+it("paginates authoritative history without an index and clamps a removed final page", async () => {
+  const native = Array.from({ length: 26 }, (_, i) => ({
+    ...meeting,
+    id: i.toString(16).padStart(32, "0"),
+    title: `Synthetic retained row ${i + 1}`,
+  }));
+  const api = {
+    searchMeetings: vi
+      .fn()
+      .mockResolvedValue({ items: [], total: 0, offset: 0, limit: 25 }),
+  } as unknown as DesktopApi;
+  const refresh = vi.fn();
+  const props = {
+    api,
+    locale: "de" as const,
+    nativeMeetings: native,
+    onOpen: vi.fn(),
+    onRefresh: refresh,
+  };
+  const view = render(<HistorySearch {...props} />);
+  expect(await screen.findByText(native[0].title)).toBeTruthy();
+  expect(screen.queryByText(native[25].title)).toBeNull();
+  await userEvent.click(screen.getByRole("button", { name: "Weiter" }));
+  expect(await screen.findByText(native[25].title)).toBeTruthy();
+  expect(screen.queryByText(native[0].title)).toBeNull();
+  view.rerender(
+    <HistorySearch {...props} hiddenMeetingIds={new Set([native[25].id])} />,
+  );
+  expect(await screen.findByText(native[0].title)).toBeTruthy();
+  expect(screen.queryByText(native[25].title)).toBeNull();
+  expect(screen.queryByRole("button", { name: "Weiter" })).toBeNull();
+  await userEvent.click(screen.getByRole("button", { name: "Aktualisieren" }));
+  expect(refresh).toHaveBeenCalledOnce();
+  expect(api.searchMeetings).not.toHaveBeenCalled();
+});
 
 it("keeps observing a started deletion when delayed cancellation rejects", async () => {
   const props = fixture();

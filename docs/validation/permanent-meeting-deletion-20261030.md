@@ -292,3 +292,51 @@ build are evidence for those unchanged bytes, not newly executed suites. No real
 user meeting, model, external export or installed program was changed. All
 previous erasure boundaries and the pending integration with model residency
 remain in force.
+
+## Candidate 08: desktop history and orphan-source reconciliation
+
+The desktop's unfiltered History now uses the authoritative native meeting
+summaries, including when the search cache is empty or only partially rebuilt.
+Transcript queries remain separate and use the index with their original
+section identifiers. Clearing the query restores all retained meetings. The
+native summaries are paginated in groups of 25, hidden erased identities are
+excluded before pagination, and removal of the final page clamps the view to
+the remaining rows. Refresh also reloads the authoritative summaries. Legacy
+imports retain their separate non-searchable section.
+
+Two full-App regressions exercise confirmed synthetic deletion followed by a
+failed or cancelled rebuild with empty or partial search results. Both old
+desktop paths hid retained meetings after a query was cleared. Both now pass,
+and filtered source results remain distinct from the complete unfiltered list.
+A further case verifies 26-row pagination, removal of the last visible page,
+refresh and no empty-query index request. The existing explicit-source scroll
+test now enters an actual transcript query before selecting its hit; all its
+highlight, scroll-position, page-reset and console assertions are retained.
+
+Orphan retained .source folders now reconcile every available readable primary
+and backup identity before an identity can filter the folder out of erasure.
+Contradictory identities block the preview and preserve the whole tree. The new
+regression failed with a foreign primary manifest hiding the selected meeting's
+backup. Both primary/backup directions now block, with original bytes unchanged.
+A paired case proves that agreeing selected-meeting copies are removed and
+agreeing foreign copies remain byte-equal. These tests use synthetic temporary
+meetings only; no real meeting or externally exported copy was erased.
+
+All 386 Rust workspace/all-target tests pass, with the same two existing special
+entry points normally ignored, including 26 core erasure cases. All 241 frontend
+tests, TypeScript and the production frontend build pass. The first frontend
+run retained a failing old empty-query source-selection fixture; another type
+check identified summary metadata field names, corrected through the existing
+userMetadata object. These failed checks remain recorded, without removing any
+source-anchor assertion or weakening a deadline. The final browser component
+fixture shows both retained meetings after clearing a query, including at
+390 pixels with no horizontal overflow or console errors. It does not perform
+native IPC, real erasure, hardware capture or provider calls.
+
+Locked dependencies, protection and reviewer rules, the primary session format,
+application version and entire historical TEST_REPORT.md remain unchanged.
+Coordination covers participating app processes. Hash checks followed by path
+removal are not atomic object binding against a hostile filesystem writer;
+older or external programs that ignore the shared leases remain outside the
+guarantee. No physical or forensic erasure guarantee is added. All earlier
+external-copy boundaries and pending model-residency integration still apply.

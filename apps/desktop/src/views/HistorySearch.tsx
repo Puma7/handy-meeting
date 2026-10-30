@@ -16,6 +16,8 @@ export default function HistorySearch({
   locale,
   onOpen,
   imported = [],
+  nativeMeetings,
+  onRefresh,
   onErase,
   hiddenMeetingIds,
 }: {
@@ -26,6 +28,9 @@ export default function HistorySearch({
   onOpen: (id: string, sourceId: string | null) => void;
   /** Imported legacy meetings are read in place and are not part of the search index. */
   imported?: MeetingSummary[];
+  /** Authoritative native summaries remain complete when the derived search cache is not. */
+  nativeMeetings?: MeetingSummary[];
+  onRefresh?: () => void;
 }) {
   const de = locale === "de";
   const [query, setQuery] = useState(""),
@@ -35,6 +40,30 @@ export default function HistorySearch({
     [busy, setBusy] = useState(false),
     [refresh, setRefresh] = useState(0);
   const generation = useRef(0);
+  const authoritative = !query.trim() && nativeMeetings !== undefined;
+  const native =
+    nativeMeetings?.filter((item) => !hiddenMeetingIds?.has(item.id)) ?? [];
+  const viewOffset = authoritative
+    ? Math.min(offset, Math.max(0, Math.floor((native.length - 1) / 25) * 25))
+    : offset;
+  const visiblePage: SearchPage | null = authoritative
+    ? {
+        items: native.slice(viewOffset, viewOffset + 25).map((item) => ({
+          ...item,
+          pinned: item.userMetadata?.pinned ?? false,
+          audioRemoved: item.userMetadata?.audioRemoved ?? false,
+          metadataRevision: item.userMetadata?.revision ?? 0,
+          sourceId: null,
+          startMs: null,
+          endMs: null,
+          excerpt: "",
+        })),
+        total: native.length,
+        offset: viewOffset,
+        limit: 25,
+      }
+    : page;
+  const loading = !authoritative && busy;
   useEffect(() => {
     const update = () => setRefresh((v) => v + 1);
     window.addEventListener("library-index-updated", update);
@@ -42,6 +71,13 @@ export default function HistorySearch({
   }, []);
   useEffect(() => {
     const current = ++generation.current;
+    if (authoritative) {
+      setBusy(false);
+      setError(null);
+      return () => {
+        generation.current++;
+      };
+    }
     setBusy(true);
     setError(null);
     const timer = setTimeout(
@@ -64,7 +100,7 @@ export default function HistorySearch({
       generation.current++;
       clearTimeout(timer);
     };
-  }, [api, query, offset, refresh]);
+  }, [api, query, offset, refresh, authoritative]);
   return (
     <section className="history-search">
       <div className="section-heading">
@@ -74,8 +110,11 @@ export default function HistorySearch({
         </h2>
         <button
           className="secondary"
-          disabled={busy}
-          onClick={() => setRefresh((v) => v + 1)}
+          disabled={loading}
+          onClick={() => {
+            onRefresh?.();
+            setRefresh((v) => v + 1);
+          }}
         >
           <RefreshCw size={15} />
           {de ? "Aktualisieren" : "Refresh"}
@@ -101,21 +140,21 @@ export default function HistorySearch({
         />
       </label>
       <div className="search-state" role="status">
-        {busy
+        {loading
           ? de
             ? "Suchergebnisse werden geladen …"
             : "Loading search results …"
-          : page
-            ? `${page.total.toLocaleString(locale)} ${de ? "Treffer" : "results"}`
+          : visiblePage
+            ? `${visiblePage.total.toLocaleString(locale)} ${authoritative ? "Meetings" : de ? "Treffer" : "results"}`
             : ""}
       </div>
-      {error && (
+      {!authoritative && error && (
         <p role="alert" className="inline-error">
           {error}
         </p>
       )}
-      <div className="session-list" aria-busy={busy}>
-        {page?.items
+      <div className="session-list" aria-busy={loading}>
+        {visiblePage?.items
           .filter((item) => !hiddenMeetingIds?.has(item.id))
           .map((item, i) => (
             <article
@@ -167,19 +206,23 @@ export default function HistorySearch({
               </div>
             </article>
           ))}
-        {!busy && page?.total === 0 && (
+        {!loading && visiblePage?.total === 0 && (
           <p className="empty">
-            {query
+            {authoritative
               ? de
-                ? "Keine Treffer. Prüfe bei Bedarf den Suchindex unter Einstellungen."
-                : "No matches. Check the search index in Settings if needed."
-              : de
-                ? "Der lokale Suchindex wird beim Start aktualisiert. Vorhandene Sitzungen bleiben erhalten."
-                : "The local index updates at startup. Existing sessions are preserved."}
+                ? "Keine Meetings vorhanden."
+                : "No meetings yet."
+              : query
+                ? de
+                  ? "Keine Treffer. Prüfe bei Bedarf den Suchindex unter Einstellungen."
+                  : "No matches. Check the search index in Settings if needed."
+                : de
+                  ? "Der lokale Suchindex wird beim Start aktualisiert. Vorhandene Sitzungen bleiben erhalten."
+                  : "The local index updates at startup. Existing sessions are preserved."}
           </p>
         )}
       </div>
-      {!query && imported.length > 0 && (
+      {!query.trim() && imported.length > 0 && (
         <div className="session-list">
           <h3>
             {de
@@ -206,22 +249,22 @@ export default function HistorySearch({
           ))}
         </div>
       )}
-      {page && page.total > 25 && (
+      {visiblePage && visiblePage.total > 25 && (
         <div className="search-pages">
           <button
             className="secondary"
-            disabled={busy || offset === 0}
-            onClick={() => setOffset((n) => Math.max(0, n - 25))}
+            disabled={loading || viewOffset === 0}
+            onClick={() => setOffset(Math.max(0, viewOffset - 25))}
           >
             {de ? "Zurück" : "Previous"}
           </button>
           <span>
-            {offset + 1}–{Math.min(offset + 25, page.total)}
+            {viewOffset + 1}–{Math.min(viewOffset + 25, visiblePage.total)}
           </span>
           <button
             className="secondary"
-            disabled={busy || offset + 25 >= page.total}
-            onClick={() => setOffset((n) => n + 25)}
+            disabled={loading || viewOffset + 25 >= visiblePage.total}
+            onClick={() => setOffset(viewOffset + 25)}
           >
             {de ? "Weiter" : "Next"}
           </button>

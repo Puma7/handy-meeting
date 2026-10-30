@@ -27,11 +27,15 @@ pub(super) fn manifest_id(folder: &Path) -> Result<String> {
     metadata::checked_directory(folder)?;
     let value = read_record(&folder.join("session.json"))
         .or_else(|_| read_record(&folder.join("session.json.bak")))?;
-    value["id"]
+    let id = value["id"]
         .as_str()
         .filter(|id| native_id(id))
         .map(str::to_owned)
-        .ok_or_else(|| "Missing native source identity".into())
+        .ok_or("Missing native source identity")?;
+    // The primary generation is not permission to ignore a readable backup.
+    // Reconcile before this identity can filter an orphan out of the inventory.
+    reject_conflicting_identity(folder, &id)?;
+    Ok(id)
 }
 
 /// Pending creation or a confirmed retry marker attributes incomplete ZIP bytes.
