@@ -425,3 +425,46 @@ dependencies, protection and review rules, application version, primary session
 format and the entire historical TEST_REPORT.md remain unchanged. No real
 meeting, device, provider service or installed program was modified. All prior
 erasure boundaries and pending model-residency integration still apply.
+
+## Candidate 11: restore focus to the erasure opener
+
+The complete candidate 10 target CI passed on Windows, Linux, macOS ARM and
+macOS Intel, including the corrected synthetic readiness fixture. Its clean
+Codex code review did not make the round complete: the full CodeRabbit review
+identified one remaining keyboard-focus issue after closing the erasure dialog.
+
+Both new full-App regressions failed on candidate 10: closing by button or Escape
+left focus on the History heading instead of the original erasure button. The
+visible synthetic browser reproduced the same result. The dialog previously
+captured its supposed opener after its layout effect had already moved focus
+inside, and synchronous restoration also preceded the parent's modal cleanup.
+
+The actual opener is now captured before the first layout focus transfer.
+Restoration runs on the next animation frame after both cleanups, only while
+this dialog remains unmounted, the opener is still connected and no replacement
+dialog is present. This retains StrictMode cleanup safety and avoids stealing
+focus from another modal. The two regressions pass with StrictMode enabled.
+Existing full-App deletion cases additionally verify that a removed opener
+retains the safe History-heading fallback, without attempting to focus a detached
+control. Cancellation, confirmation and native job admission are unchanged.
+
+All 245 frontend tests, TypeScript, production build, formatting and verify.ps1
+pass. An initial restricted Temp rename failure ran no tests; a later test-only
+unsupported locator option and its subsequent format check were corrected.
+Those failed checks are retained separately and are not application-regression
+evidence. The genuine old-code focus failures remain recorded independently.
+
+The full synthetic App browser flow returns focus to the opener at 1280 pixels
+after Close and at 390 pixels after Escape, with no horizontal overflow or final
+console errors. This is simulated preview/cancellation IPC only; real deletion
+is disabled in the browser fixture. No installed native IPC, screen-reader
+speech, physical recording or provider test is inferred from it.
+
+All native files remain byte-identical to candidate 10. Its 387 Rust all-target
+tests, 26 core erasure cases, two normally ignored existing special entry points
+and Clippy results are prior evidence for those unchanged bytes, not new runs.
+The new candidate still requires its own target CI and fresh final-head reviews.
+Locked dependencies, protection and review rules, primary session format,
+application version and the whole historical TEST_REPORT.md are unchanged.
+All existing erasure limits, separate-process assurance limits and pending
+model-residency integration remain explicit; no real meeting was modified.

@@ -40,6 +40,12 @@ export default function EraseMeetingDialog({
   const [statusUnavailable, setStatusUnavailable] = useState(false);
   const form = useRef<HTMLFormElement>(null),
     alive = useRef(true);
+  // Capture before the first layout effect transfers focus into this dialog.
+  const opener = useRef(
+    document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null,
+  );
   const job = useRef<string | null>(null),
     previewJob = useRef("");
   const timer = useRef<ReturnType<typeof setTimeout>>();
@@ -199,7 +205,6 @@ export default function EraseMeetingDialog({
   }
   useEffect(() => {
     alive.current = true;
-    const previous = document.activeElement as HTMLElement | null;
     form.current?.querySelector<HTMLButtonElement>("button")?.focus();
     timer.current = setTimeout(() => void startPreview(), 0);
     return () => {
@@ -208,7 +213,16 @@ export default function EraseMeetingDialog({
       clearTimeout(timer.current);
       if (job.current)
         void api.cancelMaintenance?.(job.current).catch(() => undefined);
-      previous?.focus();
+      // The parent removes inert and restores its fallback during passive cleanup.
+      // Restore the real opener afterwards, unless another dialog has taken over.
+      requestAnimationFrame(() => {
+        if (
+          !alive.current &&
+          opener.current?.isConnected &&
+          !document.querySelector('[role="dialog"],[role="alertdialog"]')
+        )
+          opener.current.focus();
+      });
     };
     // The parent keys the dialog by meeting ID; API and callbacks are stable for its lifetime.
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
+import { StrictMode } from "react";
 import {
   act,
   cleanup,
@@ -35,6 +36,52 @@ const plan: ErasurePreview = {
   bytes: 128000,
   rebuildSearch: true,
 };
+
+it.each(["close button", "Escape"])(
+  "returns focus to the History erasure opener after closing with %s",
+  async (action) => {
+    const props = fixture();
+    const api = {
+      ...testServices(),
+      ...props.api,
+      getAppState: vi.fn(async () => ({
+        version: "synthetic",
+        handy: null,
+        recording: false,
+        activeMeeting: null,
+      })),
+      listDevices: vi.fn().mockResolvedValue([]),
+      listMeetings: vi.fn().mockResolvedValue([meeting]),
+      listPendingErasures: vi.fn().mockResolvedValue([]),
+    } as unknown as DesktopApi;
+    render(
+      <StrictMode>
+        <App api={api} />
+      </StrictMode>,
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: /Historie/ }),
+    );
+    const opener = await screen.findByRole("button", {
+      name: `Meeting dauerhaft löschen: ${meeting.title}`,
+    });
+    await userEvent.click(opener);
+    await screen.findByRole("textbox", {
+      name: "Zur Bestätigung LÖSCHEN eingeben",
+    });
+    expect(
+      screen.getByRole("alertdialog").contains(document.activeElement),
+    ).toBe(true);
+    expect(document.querySelector("main")?.inert).toBe(true);
+    if (action === "Escape") await userEvent.keyboard("{Escape}");
+    else
+      await userEvent.click(screen.getByRole("button", { name: "Schließen" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+    expect(document.querySelector("main")?.inert).toBe(false);
+    expect(api.eraseMeetingNow).not.toHaveBeenCalled();
+  },
+);
 
 it.each(["failed", "cancelled"] as const)(
   "keeps all retained meetings in desktop history after a %s post-erasure rebuild",
@@ -134,6 +181,11 @@ it.each(["failed", "cancelled"] as const)(
     );
     await screen.findByText(
       "Meetinginhalte vollständig aus der HandyMeeting-Ablage entfernt.",
+    );
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole("heading", { name: "Historie" }),
+      ),
     );
     expect(api.rebuildSearchIndex).toHaveBeenCalledOnce();
     const query = screen.getByRole("searchbox");
