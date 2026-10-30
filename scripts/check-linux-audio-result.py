@@ -15,11 +15,13 @@ ALLOWED = {TIMING, "system" + START, "microphone" + START}
 
 
 def require(condition, message):
+    """Fail closed on missing capture evidence or mismatched saved audio."""
     if not condition:
         raise ValueError(message)
 
 
 def verify(root):
+    """Verify complete distinct PCM tracks while retaining explicit startup-gap limits."""
     result = json.loads((root / "result.json").read_text(encoding="utf-8"))
     checkpoints = sorted((root / "checkpoints").glob("checkpoint-*.json"))
     require(checkpoints, "No final checkpoint")

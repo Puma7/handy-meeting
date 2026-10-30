@@ -11,12 +11,14 @@ import struct
 import tarfile
 import tempfile
 import sys
+import types
 import unittest
 from unittest import mock
 import wave
 
 
 def load(name, file):
+    """Import the actual verifier so regressions exercise its public contracts."""
     spec = importlib.util.spec_from_file_location(name, Path(__file__).with_name(file))
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -29,6 +31,7 @@ audio = load("linux_audio_result", "check-linux-audio-result.py")
 
 class ReferenceVerdicts(unittest.TestCase):
     def setUp(self):
+        """Create distinct owned PCM fixtures and a complete native-result baseline."""
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
@@ -49,14 +52,17 @@ class ReferenceVerdicts(unittest.TestCase):
                 "text": self.manifest["speech"][source]["text"]})
 
     def verify(self):
+        """Apply the production content verdict to the current mutated fixture."""
         return asr.verify_result(self.result, self.root, self.manifest)
 
     def test_exact_speech_and_declared_numeric_alternatives_pass(self):
+        """Accept exact reference words and only the declared numeric equivalent."""
         self.assertEqual(self.verify()["system"]["wordErrors"], 0)
         self.result["parts"][1]["text"] = self.result["parts"][1]["text"].replace("forty two", "42")
         self.assertEqual(self.verify()["microphone"]["wordErrors"], 0)
 
     def test_nonempty_gibberish_and_swapped_tracks_fail_even_when_native_probe_succeeded(self):
+        """Reject wrong content even when native mechanical success flags are true."""
         original = copy.deepcopy(self.result)
         self.result["parts"][0]["text"] = "nonempty unrelated words"
         with self.assertRaisesRegex(ValueError, "word error"):
@@ -68,11 +74,13 @@ class ReferenceVerdicts(unittest.TestCase):
             self.verify()
 
     def test_critical_fact_change_fails_even_below_word_error_limit(self):
+        """Require source-specific facts even when overall edit distance is small."""
         self.result["parts"][0]["text"] = self.result["parts"][0]["text"].replace("Friday", "Monday")
         with self.assertRaisesRegex(ValueError, "track-specific"):
             self.verify()
 
     def test_truncation_changed_pcm_and_missing_restart_fail(self):
+        """Reject partial recognition, changed audio, open files and absent restart proof."""
         for field, value in (("confirmedSampleCount", 0), ("processedSamples", 1),
                              ("confirmedSha256", "0" * 64), ("audioClosed", False)):
             with self.subTest(field=field):
@@ -86,6 +94,7 @@ class ReferenceVerdicts(unittest.TestCase):
             self.verify()
 
     def test_download_is_bounded_hash_checked_and_never_overwrites(self):
+        """Reject oversized or substituted downloads while preserving prior evidence."""
         path = self.root / "download"
         asset = {"bytes": 3, "sha256": hashlib.sha256(b"abc").hexdigest()}
         with mock.patch.object(asr.urllib.request, "urlopen", return_value=io.BytesIO(b"abcd")):
@@ -100,6 +109,7 @@ class ReferenceVerdicts(unittest.TestCase):
                 asr.download("https://example.test/pinned", path2, asset)
 
     def test_short_download_and_timeout_preserve_evidence_and_fail(self):
+        """Keep partial download evidence and never turn EOF or timeout into success."""
         asset = {"bytes": 3, "sha256": hashlib.sha256(b"abc").hexdigest()}
         with mock.patch.object(asr.urllib.request, "urlopen", return_value=io.BytesIO(b"ab")):
             with self.assertRaisesRegex(ValueError, "length"):
@@ -111,6 +121,7 @@ class ReferenceVerdicts(unittest.TestCase):
         self.assertTrue((self.root / "timeout").exists())
 
     def test_ci_provisioning_isolates_home_hf_and_loaders_and_copies_checked_executable(self):
+        """Exercise fresh CI provisioning with tiny pinned synthetic assets, not inference."""
         manifest = copy.deepcopy(self.manifest)
         bundle = io.BytesIO()
         with tarfile.open(fileobj=bundle, mode="w:gz") as archive:
@@ -134,14 +145,17 @@ class ReferenceVerdicts(unittest.TestCase):
         calls = []
 
         def response(url, timeout):
+            """Return the selected tiny pinned asset without network access."""
             self.assertEqual(timeout, 60)
             return io.BytesIO(payloads[url.rsplit("/", 1)[1]])
 
         def generate(root, rid, definition, env):
+            """Reuse owned PCM fixtures instead of invoking a host speech engine."""
             for source in asr.SOURCES:
                 (root / (source + ".wav")).write_bytes((self.root / (source + ".wav")).read_bytes())
 
         def recognize(command, env, log, timeout):
+            """Simulate only native process output while assertions verify orchestration."""
             calls.append(command)
             self.assertEqual(timeout, 300)
             self.assertNotIn("LD_LIBRARY_PATH", env)
@@ -157,11 +171,20 @@ class ReferenceVerdicts(unittest.TestCase):
             Path(command[6]).mkdir()
             (Path(command[6]) / "result.json").write_text(json.dumps(result))
 
+        def query(command, **kwargs):
+            """Simulate the real CLI boundary without exposing untrusted diagnostic text."""
+            self.assertEqual(command[1:], ["--list-models", "--json"])
+            self.assertEqual(kwargs["timeout"], 45)
+            kwargs["stdout"].write(json.dumps([{"id": manifest["model"]["repository"] + "/" + manifest["model"]["file"],
+                "is_downloaded": True, "supports_streaming": True}]).encode())
+            return types.SimpleNamespace(returncode=0)
+
         argv = ["check-portable-asr.py", "osx-arm64", str(app), str(sdk), str(output)]
         with mock.patch.object(asr, "MANIFEST", definition), mock.patch.object(sys, "argv", argv), \
              mock.patch.object(asr.urllib.request, "urlopen", side_effect=response), \
              mock.patch.object(asr, "generate_speech", side_effect=generate), \
              mock.patch.object(asr, "run", side_effect=recognize), \
+             mock.patch.object(asr.subprocess, "run", side_effect=query), \
              mock.patch.dict(os.environ, {"LD_LIBRARY_PATH": "caller-sdk", "DYLD_LIBRARY_PATH": "caller-sdk"}):
             asr.main()
             self.assertEqual(os.environ["LD_LIBRARY_PATH"], "caller-sdk")
@@ -174,7 +197,63 @@ class ReferenceVerdicts(unittest.TestCase):
         self.assertEqual(receipt["handyVersion"], "0.9.8")
         self.assertEqual(app.read_bytes(), b"exact checked executable")
 
+    def test_catalog_failure_reports_only_static_loader_categories(self):
+        """Classify missing libraries without publishing raw paths or log fragments."""
+        def query(command, **kwargs):
+            """Simulate the real CLI boundary without exposing untrusted diagnostic text."""
+            kwargs["stderr"].write(b"private-path/private-session: error while loading shared libraries: arbitrary.so")
+            return types.SimpleNamespace(returncode=127)
+        with mock.patch.object(asr.subprocess, "run", side_effect=query), \
+             mock.patch("builtins.print") as printed:
+            with self.assertRaisesRegex(ValueError, "catalog preflight failed"):
+                asr.check_handy_catalog(self.root / "handy", self.root, self.manifest, {})
+        summary = json.loads(printed.call_args.args[0])["handyPreflight"]
+        self.assertTrue(summary["missingSharedLibrary"])
+        self.assertNotIn("private", json.dumps(summary))
+        self.assertNotIn("arbitrary", json.dumps(summary))
+
+    def test_process_error_never_echoes_raw_transcript_or_path(self):
+        """Expose a known static error while keeping raw process output private."""
+        def failed(command, **kwargs):
+            """Return a failed process whose private output must never be echoed."""
+            kwargs["stdout"].write(b"private transcript /home/person/session/secret\nHandy could not be queried.")
+            return types.SimpleNamespace(returncode=1)
+        with mock.patch.object(asr.subprocess, "run", side_effect=failed):
+            with self.assertRaisesRegex(ValueError, "^Handy could not be queried\\.$"):
+                asr.run(["owned-test-process"], {}, self.root / "process.log")
+
+    def test_timeout_and_launch_errors_do_not_publish_command_arguments(self):
+        """Keep executable paths and speech arguments out of timeout/launch tracebacks."""
+        failures = [asr.subprocess.TimeoutExpired(["private-speech", "/private/path"], 1),
+                    OSError("private-path")]
+        for index, failure in enumerate(failures):
+            with mock.patch.object(asr.subprocess, "run", side_effect=failure):
+                with self.assertRaises(ValueError) as caught:
+                    asr.run(["private-speech"], {}, self.root / (str(index) + ".log"))
+                self.assertNotIn("private-path", str(caught.exception))
+                self.assertNotIn("private-speech", str(caught.exception))
+                self.assertTrue(caught.exception.__suppress_context__)
+                root = self.root / ("catalog" + str(index))
+                root.mkdir()
+                with self.assertRaises(ValueError) as caught:
+                    asr.check_handy_catalog(self.root / "private-path", root, self.manifest, {})
+                self.assertNotIn("private-path", str(caught.exception))
+                self.assertTrue(caught.exception.__suppress_context__)
+
+    def test_failed_probe_summary_excludes_raw_errors_transcripts_and_session_ids(self):
+        """Publish only whitelisted checkpoint facts, never arbitrary result strings."""
+        result = copy.deepcopy(self.result)
+        result["id"] = "private-session-id"
+        result["parts"][0].update(text="private transcript", error="worker failed /private/model/file")
+        (self.root / "probe").mkdir()
+        (self.root / "probe/result.json").write_text(json.dumps(result))
+        summary = asr.failed_probe_summary(self.root)
+        self.assertTrue(summary["resultAvailable"])
+        self.assertIn("model-runtime", summary["tracks"][0]["errorCategories"])
+        self.assertNotIn("private", json.dumps(summary))
+
     def test_local_executable_is_hashed_without_claiming_a_pinned_release_version(self):
+        """Identify a local executable without borrowing an unverified CI version."""
         definition = self.root / "local-assets.json"
         manifest = copy.deepcopy(self.manifest)
         model, handy, app, sdk = (self.root / name for name in ("model", "handy", "app", "sdk"))
@@ -189,6 +268,7 @@ class ReferenceVerdicts(unittest.TestCase):
         result["version"] = "test"
 
         def recognize(command, env, log, timeout):
+            """Simulate only native process output while assertions verify orchestration."""
             Path(command[6]).mkdir()
             (Path(command[6]) / "result.json").write_text(json.dumps(result))
 
@@ -204,6 +284,7 @@ class ReferenceVerdicts(unittest.TestCase):
         self.assertEqual(receipt["handyExecutableSha256"], hashlib.sha256(handy.read_bytes()).hexdigest())
 
     def test_bundle_rejects_traversal_and_escaping_links(self):
+        """Reject archive entries that could escape the new owned bundle directory."""
         for index, (name, link) in enumerate((("../outside", None), ("Handy.app/link", "../../outside"))):
             archive = self.root / (str(index) + ".tar.gz")
             with tarfile.open(archive, "w:gz") as bundle:
@@ -216,6 +297,7 @@ class ReferenceVerdicts(unittest.TestCase):
 
     @unittest.skipIf(os.name == "nt", "Real framework links/modes require a Unix target host")
     def test_valid_mac_framework_link_and_executable_mode_are_retained(self):
+        """Preserve legitimate internal framework links and Unix executable permissions."""
         archive = self.root / "valid.tar.gz"
         with tarfile.open(archive, "w:gz") as bundle:
             entry = tarfile.TarInfo("Handy.app/Contents/Frameworks/Test.framework/Versions/A/Test")
@@ -231,6 +313,7 @@ class ReferenceVerdicts(unittest.TestCase):
         self.assertTrue(os.access(target, os.X_OK))
 
     def test_linux_unexpected_capture_failure_cannot_pass_on_duration_and_signal(self):
+        """Fail unexpected capture warnings even when duration appears sufficient."""
         (self.root / "checkpoints").mkdir()
         session = {"id": "a" * 32, "status": "recorded", "captureIncomplete": True,
                    "warnings": ["system: capture process exited unexpectedly"], "parts": []}
@@ -242,6 +325,7 @@ class ReferenceVerdicts(unittest.TestCase):
             audio.verify(self.root)
 
     def linux_fixture(self, counts=(136000, 136000), warnings=None):
+        """Create closed two-tone PCM and matching hashes for the actual Linux verifier."""
         warnings = [audio.TIMING] if warnings is None else warnings
         session = {"id": "b" * 32, "status": "recorded",
                    "captureIncomplete": any(w.endswith(audio.START) for w in warnings),
@@ -267,6 +351,7 @@ class ReferenceVerdicts(unittest.TestCase):
         return folder
 
     def test_full_linux_pcm_tones_pass_and_start_gaps_remain_incomplete(self):
+        """Accept transport proof while preserving the incomplete startup-gap verdict."""
         self.linux_fixture(warnings=[audio.TIMING, "system" + audio.START])
         receipt = audio.verify(self.root)
         self.assertEqual(receipt["verdict"], "passed-with-startup-gaps")
@@ -274,6 +359,7 @@ class ReferenceVerdicts(unittest.TestCase):
         self.assertFalse(receipt["physicalHardware"])
 
     def test_linux_clean_capture_passes_but_changed_confirmed_pcm_fails(self):
+        """Prove full distinct tones pass and a changed confirmed byte fails."""
         folder = self.linux_fixture()
         self.assertTrue(audio.verify(self.root)["completeCapture"])
         file = folder / "system-000000000000.wav"
@@ -284,16 +370,19 @@ class ReferenceVerdicts(unittest.TestCase):
             audio.verify(self.root)
 
     def test_linux_half_length_cannot_pass_old_four_second_minimum(self):
+        """Reject a half-length capture that passed the former duration minimum."""
         self.linux_fixture(counts=(64000, 64000))
         with self.assertRaisesRegex(ValueError, "truncated"):
             audio.verify(self.root)
 
     def test_linux_more_than_500_ms_track_drift_fails(self):
+        """Preserve the preregistered500ms maximum difference between saved tracks."""
         self.linux_fixture(counts=(136000, 144016))
         with self.assertRaisesRegex(ValueError, "500 ms"):
             audio.verify(self.root)
 
     def test_linux_swapped_or_silent_track_fails_even_with_matching_hashes(self):
+        """Detect wrong signal sources independently of self-consistent PCM hashes."""
         folder = self.linux_fixture()
         checkpoint = self.root / "checkpoints/checkpoint-000000.json"
         session = json.loads(checkpoint.read_text())

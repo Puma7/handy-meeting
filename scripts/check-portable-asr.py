@@ -25,11 +25,13 @@ SOURCES = ("system", "microphone")
 
 
 def require(condition, message):
+    """Reject a missing proof instead of producing a successful verdict."""
     if not condition:
         raise ValueError(message)
 
 
 def digest(path):
+    """Hash a regular input incrementally without retaining model bytes in RAM."""
     result = hashlib.sha256()
     with path.open("rb") as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
@@ -38,12 +40,14 @@ def digest(path):
 
 
 def verify_asset(path, asset):
+    """Require both the reviewed byte length and SHA-256 before using an asset."""
     require(path.is_file() and not path.is_symlink(), "Asset must be a regular file")
     require(path.stat().st_size == asset["bytes"], "Pinned asset length differs")
     require(digest(path) == asset["sha256"], "Pinned asset digest differs")
 
 
 def download(url, path, asset):
+    """Download a pinned HTTPS asset exclusively, bounded by size and elapsed time."""
     require(url.startswith("https://"), "Asset download requires HTTPS")
     path.parent.mkdir(parents=True, exist_ok=True)
     # Exclusive creation preserves failed/partial evidence, never trusts a cache.
@@ -95,12 +99,64 @@ def extract_app(archive, root):
 
 
 def run(command, env, log, timeout=60):
+    """Retain process output privately; expose only known static failure categories."""
     with log.open("xb") as output:
-        subprocess.run([str(c) for c in command], env=env, stdout=output,
-                       stderr=subprocess.STDOUT, check=True, timeout=timeout)
+        try:
+            result = subprocess.run([str(c) for c in command], env=env, stdout=output,
+                                    stderr=subprocess.STDOUT, check=False, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            raise ValueError("Diagnostic process exceeded its time limit; output retained privately") from None
+        except OSError:
+            raise ValueError("Diagnostic process could not start; output retained privately") from None
+    if result.returncode:
+        with log.open("rb") as output:
+            output.seek(max(0, log.stat().st_size - 64 * 1024))
+            tail = output.read(64 * 1024).decode("utf-8", errors="replace")
+        safe = next((message for message in (
+            "Handy could not be queried.", "Handy's model-list format is not supported.",
+            "Handy did not respond within the time limit.",
+            "Synthetic model is not a currently installed streaming model advertised by Handy",
+            "Synthetic fixture must be readable 16-kHz mono 16-bit PCM",
+            "Synthetic native streaming/restart verification failed",
+        ) if message in tail), "Process failed; raw output retained privately")
+        raise ValueError(safe)
+
+
+def check_handy_catalog(handy, root, manifest, env):
+    """Query the real CLI and report readiness or static loader errors, never raw output."""
+    stdout, stderr = root / "handy-catalog.json", root / "handy-catalog.log"
+    with stdout.open("xb") as out, stderr.open("xb") as err:
+        try:
+            result = subprocess.run([str(handy), "--list-models", "--json"], cwd=handy.parent,
+                                    env=env, stdout=out, stderr=err, timeout=45, check=False)
+        except subprocess.TimeoutExpired:
+            raise ValueError("Handy catalog exceeded its time limit; output retained privately") from None
+        except OSError:
+            raise ValueError("Handy catalog process could not start; output retained privately") from None
+    require(stdout.stat().st_size <= 8 * 1024 * 1024 and stderr.stat().st_size <= 64 * 1024,
+            "Handy preflight exceeded catalog output limits")
+    errors = stderr.read_text(encoding="utf-8", errors="replace")
+    summary = {"exitCode": result.returncode,
+               "missingSharedLibrary": "error while loading shared libraries" in errors,
+               "glibcVersionMismatch": "GLIBC_" in errors and "not found" in errors,
+               "displayUnavailable": "cannot open display" in errors.lower()}
+    try:
+        catalog = json.loads(stdout.read_text(encoding="utf-8"))
+        require(isinstance(catalog, list), "Handy catalog must be an array")
+        model_id = manifest["model"]["repository"] + "/" + manifest["model"]["file"]
+        selected = [model for model in catalog if model.get("id") == model_id]
+        summary.update(catalogValid=True, modelCount=len(catalog),
+                       requiredModelInstalled=len(selected) == 1 and selected[0].get("is_downloaded") is True,
+                       requiredModelStreaming=len(selected) == 1 and selected[0].get("supports_streaming") is True)
+    except (ValueError, AttributeError, TypeError):
+        summary["catalogValid"] = False
+    print(json.dumps({"handyPreflight": summary}), flush=True)
+    require(result.returncode == 0 and summary.get("requiredModelInstalled") is True
+            and summary.get("requiredModelStreaming") is True, "Real Handy catalog preflight failed")
 
 
 def stage_assets(root, rid, manifest, env):
+    """Stage pinned real Handy and weights in the job-owned Hugging Face cache."""
     asset = manifest["handy"][rid]
     archive = root / asset["file"]
     download(f"https://github.com/cjpais/Handy/releases/download/v{manifest['handyVersion']}/{asset['file']}",
@@ -137,6 +193,7 @@ def stage_assets(root, rid, manifest, env):
 
 
 def pcm(path):
+    """Read a complete short mono PCM16 fixture and reject unsupported formats."""
     with wave.open(str(path), "rb") as audio:
         require((audio.getnchannels(), audio.getsampwidth(), audio.getcomptype()) == (1, 2, "NONE"),
                 "Speech fixture must be mono PCM16")
@@ -149,6 +206,7 @@ def pcm(path):
 
 
 def generate_speech(root, rid, manifest, env):
+    """Generate known English speech locally and convert only fixtures to16kHz PCM."""
     for source in SOURCES:
         raw = root / (source + "-tts.wav")
         target = root / (source + ".wav")
@@ -178,6 +236,7 @@ def generate_speech(root, rid, manifest, env):
 
 
 def words(text):
+    """Normalize case/punctuation and the two preregistered numeric alternatives."""
     require(isinstance(text, str), "Transcript text is missing")
     # Declared numeric alternatives, no general deletion of numbers/content.
     text = re.sub(r"\b42\b", "forty two", text.lower())
@@ -186,6 +245,7 @@ def words(text):
 
 
 def word_errors(reference, actual):
+    """Count word insertions, deletions and substitutions using edit distance."""
     previous = list(range(len(actual) + 1))
     for i, expected in enumerate(reference, 1):
         current = [i]
@@ -197,6 +257,7 @@ def word_errors(reference, actual):
 
 
 def verify_result(result, fixtures, manifest):
+    """Require complete durable tracks, real restart proof and reference content."""
     for flag in ("success", "synthetic", "intentionalOwnedAsrKill", "confirmedAudioHashesPreserved",
                  "confirmedTextJournalPrefixPreserved", "bothTranscriptsComplete", "reopenedTextMatches"):
         require(result.get(flag) is True, "Missing real ASR/restart proof: " + flag)
@@ -231,7 +292,41 @@ def verify_result(result, fixtures, manifest):
     return receipts
 
 
+def failed_probe_summary(root):
+    """Report failed checkpoint counters/categories without raw text, paths or IDs."""
+    path = root / "probe/result.json"
+    if not path.is_file() or path.stat().st_size > 8 * 1024 * 1024:
+        return {"resultAvailable": False}
+    try:
+        result = json.loads(path.read_text(encoding="utf-8"))
+        summary = {flag: result.get(flag) is True for flag in (
+            "intentionalOwnedAsrKill", "confirmedAudioHashesPreserved",
+            "confirmedTextJournalPrefixPreserved", "bothTranscriptsComplete", "reopenedTextMatches")}
+        summary["resultAvailable"] = True
+        tracks = []
+        for source in SOURCES:
+            for part in result.get("parts", []):
+                if part.get("source") != source:
+                    continue
+                error = str(part.get("error", "")).lower()
+                categories = [category for category, needles in (
+                    ("deadline", ("deadline", "time limit")),
+                    ("worker-transport", ("pipe", "channel", "protocol", "worker")),
+                    ("model-runtime", ("model", "native", "runtime", "load")),
+                    ("preservation", ("prefix", "hash", "journal")),
+                ) if any(needle in error for needle in needles)]
+                tracks.append({"source": source, "complete": part.get("status") == "complete",
+                               "processedSamples": part.get("processedSamples")
+                               if type(part.get("processedSamples")) is int else None,
+                               "errorCategories": categories})
+        summary["tracks"] = tracks
+        return summary
+    except (ValueError, AttributeError, TypeError):
+        return {"resultAvailable": False}
+
+
 def main():
+    """Run isolated CI provisioning or explicit local reuse, then emit a safe verdict."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("rid", choices=("linux-x64", "osx-arm64", "osx-x64", "win-x64"))
     parser.add_argument("executable", type=Path)
@@ -272,8 +367,13 @@ def main():
         require(digest(copied) == digest(app), "Checked executable changed during staging")
         shutil.copytree(backend, program / "native", symlinks=False)
         app, backend = copied, program / "native"
-    run([app, "--synthetic-smoke", model, backend, fixtures / "system.wav", fixtures / "microphone.wav",
-         root / "probe", handy], env, root / "recognition.log", timeout=300)
+        check_handy_catalog(handy, root, manifest, env)
+    try:
+        run([app, "--synthetic-smoke", model, backend, fixtures / "system.wav", fixtures / "microphone.wav",
+             root / "probe", handy], env, root / "recognition.log", timeout=300)
+    except ValueError:
+        print(json.dumps({"failedProbe": failed_probe_summary(root)}), flush=True)
+        raise
     result = json.loads((root / "probe/result.json").read_text(encoding="utf-8"))
     tracks = verify_result(result, fixtures, manifest)
     # Allowlisted scalar/derived proof, deliberately no raw session/catalog/logs.
