@@ -486,6 +486,7 @@ class ReferenceVerdicts(unittest.TestCase):
         self.assertEqual(detail["minimumRmsExclusive"], 1000)
         self.assertEqual(detail["sampleRate"], 16000)
         self.assertFalse(detail["declaredStartup"])
+        self.assertEqual(detail["leadingZeroSamples"], 1601)
         self.assertGreater(detail["rms"], 1000)
         self.assertLess(detail["hz"], 940)
         self.assertNotIn(str(self.root), message)
@@ -505,6 +506,26 @@ class ReferenceVerdicts(unittest.TestCase):
         self.assertLessEqual(detail["endSample"], 144000)
         self.assertEqual(detail["expectedHz"], 440)
         self.assertEqual(detail["toleranceHz"], 40)
+
+    def test_linux_repeated_short_silences_cannot_replace_eight_seconds_of_tone(self):
+        """Window averages must not turn 7.82 seconds of tone into an eight-second proof."""
+        self.linux_fixture()
+        def interrupt(data):
+            payload = bytearray(data)
+            for sample in range(0, len(data) // 2, 2000):
+                payload[sample * 2:(sample + 160) * 2] = bytes(320)
+            return bytes(payload)
+        self.rewrite_linux_signal("system", interrupt)
+        with self.assertRaisesRegex(ValueError, "less than eight seconds of qualified tone"):
+            audio.verify(self.root)
+
+    def test_linux_phase_zero_crossings_are_not_missing_tone(self):
+        """Keep a complete exact-eight-second sine valid despite its isolated phase zeros."""
+        self.linux_fixture(counts=(128000, 128000))
+        receipt = audio.verify(self.root)
+        for track in receipt["tracks"].values():
+            self.assertEqual(track["qualifiedToneSamples"], 128000)
+            self.assertEqual(track["excludedInteriorZeroSamples"], 0)
 
     def test_linux_declared_startup_silence_is_separate_from_eight_seconds_of_tone(self):
         """A declared half-second prefix leaves eight real seconds for window verification."""

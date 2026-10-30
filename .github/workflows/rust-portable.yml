@@ -147,6 +147,8 @@ jobs:
           node scripts/rust-artifacts.mjs source-fingerprint > .build/portable-source-after.json
           python3 -c 'import json; assert json.load(open(".build/portable-source-before.json"))==json.load(open(".build/portable-source-after.json")), "Source changed during portable checks"'
       - name: Transcribe generated speakers with pinned real Handy, then restart and reopen
+        # Independent total CI budget. Per-operation deadlines are upper bounds,
+        # not additive time allowances; an overly slow sequence must fail closed.
         timeout-minutes: 12
         run: |
           set -euo pipefail

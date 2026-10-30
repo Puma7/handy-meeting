@@ -21,9 +21,25 @@ def require(condition, message):
         raise ValueError(message)
 
 
+def qualified_tone_samples(samples):
+    """Exclude zero runs from known synthetic tones while retaining isolated sine phase zeros."""
+    excluded, run = 0, 0
+    for sample in samples:
+        if sample == 0:
+            run += 1
+        else:
+            if run > 1:
+                excluded += run
+            run = 0
+    if run > 1:
+        excluded += run
+    return len(samples) - excluded, excluded
+
+
 def verify_tone(samples, frequency, tolerance, declared_startup, source):
     """Check every overlapping window; failures expose only its source and numeric signal evidence."""
-    start = next((i for i, sample in enumerate(samples) if sample), len(samples)) if declared_startup else 0
+    leading_zeros = next((i for i, sample in enumerate(samples) if sample), len(samples))
+    start = leading_zeros if declared_startup else 0
     # The capture is8–10seconds including its estimated startup padding. Even a
     # declared gap must leave eight seconds of tone, allowing its first phase-zero sample.
     require(start <= len(samples) - 8 * 16000 + 1, "Declared startup silence leaves less than eight seconds of tone")
@@ -41,15 +57,27 @@ def verify_tone(samples, frequency, tolerance, declared_startup, source):
                   "trackSamples": len(samples), "sampleRate": 16000,
                   "rms": round(rms, 3), "hz": round(hz, 3), "expectedHz": frequency,
                   "toleranceHz": tolerance, "minimumRmsExclusive": 1000,
-                  "declaredStartup": declared_startup, "startupSamples": start}
+                  "declaredStartup": declared_startup, "startupSamples": start,
+                  "leadingZeroSamples": leading_zeros}
         require(rms > 1000 and abs(hz - frequency) < tolerance,
                 "Silent or mixed-up virtual source window: " + json.dumps(detail, sort_keys=True))
         levels.append(rms)
         frequencies.append(hz)
+    qualified, excluded = qualified_tone_samples(samples[start:])
+    # A source-specific excluded prefix can include the tone's first phase-zero
+    # sample, the same single-sample boundary allowance as the startup check above.
+    allowance = int(start > 0)
+    require(qualified + allowance >= 8 * 16000,
+            "Capture contains less than eight seconds of qualified tone: " + json.dumps({
+                "source": source, "qualifiedToneSamples": qualified,
+                "excludedInteriorZeroSamples": excluded, "phaseZeroAllowanceSamples": allowance,
+                "requiredToneSamples": 8 * 16000, "sampleRate": 16000}, sort_keys=True))
     return {"rms": round(sum(levels) / len(levels)), "hz": round(sum(frequencies) / len(frequencies)),
             "minimumRms": round(min(levels)), "minimumHz": round(min(frequencies)),
             "maximumHz": round(max(frequencies)), "toneWindows": len(offsets),
-            "windowSamples": size, "startupSilenceMs": start * 1000 // 16000}
+            "windowSamples": size, "startupSilenceMs": start * 1000 // 16000,
+            "qualifiedToneSamples": qualified, "excludedInteriorZeroSamples": excluded,
+            "phaseZeroAllowanceSamples": allowance}
 
 
 def verify(root):

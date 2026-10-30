@@ -154,3 +154,39 @@ unchanged. The recording fixture, native/frontend sources and the complete
 previously approved historical TEST_REPORT.md remain byte-identical to candidate
 14. A fresh actual Linux run is required to obtain evidence for the remaining
 failure; local synthetic success is not a successful device/target CI result.
+
+## Candidate 16: tone duration independent of window averages
+
+An additional synthetic regression reproduces a real verifier gap: an 8.5 second
+track with 10 ms of silence every 125 ms passes every existing 250 ms window,
+yet contains only about 7.82 seconds of tone. The old checker accepted it. The
+checker now separately excludes runs of exact-zero samples from these known
+synthetic sine fixtures, while retaining isolated phase-zero samples. It still
+requires eight seconds of qualified tone after any source-specific declared
+prefix. The existing single phase-zero boundary allowance for that excluded
+prefix remains one sample. Complete exact-eight-second sine tracks pass; repeated
+short silences cannot substitute for the required duration. All original RMS,
+frequency, overlapping-window, receipt-length, hash and track-difference limits
+remain in force, and numeric failure diagnostics remain available.
+
+The per-operation download, synthesis and ASR deadlines remain hard upper bounds.
+The workflow's independent 12 minute total ASR-step budget is also deliberately
+retained. The sum of every sequential maximum can exceed that total; it does not
+grant a slow sequence extra runtime. Hitting the total budget must fail the CI
+step, never turn incomplete evidence into success. The workflow now states this
+policy explicitly instead of implying that each maximum can be consumed in full.
+No check or runtime limit was relaxed to satisfy a review suggestion.
+
+All 120 Python checks ran with 119 passes and one regular Unix-only skip under
+Windows. The recording fixture, native/frontend source bytes and complete
+candidate 15 TEST_REPORT.md remain unchanged. The real current target CI must
+still run; the unexplained Linux signal failure from candidate 14 is not claimed
+fixed by these synthetic checker regressions.
+
+Candidate 15's actual Linux job identified the first microphone window
+(samples 0–4000): 890 Hz against 1000 Hz ±60, RMS 5342.167 against >1000,
+144833 samples in the track, no declared startup gap. This narrows the observed
+failure but does not identify its cause. The next diagnostic additionally
+counts initial exact-zero samples independently of the startup flag, so a
+possible unreported initial padding can be distinguished from other signal
+problems. The count never excuses undeclared silence or changes pass criteria.
