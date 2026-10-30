@@ -160,3 +160,62 @@ filtered invocation selected no case because its module prefix was omitted; it
 is retained as such, and a corrected exact-name rerun is recorded separately. No real user meeting, provider service, audio device or
 external export was deleted. Hardware, separate-process, Linux/macOS runtime,
 GPU, physical/forensic erasure and endurance claims remain outside this proof.
+
+## Candidate 05: embedded identity, repeated interruption and publication exclusion
+
+A successful archive inventory/hash verification now also checks each readable
+embedded primary and backup session identity before the ZIP can be selected for
+erasure. The same check applies to orphan ZIPs without a receipt. Four synthetic
+fixtures keep the outer manifest and all content hashes valid while introducing
+a foreign primary or backup identity, with and without a receipt. All refuse
+erasure and preserve the existing files. The former code accepted the first such
+ZIP despite its foreign embedded identity.
+
+An already confirmed interruption marker retains the checked archive identity
+when a later interruption has removed the original creation pending file but
+has not yet removed its incomplete ZIP. A new preview and typed confirmation
+remain necessary. Readable contradictory ZIP identities still block removal;
+an unrelated unverified ZIP gains no authority. A regression uses an actual
+cancelled archive creation and stops erasure between pending-file and ZIP removal.
+The former retry failed; the corrected retry removes the remaining attributed
+bytes and clears its minimal marker.
+
+Analysis, including resumed analysis of an archived transcript, now holds a
+process-shared publication lease from before reading sources or snapshots until
+all checkpoint/result writes end. Live-summary and optional speaker workers
+retain the same shared lease through their worker lifetime, and transcript
+exports retain it through saving. Explicit erasure and the existing archived
+permanent-deletion paths require exclusive publication admission before removal.
+This adds exclusion, without changing automatic retention age or VIP rules.
+
+The stable coordination lock is outside meeting and cache namespaces. Publishers
+can coexist and do not reacquire the archive/annotation lease: no capture handle
+or recording transition is held by this new lease. A core fixture proves that
+two concurrent publishers are admitted, and erasure remains blocked until both
+end. Native fixtures pause new and resumed archived analyses at their own
+loopback HTTP stub after persisted snapshot creation. Erasure is refused until
+the request and writes end, then succeeds. The old analysis failed this exclusion
+check. These are synthetic same-process threads/Services exercising OS locks,
+not a separate-process, real model-provider or physical-device test. External
+programs and older binaries that ignore these locks are outside this guarantee.
+
+The review's suspected maintenance-guard lifetime problem was not reproduced.
+The actual deletion worker is now directly testable through a small extracted
+start helper, with its guard scope unchanged. Its native regression performs a
+synthetic erasure, observes the exact job's complete status, then immediately
+acquires indexing admission and successfully rebuilds the derived index. The
+guard ends before terminal status publication; no admission rule was relaxed.
+
+The full Rust workspace/all-target run passed 380 tests; the two existing special
+entry points remain normally ignored. All 24 synthetic core erasure cases pass.
+The frontend, dependencies, review rules and complete historical TEST_REPORT.md
+remain byte-identical to published candidate 04. Its 238 frontend tests and
+TypeScript/production build are previous evidence for those unchanged bytes,
+not newly executed frontend suites. No real meeting, external export, model
+service or user program was changed or erased.
+
+Rust formatting and Clippy with warnings as errors passed. The sequential
+verify.ps1 run also passed 47 PCM, 35 notes, 28 template and 8 agent checks plus
+monitor. Earlier restricted temporary-folder access and an invalid status in a
+new completion fixture are retained as infrastructure/fixture failures; neither
+is reported as a failing application regression or a successful verification.

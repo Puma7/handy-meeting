@@ -407,6 +407,7 @@ pub fn delete_archived_meeting(
         return Err("Invalid archived meeting identity".into());
     }
     let _operation = operation_lock(root)?;
+    let _publication = publication_lease(root, true)?;
     if confirmation != format!("DELETE {id}") {
         return Err("Permanent deletion requires the exact meeting confirmation".into());
     }
@@ -551,6 +552,7 @@ pub fn resume_deletion(
     mut progress: impl FnMut(u64, u64),
 ) -> Result<String> {
     let _operation = operation_lock(root)?;
+    let _publication = publication_lease(root, true)?;
     let (log, mut record) = deletion_log(root, log_id)?;
     if !matches!(record["phase"].as_str(), Some("confirmed" | "deleting")) {
         return Err("This deletion is not unfinished".into());

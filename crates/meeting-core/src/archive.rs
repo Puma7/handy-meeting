@@ -43,6 +43,25 @@ fn operation_lock(root: &Path) -> Result<File> {
 pub fn source_mutation_lease(root: &Path) -> Result<File> {
     operation_lock(root)
 }
+/// Content publishers share this process-shared lease from their first source read
+/// through their final write. Parallel analysis/live/speaker work can coexist; no
+/// capture transition or existing archive/annotation lock is reacquired by a writer.
+pub fn source_publication_lease(root: &Path) -> Result<File> {
+    publication_lease(root, false)
+}
+/// Erasure alone takes exclusive publication admission before inspecting any source.
+/// The stable lock is outside erased namespaces, so another process cannot recreate
+/// a second lock inode while a publisher still owns the original one.
+fn publication_lease(root: &Path, exclusive: bool) -> Result<File> {
+    metadata::checked_directory(root)?;
+    let file = metadata::open_lock_file(&root.join("content-publication.lock"))?;
+    if exclusive {
+        metadata::lock_soon(&file)?;
+    } else {
+        fs2::FileExt::try_lock_shared(&file)?;
+    }
+    Ok(file)
+}
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ArchivedFile {

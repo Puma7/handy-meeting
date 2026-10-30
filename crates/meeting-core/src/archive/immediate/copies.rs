@@ -34,8 +34,8 @@ pub(super) fn manifest_id(folder: &Path) -> Result<String> {
         .ok_or_else(|| "Missing native source identity".into())
 }
 
-/// Pending creation is explicit attribution for incomplete ZIP bytes. If a ZIP is
-/// readable, every available identity record must still agree before unlinking it.
+/// Pending creation or a confirmed retry marker attributes incomplete ZIP bytes.
+/// Every readable identity must agree even when the full archive verifies successfully.
 fn reject_conflicting_zip_identity(path: &Path, id: &str, cancel: &AtomicBool) -> Result<()> {
     regular(path)?;
     let Ok(mut reader) = zip::ZipArchive::new(File::open(path)?) else {
@@ -181,8 +181,8 @@ pub(super) fn targets(
                         Ok(manifest) if manifest.meeting_id != expected => {
                             return Err("Archive ZIP conflicts with its attributed meeting; erasure blocked".into());
                         }
-                        Ok(_) => (),
-                        Err(_) if pending.contains(aid) => {
+                        Ok(_) => reject_conflicting_zip_identity(&path, expected, cancel)?,
+                        Err(_) if pending.contains(aid) || known.iter().any(|id| id == aid) => {
                             reject_conflicting_zip_identity(&path, expected, cancel)?;
                         }
                         Err(error) => return Err(error),
@@ -201,7 +201,9 @@ pub(super) fn targets(
                 continue;
             }
             let meeting = if name.ends_with(".zip") {
-                verify(&path, Some(cancel), |_, _| {})?.meeting_id
+                let meeting = verify(&path, Some(cancel), |_, _| {})?.meeting_id;
+                reject_conflicting_zip_identity(&path, &meeting, cancel)?;
+                meeting
             } else {
                 manifest_id(&path)?
             };

@@ -109,8 +109,20 @@ pub(crate) fn erase_meeting_now(
     let preview = service
         .deletion_previews
         .take(&preview_id, &meeting_id, &confirmation)?;
-    service
+    start_confirmed_erasure(owned, preview, guard)
+}
+
+/// The worker owns maintenance admission only through the destructive work; its
+/// guard leaves scope before Jobs publishes terminal status and the UI rebuilds search.
+fn start_confirmed_erasure(
+    owned: Arc<Service>,
+    preview: ErasurePreview,
+    guard: crate::retention_commands::MaintenanceGuard,
+) -> AppResult<String> {
+    let meeting_id = preview.meeting_id.clone();
+    owned
         .maintenance_jobs
+        .clone()
         .start_work("meeting-erasure", move |job, jobs, cancel| {
             let _guard = guard;
             // All writers have ended before maintenance admission. Forget their finished
@@ -142,6 +154,66 @@ pub(crate) async fn list_pending_erasures(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Exercise the real deletion worker and then the actual index-start admission.
+    /// This guards the ordering of guard destruction and terminal status publication.
+    #[test]
+    fn completed_erasure_releases_maintenance_before_search_rebuild() {
+        let root = std::env::temp_dir().join(format!(
+            "handymeeting-erasure-complete-{}",
+            meeting_notes::new_job_id()
+        ));
+        let store = meeting_core::SessionStore::create(
+            &root.join("sessions"),
+            "Synthetic completion scope",
+            "m",
+            "s",
+            None,
+        )
+        .unwrap();
+        let meeting = store.snapshot().unwrap().id;
+        store.set_status("complete").unwrap();
+        drop(store);
+        let service = Arc::new(Service::new(root.clone()).unwrap());
+        let preview = meeting_core::archive::preview_erasure(
+            &root,
+            &meeting,
+            &std::sync::atomic::AtomicBool::new(false),
+        )
+        .unwrap();
+        let guard = crate::retention_commands::reserve(&service).unwrap();
+        let job = start_confirmed_erasure(Arc::clone(&service), preview, guard).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let status = service.maintenance_jobs.snapshot().unwrap();
+            assert_eq!(status.job_id, job);
+            if status.status != "running" {
+                assert_eq!(status.status, "complete", "{:?}", status.error);
+                break;
+            }
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(!service.lock().unwrap().maintenance_reserved);
+        assert!(!service.lock().unwrap().transitioning);
+        assert!(!root.join("sessions").join(meeting).exists());
+        let lease = service
+            .reserve_operation(crate::operations::Kind::Index)
+            .expect("Completed deletion retained maintenance admission");
+        service
+            .library_jobs
+            .start_scan(root, true, Some(lease))
+            .unwrap();
+        loop {
+            let status = service.library_jobs.snapshot().unwrap();
+            if status.status != "running" {
+                assert_eq!(status.status, "complete", "{:?}", status.error);
+                break;
+            }
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
     #[test]
     fn previews_bind_confirmation_to_one_meeting_and_are_single_use() {
         let rows = Previews::default();

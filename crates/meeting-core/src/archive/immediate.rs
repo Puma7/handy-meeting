@@ -285,6 +285,7 @@ pub fn preview_erasure(root: &Path, id: &str, cancel: &AtomicBool) -> Result<Era
         );
     }
     let _operation = operation_lock(root)?;
+    let _publication = publication_lease(root, true)?;
     let _index = crate::library::erasure_index_lock(root)?;
     let _annotations = annotation_locks(root, id)?;
     let _leases = source_leases(root, id, cancel)?;
@@ -348,6 +349,7 @@ pub fn erase_meeting(
         return Err("Erasure requires confirmation of exactly one native meeting".into());
     }
     let _operation = operation_lock(root)?;
+    let _publication = publication_lease(root, true)?;
     let _index = crate::library::erasure_index_lock(root)?;
     let _annotations = annotation_locks(root, id)?;
     let _leases = source_leases(root, id, cancel)?;

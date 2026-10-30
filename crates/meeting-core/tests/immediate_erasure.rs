@@ -10,6 +10,24 @@ use std::{
 };
 
 const PRIVATE: &str = "syntheticerasurecanaryneverretainthisphrase";
+
+/// Shared publication does not serialize independent writers, but erasure cannot
+/// inspect/remove content until every publisher's final write has finished.
+#[test]
+fn publication_leases_allow_parallel_writers_and_exclude_erasure_until_all_end() {
+    let root = tempfile::tempdir().unwrap();
+    let id = fixture(root.path(), PRIVATE, 1);
+    let cancel = AtomicBool::new(false);
+    let first = archive::source_publication_lease(root.path()).unwrap();
+    let second = archive::source_publication_lease(root.path()).unwrap();
+    let before = tree(&root.path().join("sessions").join(&id));
+    assert!(archive::preview_erasure(root.path(), &id, &cancel).is_err());
+    drop(first);
+    assert!(archive::preview_erasure(root.path(), &id, &cancel).is_err());
+    assert_eq!(tree(&root.path().join("sessions").join(&id)), before);
+    drop(second);
+    erase(root.path(), &id);
+}
 /// Builds only a fresh synthetic PCM/transcript meeting under the supplied temporary root.
 fn fixture(root: &Path, text: &str, seconds: usize) -> String {
     fs::create_dir_all(root.join("sessions")).unwrap();
@@ -339,6 +357,146 @@ fn incomplete_zip_identity_conflicts_and_missing_attribution_still_block_erasure
         assert!(archive::preview_erasure(root.path(), &id, &cancel).is_err());
         assert_eq!(fs::read(path).unwrap(), bytes);
     }
+}
+
+/// Even a hash-valid ZIP cannot authorize removing a different embedded meeting.
+#[test]
+fn verified_and_orphan_zips_reject_foreign_embedded_session_identities() {
+    use sha2::{Digest, Sha256};
+    use std::io::{Read, Write};
+    for orphan in [false, true] {
+        for name in ["session/session.json", "session/session.json.bak"] {
+            let root = tempfile::tempdir().unwrap();
+            let id = fixture(root.path(), PRIVATE, 1);
+            let foreign = fixture(root.path(), "Foreign ZIP contents preserved", 1);
+            let cancel = AtomicBool::new(false);
+            let receipt =
+                archive::create(root.path(), &id, 0, "whole-meeting", &cancel, |_, _| {}).unwrap();
+            let archives = root.path().join("archives");
+            let path = archives.join(format!("{}.zip", receipt.archive_id));
+            let mut entries = BTreeMap::new();
+            {
+                let mut reader = zip::ZipArchive::new(fs::File::open(&path).unwrap()).unwrap();
+                for n in 0..reader.len() {
+                    let mut entry = reader.by_index(n).unwrap();
+                    let mut bytes = Vec::new();
+                    entry.read_to_end(&mut bytes).unwrap();
+                    entries.insert(entry.name().unwrap().into_owned(), bytes);
+                }
+            }
+            let mut embedded: serde_json::Value = serde_json::from_slice(&entries[name]).unwrap();
+            embedded["id"] = foreign.into();
+            let bytes = serde_json::to_vec(&embedded).unwrap();
+            let mut manifest: serde_json::Value =
+                serde_json::from_slice(&entries["ARCHIVE_MANIFEST.json"]).unwrap();
+            let item = manifest["files"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|item| item["name"] == name)
+                .unwrap();
+            item["bytes"] = (bytes.len() as u64).into();
+            item["sha256"] = format!("{:x}", Sha256::digest(&bytes)).into();
+            entries.insert(name.into(), bytes);
+            entries.insert(
+                "ARCHIVE_MANIFEST.json".into(),
+                serde_json::to_vec(&manifest).unwrap(),
+            );
+            let mut writer = zip::ZipWriter::new(fs::File::create(&path).unwrap());
+            for (name, bytes) in entries {
+                if name.ends_with('/') {
+                    writer
+                        .add_directory(name, zip::write::SimpleFileOptions::default())
+                        .unwrap();
+                } else {
+                    writer
+                        .start_file(name, zip::write::SimpleFileOptions::default())
+                        .unwrap();
+                    writer.write_all(&bytes).unwrap();
+                }
+            }
+            writer.finish().unwrap();
+            assert!(
+                archive::verify(&path, Some(&cancel), |_, _| {}).is_ok(),
+                "Fixture must pass full inventory/hash verification"
+            );
+            if orphan {
+                for suffix in ["pending.json", "receipt.json"] {
+                    fs::remove_file(archives.join(format!("{}.{suffix}", receipt.archive_id)))
+                        .unwrap();
+                }
+            }
+            let before = tree(root.path());
+            assert!(archive::preview_erasure(root.path(), &id, &cancel).is_err(), "Hash-valid ZIP concealed a foreign embedded identity: orphan={orphan}, record={name}");
+            let after = tree(root.path());
+            for (path, bytes) in before {
+                assert!(
+                    after.get(&path) == Some(&bytes),
+                    "Existing synthetic file changed: {}",
+                    path.display()
+                );
+            }
+        }
+    }
+}
+
+/// The confirmed interruption marker must survive loss of the original creation record.
+#[test]
+fn cancelled_zip_erasure_can_resume_after_pending_file_was_removed() {
+    let root = tempfile::tempdir().unwrap();
+    let id = fixture(root.path(), PRIVATE, 1);
+    let cancel = AtomicBool::new(false);
+    assert!(
+        archive::create(root.path(), &id, 0, "whole-meeting", &cancel, |n, _| {
+            if n >= 1 {
+                cancel.store(true, Ordering::Release);
+            }
+        })
+        .is_err()
+    );
+    let folder = root.path().join("archives");
+    let zip = fs::read_dir(&folder)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .find(|p| p.extension().is_some_and(|ext| ext == "zip"))
+        .unwrap();
+    let pending = zip.with_extension("pending.json");
+    cancel.store(false, Ordering::Release);
+    let preview = archive::preview_erasure(root.path(), &id, &cancel).unwrap();
+    let result = archive::erase_meeting(
+        root.path(),
+        &id,
+        &preview.fingerprint,
+        &format!("DELETE {id}"),
+        &cancel,
+        |_, _| {
+            if !pending.exists() && zip.exists() {
+                cancel.store(true, Ordering::Release);
+            }
+        },
+    );
+    assert!(result.is_err());
+    assert!(
+        !pending.exists() && zip.exists(),
+        "Fixture must stop after pending removal but before ZIP removal"
+    );
+    assert_eq!(archive::pending_erasures(root.path()).unwrap().len(), 1);
+    cancel.store(false, Ordering::Release);
+    let fresh = archive::preview_erasure(root.path(), &id, &cancel).expect(
+        "Confirmed archive identity must remain usable after the original pending file is removed",
+    );
+    archive::erase_meeting(
+        root.path(),
+        &id,
+        &fresh.fingerprint,
+        &format!("DELETE {id}"),
+        &cancel,
+        |_, _| {},
+    )
+    .unwrap();
+    assert!(!zip.exists());
+    assert!(!root.path().join("sessions").join(id).exists());
+    assert!(archive::pending_erasures(root.path()).unwrap().is_empty());
 }
 
 /// A short native fixture is erasable directly while automatic retention remains archive-only.
