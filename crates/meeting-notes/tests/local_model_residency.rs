@@ -22,6 +22,7 @@ struct Server {
     handle: Option<thread::JoinHandle<()>>,
 }
 impl Server {
+    /// Starts only this fixture-owned bounded loopback HTTP server; no actual model service is contacted.
     fn new(mut handler: impl FnMut(&str, &Value) -> (u16, Value) + Send + 'static) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
@@ -54,9 +55,11 @@ impl Server {
             handle: Some(handle),
         }
     }
+    /// Snapshots protocol requests so preservation and cleanup assertions inspect the actual wire contract.
     fn seen(&self) -> Vec<(String, Value)> {
         self.requests.lock().unwrap().clone()
     }
+    /// Builds a local-only synthetic connection without credentials or cloud permission.
     fn connection(&self) -> Connection {
         Connection {
             endpoint: self.endpoint.clone(),
@@ -68,11 +71,13 @@ impl Server {
     }
 }
 impl Drop for Server {
+    /// Stops and joins only this fixture server thread, leaving application and user processes untouched.
     fn drop(&mut self) {
         self.stop.store(true, Ordering::Release);
         self.handle.take().unwrap().join().unwrap();
     }
 }
+/// Parses bounded fixture HTTP bodies to distinguish management requests from inference text.
 fn read(stream: &mut TcpStream) -> (String, Value) {
     stream.set_nonblocking(false).unwrap();
     stream
@@ -119,6 +124,7 @@ fn read(stream: &mut TcpStream) -> (String, Value) {
         },
     )
 }
+/// Provides deterministic native Ollama acknowledgements without model or audio access.
 fn ollama(path: &str, _: &Value) -> (u16, Value) {
     match path {
         "/api/ps" => (200, json!({"models":[]})),
@@ -130,6 +136,7 @@ fn ollama(path: &str, _: &Value) -> (u16, Value) {
         _ => (500, json!({})),
     }
 }
+/// Separates foreign and owned synthetic LM Studio instance IDs for cleanup assertions.
 fn lm(path: &str, body: &Value) -> (u16, Value) {
     match path {
         "/api/v1/models" => (
@@ -148,6 +155,7 @@ fn lm(path: &str, body: &Value) -> (u16, Value) {
         _ => (500, json!({})),
     }
 }
+/// Uses one nonbinding synthetic source and the actual evidence-schema transport path.
 fn generate(client: &TextClient) -> anyhow::Result<String> {
     client.generate(
         &[Source {
@@ -166,6 +174,7 @@ fn generate(client: &TextClient) -> anyhow::Result<String> {
     )
 }
 
+/// Checks management precedes text and that client clones prevent premature final cleanup.
 #[test]
 fn ollama_pins_before_text_and_last_user_releases_after_all_client_clones() {
     let server = Server::new(ollama);
@@ -190,9 +199,9 @@ fn ollama_pins_before_text_and_last_user_releases_after_all_client_clones() {
     );
     assert_eq!(
         seen[1].1,
-        json!({"model":"synthetic","stream":false,"keep_alive":-1})
+        json!({"model":"synthetic","stream":false,"keep_alive":300})
     );
-    assert_eq!(seen[2].1["keep_alive"], -1);
+    assert_eq!(seen[2].1["keep_alive"], 300);
     assert_eq!(seen[2].1["options"]["num_predict"], 2048);
     assert!(seen[2].1["format"]["properties"]["items"].is_object());
     assert_eq!(seen[2].1["messages"][0]["role"], "system");
@@ -209,6 +218,7 @@ fn ollama_pins_before_text_and_last_user_releases_after_all_client_clones() {
     assert_eq!(seen[3].1["keep_alive"], 0);
 }
 
+/// Checks instance-specific inference and proves the unrelated loaded instance is never unloaded.
 #[test]
 fn lm_studio_uses_its_explicit_instance_and_never_unloads_the_foreign_one() {
     let server = Server::new(lm);
@@ -241,6 +251,7 @@ fn lm_studio_uses_its_explicit_instance_and_never_unloads_the_foreign_one() {
         .any(|(_, b)| b.get("instance_id") == Some(&json!("foreign"))));
 }
 
+/// Refuses a reused foreign instance instead of claiming ownership or sending text to it.
 #[test]
 fn lm_studio_reused_foreign_id_is_explicit_failure_without_unload_or_inference() {
     let server = Server::new(|p, b| {
@@ -266,6 +277,7 @@ fn lm_studio_reused_foreign_id_is_explicit_failure_without_unload_or_inference()
     assert_eq!(server.seen().len(), 2);
 }
 
+/// Preserves foreign indefinite residency and restores finite idle grace rather than forcing unload.
 #[test]
 fn borrowed_ollama_indefinite_load_is_preserved_and_finite_idle_grace_is_restored() {
     for (expiry, release) in [
@@ -296,6 +308,7 @@ fn borrowed_ollama_indefinite_load_is_preserved_and_finite_idle_grace_is_restore
     }
 }
 
+/// Keeps failed work reserved while refusing incomplete answers and allows explicit retry.
 #[test]
 fn failure_keeps_warm_reservation_for_retry_and_rejects_truncated_native_answers() {
     let failed = Arc::new(AtomicBool::new(true));
@@ -343,6 +356,7 @@ fn failure_keeps_warm_reservation_for_retry_and_rejects_truncated_native_answers
     assert_eq!(server.seen().last().unwrap().1["keep_alive"], 0);
 }
 
+/// Proves cancelled or unconfirmed preparation cannot transmit inference text.
 #[test]
 fn cancellation_before_prepare_does_not_contact_provider_and_failed_load_sends_no_text() {
     let server = Server::new(|p, b| {
@@ -371,6 +385,7 @@ fn cancellation_before_prepare_does_not_contact_provider_and_failed_load_sends_n
     assert_eq!(server.seen().len(), 2);
 }
 
+/// Makes an unacknowledged release visible rather than silently reusing uncertain ownership.
 #[test]
 fn failed_cleanup_blocks_unconfirmed_reuse_instead_of_claiming_a_fresh_pin() {
     let server = Server::new(|p, b| {
@@ -389,6 +404,7 @@ fn failed_cleanup_blocks_unconfirmed_reuse_instead_of_claiming_a_fresh_pin() {
     assert_eq!(server.seen().len(), 3);
 }
 
+/// Exercises route, credential and model boundaries before any provider request.
 #[test]
 fn pool_rejects_cloud_remote_route_auth_and_model_mismatches_before_network() {
     let server = Server::new(ollama);
@@ -418,26 +434,16 @@ fn pool_rejects_cloud_remote_route_auth_and_model_mismatches_before_network() {
     assert!(server.seen().is_empty());
 }
 
+/// A finite lease bridges a quiet live interval while a retained coordinator owns it.
 #[test]
-fn virtual_idle_expiry_cannot_drop_the_model_between_live_updates() {
-    // Advance a provider-side virtual clock past its default idle TTL. This is a protocol
-    // regression, not a hardware, performance or real-duration measurement.
-    let warm = Arc::new(AtomicBool::new(false));
-    let pinned = Arc::new(AtomicBool::new(false));
-    let (loaded, forever) = (Arc::clone(&warm), Arc::clone(&pinned));
-    let server = Server::new(move |p, b| {
-        if p == "/api/generate" {
-            loaded.store(b["keep_alive"] != 0, Ordering::Release);
-            forever.store(b["keep_alive"] == -1, Ordering::Release);
+fn bounded_idle_grace_keeps_the_model_between_live_updates() {
+    let remaining = Arc::new(std::sync::atomic::AtomicI64::new(0));
+    let ttl = Arc::clone(&remaining);
+    let server = Server::new(move |path, body| {
+        if path == "/api/generate" || path == "/api/chat" {
+            ttl.store(body["keep_alive"].as_i64().unwrap(), Ordering::Release);
         }
-        if p == "/v1/chat/completions" {
-            loaded.store(true, Ordering::Release);
-            return (
-                200,
-                json!({"choices":[{"finish_reason":"stop","message":{"content":"{\"items\":[]}"}}]}),
-            );
-        }
-        ollama(p, b)
+        ollama(path, body)
     });
     let pool = LocalModelPool::default();
     let conn = server.connection();
@@ -447,22 +453,18 @@ fn virtual_idle_expiry_cannot_drop_the_model_between_live_updates() {
         .with_residency(Arc::clone(&anchor))
         .unwrap();
     generate(&client).unwrap();
-    if !pinned.load(Ordering::Acquire) {
-        warm.store(false, Ordering::Release);
-    }
-    assert!(
-        warm.load(Ordering::Acquire),
-        "Selected model expired between live updates"
-    );
+    // This is a provider-side virtual quiet interval, not a four-minute device run.
+    assert_eq!(remaining.fetch_sub(240, Ordering::AcqRel), 300);
     drop(client);
     assert!(
-        warm.load(Ordering::Acquire),
-        "Idle coordinator still awaits finalization"
+        remaining.load(Ordering::Acquire) > 0,
+        "Idle coordinator awaits finalization"
     );
     drop(anchor);
-    assert!(!warm.load(Ordering::Acquire));
+    assert_eq!(remaining.load(Ordering::Acquire), 0);
 }
 
+/// Treats HTTP success without provider-specific acknowledgement as an ownership failure.
 #[test]
 fn successful_http_without_load_or_exact_unload_ack_is_not_a_confirmed_lifetime() {
     let server = Server::new(|p, b| {
@@ -494,6 +496,7 @@ fn successful_http_without_load_or_exact_unload_ack_is_not_a_confirmed_lifetime(
     assert!(pool.reserve(&conn, LocalProvider::LmStudio).is_err());
 }
 
+/// Waits for a submitted native acknowledgement so cancellation cleans only the known owned instance.
 #[test]
 fn cancellation_during_native_load_still_tracks_the_created_instance_until_release() {
     let entered = Arc::new(AtomicBool::new(false));
@@ -541,6 +544,7 @@ fn cancellation_during_native_load_still_tracks_the_created_instance_until_relea
     );
 }
 
+/// Retains failed finalization and verifies saved live-window bytes survive resume before cleanup.
 #[test]
 fn failed_live_overview_stays_warm_and_resume_preserves_the_window_before_final_release() {
     use meeting_notes::live::{read_latest, LiveRunner, LiveText, Trigger};
@@ -633,6 +637,7 @@ fn failed_live_overview_stays_warm_and_resume_preserves_the_window_before_final_
     assert_eq!(server.seen().last().unwrap().1["keep_alive"], 0);
 }
 
+/// Prevents premature cleanup across aliases while preserving their distinct validated destinations.
 #[test]
 fn loopback_aliases_defer_cleanup_without_merging_routes_or_model_instances() {
     let server = Server::new(ollama);
@@ -666,4 +671,121 @@ fn loopback_aliases_defer_cleanup_without_merging_routes_or_model_instances() {
             .count(),
         2
     );
+}
+
+/// Abruptly exiting our synthetic child must leave a finite server TTL, never an orphan pin.
+#[test]
+fn terminated_owner_leaves_bounded_ollama_residency_and_restart_can_release() {
+    const CHILD: &str = "HANDYMEETING_SYNTHETIC_RESIDENCY_CRASH_ENDPOINT";
+    if let Ok(endpoint) = std::env::var(CHILD) {
+        let connection = Connection {
+            endpoint,
+            model: "synthetic".into(),
+            mode: "local".into(),
+            cloud_consent: false,
+            api_key: String::new(),
+        };
+        let pool = LocalModelPool::default();
+        let lease = pool.reserve(&connection, LocalProvider::Ollama).unwrap();
+        let client = TextClient::new(&connection)
+            .unwrap()
+            .with_residency(lease)
+            .unwrap();
+        generate(&client).unwrap();
+        // Deliberately bypass Drop only in this named test child, not the host application.
+        std::process::exit(0);
+    }
+    let server = Server::new(ollama);
+    let status = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "terminated_owner_leaves_bounded_ollama_residency_and_restart_can_release",
+            "--test-threads=1",
+        ])
+        .env(CHILD, &server.endpoint)
+        .status()
+        .unwrap();
+    assert!(status.success());
+    let seen = server.seen();
+    let lifetimes: Vec<_> = seen
+        .iter()
+        .filter(|(path, _)| path == "/api/generate" || path == "/api/chat")
+        .map(|(_, body)| body["keep_alive"].as_i64().unwrap())
+        .collect();
+    assert_eq!(lifetimes.len(), 2);
+    assert!(
+        lifetimes.iter().all(|seconds| (1..=300).contains(seconds)),
+        "Terminated app-owned loads and inference must not leave indefinite residency: {lifetimes:?}"
+    );
+    // Provider-side expiry is simulated by the empty /api/ps response. A new app
+    // owns the subsequent load and can release it, rather than borrowing a far-future pin.
+    let restarted = LocalModelPool::default();
+    let lease = restarted
+        .reserve(&server.connection(), LocalProvider::Ollama)
+        .unwrap();
+    lease.prepare(&AnalysisControl::default()).unwrap();
+    drop(lease);
+    assert_eq!(server.seen().last().unwrap().1["keep_alive"], 0);
+}
+
+/// A retained owner renews through an actual idle interval without generating text.
+#[test]
+fn retained_owner_renews_ollama_without_inference_then_last_owner_releases() {
+    let (sent, renewal) = std::sync::mpsc::channel();
+    let mut loads = 0;
+    let server = Server::new(move |path, body| {
+        if path == "/api/generate" && body["keep_alive"] != 0 {
+            loads += 1;
+            if loads > 1 {
+                sent.send(body["keep_alive"].as_i64().unwrap()).unwrap();
+            }
+        }
+        ollama(path, body)
+    });
+    let pool = LocalModelPool::default();
+    let lease = pool
+        .reserve(&server.connection(), LocalProvider::Ollama)
+        .unwrap();
+    lease.prepare(&AnalysisControl::default()).unwrap();
+    // This waits for the production 60-second refresher; it is still a synthetic
+    // HTTP fixture, not a real model/server, device or long-meeting proof.
+    assert_eq!(renewal.recv_timeout(Duration::from_secs(75)).unwrap(), 300);
+    assert!(!server.seen().iter().any(|(path, _)| path == "/api/chat"));
+    drop(lease);
+    assert_eq!(server.seen().last().unwrap().1["keep_alive"], 0);
+}
+
+/// Failed background renewal cannot be silently treated as a confirmed warm model.
+#[test]
+fn failed_background_renewal_blocks_text_until_explicit_retry_succeeds() {
+    let fail = Arc::new(AtomicBool::new(true));
+    let failing = Arc::clone(&fail);
+    let (sent, renewal) = std::sync::mpsc::channel();
+    let mut loads = 0;
+    let server = Server::new(move |path, body| {
+        if path == "/api/generate" && body["keep_alive"] != 0 {
+            loads += 1;
+            if loads > 1 && failing.load(Ordering::Acquire) {
+                sent.send(()).unwrap();
+                return (500, json!({}));
+            }
+        }
+        ollama(path, body)
+    });
+    let pool = LocalModelPool::default();
+    let conn = server.connection();
+    let lease = pool.reserve(&conn, LocalProvider::Ollama).unwrap();
+    lease.prepare(&AnalysisControl::default()).unwrap();
+    renewal.recv_timeout(Duration::from_secs(75)).unwrap();
+    let client = TextClient::new(&conn)
+        .unwrap()
+        .with_residency(Arc::clone(&lease))
+        .unwrap();
+    assert!(generate(&client).is_err());
+    assert!(!server.seen().iter().any(|(path, _)| path == "/api/chat"));
+    fail.store(false, Ordering::Release);
+    assert!(generate(&client).is_ok());
+    drop(client);
+    drop(lease);
+    assert_eq!(server.seen().last().unwrap().1["keep_alive"], 0);
 }

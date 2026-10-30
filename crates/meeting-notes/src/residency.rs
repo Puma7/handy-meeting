@@ -6,7 +6,7 @@ use std::{
     collections::HashMap,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
-        Arc, Mutex,
+        Arc, Mutex, OnceLock,
     },
     time::Duration,
 };
@@ -29,11 +29,13 @@ struct Slot {
     model: String,
     users: AtomicUsize,
     cleanup_failed: AtomicBool,
+    refresher: OnceLock<Result<std::thread::Thread, ()>>,
 }
 struct State {
     client: TextClient,
     provider: LocalProvider,
     loaded: Option<Loaded>,
+    refresh_failed: bool,
 }
 enum Loaded {
     Ollama { release_after: i64 },
@@ -45,6 +47,11 @@ pub struct ModelLease {
     slot: Arc<Slot>,
     slots: Arc<Mutex<HashMap<String, Arc<Slot>>>>,
 }
+
+// A stopped app cannot renew this finite server-side lease. Live/failed owners
+// renew every minute, including idle intervals without inference.
+const OLLAMA_KEEP_ALIVE_SECONDS: i64 = 300;
+const OLLAMA_REFRESH_INTERVAL: Duration = Duration::from_secs(60);
 
 impl LocalModelPool {
     /// Reserves only the caller's chosen local route/model, without making network requests.
@@ -73,10 +80,12 @@ impl LocalModelPool {
                 model: connection.model.clone(),
                 users: AtomicUsize::new(0),
                 cleanup_failed: AtomicBool::new(false),
+                refresher: OnceLock::new(),
                 state: Mutex::new(State {
                     client,
                     provider,
                     loaded: None,
+                    refresh_failed: false,
                 }),
             })
         }));
@@ -101,6 +110,7 @@ impl LocalModelPool {
 }
 
 impl ModelLease {
+    /// Requires identical validated route/model and credential digest before binding a text client.
     pub(crate) fn matches_client(&self, client: &TextClient) -> bool {
         client
             .local_identity()
@@ -126,6 +136,12 @@ impl ModelLease {
             .map_err(|_| anyhow::anyhow!("Lokales Modell ist gesperrt."))?;
         control.check()?;
         if state.loaded.is_some() {
+            if state.refresh_failed {
+                renew_ollama(&mut state, Duration::from_secs(300))?;
+            }
+            if ollama_keep_alive(&state).is_some_and(|seconds| seconds > 0) {
+                self.ensure_refresher()?;
+            }
             return Ok(());
         }
         let client = &state.client;
@@ -161,7 +177,7 @@ impl ModelLease {
                 };
                 let response = client.model_request(
                     "api/generate",
-                    Some(&json!({"model":client.model,"stream":false,"keep_alive":-1})),
+                    Some(&json!({"model":client.model,"stream":false,"keep_alive":keep_alive_for(release_after)})),
                     // A native load creates server state. Once submitted, read its bounded
                     // acknowledgement even after cancellation so the owned instance remains
                     // known and can be released. Inference itself remains cancellable.
@@ -228,10 +244,43 @@ impl ModelLease {
             }
         };
         state.loaded = Some(loaded);
+        state.refresh_failed = false;
+        if ollama_keep_alive(&state).is_some_and(|seconds| seconds > 0) {
+            self.ensure_refresher()?;
+        }
         control.check()
     }
+    /// One weakly owned worker per bounded slot isolates each provider's delay.
+    /// It retains neither meetings nor the slot between refreshes; the registry
+    /// already limits the application to 128 distinct routes.
+    fn ensure_refresher(&self) -> Result<()> {
+        let weak_slot = Arc::downgrade(&self.slot);
+        let result = self.slot.refresher.get_or_init(|| {
+            std::thread::Builder::new()
+                .name("local-model-residency".into())
+                .spawn(move || loop {
+                    std::thread::park_timeout(OLLAMA_REFRESH_INTERVAL);
+                    let Some(slot) = weak_slot.upgrade() else {
+                        break;
+                    };
+                    // A load/release already holds this lock; never wait behind it
+                    // or hold the global registry during provider requests.
+                    let Ok(mut state) = slot.state.try_lock() else {
+                        continue;
+                    };
+                    if ollama_keep_alive(&state).is_some_and(|seconds| seconds > 0) {
+                        state.refresh_failed =
+                            renew_ollama(&mut state, Duration::from_secs(10)).is_err();
+                    }
+                })
+                .map(|worker| worker.thread().clone())
+                .map_err(|_| ())
+        });
+        ensure!(result.is_ok(), "Die regelmäßige Modellreservierung konnte nicht gestartet werden. Anwendung vor weiterer Auswertung neu starten.");
+        Ok(())
+    }
     /// Returns only routing policy for the selected model; never session or audio data.
-    pub(crate) fn inference(&self) -> Result<(LocalProvider, String)> {
+    pub(crate) fn inference(&self) -> Result<(LocalProvider, String, i64)> {
         let state = self
             .slot
             .state
@@ -245,14 +294,17 @@ impl ModelLease {
             Loaded::Ollama { .. } => state.client.model.clone(),
             Loaded::LmStudio { instance } => instance.clone(),
         };
-        Ok((state.provider, name))
+        ensure!(!state.refresh_failed, "Die lokale Modellreservierung konnte nicht erneuert werden. Modelldienst prüfen und Auswertung fortsetzen.");
+        Ok((state.provider, name, ollama_keep_alive(&state).unwrap_or(0)))
     }
+    /// Compares logical slot identity without merging different routes or credentials.
     pub fn same_model(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.slot, &other.slot)
     }
 }
 
 impl Drop for ModelLease {
+    /// Releases only the final logical owner, deferring cleanup while any loopback alias remains active.
     fn drop(&mut self) {
         if self.slot.users.fetch_sub(1, Ordering::AcqRel) != 1 {
             return;
@@ -284,6 +336,8 @@ impl Drop for ModelLease {
     }
 }
 impl Slot {
+    /// Serializes the final release against refresh; no subsequent refresh can
+    /// recreate a model once its loaded state was removed under this mutex.
     fn release(&self) {
         let Ok(mut state) = self.state.lock() else {
             return;
@@ -328,6 +382,41 @@ impl Slot {
     }
 }
 
+/// Preserve foreign indefinite reservations; owned loads receive only finite TTLs.
+fn keep_alive_for(release_after: i64) -> i64 {
+    if release_after == -1 {
+        -1
+    } else {
+        release_after.max(OLLAMA_KEEP_ALIVE_SECONDS)
+    }
+}
+
+/// Unloaded slots and LM Studio explicit instances never enter the Ollama refresher.
+fn ollama_keep_alive(state: &State) -> Option<i64> {
+    match state.loaded {
+        Some(Loaded::Ollama { release_after }) => Some(keep_alive_for(release_after)),
+        _ => None,
+    }
+}
+
+/// Refresh only the existing slot's policy; failed renewal is surfaced before inference.
+fn renew_ollama(state: &mut State, timeout: Duration) -> Result<()> {
+    let seconds = ollama_keep_alive(state).context("Lokale Modellreservierung fehlt.")?;
+    let response = state.client.model_request(
+        "api/generate",
+        Some(&json!({"model":state.client.model,"stream":false,"keep_alive":seconds})),
+        &AnalysisControl::default(),
+        timeout,
+    )?;
+    ensure!(
+        response["done"] == true,
+        "Lokale Modellreservierung wurde nicht erneut bestätigt."
+    );
+    state.refresh_failed = false;
+    Ok(())
+}
+
+/// Rejects empty, oversized and control-bearing provider identifiers before management requests.
 fn valid_model_name(value: &str) -> Result<()> {
     ensure!(
         !value.is_empty() && value.len() <= 300 && !value.chars().any(char::is_control),
@@ -335,6 +424,7 @@ fn valid_model_name(value: &str) -> Result<()> {
     );
     Ok(())
 }
+/// Accepts only exact Ollama names and its implicit latest tag; no fuzzy model selection.
 fn model_name_matches(value: Option<&str>, model: &str) -> bool {
     value.is_some_and(|value| {
         value == model

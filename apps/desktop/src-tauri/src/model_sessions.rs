@@ -113,6 +113,7 @@ impl Models {
     }
 }
 impl ModelWork {
+    /// Rejects a stale work handle after its exact reservation generation was released.
     pub(crate) fn lease(&self) -> AppResult<Arc<ModelLease>> {
         self.expected
             .upgrade()
@@ -138,6 +139,7 @@ impl ModelWork {
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// Builds a synthetic non-listening loopback route; coordinator tests make no network requests.
     fn connection(model: &str) -> Connection {
         Connection {
             endpoint: "http://127.0.0.1:9/v1/".into(),
@@ -153,6 +155,7 @@ mod tests {
             .unwrap()
             .unwrap()
     }
+    /// Proves dropping a transient client does not discard the retry anchor.
     #[test]
     fn failed_work_is_retained_without_a_client_and_reused_by_the_same_meeting() {
         let models = Models::default();
@@ -171,6 +174,7 @@ mod tests {
         retry.finish();
         assert!(weak.upgrade().is_none());
     }
+    /// Keeps unrelated meetings and independent live/post owners isolated during completion.
     #[test]
     fn another_meetings_completion_preserves_failed_work_and_live_post_owners_are_independent() {
         let models = Models::default();
@@ -189,6 +193,7 @@ mod tests {
         post.finish();
         assert!(models.0.work.lock().unwrap().is_empty());
     }
+    /// Prevents rejected replacement and stale completion from releasing preserved work.
     #[test]
     fn invalid_replacement_or_stale_worker_cannot_release_earlier_model() {
         let models = Models::default();
@@ -213,6 +218,7 @@ mod tests {
         replacement.finish();
         assert!(weak.upgrade().is_none());
     }
+    /// Separates durable completion from the lifetime of in-flight client references.
     #[test]
     fn completion_keeps_inflight_clients_alive_after_removing_the_anchor() {
         let models = Models::default();

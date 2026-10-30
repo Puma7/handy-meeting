@@ -130,6 +130,7 @@ impl TextClient {
         self.residency = Some(lease);
         Ok(self)
     }
+    /// Derives a session-free reservation identity only after local route validation.
     pub(crate) fn local_identity(&self) -> Result<String> {
         ensure!(
             self.local,
@@ -141,6 +142,7 @@ impl TextClient {
         );
         Ok(format!("{}\0{}", self.target, self.model))
     }
+    /// Compares credentials without logging or retaining another plaintext credential copy.
     pub(crate) fn local_auth_digest(&self) -> [u8; 32] {
         use sha2::Digest;
         sha2::Sha256::digest(self.key.as_bytes()).into()
@@ -316,6 +318,7 @@ impl TextClient {
         self.diagnostic.borrow_mut().result = stage;
     }
 
+    /// Uses the same evidence schema and output limits across explicitly selected provider envelopes.
     fn chat_json_inner(
         &self,
         system: &str,
@@ -338,13 +341,13 @@ impl TextClient {
         }
         let response = if let Some(lease) = &self.residency {
             lease.prepare(control)?;
-            let (provider, model) = lease.inference()?;
+            let (provider, model, keep_alive) = lease.inference()?;
             match provider {
                 crate::residency::LocalProvider::Ollama => {
                     // Native chat supports keep_alive on older Ollama versions too.
                     // The same fixed messages/schema/budget are used; only the envelope differs.
                     let native = serde_json::json!({"model":model,"stream":false,
-                        "messages":body["messages"],"format":schema,"keep_alive":-1,
+                        "messages":body["messages"],"format":schema,"keep_alive":keep_alive,
                         "options":{"num_predict":max_tokens,"temperature":0}});
                     let result = self.model_request(
                         "api/chat",
