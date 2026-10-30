@@ -477,6 +477,10 @@ mod tests {
                         Err(e) => panic!("Synthetic loopback accept: {e}"),
                     }
                 };
+                // Accepted sockets inherit the nonblocking listener mode on Windows.
+                // The request-body gate needs a bounded blocking read, not a race
+                // between accept and the client's first HTTP bytes.
+                socket.set_nonblocking(false).unwrap();
                 socket
                     .set_read_timeout(Some(Duration::from_secs(5)))
                     .unwrap();

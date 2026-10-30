@@ -367,3 +367,61 @@ bytes and were not rerun for this frontend correction. Locked dependencies,
 protection and review rules, application version, primary session format and the
 entire historical TEST_REPORT.md remain unchanged. All existing deletion limits
 and the model-residency integration requirement still apply.
+
+## Candidate 10: readiness-fixture isolation and bounded archive work
+
+The Intel CI run for candidate 09 failed the existing synthetic startup-progress
+test before packaging. Its 150 ms fixture deadline depended on the host scheduling
+a separate recorder thread in time. Ten unchanged local baseline runs passed;
+inserting a private, deterministic 250 ms recorder stall reproduced the same
+deadline error in all ten runs. This establishes the fixture's scheduling
+dependence, not an observed trace of the Intel scheduler or a hardware fault.
+
+The positive test now uses a thread-local scoped clock driven by the exact
+startup-progress snapshot already inspected by the controller. Recorder gates
+separate eight progress steps from a final idle turn. All ten deliberately
+stalled runs pass with the corrected fixture. A new negative case proves that
+progress does not waive the eventual idle deadline: a late microphone is stopped
+while the healthy system track remains owned. Removing deadline renewal as a
+private fault injection was missed in all ten old-test runs and detected in all
+ten corrected-test runs. Temporary fault and stall edits were restored exactly.
+
+The test deadline remains 150 ms, the existing real harness guard remains five
+seconds, and the readiness polling interval remains 100 ms. Release builds alias
+the clock directly to std::time::Instant at the same three read sites; after
+resolving that alias and removing cfg(test) observations, the readiness-policy
+body is token-identical. Its macOS 60-second and other-supported-platform
+10-second idle deadlines, cancellation and late-worker stop policy are unchanged.
+This is controlled-clock/thread fixture coverage, not a new device, endurance or
+actual Intel CI result. The new target CI must independently pass.
+
+A later local full run exposed a separate race in the synthetic archived-analysis
+HTTP gate: Windows accepted sockets inherited the listener's nonblocking mode.
+A read timeout alone did not make the accepted stream blocking. A private loopback
+probe delayed the first client bytes by 250 ms: the original read returned
+WouldBlock immediately, whereas explicitly selecting blocking mode read all nine
+synthetic bytes after 250 ms. The test server now selects that mode before its
+unchanged five-second read timeout. Its fresh/resumed analysis, concurrent erasure
+exclusion, final worker join and subsequent confirmed erasure assertions remain
+unchanged. No production HTTP transport is modified; the failed full-run evidence
+is retained separately.
+
+The non-blocking archive-performance observation from the complete candidate 09
+review is also addressed. Source-lease preparation returns its checked archive
+targets for the pre-removal inventory while the exclusive archive/publication
+leases remain held. Attributed ZIP contents are no longer decompressed and
+manifest-hashed twice in that unchanged preparation phase. Each ordinary file
+still receives its inventory hash and is rechecked before unlinking. Attribution
+after removal is computed fresh; interrupted ZIP recovery and every readable
+primary/backup identity check remain in place. This is bounded duplicate-work
+removal, without a measured large-archive latency claim or a new safety exception.
+
+The complete Rust workspace/all-target run passes 387 tests, including the 26
+core erasure cases; the same two existing special entry points are normally
+ignored. Rust formatting, Clippy with warnings denied and verify.ps1 pass. The
+243 frontend tests and TypeScript/production build remain prior candidate 09
+evidence for byte-identical UI files, not newly executed suites. Locked
+dependencies, protection and review rules, application version, primary session
+format and the entire historical TEST_REPORT.md remain unchanged. No real
+meeting, device, provider service or installed program was modified. All prior
+erasure boundaries and pending model-residency integration still apply.

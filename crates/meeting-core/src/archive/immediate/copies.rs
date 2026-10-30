@@ -219,18 +219,19 @@ pub(super) fn targets(
     }
     Ok(ids.into_iter().collect())
 }
-/// Adds only fixed namespaces belonging to the selected native meeting.
+/// Adds fixed namespaces for targets already attributed under the caller's exclusive
+/// archive/publication leases. Each file still receives its own inventory hash.
 pub(super) fn inventory(
     root: &Path,
     id: &str,
-    known: &[String],
+    checked_targets: Vec<String>,
     cancel: &AtomicBool,
 ) -> Result<Inventory> {
     metadata::checked_directory(root)?;
     let mut data = Inventory {
         files: Vec::new(),
         directories: Vec::new(),
-        archive_ids: targets(root, id, known, cancel)?,
+        archive_ids: checked_targets,
         preserved_atomic_remnants: 0,
     };
     for path in [

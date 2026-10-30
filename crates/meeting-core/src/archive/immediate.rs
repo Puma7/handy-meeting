@@ -153,12 +153,14 @@ fn retained_records(
     }
     Ok(())
 }
-/// Session leases prevent other processes from reopening a source during explicit removal.
+/// Keeps the checked archive targets alongside the source leases. The caller already
+/// holds the exclusive archive/publication leases, so pre-removal inventory can reuse
+/// this attribution without decompressing the same ZIPs a second time.
 fn source_leases(
     root: &Path,
     id: &str,
     cancel: &AtomicBool,
-) -> Result<Vec<crate::storage::RelocationGuard>> {
+) -> Result<(Vec<crate::storage::RelocationGuard>, Vec<String>)> {
     let known = pending(root, id)?
         .map(|p| p.archive_ids)
         .unwrap_or_default();
@@ -177,20 +179,30 @@ fn source_leases(
             leases.push(crate::storage::erasure_lease(&path)?);
         }
     }
-    Ok(leases)
+    Ok((leases, targets))
 }
 /// Erasure authority accepts only fixed native identities, never external legacy references.
 fn native_id(id: &str) -> bool {
     metadata::valid_id(id) && !id.starts_with("legacy-")
 }
-/// Enumerates current remaining bytes, including partially erased attributed copies.
-fn inventory_for(root: &Path, id: &str, cancel: &AtomicBool) -> Result<Inventory> {
+/// Reuses targets only within the unchanged, exclusively leased pre-removal state.
+/// Passing None after removal performs fresh attribution of all remaining copies.
+fn inventory_for(
+    root: &Path,
+    id: &str,
+    cancel: &AtomicBool,
+    checked_targets: Option<Vec<String>>,
+) -> Result<Inventory> {
     let prior = pending(root, id)?;
     let known = prior
         .as_ref()
         .map(|p| p.archive_ids.as_slice())
         .unwrap_or_default();
-    let mut data = copies::inventory(root, id, known, cancel)?;
+    let targets = match checked_targets {
+        Some(targets) => targets,
+        None => copies::targets(root, id, known, cancel)?,
+    };
+    let mut data = copies::inventory(root, id, targets, cancel)?;
     if data.files.is_empty() && data.directories.is_empty() && prior.is_none() {
         return Err("No app-owned meeting or attributed copy found".into());
     }
@@ -288,8 +300,8 @@ pub fn preview_erasure(root: &Path, id: &str, cancel: &AtomicBool) -> Result<Era
     let _publication = publication_lease(root, true)?;
     let _index = crate::library::erasure_index_lock(root)?;
     let _annotations = annotation_locks(root, id)?;
-    let _leases = source_leases(root, id, cancel)?;
-    let data = inventory_for(root, id, cancel)?;
+    let (_leases, targets) = source_leases(root, id, cancel)?;
+    let data = inventory_for(root, id, cancel, Some(targets))?;
     cache_inventory(root, cancel)?;
     Ok(ErasurePreview {
         meeting_id: id.into(),
@@ -352,8 +364,8 @@ pub fn erase_meeting(
     let _publication = publication_lease(root, true)?;
     let _index = crate::library::erasure_index_lock(root)?;
     let _annotations = annotation_locks(root, id)?;
-    let _leases = source_leases(root, id, cancel)?;
-    let mut data = inventory_for(root, id, cancel)?;
+    let (_leases, targets) = source_leases(root, id, cancel)?;
+    let mut data = inventory_for(root, id, cancel, Some(targets))?;
     if fingerprint(id, &data.files, data.preserved_atomic_remnants)? != expected {
         return Err(
             "Meeting or copies changed since preview; nothing deleted. Create a new preview."
@@ -404,7 +416,7 @@ pub fn erase_meeting(
         metadata::checked_directory(&directory)?;
         fs::remove_dir(directory)?;
     }
-    let remaining = inventory_for(root, id, cancel)?;
+    let remaining = inventory_for(root, id, cancel, None)?;
     if !remaining.files.is_empty()
         || !remaining.directories.is_empty()
         || remaining.preserved_atomic_remnants != data.preserved_atomic_remnants

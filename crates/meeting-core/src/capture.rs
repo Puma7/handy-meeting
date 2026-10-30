@@ -21,6 +21,41 @@ use std::{
     time::{Duration, Instant},
 };
 
+// Release builds resolve the same three readiness clock reads directly to std.
+// Only a scoped unit-test clock can separate fixture scheduling from idle time.
+#[cfg(all(not(test), any(windows, target_os = "linux", target_os = "macos")))]
+type ReadinessClock = Instant;
+#[cfg(all(test, any(windows, target_os = "linux", target_os = "macos")))]
+struct TestReadinessClock {
+    read: Box<dyn FnMut(u64) -> Instant>,
+    observed_progress: u64,
+}
+#[cfg(all(test, any(windows, target_os = "linux", target_os = "macos")))]
+thread_local! {
+    static READINESS_TEST_CLOCK: std::cell::RefCell<Option<TestReadinessClock>> = const { std::cell::RefCell::new(None) };
+}
+#[cfg(all(test, any(windows, target_os = "linux", target_os = "macos")))]
+struct ReadinessClock;
+#[cfg(all(test, any(windows, target_os = "linux", target_os = "macos")))]
+impl ReadinessClock {
+    /// Use real time unless this test thread explicitly owns a scoped clock.
+    fn now() -> Instant {
+        READINESS_TEST_CLOCK.with(|clock| match clock.borrow_mut().as_mut() {
+            Some(clock) => (clock.read)(clock.observed_progress),
+            None => Instant::now(),
+        })
+    }
+    /// Bind virtual time to the exact progress snapshot the policy inspected,
+    /// never to a second racing read of the recorder's counter.
+    fn observe(progress: u64) {
+        READINESS_TEST_CLOCK.with(|clock| {
+            if let Some(clock) = clock.borrow_mut().as_mut() {
+                clock.observed_progress = progress;
+            }
+        });
+    }
+}
+
 #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 type TrackRecorder = fn(
     SessionStore,
@@ -247,7 +282,9 @@ impl CaptureController {
         })?;
         self.tracks.push((source, track, Arc::clone(&track_stop)));
         let mut progress = self.controls.startup_progress();
-        let mut deadline = Instant::now() + self.ready_timeout;
+        #[cfg(test)]
+        ReadinessClock::observe(progress);
+        let mut deadline = ReadinessClock::now() + self.ready_timeout;
         loop {
             match result.recv_timeout(Duration::from_millis(100)) {
                 Ok(Ok(())) => return Ok(()),
@@ -264,10 +301,12 @@ impl CaptureController {
                         );
                     }
                     let current = self.controls.startup_progress();
+                    #[cfg(test)]
+                    ReadinessClock::observe(current);
                     if current != progress {
                         progress = current;
-                        deadline = Instant::now() + self.ready_timeout;
-                    } else if Instant::now() >= deadline {
+                        deadline = ReadinessClock::now() + self.ready_timeout;
+                    } else if ReadinessClock::now() >= deadline {
                         // Stop before the receiver is dropped: a late acknowledgment then
                         // finds its stop request and finalizes instead of recording.
                         track_stop.store(true, Ordering::Release);
@@ -580,8 +619,9 @@ mod tests {
     }
 
     #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
-    /// Synthetic slow device: the first microphone start ends at once, the reconnect needs
-    /// 400 ms and reports preparation progress only when `synthetic-progress` exists.
+    /// Synthetic slow device: the first microphone start ends at once. Reconnect
+    /// reports eight 50ms steps only when requested. Clock-controlled cases wait
+    /// for acknowledgment of each step and for the caller's final readiness gate.
     fn slow_reconnect_fixture(
         store: SessionStore,
         source: &str,
@@ -602,10 +642,29 @@ mod tests {
                 return Err("Synthetic device interruption".into());
             }
             let reports = store.folder().join("synthetic-progress").exists();
-            for _ in 0..8 {
+            let controlled = store.folder().join("synthetic-controlled-clock").exists();
+            for step in 0..8 {
+                if reports && controlled {
+                    let ack = store.folder().join(format!("synthetic-startup-ack-{step}"));
+                    while !ack.exists() && !stop.load(Ordering::Acquire) {
+                        thread::sleep(Duration::from_millis(5));
+                    }
+                    if stop.load(Ordering::Acquire) {
+                        return Err("Synthetic startup stopped before readiness".into());
+                    }
+                }
                 thread::sleep(Duration::from_millis(50));
                 if reports {
                     controls.note_startup_progress();
+                }
+            }
+            if reports && controlled {
+                let allow = store.folder().join("synthetic-allow-ready");
+                while !allow.exists() && !stop.load(Ordering::Acquire) {
+                    thread::sleep(Duration::from_millis(5));
+                }
+                if stop.load(Ordering::Acquire) {
+                    return Err("Synthetic startup stopped before readiness".into());
                 }
             }
             if ready.send(Ok(())).is_err() {
@@ -639,6 +698,7 @@ mod tests {
         .unwrap();
         if progress {
             std::fs::write(store.folder().join("synthetic-progress"), b"").unwrap();
+            std::fs::write(store.folder().join("synthetic-controlled-clock"), b"").unwrap();
         }
         let mut controller = CaptureController::start_with_recorder(
             store.clone(),
@@ -657,6 +717,61 @@ mod tests {
             thread::sleep(Duration::from_millis(5));
         }
         (root, store, controller)
+    }
+
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    /// Restore any outer clock even if a fixture assertion unwinds. Other test
+    /// threads, recorders and release builds always keep their real clock.
+    fn with_readiness_clock<T>(
+        clock: impl FnMut(u64) -> Instant + 'static,
+        work: impl FnOnce() -> T,
+    ) -> T {
+        struct Restore(Option<TestReadinessClock>);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                READINESS_TEST_CLOCK.with(|clock| *clock.borrow_mut() = self.0.take());
+            }
+        }
+        let _restore = Restore(READINESS_TEST_CLOCK.with(|slot| {
+            slot.borrow_mut().replace(TestReadinessClock {
+                read: Box::new(clock),
+                observed_progress: 0,
+            })
+        }));
+        work()
+    }
+
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    /// Exercise the actual readiness loop while eight acknowledged reports move
+    /// only the synthetic clock. A final idle turn tests renewal itself; the
+    /// unchanged five-second real harness guard still catches a stuck fixture.
+    fn reconnect_with_progress_clock(
+        controller: &mut CaptureController,
+        store: &SessionStore,
+        final_idle: Duration,
+        release_ready: bool,
+    ) -> Result<()> {
+        let base = Instant::now();
+        let real_started = Instant::now();
+        let folder = store.folder().to_owned();
+        let mut previous = None;
+        with_readiness_clock(
+            move |count| {
+                assert!(
+                    real_started.elapsed() < Duration::from_secs(5),
+                    "Synthetic readiness fixture did not finish"
+                );
+                let idle = count >= 8 && previous == Some(count);
+                if idle && release_ready {
+                    std::fs::write(folder.join("synthetic-allow-ready"), b"").unwrap();
+                }
+                previous = Some(count);
+                std::fs::write(folder.join(format!("synthetic-startup-ack-{count}")), b"").unwrap();
+                base + Duration::from_millis(count * 50)
+                    + if idle { final_idle } else { Duration::ZERO }
+            },
+            || controller.reconnect_microphone(),
+        )
     }
 
     #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
@@ -686,7 +801,8 @@ mod tests {
     #[test]
     fn reported_startup_progress_extends_the_readiness_wait() {
         let (_root, store, mut controller) = interrupted_slow_microphone(true);
-        controller.reconnect_microphone().unwrap();
+        reconnect_with_progress_clock(&mut controller, &store, Duration::from_millis(100), true)
+            .unwrap();
         assert!(controller.controls().has_microphone);
         let deadline = std::time::Instant::now() + Duration::from_secs(5);
         while !store.folder().join("synthetic-late-mic-recorded").exists() {
@@ -694,6 +810,28 @@ mod tests {
             thread::sleep(Duration::from_millis(5));
         }
         controller.stop().unwrap();
+    }
+
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn reported_startup_progress_does_not_waive_the_idle_deadline() {
+        let (_root, store, mut controller) = interrupted_slow_microphone(true);
+        let error = reconnect_with_progress_clock(
+            &mut controller,
+            &store,
+            Duration::from_millis(200),
+            false,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("did not become ready in time"), "{error}");
+        assert!(!controller.controls().has_microphone);
+        assert!(
+            controller.is_running(),
+            "healthy system capture is still owned"
+        );
+        controller.stop().unwrap();
+        assert!(!store.folder().join("synthetic-late-mic-recorded").exists());
     }
 
     #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
