@@ -162,13 +162,13 @@ def stage_assets(root, rid, manifest, env):
     download(f"https://github.com/cjpais/Handy/releases/download/v{manifest['handyVersion']}/{asset['file']}",
              archive, asset)
     if rid == "linux-x64":
-        archive.chmod(0o755)
-        # AppImage extraction does not need FUSE. Pinned executable, fresh cwd.
-        with (root / "handy-extract.log").open("xb") as output:
-            subprocess.run([str(archive), "--appimage-extract"], cwd=root, env=env,
-                           stdout=output, stderr=subprocess.STDOUT, check=True, timeout=60)
-        handy = root / "squashfs-root/AppRun"
-        require(handy.is_file() and not handy.is_symlink(), "Pinned Handy bundle needs a regular AppRun launcher")
+        # Upstream builds the DEB on Ubuntu22.04; its AppImage uses Ubuntu24.04
+        # and fails the real catalog preflight on this deliberately older host.
+        # Extract privately; never install a package or execute maintainer scripts.
+        bundle = root / "handy-deb"
+        run(["dpkg-deb", "--extract", archive, bundle], env, root / "handy-extract.log")
+        handy = bundle / "usr/bin/handy"
+        require(handy.is_file() and not handy.is_symlink(), "Pinned Handy package needs a regular executable")
     else:
         extract_app(archive, root / "handy-bundle")
         binaries = list((root / "handy-bundle").glob("*.app/Contents/MacOS/*"))
@@ -356,6 +356,11 @@ def main():
         # Avoid injecting Meeting's SDK into the separate upstream Handy binary.
         for name in ("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH"):
             env.pop(name, None)
+        if args.rid.startswith("osx-"):
+            # Handy's catalog path also enumerates Metal devices. This CPU-only
+            # check needs no GPU/shader initialization on virtual Mac runners.
+            # ggml in Handy's pinned transcribe-cpp-sys0.2.4 supports zero devices.
+            env["GGML_METAL_DEVICES"] = "0"
         handy, model = stage_assets(root, args.rid, manifest, env)
         fixtures = root
         generate_speech(root, args.rid, manifest, env)
@@ -381,6 +386,7 @@ def main():
                "executableSha256": digest(app),
                "handyVersion": None if all(local) else manifest["handyVersion"],
                "handyReleaseArchiveVerified": not all(local), "handyExecutableSha256": digest(handy),
+               "handyGpuEnumerationDisabledForCpuCheck": not all(local) and args.rid.startswith("osx-"),
                "modelSha256": manifest["model"]["sha256"], "modelRevision": manifest["model"]["revision"],
                "backend": "CPU", "syntheticSpeech": True, "realtime": False, "physicalDevices": False,
                "elapsedSeconds": result["elapsedSeconds"], "maximumWordErrorRate": manifest["maximumWordErrorRate"],

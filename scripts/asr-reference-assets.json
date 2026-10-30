@@ -1,7 +1,7 @@
 {
   "handyVersion": "0.9.8",
   "handy": {
-    "linux-x64": {"file": "Handy_0.9.8_amd64.AppImage", "bytes": 128682488, "sha256": "d683dc96762f9a47975045ab480392d33a5b491968fb336dcac47e2f65e7184f"},
+    "linux-x64": {"file": "Handy_0.9.8_amd64.deb", "bytes": 41941410, "sha256": "4efe1fdcc2b68e95612e866810ccb23e06bbdf004a4e857de0862b0c6927caa8"},
     "osx-arm64": {"file": "Handy_aarch64.app.tar.gz", "bytes": 19950735, "sha256": "e6931a14805eac47878e5e80ba7de9395cebaf355d4b7e231fbdac532169e9a4"},
     "osx-x64": {"file": "Handy_x64.app.tar.gz", "bytes": 22403409, "sha256": "07623a104a59932ce1bff3a08ebc0ab81e5dbf404089a8da6141cefa6ee687bc"}
   },

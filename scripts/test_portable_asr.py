@@ -160,6 +160,7 @@ class ReferenceVerdicts(unittest.TestCase):
             self.assertEqual(timeout, 300)
             self.assertNotIn("LD_LIBRARY_PATH", env)
             self.assertNotIn("DYLD_LIBRARY_PATH", env)
+            self.assertEqual(env["GGML_METAL_DEVICES"], "0")
             self.assertEqual(env["HOME"], str(output / "home"))
             self.assertEqual(env["HF_HOME"], str(output / "home/huggingface"))
             self.assertEqual(env["XDG_DATA_HOME"], str(output / "home/data"))
@@ -194,6 +195,7 @@ class ReferenceVerdicts(unittest.TestCase):
         self.assertNotIn("parts", receipt)
         self.assertTrue(receipt["success"])
         self.assertTrue(receipt["handyReleaseArchiveVerified"])
+        self.assertTrue(receipt["handyGpuEnumerationDisabledForCpuCheck"])
         self.assertEqual(receipt["handyVersion"], "0.9.8")
         self.assertEqual(app.read_bytes(), b"exact checked executable")
 
@@ -282,6 +284,34 @@ class ReferenceVerdicts(unittest.TestCase):
         self.assertIsNone(receipt["handyVersion"])
         self.assertFalse(receipt["handyReleaseArchiveVerified"])
         self.assertEqual(receipt["handyExecutableSha256"], hashlib.sha256(handy.read_bytes()).hexdigest())
+
+    def test_linux_uses_ubuntu22_deb_without_installation_or_appimage_execution(self):
+        """Exercise private extraction rather than the newer-GLIBC AppImage launcher."""
+        calls = []
+
+        def downloaded(url, path, asset):
+            """Create only owned placeholder assets at the production cache locations."""
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"fixture")
+
+        def extract(command, env, log, timeout=60):
+            """Model dpkg extraction while rejecting installation or script execution."""
+            calls.append(command)
+            self.assertEqual(command[:2], ["dpkg-deb", "--extract"])
+            self.assertTrue(str(command[2]).endswith("Handy_0.9.8_amd64.deb"))
+            executable = Path(command[3]) / "usr/bin/handy"
+            executable.parent.mkdir(parents=True)
+            executable.write_bytes(b"extracted executable")
+
+        with mock.patch.object(asr, "download", side_effect=downloaded), \
+             mock.patch.object(asr, "run", side_effect=extract), \
+             mock.patch.object(asr.subprocess, "run", side_effect=AssertionError("Do not execute AppImage")):
+            handy, weights = asr.stage_assets(self.root, "linux-x64", self.manifest, {})
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(handy.read_bytes(), b"extracted executable")
+        self.assertTrue(weights.is_file())
+        self.assertEqual(self.manifest["handy"]["linux-x64"]["sha256"],
+                         "4efe1fdcc2b68e95612e866810ccb23e06bbdf004a4e857de0862b0c6927caa8")
 
     def test_bundle_rejects_traversal_and_escaping_links(self):
         """Reject archive entries that could escape the new owned bundle directory."""
