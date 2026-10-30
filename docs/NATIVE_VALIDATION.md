@@ -8,7 +8,7 @@ exists. No physical Mac/Linux recording is claimed by this document.
 
 ## Test matrix and evidence
 
-Test Apple Silicon and Intel separately on macOS13+, Ubuntu22.04/24.04 and
+Test Apple Silicon and Intel separately on macOS15+, Ubuntu22.04/24.04 and
 Debian12/13 on x64 desktops. Linux needs PulseAudio or PipeWire-Pulse. Record the
 package/executable SHA-256, version, OS/build, chip/CPU, RAM, GPU/driver, audio
 devices, selected model/revision/runtime, permissions and test start/end times.

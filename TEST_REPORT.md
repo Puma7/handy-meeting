@@ -849,3 +849,50 @@ Lokal bestanden: `makensis -WX` ohne Warnung und 72 Release-Skripttests.
 - **Frühere Ordnerverknüpfung (Minor):** Die Verknüpfung `Meeting for Handy\Meeting for Handy.lnk` aus dem Versionsordner-Layout wird nur noch gelöscht, wenn der Eigentumseintrag des 1.0.5-Helfers (`HKCU\Software\HandyMeeting\BrandedStartMenuLink`, Werte `Link` und `Target`) sie nennt und ihr Ziel noch dem vermerkten Programm entspricht. Der Eintrag wird mit ihr entfernt. Eine Endung auf `HandyMeeting.exe` allein genügt nicht mehr. `-RunChecks` legt die synthetische frühere Verknüpfung jetzt mit diesem Eintrag an und prüft, dass beide verschwinden. Mit Wine 9 ist zusätzlich nachgestellt: eine nicht vermerkte und eine fremde Verknüpfung bleiben erhalten.
 
 Lokal bestanden: 168 Vitest-Fälle, `tsc`, `prettier`, 72 Release-Skripttests, `makensis -WX`.
+
+## Ergänzung: portable Transkriptionsprüfung, 30. Oktober 2026
+
+Ausgangsstand ist der Quellbaum von `f2ccb8a8a268323da5ea0ad8ed1eb69102694da6`
+(1.0.7). Die bestehenden Linux-/Mac-Paketprüfungen luden kein Sprachmodell;
+ein grüner Build belegte deshalb keine tatsächlich erkannte Sprache. Der neue
+Pflichtschritt für Linux x64 sowie Mac ARM/Intel verwendet die echte Modellliste
+von Handy0.9.8 und festgelegte Nemotron3.5-Q8-Gewichte mit Runtime0.4.1 auf CPU.
+Zwei unterschiedliche künstliche Sprecher müssen vollständig transkribiert
+werden. Ein gezielter eigener ASR-Prozessabbruch, Neustart, unveränderte
+Audio-Hashes, erhaltener Textjournalanfang und Wiederöffnung gehören zum Test.
+Zusätzlich gelten vorab höchstens15% Wortfehler und alle festgelegten
+spurbezogenen Schlüsselwörter. Falscher nichtleerer Text genügt nicht mehr.
+
+Lokal auf Windows x64 mit Intel Core i7-13700 (16 Kerne,24 Threads), vorhandenem
+Modell und Microsoft-Zira-Sprachdateien
+tatsächlich ausgeführt: beide Spuren mit je31 Referenzwörtern ohne Wortfehler,
+202720 bzw.201440 Samples bei16kHz; ein eigener System-ASR-Neustart, Audio und
+Textjournal erhalten, Wiederöffnung erfolgreich. Gesamtdauer33,4442571s;
+beschleunigte Dateiverarbeitung, keine Aufnahmegeräte geöffnet. Während dieses
+Modelllaufs liefen keine anderen von diesem Auftrag gestarteten Tests;
+anschließend liefen Projekt- und Oberflächenprüfungen parallel. Andere
+Hintergrundlasten des Nutzers wurden nicht erfasst. RAM, Grafikspeicher und Echtzeitlatenz wurden
+dabei nicht gemessen. Dieser Windows-Lauf beweist nicht die neue Bereitstellung
+der Linux-/Mac-Testmodelle oder deren Zielausführung.
+
+Lokal bestanden außerdem348 Rust-All-Targettests (zwei gesonderte Prüfeinstiege
+regulär ignoriert), Clippy mit `-D warnings`, Formatprüfung,225 Frontendtests,
+TypeScript und Produktionsbuild sowie `verify.ps1` mit47 PCM-,35 Notiz-,28
+Vorlagen- und8 Agentenprüfungen plus Monitorprüfung. Die neuen Python-Fälle
+prüfen auch echte Fehlerurteile für geänderte Audio-Hashes, Teiltranskripte,
+falsche Sprecher und Schlüsselwörter sowie kleine künstliche Download-/Cache-
+und Archivfälle; sie sind keine echten Modellläufe auf Mac oder Linux.
+
+Der Linux-Tontest verlangt jetzt die vollständigen acht Sekunden beider Spuren,
+geschlossene und hashgleiche PCM-Dateien, getrennte Signale und weiterhin
+höchstens500ms Spurdifferenz. Unerwartete Warnungen oder unerklärte
+`captureIncomplete`-Zustände scheitern. Bekannte geschätzte Startlücken bleiben
+explizit `passed-with-startup-gaps` und `completeCapture=false`; sie werden nicht
+als lückenloser Erfolg ausgegeben. Die Mac-Prüfanleitung nennt passend zum
+aktuellen Paket macOS15+.
+
+Die tatsächlichen neuen Linux-/Mac-CI-Ergebnisse sind bei Erstellung dieser
+Ergänzung noch offen und werden am PR mit Laufverweisen dokumentiert. Physische
+Geräte, Mac-Aufnahmefreigaben, PipeWire, kombinierte Zweistundenläufe, GPU,
+Signatur/Notarisierung und der frühere lokale Textmodell-Referenztest bleiben
+getrennte offene Nachweise. Keine neue Programmversion wird hier freigegeben.
