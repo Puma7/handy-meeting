@@ -282,6 +282,28 @@ export default function SpeakerExperiments({
     );
   }
   if (!setupOnly && !meeting) return null;
+  const checkFeedback = (
+    <>
+      {setupOnly && error && <p role="alert">{error}</p>}
+      {archiveNeeded && api.archiveSpeakerModelChecks && (
+        <div>
+          <p className="muted">
+            {de
+              ? "Die bisherigen Prüfnachweise benötigen Aufmerksamkeit. Du kannst sie zusammen archivieren und eine neue Prüfung beginnen. Alle Dateien bleiben erhalten; Aufnahmen und Auswertungen werden nicht verändert."
+              : "The existing check records need attention. You can archive them together and start a new check. Every file is retained; recordings and analyses are unchanged."}
+          </p>
+          <button
+            className="secondary"
+            disabled={busy || running || recording || checkingBlocked}
+            onClick={() => void archiveChecks()}
+          >
+            {de ? "Prüfnachweise archivieren" : "Archive check records"}
+          </button>
+        </div>
+      )}
+      {archiveNotice && <p role="status">{archiveNotice}</p>}
+    </>
+  );
   const Container = embedded ? "section" : "details";
   return (
     <Container className="speaker-options">
@@ -351,30 +373,9 @@ export default function SpeakerExperiments({
             : "Speaker support checked. Analysis remains an optional draft."}
         </p>
       )}
-      {setupOnly &&
-        error &&
-        (statusContainer ? (
-          createPortal(<p role="alert">{error}</p>, statusContainer)
-        ) : (
-          <p role="alert">{error}</p>
-        ))}
-      {archiveNeeded && api.archiveSpeakerModelChecks && (
-        <div>
-          <p className="muted">
-            {de
-              ? "Die bisherigen Prüfnachweise benötigen Aufmerksamkeit. Du kannst sie zusammen archivieren und eine neue Prüfung beginnen. Alle Dateien bleiben erhalten; Aufnahmen und Auswertungen werden nicht verändert."
-              : "The existing check records need attention. You can archive them together and start a new check. Every file is retained; recordings and analyses are unchanged."}
-          </p>
-          <button
-            className="secondary"
-            disabled={busy || running || recording || checkingBlocked}
-            onClick={() => void archiveChecks()}
-          >
-            {de ? "Prüfnachweise archivieren" : "Archive check records"}
-          </button>
-        </div>
-      )}
-      {archiveNotice && <p role="status">{archiveNotice}</p>}
+      {setupOnly && statusContainer
+        ? createPortal(checkFeedback, statusContainer)
+        : checkFeedback}
       {!setupOnly && meeting && (
         <>
           <div>

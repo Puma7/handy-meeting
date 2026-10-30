@@ -8,6 +8,9 @@ apply to recording, history, live summaries, post-meeting analysis and settings.
 - Keep frequent controls visible. Put explanations, optional automation, template
   editing and maintenance in named native disclosures. They must work by keyboard.
 - Keep running maintenance progress/cancellation outside collapsed settings.
+- Keep an actionable error, its remedy and its completion acknowledgement in the
+  same visible status region. A visible error must not depend on hidden controls
+  to resolve it, even when an optional section closes while work is running.
 - Keep errors, capture warnings, unconfirmed results and per-run cloud consent
   visible at their decision point. A collapsed help section must never grant consent.
 - Use short source names (System audio / Microphone). Give both source cards the

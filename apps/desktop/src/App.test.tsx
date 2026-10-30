@@ -146,6 +146,45 @@ it("keeps a late speaker model error visible after its settings disclosure close
   expect(disclosure.open).toBe(false);
 });
 
+it("keeps the speaker check archive remedy and its completion outside closed settings", async () => {
+  const api = fakeApi();
+  api.startSpeakerExperiment = vi.fn();
+  api.checkSpeakerModel = vi
+    .fn()
+    .mockRejectedValue(
+      new Error(
+        "[SPEAKER_CHECK_ARCHIVE_REQUIRED] Synthetic check archive full",
+      ),
+    );
+  api.archiveSpeakerModelChecks = vi.fn().mockResolvedValue(1);
+  render(<App api={api} />);
+  await ready();
+  await userEvent.click(screen.getByRole("button", { name: "Einstellungen" }));
+  const summary = screen.getByText("Sprecherfunktionen · optional");
+  await userEvent.click(summary);
+  await userEvent.selectOptions(
+    screen.getByLabelText("Installiertes Modell für die Sprecherprüfung"),
+    "installed-stream",
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "Sprecherunterstützung prüfen" }),
+  );
+  await screen.findByText("Synthetic check archive full");
+  await userEvent.click(summary);
+  const archive = screen.getByRole("button", {
+    name: "Prüfnachweise archivieren",
+  });
+  expect(archive.closest("details")).toBeNull();
+  expect(api.archiveSpeakerModelChecks).not.toHaveBeenCalled();
+  await userEvent.click(archive);
+  expect(api.archiveSpeakerModelChecks).toHaveBeenCalledOnce();
+  const notice = await screen.findByText(
+    "Prüfnachweise archiviert und erhalten. Bitte die Modellprüfung erneut starten.",
+  );
+  expect(notice.closest("details")).toBeNull();
+  expect(summary.closest("details")!.open).toBe(false);
+});
+
 describe("migration frontend boundaries (synthetic IPC)", () => {
   it("requires actual desktop readiness and passes separate microphone selection", async () => {
     const api = fakeApi();
@@ -546,7 +585,14 @@ describe("migration frontend boundaries (synthetic IPC)", () => {
     vi.spyOn(Date, "now").mockImplementation(() => now);
     const api = fakeApi();
     const path = "/confirmed-state-unavailable/Handy.exe";
-    api.chooseHandyExecutable = vi.fn().mockResolvedValue(path);
+    // Arm the fault only after this native choice is actually confirmed. An idle
+    // poll while userEvent prepares the click must not consume this failure.
+    api.chooseHandyExecutable = vi.fn().mockImplementation(async () => {
+      vi.mocked(api.getAppState).mockRejectedValueOnce(
+        new Error("Synthetic state unavailable before explicit verification"),
+      );
+      return path;
+    });
     vi.mocked(api.refreshHandy).mockImplementation(async (explicit) => ({
       ...state().handy!,
       executable: explicit === path ? path : state().handy!.executable,
@@ -556,15 +602,13 @@ describe("migration frontend boundaries (synthetic IPC)", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Einstellungen" }),
     );
-    vi.mocked(api.getAppState).mockRejectedValueOnce(
-      new Error("Synthetic state unavailable before explicit verification"),
-    );
     await userEvent.click(
       screen.getByRole("button", { name: "Handy-Programm auswählen …" }),
     );
     await screen.findByText(
       "Synthetic state unavailable before explicit verification",
     );
+    expect(api.chooseHandyExecutable).toHaveBeenCalledOnce();
     expect(api.refreshHandy).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: "Meeting" }));
     const start = screen.getByRole("button", { name: "Aufnahme starten" });

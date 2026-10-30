@@ -197,3 +197,32 @@ no horizontal document overflow or browser console errors. The final destructive
 action remains disabled without typed confirmation; no native deletion, model
 check, real meeting or audio device is invoked by this browser fixture. Native,
 physical-device, model-provider, GPU and endurance evidence is unchanged.
+
+## Candidate 12: keep the remedy and acknowledgement with the setup error
+
+The speaker-check feedback region now includes its archive remedy and archive
+completion notice, using the same visible status container as the setup error.
+Its inline fallback and all native capability/admission conditions remain
+unchanged. A new full-App regression reproduces the hidden archive action on
+candidate 11, then checks that both the explicit mocked archive action and its
+completion notice remain outside closed settings. No archiving starts merely
+because the error arrives. The design guide now requires an actionable error,
+its remedy and its acknowledgement to share a visible status region.
+
+The actual candidate 11 Intel CI failed one existing program-selection fixture:
+the old model option remained present in the scenario intended to simulate a
+failed fresh-state read after a confirmed native choice. The log alone does not
+establish a production failure. That fixture armed its one-shot state error
+before userEvent prepared the chooser click, allowing an unrelated idle poll to
+consume it. The fault is now armed inside the confirmed chooser, and the test
+additionally proves that the chooser ran. All existing blocked-start, old-option
+and explicit recovery assertions remain; no timeout, assertion or test is removed.
+Actual fresh Intel CI is required before calling the platform check successful.
+
+All 243 frontend tests and TypeScript/production build pass locally. Synthetic
+rendered checks at 1280 px and 390 px confirm that the archive remedy and its
+completion notice remain outside closed speaker settings, without horizontal
+overflow or browser console errors. They invoke only a mock archive callback.
+Native sources, dependencies, review rules and the complete candidate 11
+TEST_REPORT.md remain byte-identical. No real meeting, check archive, model
+service or audio device is opened or changed by these fixtures.
