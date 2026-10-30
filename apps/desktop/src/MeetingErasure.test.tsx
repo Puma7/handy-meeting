@@ -233,6 +233,51 @@ function fixture() {
   };
 }
 
+it.each(["preview", "erase"])(
+  "can close after a stopped pending %s command rejects without a job ID",
+  async (phase) => {
+    const props = fixture();
+    let reject!: (error: Error) => void;
+    const pending = new Promise<string>((_, fail) => {
+      reject = fail;
+    });
+    if (phase === "preview")
+      props.api.previewMeetingErasure = vi.fn(() => pending);
+    else props.api.eraseMeetingNow = vi.fn(() => pending);
+    render(<EraseMeetingDialog {...props} meeting={meeting} locale="en" />);
+    if (phase === "erase") {
+      await userEvent.type(
+        await screen.findByRole("textbox", { name: "Type DELETE to confirm" }),
+        "DELETE",
+      );
+      await userEvent.click(
+        screen.getByRole("button", { name: "Permanently delete now" }),
+      );
+    } else
+      await waitFor(() =>
+        expect(props.api.previewMeetingErasure).toHaveBeenCalledOnce(),
+      );
+    const stop = screen.getByRole("button", {
+      name: phase === "preview" ? "Cancel check" : "Stop remaining deletion",
+    });
+    await userEvent.click(stop);
+    expect((stop as HTMLButtonElement).disabled).toBe(true);
+    await act(async () =>
+      reject(new Error("Synthetic pending command rejected")),
+    );
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "Synthetic pending command rejected",
+    );
+    const close = screen.getByRole("button", { name: "Close" });
+    expect((close as HTMLButtonElement).disabled).toBe(false);
+    expect(props.api.cancelMaintenance).not.toHaveBeenCalled();
+    expect(props.onDeleted).not.toHaveBeenCalled();
+    expect(props.onStopped).toHaveBeenCalledTimes(phase === "erase" ? 1 : 0);
+    await userEvent.click(close);
+    expect(props.onClose).toHaveBeenCalledOnce();
+  },
+);
+
 it("paginates authoritative history without an index and clamps a removed final page", async () => {
   const native = Array.from({ length: 26 }, (_, i) => ({
     ...meeting,

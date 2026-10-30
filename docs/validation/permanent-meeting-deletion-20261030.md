@@ -468,3 +468,59 @@ Locked dependencies, protection and review rules, primary session format,
 application version and the whole historical TEST_REPORT.md are unchanged.
 All existing erasure limits, separate-process assurance limits and pending
 model-residency integration remain explicit; no real meeting was modified.
+
+## Candidate 12: pending-start recovery and precise retention coordination
+
+The second complete candidate 11 CodeRabbit review found three additional
+correctness issues despite the clean first round and successful target CI.
+Those results remain attached to candidate 11; they are not a clean final review.
+
+If Stop was selected before a preview/erase command returned its job identity,
+a subsequent rejected command left the Close button disabled. Both new old-code
+regressions failed on that exact state. Both rejection handlers now clear the
+cancelling state when entering the existing failed stage. The tests verify that
+Close is enabled and works, no unknown job is cancelled, no deletion is reported
+complete and only the existing rejected erase-start path releases its callback.
+Known running jobs keep their existing bounded status/cancellation observation.
+
+Read-only retention previews now hold the shared content-publication lease from
+before the scan through final plan publication. Ordinary metadata/VIP and speaker
+edits may proceed; erasure still requires exclusive publication admission.
+A parked-scan regression failed on the old broad archive-mutation lock. It now
+performs both native edits while indexing admission and the scan remain active,
+then confirms erasure is blocked without relying on a cached session writer.
+The complementary test parks an actual confirmed synthetic erasure before its
+first removal and verifies a second Service cannot publish a retention plan.
+After cancellation, publication succeeds; a freshly confirmed final erasure
+removes the title-bearing plan. These are synchronized threads/Services using
+OS file leases in one process, not independent-process or hardware validation.
+
+Mixed identities in maintenance records now block erasure before any removal,
+for both ordinary complete JSON and interrupted atomic JSON, including readable
+identity fields before EOF truncation. Simply preserving a known selected-meeting
+record while reporting complete erasure would hide sensitive remaining content;
+removing it would also remove foreign evidence. The conservative error preserves
+all original bytes and requires the conflict to be reviewed before another
+preview. Old-code cases proved both ordinary and temporary mixed records were
+previously accepted. All four complete/truncated and ordinary/temporary cases
+now refuse safely. Rebuildable multi-meeting retention plans remain removable,
+and the paired checks preserve every foreign original byte. Existing unknown
+and unrelated remnants retain their previous handling and disclosure.
+
+All 389 Rust workspace/all-target tests pass, including 27 core erasure cases;
+the same two existing special entry points remain normally ignored. All 247
+frontend tests, TypeScript, production build, Rust/frontend formatting, Clippy
+with warnings denied and verify.ps1 pass. Test-setup failures (an unsupported
+matcher, missing test import and an independently held source-writer fixture)
+remain recorded separately from genuine before-code failures. No test deadline,
+assertion purpose, dependency lock or protection/reviewer rule was relaxed.
+
+Visible synthetic browser checks exercise pending preview and erase starts,
+Stop, deterministic simulated admission rejection, enabled Close and actual
+dialog closure, at desktop and 390-pixel width with no overflow or console
+errors. The fixture has no real IPC, filesystem or erasure implementation.
+No real meeting, device, model server, external copy or installed app is used.
+Application version, primary session format and whole historical TEST_REPORT.md
+remain unchanged. Fresh candidate 12 target CI and final-head reviews are still
+required; all earlier distribution, independent-process, hardware, provider,
+external-copy and model-residency integration limits remain in force.

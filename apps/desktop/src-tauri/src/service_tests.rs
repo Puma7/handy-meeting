@@ -1,5 +1,72 @@
 //! Synthetic service-state regressions; ordinary tests never open audio devices.
 use super::*;
+use std::time::Duration;
+
+/// A parked read-only retention scan may coexist with ordinary native edits.
+#[test]
+fn retention_preview_allows_metadata_and_speaker_edits_during_the_scan() {
+    let root = fixture_root("retention-preview-mutations");
+    let service = Service::new(root.clone()).unwrap();
+    let store =
+        SessionStore::create(&root.join("sessions"), "Synthetic preview", "m", "s", None).unwrap();
+    let id = store.snapshot().unwrap().id;
+    store.set_status("complete").unwrap();
+    drop(store);
+    let _index = service.reserve_operation(operations::Kind::Index).unwrap();
+    let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+    let (release_tx, release_rx) = std::sync::mpsc::channel();
+    let worker_root = root.clone();
+    let worker = std::thread::spawn(move || {
+        let mut announced = false;
+        retention_commands::publish_preview(
+            &worker_root,
+            &"e".repeat(32),
+            &AtomicBool::new(false),
+            |_, _| {
+                if !announced {
+                    announced = true;
+                    entered_tx.send(()).unwrap();
+                    release_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+                }
+            },
+        )
+    });
+    entered_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+    let metadata = library_commands::edit_metadata(
+        &service,
+        &id,
+        0,
+        Some("Synthetic renamed while scanning".into()),
+        true,
+    );
+    let speakers = speaker_commands::save_labels(&service, &id, 0, false, vec![]);
+    // Release the ordinary writer-capable view so it cannot mask a missing
+    // publication fence through the independent session writer lock.
+    service.lock().unwrap().view = None;
+    let erasure_blocked =
+        meeting_core::archive::preview_erasure(&root, &id, &AtomicBool::new(false)).is_err();
+    release_tx.send(()).unwrap();
+    worker.join().unwrap().unwrap();
+    assert!(
+        metadata.is_ok(),
+        "Read-only retention scan blocked metadata: {metadata:?}"
+    );
+    assert!(
+        speakers.is_ok(),
+        "Read-only retention scan blocked speaker labels: {speakers:?}"
+    );
+    assert!(
+        erasure_blocked,
+        "Retention publication allowed concurrent erasure"
+    );
+    assert_eq!(
+        meeting_core::metadata::read(&root, &id)
+            .unwrap()
+            .title
+            .as_deref(),
+        Some("Synthetic renamed while scanning")
+    );
+}
 
 /// A second Service's erasure lease must fence both the title snapshot and plan publication.
 #[test]
@@ -32,13 +99,38 @@ fn retention_plan_publication_obeys_cross_service_erasure_exclusion() {
     let job = "d".repeat(32);
     let plan = root.join("retention-plans").join(format!("{job}.json"));
     let cancel = AtomicBool::new(false);
-    let fence = meeting_core::archive::source_mutation_lease(&other.root).unwrap();
+    let preview = meeting_core::archive::preview_erasure(&other.root, &id, &cancel).unwrap();
+    let worker_root = other.root.clone();
+    let worker_id = id.clone();
+    let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+    let (release_tx, release_rx) = std::sync::mpsc::channel();
+    let erasure = std::thread::spawn(move || {
+        let stop = AtomicBool::new(false);
+        meeting_core::archive::erase_meeting(
+            &worker_root,
+            &worker_id,
+            &preview.fingerprint,
+            &format!("DELETE {worker_id}"),
+            &stop,
+            |_, _| {
+                entered_tx.send(()).unwrap();
+                release_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+                stop.store(true, Ordering::Release);
+            },
+        )
+    });
+    entered_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+    let publication = retention_commands::publish_preview(&service.root, &job, &cancel, |_, _| {});
+    release_tx.send(()).unwrap();
     assert!(
-        retention_commands::publish_preview(&service.root, &job, &cancel, |_, _| {}).is_err(),
+        erasure.join().unwrap().is_err(),
+        "Synthetic erasure should stop before first removal"
+    );
+    assert!(
+        publication.is_err(),
         "A content-bearing retention plan bypassed another Service's erasure exclusion"
     );
     assert!(!plan.exists());
-    drop(fence);
     retention_commands::publish_preview(&service.root, &job, &cancel, |_, _| {}).unwrap();
     let value: serde_json::Value = serde_json::from_slice(&fs::read(&plan).unwrap()).unwrap();
     assert!(value["candidates"]

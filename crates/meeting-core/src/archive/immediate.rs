@@ -4,7 +4,7 @@ use super::{
     deletion::{add_tree, annotation_locks, optional_entries, push_delete_file, DeleteFile},
     *,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 mod copies;
 mod records;
 
@@ -53,29 +53,45 @@ fn read_record(path: &Path) -> Result<serde_json::Value> {
     }
     Ok(serde_json::from_slice(&bytes)?)
 }
-/// Attributes complete maintenance records by exact meetingId fields, never title/path text.
-fn references(value: &serde_json::Value, id: &str, depth: usize) -> Result<bool> {
+/// Collects complete structured meetingId fields, never quoted title/path text.
+fn references(value: &serde_json::Value, ids: &mut BTreeSet<String>, depth: usize) -> Result<()> {
     if depth > 64 {
         return Err("Retained record nesting exceeds erasure bound".into());
     }
-    Ok(match value {
+    match value {
         serde_json::Value::Array(rows) => {
-            let mut found = false;
             for row in rows {
-                found |= references(row, id, depth + 1)?;
+                references(row, ids, depth + 1)?;
             }
-            found
         }
         serde_json::Value::Object(rows) => {
-            let mut found = false;
             for (key, row) in rows {
-                found |= (key == "meetingId" && row.as_str() == Some(id))
-                    || references(row, id, depth + 1)?;
+                if key == "meetingId" {
+                    if let Some(id) = row.as_str().filter(|id| native_id(id)) {
+                        ids.insert(id.to_owned());
+                        if ids.len() > MAX_FILES {
+                            return Err("Too many retained record identities".into());
+                        }
+                    }
+                }
+                references(row, ids, depth + 1)?;
             }
-            found
         }
-        _ => false,
-    })
+        _ => (),
+    }
+    Ok(())
+}
+/// Plans are rebuildable shared previews. Mixed maintenance logs are ambiguous
+/// authority: neither erase another meeting's evidence nor silently retain known
+/// selected-meeting content while claiming success. Block before any removal.
+fn selected_record(parent: &str, id: &str, ids: &BTreeSet<String>) -> Result<bool> {
+    if !ids.contains(id) {
+        return Ok(false);
+    }
+    if parent == "maintenance-log" && ids.len() != 1 {
+        return Err("Maintenance record names multiple meetings; erasure blocked and all files preserved. Review the conflicting record before creating another preview.".into());
+    }
+    Ok(true)
 }
 /// Attributes legacy pending records before allowing a retry whose source manifest is gone.
 fn pending(root: &Path, id: &str) -> Result<Option<PendingErasure>> {
@@ -140,13 +156,18 @@ fn retained_records(
             let path = entry?.path();
             if records::is_temporary(&path)? {
                 match records::temporary_identities(&path, false)? {
-                    Some(ids) if ids.contains(id) => push_delete_file(root, &path, cancel, files)?,
-                    Some(_) => (),
+                    Some(ids) => {
+                        if selected_record(parent, id, &ids)? {
+                            push_delete_file(root, &path, cancel, files)?;
+                        }
+                    }
                     None => *preserved += 1,
                 }
                 continue;
             }
-            if references(&read_record(&path)?, id, 0)? {
+            let mut ids = BTreeSet::new();
+            references(&read_record(&path)?, &mut ids, 0)?;
+            if selected_record(parent, id, &ids)? {
                 push_delete_file(root, &path, cancel, files)?;
             }
         }

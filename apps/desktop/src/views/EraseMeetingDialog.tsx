@@ -198,6 +198,7 @@ export default function EraseMeetingDialog({
     } catch (failure) {
       if (alive.current && generation.current === sequence) {
         submitting.current = false;
+        setCancelling(false);
         setStage("failed");
         setError(errorMessage(failure));
       }
@@ -264,6 +265,7 @@ export default function EraseMeetingDialog({
       if (alive.current && generation.current === sequence) {
         submitting.current = false;
         destructive.current = false;
+        setCancelling(false);
         callbacks.current.onStopped();
         setStage("failed");
         setError(errorMessage(failure));

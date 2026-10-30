@@ -72,9 +72,9 @@ pub(crate) fn publish_preview(
     progress: impl FnMut(u64, u64),
 ) -> meeting_core::Result<()> {
     crate::validate_id(id)?;
-    // Erasure takes this same process-shared lease. Retain it through the final
-    // atomic publication so an old title snapshot cannot appear after deletion.
-    let _source = meeting_core::archive::source_mutation_lease(root)?;
+    // Erasure takes exclusive publication admission. Share this lease through
+    // the final write without excluding unrelated metadata or speaker edits.
+    let _source = meeting_core::archive::source_publication_lease(root)?;
     let mut plan = meeting_core::retention::preview(root, chrono_now(), cancel, progress)?;
     plan.id = id.to_owned();
     crate::create_json(&plans(root)?.join(format!("{id}.json")), &plan).map_err(|e| e.into())

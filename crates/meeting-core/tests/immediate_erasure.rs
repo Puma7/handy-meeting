@@ -11,6 +11,47 @@ use std::{
 
 const PRIVATE: &str = "syntheticerasurecanaryneverretainthisphrase";
 
+/// Ambiguous shared logs are not single-meeting deletion authority, even at EOF.
+/// Rebuildable multi-meeting retention plans remain disposable derived previews.
+#[test]
+fn conflicting_maintenance_identities_block_without_removing_foreign_records() {
+    for temporary in [true, false] {
+        for truncated in [false, true] {
+            let root = tempfile::tempdir().unwrap();
+            let id = fixture(root.path(), PRIVATE, 1);
+            let other = fixture(root.path(), "Foreign original retained", 1);
+            let foreign = tree(&root.path().join("sessions").join(&other));
+            let path = root.path().join("maintenance-log").join(if temporary {
+                ".tmpMixed"
+            } else {
+                "mixed.json"
+            });
+            let mut bytes = serde_json::to_vec(&serde_json::json!({"meetingId":id,"records":[{"meetingId":other,"title":"Foreign maintenance evidence"}]})).unwrap();
+            if truncated {
+                bytes.pop();
+            }
+            extra(&path, &bytes);
+            let before = tree(root.path());
+            assert!(archive::preview_erasure(root.path(), &id, &AtomicBool::new(false)).is_err(), "Mixed maintenance identities authorized erasure: temporary={temporary},truncated={truncated}");
+            let after = tree(root.path());
+            for (path, bytes) in before {
+                assert_eq!(after.get(&path), Some(&bytes));
+            }
+            assert!(!root.path().join("immediate-deletions").exists());
+            fs::remove_file(&path).unwrap();
+            let shared_plan = root.path().join("retention-plans").join(if temporary {
+                ".tmpPlan"
+            } else {
+                "plan.json"
+            });
+            extra(&shared_plan, &serde_json::to_vec(&serde_json::json!({"candidates":[{"meetingId":id,"title":PRIVATE},{"meetingId":other,"title":"Rebuildable foreign plan row"}]})).unwrap());
+            erase(root.path(), &id);
+            assert!(!shared_plan.exists());
+            assert_eq!(tree(&root.path().join("sessions").join(&other)), foreign);
+        }
+    }
+}
+
 /// An orphan retained source has no receipt to arbitrate two contradictory
 /// readable generations. Preserve both identities and all original bytes.
 #[test]
