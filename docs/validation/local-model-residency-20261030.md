@@ -14,7 +14,7 @@ Cleanup is also deferred across separate loopback spellings of the same provider
 
 ## Provider boundaries
 
-- Ollama: app-owned native `/api/generate` loads and `/api/chat` inference use a finite 300-second lifetime. Each finite slot has one weakly owned worker that renews it every 60 seconds, including idle intervals without inference and failed/partial work awaiting retry. Provider delays are isolated by slot; no global reservation lock is held during management. Messages, JSON schema and output budget are unchanged. Final release unloads an initially absent model. An initially present indefinitely loaded model is left loaded. An initially present finite lifetime is restored with at least five minutes' idle grace, rather than forcibly unloaded.
+- Ollama: app-owned native `/api/generate` loads and `/api/chat` inference use a finite 300-second lifetime. Each finite slot has one weakly owned worker that renews it every 60 seconds, including idle intervals without inference and failed/partial work awaiting retry. Renewals use per-slot state; final cleanup and new reservations serialize within a provider/model family. The global reservation registry is released before management or a slot-state wait. Same-family startup can still wait for bounded per-route cleanup requests. Messages, JSON schema and output budget are unchanged. Final release unloads an initially absent model. An initially present indefinitely loaded model is left loaded. An initially present finite lifetime is restored with at least five minutes' idle grace, rather than forcibly unloaded.
 - LM Studio: native REST v1 explicitly loads the chosen catalog key. Inference addresses the returned instance ID. Only a newly returned instance absent from the pre-load inventory is eligible for app cleanup. A reused existing instance is rejected with a clear error because the app cannot establish its pin or ownership. Cleanup must acknowledge the exact owned instance ID. Native REST v1 support is required; no silent provider or API fallback occurs.
 - Native loading is bounded to 300 seconds. Once submitted, its acknowledgement is read even after cancellation so a created instance is tracked and cleaned up. User cancellation is still recorded immediately; a replacement live worker waits for its predecessor to finish. Inference requests remain cancellable.
 - Management uses the existing loopback-only, no-proxy, no-redirect transport. It receives provider/model metadata and credentials only, never session objects or audio-file access. Management errors do not expose server response bodies. Cloud consent and source validation remain unchanged.
@@ -213,3 +213,84 @@ Raw artificial conversations, local paths, instance records and process samples
 remain private. Only this sanitized note is published; TEST_REPORT.md remains
 byte-identical. Fresh final-head reviews and CI are tracked separately from the
 older candidate results.
+
+## Candidate 07: isolated final cleanup and repeated actual reference
+
+The prior complete review's retained cleanup-lock concern was validated against
+candidate 06. Its final lease drop kept the global pool registry locked while
+waiting for slot state and native provider cleanup. Thus unrelated model
+reservations could wait for another model's bounded release. The earlier broad
+statement that management never held that registry was inaccurate for cleanup.
+
+Two new synthetic wire regressions hold an actual Ollama release or native LM
+Studio unload response pending. An unrelated model must reserve, infer and
+finish before that response is released. Both failed on candidate 06 at the
+intended isolation assertion and passed after correction. An initial run lacked
+permission to reach the fixture's loopback sockets; it is retained as a setup
+failure and is not the before-regression evidence.
+
+Slots now share a transition gate for their provider/model cleanup family.
+Registry lookup/insertion stays brief. Final cleanup snapshots the same eligible
+slots, releases the registry, and retains only the family gate during slot-state
+waits and provider acknowledgement. A concurrent new loopback alias receives the
+same gate before it becomes usable. A separate regression checks that it waits
+for the old cleanup, then loads and retains its own lease until its last user.
+Existing alias and failed-cleanup recovery cases still pass. Routes, credential
+digests, exact unload eligibility, instance acknowledgements, retry policies,
+300/60-second Ollama timing and 10-second management deadlines are unchanged.
+This isolates different model families; it does not promise immediate startup
+for the same family or independently running applications.
+
+Fresh final product checks passed: 374 Rust workspace/all-target tests, with the
+same two special entries normally ignored; all 21 provider protocol cases;
+workspace/all-target Clippy with warnings as errors; and Rust format check.
+Dependencies remained locked and offline. The first workspace attempt omitted
+the existing native SDK environment and stopped before tests when a fallback
+source build could not find CMake. The successful repetition used the existing
+pinned 0.4.1 SDK read-only, without downloading or changing it. Frontend bytes
+remain identical to the prior 225-test/TypeScript/build proof; no new UI run is
+claimed.
+
+The actual selected-provider reference was repeated on the corrected production
+core with the same private harness, unchanged desktop coordinator, installed LM
+Studio 0.4.26+4 and existing Gemma 4 E4B Q4_K_M model. The hardware, model size,
+context and native API scope are those recorded for candidate 06. No source file
+changed during the repeated run; only this sanitized note was updated afterward.
+
+The run passed its preregistered lifecycle and positive/nonbinding checks in
+464.763 seconds. Idle time was 330.328 seconds with eleven read-only samples of
+the same single instance, without inference or repeated loading. The separately
+test-owned selected-instance refusal/preservation, native owned load,
+post-completion/live-owner isolation, two preserved interrupted/resumed post
+checkpoints, durable live window/overview readback and final exact-instance
+unload all passed again. Both live and post outputs retained one explicit
+decision and one explicit task for positive text, versus zero of each for
+nonbinding text. The valid task retained the literal owner/due expression; an
+unanswered question retained unknown owner and due date.
+
+The positive final live overview stored five accepted items. One model-produced
+overview item was rejected by the unchanged `ownerOrDueOutsideTasks` rule and
+omitted; the valid explicit task remained in the separate task list. The
+nonbinding overview stored two items. This rejection is retained and reported,
+not hidden by repeating the run or relaxing the validator. Source-ID/literal
+quote validation and these checked cases do not establish general semantic
+correctness, complete overview coverage or a zero-rejection model guarantee.
+
+Ninety-four memory samples targeted five-second intervals, with actual gaps
+retained. The highest observed individual `llama-server` peaks were
+6,803,718,144 Working Set bytes and 6,854,184,960 Private Bytes, reported separately
+rather than added. Whole-device GPU memory used read 4,014 MiB before inference,
+peaked at 9,240 MiB and read 4,312 MiB after release. It includes other desktop
+activity and is not model-exclusive memory or proof of complete reclamation.
+Owned Rust tests/Clippy overlapped part of this run, using two build jobs and
+four test threads; existing desktop applications remained running. No capture
+or ASR load was started, and these observations are not a performance benchmark.
+
+Fresh native inventory again matched the complete original catalog, with no
+loaded instances. The same limits apply: one private harness process, no
+installed UI/full-worker or independent application-process proof, no actual
+Ollama reference, no user meetings or downloads, and no physical capture or
+combined two-hour endurance test. Raw synthetic content, paths, instance records
+and process samples remain private. TEST_REPORT.md remains byte-identical.
+Required final verification and fresh final-head review/CI receipts are tracked
+separately; the PR stays a draft without a merge, release or installed update.

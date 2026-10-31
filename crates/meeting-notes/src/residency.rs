@@ -23,6 +23,8 @@ pub struct LocalModelPool {
 }
 struct Slot {
     state: Mutex<State>,
+    /// Serializes reservations and final cleanup only for this provider/model family.
+    transition: Arc<Mutex<()>>,
     identity: String,
     auth_digest: [u8; 32],
     provider: LocalProvider,
@@ -74,8 +76,20 @@ impl LocalModelPool {
             slots.len() < 128 || slots.contains_key(&identity),
             "Zu viele lokale Modellverbindungen; Anwendung vor weiteren Verbindungen neu starten."
         );
+        // All routes conservatively grouped for cleanup must share the transition,
+        // including a route first inserted while another alias is being released.
+        let transition = slots
+            .values()
+            .find(|slot| {
+                slot.provider == provider
+                    && cleanup_group_model(provider, &slot.model)
+                        == cleanup_group_model(provider, &connection.model)
+            })
+            .map(|slot| Arc::clone(&slot.transition))
+            .unwrap_or_else(|| Arc::new(Mutex::new(())));
         let slot = Arc::clone(slots.entry(identity.clone()).or_insert_with(|| {
             Arc::new(Slot {
+                transition,
                 identity,
                 auth_digest,
                 provider,
@@ -96,6 +110,13 @@ impl LocalModelPool {
             slot.provider == provider && slot.auth_digest == auth_digest,
             "Die reservierte Modellverbindung wurde geändert. Anwendung vor der neuen Verbindung neu starten."
         );
+        drop(slots);
+        // A same-model cleanup must finish before this reservation becomes usable.
+        // Waiting here never retains the registry required by unrelated models.
+        let transition = slot
+            .transition
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Modellreservierungen sind gesperrt."))?;
         if slot.provider == LocalProvider::Ollama && slot.users.load(Ordering::Acquire) == 0 {
             // Finite provider TTLs and a fresh /api/ps query permit a new reservation;
             // no loaded ownership state or inference confirmation is reused.
@@ -107,9 +128,8 @@ impl LocalModelPool {
                 count.checked_add(1)
             })
             .map_err(|_| anyhow::anyhow!("Zu viele Modellreservierungen."))?;
-        // Reservation becomes visible while the registry is locked, before any last-user
-        // cleanup can run. Actual provider loading never holds this registry lock.
-        drop(slots);
+        // Cleanup observes this user under the same family transition.
+        drop(transition);
         Ok(Arc::new(ModelLease {
             slot,
             slots: Arc::clone(&self.slots),
@@ -326,6 +346,9 @@ impl Drop for ModelLease {
         if self.slot.users.fetch_sub(1, Ordering::AcqRel) != 1 {
             return;
         }
+        let Ok(_transition) = self.slot.transition.lock() else {
+            return;
+        };
         let Ok(slots) = self.slots.lock() else {
             return;
         };
@@ -347,9 +370,21 @@ impl Drop for ModelLease {
         {
             return;
         }
-        for slot in slots.values().filter(same_model) {
+        let releasing: Vec<_> = slots.values().filter(same_model).cloned().collect();
+        // Keep the family transition through provider acknowledgement, but release
+        // the shared registry before any slot-state wait or management request.
+        drop(slots);
+        for slot in releasing {
             slot.release();
         }
+    }
+}
+/// Groups cleanup serialization conservatively; inference and ownership name matching
+/// remain exact. Repeated implicit latest suffixes share a gate without broadening unloads.
+fn cleanup_group_model(provider: LocalProvider, model: &str) -> &str {
+    match provider {
+        LocalProvider::Ollama => model.trim_end_matches(":latest"),
+        LocalProvider::LmStudio => model,
     }
 }
 impl Slot {

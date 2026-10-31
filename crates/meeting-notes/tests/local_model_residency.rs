@@ -155,6 +155,135 @@ fn lm(path: &str, body: &Value) -> (u16, Value) {
         _ => (500, json!({})),
     }
 }
+/// Holds an actual fixture cleanup response until the test explicitly releases it.
+fn gated_cleanup(
+    provider: LocalProvider,
+) -> (
+    Server,
+    std::sync::mpsc::Receiver<()>,
+    std::sync::mpsc::SyncSender<()>,
+) {
+    let (entered, observed) = std::sync::mpsc::sync_channel(1);
+    let (release, allowed) = std::sync::mpsc::sync_channel(1);
+    let server = Server::new(move |path, body| {
+        let cleanup = match provider {
+            LocalProvider::Ollama => path == "/api/generate" && body["keep_alive"] == 0,
+            LocalProvider::LmStudio => path == "/api/v1/models/unload",
+        };
+        if cleanup {
+            entered.send(()).unwrap();
+            allowed.recv_timeout(Duration::from_secs(5)).unwrap();
+        }
+        match provider {
+            LocalProvider::Ollama => ollama(path, body),
+            LocalProvider::LmStudio => lm(path, body),
+        }
+    });
+    (server, observed, release)
+}
+/// Proves a pending native cleanup cannot hold the registry needed by another model.
+fn check_unrelated_progress_during_cleanup(provider: LocalProvider) {
+    let (slow, entered, release) = gated_cleanup(provider);
+    let fast = Server::new(move |path, body| match provider {
+        LocalProvider::Ollama => ollama(path, body),
+        LocalProvider::LmStudio => {
+            let (status, mut reply) = lm(path, body);
+            if path == "/api/v1/models" {
+                reply["models"][0]["key"] = json!("unrelated");
+            }
+            (status, reply)
+        }
+    });
+    let pool = Arc::new(LocalModelPool::default());
+    let lease = pool.reserve(&slow.connection(), provider).unwrap();
+    lease.prepare(&AnalysisControl::default()).unwrap();
+    let cleanup = thread::spawn(move || drop(lease));
+    entered.recv_timeout(Duration::from_secs(2)).unwrap();
+    let mut connection = fast.connection();
+    connection.model = "unrelated".into();
+    let other_pool = Arc::clone(&pool);
+    let (done, observed) = std::sync::mpsc::sync_channel(1);
+    let other = thread::spawn(move || {
+        let lease = other_pool.reserve(&connection, provider).unwrap();
+        let client = TextClient::new(&connection)
+            .unwrap()
+            .with_residency(lease)
+            .unwrap();
+        generate(&client).unwrap();
+        drop(client);
+        done.send(()).unwrap();
+    });
+    let progressed = observed.recv_timeout(Duration::from_secs(2)).is_ok();
+    // Always release/join the test's own threads before reporting a regression.
+    release.send(()).unwrap();
+    cleanup.join().unwrap();
+    other.join().unwrap();
+    assert!(
+        progressed,
+        "Unrelated reservation/inference waited for native cleanup"
+    );
+    assert!(fast
+        .seen()
+        .iter()
+        .any(|(path, _)| path.ends_with("/chat") || path.ends_with("/completions")));
+}
+/// Exercises the actual Ollama management path while another model completes inference.
+#[test]
+fn slow_ollama_final_cleanup_does_not_block_unrelated_model_work() {
+    check_unrelated_progress_during_cleanup(LocalProvider::Ollama);
+}
+/// Exercises the native LM Studio unload path while another model completes inference.
+#[test]
+fn slow_lm_studio_final_cleanup_does_not_block_unrelated_model_work() {
+    check_unrelated_progress_during_cleanup(LocalProvider::LmStudio);
+}
+/// A newly inserted loopback alias must not load until its family's old cleanup acknowledges.
+#[test]
+fn a_new_model_alias_waits_for_pending_cleanup_then_keeps_its_own_lease() {
+    for provider in [LocalProvider::Ollama, LocalProvider::LmStudio] {
+        let (server, entered, release) = gated_cleanup(provider);
+        let pool = Arc::new(LocalModelPool::default());
+        let first = pool.reserve(&server.connection(), provider).unwrap();
+        first.prepare(&AnalysisControl::default()).unwrap();
+        let cleanup = thread::spawn(move || drop(first));
+        entered.recv_timeout(Duration::from_secs(2)).unwrap();
+        let mut alias = server.connection();
+        alias.endpoint = alias.endpoint.replace("127.0.0.1", "localhost");
+        if provider == LocalProvider::Ollama {
+            alias.model.push_str(":latest");
+        }
+        let other_pool = Arc::clone(&pool);
+        let (started, observed_start) = std::sync::mpsc::sync_channel(1);
+        let (reserved, observed) = std::sync::mpsc::sync_channel(1);
+        let reserve = thread::spawn(move || {
+            started.send(()).unwrap();
+            let lease = other_pool.reserve(&alias, provider).unwrap();
+            lease.prepare(&AnalysisControl::default()).unwrap();
+            reserved.send(lease).unwrap();
+        });
+        observed_start.recv_timeout(Duration::from_secs(2)).unwrap();
+        let early = observed.recv_timeout(Duration::from_millis(150));
+        let waited = early.is_err();
+        release.send(()).unwrap();
+        cleanup.join().unwrap();
+        let lease =
+            early.unwrap_or_else(|_| observed.recv_timeout(Duration::from_secs(2)).unwrap());
+        reserve.join().unwrap();
+        let unloads = |seen: &[(String, Value)]| {
+            seen.iter()
+                .filter(|(path, body)| {
+                    path == "/api/v1/models/unload"
+                        || (path == "/api/generate" && body["keep_alive"] == 0)
+                })
+                .count()
+        };
+        assert_eq!(unloads(&server.seen()), 1, "New active alias was unloaded");
+        release.send(()).unwrap();
+        drop(lease);
+        assert_eq!(unloads(&server.seen()), 2);
+        assert!(waited, "Same-model reservation overtook pending cleanup");
+    }
+}
 /// Uses one nonbinding synthetic source and the actual evidence-schema transport path.
 fn generate(client: &TextClient) -> anyhow::Result<String> {
     client.generate(
