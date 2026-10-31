@@ -468,3 +468,68 @@ source fingerprint therefore changes, while the referenced production modules
 remain byte-identical; a separate equivalence proof records that distinction.
 No old reference is represented as a new run on the later head. Fresh current CI
 and two new review rounds remain required on the corrected published head.
+
+
+### Configured native routes retain their loopback host identity
+
+The first full review of candidate 10 found that configured-provider matching
+checked loopback eligibility but discarded the host from its comparison key.
+A different loopback bind with the same port and path could therefore acquire
+the wrong native provider route. Two actual before regressions fail: an
+unconfigured bind receives Ollama management and a same-port LM Studio bind is
+misclassified as Ollama. Both are real production matching errors.
+
+Matching now includes the normalized host together with scheme, port and path.
+Only the existing localhost alias maps to pinned 127.0.0.1; distinct IPv4 loopback
+addresses and IPv6 ::1 stay distinct. Credentials, HTTPS, remote hosts, query,
+fragment, and different ports or paths remain ineligible. A pure matching helper
+uses the same production path without changing process environment in parallel
+tests. Three regressions cover wrong-bind rejection, cross-provider same-port
+routing, accepted same-bind aliases and the existing unsafe-URL exclusions.
+All 383 workspace/all-target Rust tests pass, with two existing special entries
+regularly ignored. Format, Clippy with warnings denied and required project
+verification pass. Shared UI and dependency bytes remain unchanged.
+
+A fresh real selected-model reference is required after this production binding
+change. Its private harness now imports the actual local_models.rs selector as
+well as the coordinator and core modules; every real reservation must use the
+provider returned for the configured endpoint. An otherwise matching
+127.0.0.2:1235 endpoint must remain unclassified. This extends the previous
+reference coverage, which selected the native provider explicitly. The same
+330-second idle, positive/nonbinding content, ownership, persistence and exact
+owned-release requirements apply. No model download or user meeting is used.
+
+
+The fresh host-corrected real reference completed successfully on the same
+HandyMeeting 1.0.7 / Windows 11 Pro 26200 / i7-13700 / RTX 4070 environment,
+LM Studio 0.4.26+4 (CLI dcefd5a), existing google/gemma-4-e4b Q4_K_M model,
+8192 context and 6,326,936,720-byte installed model. Its actual selector returns
+LM Studio for the configured endpoint and rejects the different same-port bind
+before any native mutation. Idle residency lasts 330.475444 seconds
+with the same instance at all eleven samples; the harness lasts
+450.304480 seconds (456.204000 seconds including
+the sampling wrapper). All preregistered ownership, positive/nonbinding, durable
+checkpoint/resume, final readback and exact owned-unload checks pass. Accepted
+quotes/source IDs were manually read. The positive final overview retains five
+items and rejects one; the reason is not persisted and is not inferred from old
+runs. The task remains separately present, unknown owner/due remain unknown,
+and the nonbinding post summary is empty. This is no semantic completeness or
+zero-rejection claim, and no validation rule was relaxed.
+
+Memory is sampled 92 times at a nominal five-second interval.
+Maximum individual llama-server Working Set is 6,803,189,760 bytes and
+maximum individual Private Bytes is 6,853,861,376 bytes, reported separately.
+Whole-device GPU usage is 3978 MiB before inference,
+8838 MiB peak and 3901 MiB after release.
+These readings include other desktop load; per-process peaks are not simultaneous
+sums and do not prove exclusive attribution or complete reclamation. Own builds
+and local verification ended before this run; existing desktop applications and
+light source/GitHub inspection remained active. No capture, ASR or download ran.
+
+All 2,987 tracked source files stayed byte-identical during the reference. Its
+private fingerprint precedes only this final sanitized results paragraph. The
+actual provider selector, coordinator, core/prompt and dependency bytes stay
+exact for publication. Earlier reference runs retain their original fingerprints
+and are not reassigned. The installed GUI, full automatic worker, independent
+app-process, actual Ollama, hardware capture and endurance limitations above
+remain. Fresh current CI and two clean review rounds are still required.
