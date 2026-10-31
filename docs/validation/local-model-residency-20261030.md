@@ -31,7 +31,7 @@ For published candidate 02, the prescribed `verify.ps1` passed: 47 PCM, 35 notes
 
 A concurrent repeat of the legacy checks timed out during an agent exchange; the sequential repeat passed with the same check and unchanged deadline. The initial full Rust build exhausted local disk space; only this task's fresh build cache was removed, then the checks were rebuilt with debug symbols and incremental compilation disabled. Prior logs remain retained. No product test, warning policy or CI threshold was weakened.
 
-Actual Ollama and the configured LM Studio server were unreachable during the read-only probes. **The real local reference test with positive and nonbinding statements remains a merge gate**, including verification of the installed provider's load/instance behavior and residency across an actual idle period. No real model performance, GPU memory, capture hardware or combined long-duration result is claimed. Existing capture interruption, signing/notarization and platform limitations remain open. The full historical `TEST_REPORT.md` is unchanged.
+For candidates 01–05, actual Ollama and the configured LM Studio server were unreachable during read-only probes. Those historical probes and synthetic fixtures remain retained. The selected LM Studio provider now has the real positive/nonbinding, idle and release reference documented below. Actual Ollama compatibility remains untested. Existing capture interruption, signing/notarization and platform limitations remain open. The full historical `TEST_REPORT.md` is unchanged.
 
 Official protocol sources: [Ollama keep-alive](https://docs.ollama.com/faq), [native chat](https://docs.ollama.com/api/chat), [LM Studio idle TTL and auto-evict](https://lmstudio.ai/docs/developer/core/ttl-and-auto-evict), [load](https://lmstudio.ai/docs/developer/rest/load), [list](https://lmstudio.ai/docs/developer/rest/list), [unload](https://lmstudio.ai/docs/developer/rest/unload).
 
@@ -132,3 +132,84 @@ termination test. The exact native preload regression passed. Frontend bytes
 remain identical to the earlier 225-test/TypeScript/build proof; no new frontend
 run or real-provider result is claimed. Full lint/format/verify outcomes are
 recorded with the immutable candidate proof.
+
+## Candidate 06: actual selected LM Studio reference — 2026-10-31
+
+The maintainer explicitly authorized starting the existing local service and using
+the already installed selected model, with no downloads or user meetings. The
+existing LM Studio service was started on loopback port 1235. No application was
+installed or replaced. All 2,979 published source files still matched candidate
+05 during the reference; candidate 06 changes only this validation note.
+
+Environment: Windows 11 Pro build 26200, Intel Core i7-13700 (16 cores / 24 logical
+processors), 66,838,500 KiB visible physical memory, NVIDIA RTX 4070 with 12,282 MiB
+device memory and driver 621.01. Provider: LM Studio 0.4.26+4, CLI commit dcefd5a.
+Selected installed model: `google/gemma-4-e4b`, Gemma 4 E4B, GGUF Q4_K_M,
+6,326,936,720 catalog bytes. Native REST v1 reported an 8,192-token context,
+Flash Attention and GPU KV-cache offload. These settings were observed, not
+changed to fit an outcome. Notes used `handymeeting-rust-notes-3`; live notes used
+`handymeeting-live-notes-2`.
+
+The private executable used the unchanged production `meeting-notes` crate and
+the unchanged desktop `model_sessions` coordinator module. Its own build was
+offline and locked, with warnings as errors; every dependency name, version,
+source and checksum matched the production Cargo.lock. It used new private
+output directories and artificial conversation text only.
+
+The actual run passed in 461.270 seconds:
+
+- Native REST v1 acknowledged loading the selected existing model and returned an
+  instance ID. A separate test owner first loaded that same selected model. The
+  production pool refused to adopt or duplicate this already loaded instance;
+  the complete native inventory remained equal. Only the instance established
+  by that test owner's acknowledgement was then unloaded, with an exact-ID
+  acknowledgement. No unrelated model was loaded for this check.
+- The application pool then loaded its own selected instance. The preregistered
+  idle interval was 330 seconds without inference or repeated load requests.
+  Eleven read-only inventory samples at approximately 30-second intervals kept
+  the same single instance; measured idle time was 330.180 seconds. Dropping
+  transient work handles retained the actual coordinator's retry anchor. A fresh
+  handle reused the same instance after the idle interval.
+- Post-meeting and live inference both produced one explicit decision and one
+  explicit task from the positive text, with the literal named owner and due
+  expression. Both produced zero decisions and zero tasks from the nonbinding
+  text. Production validators checked existing source IDs and literal quotes.
+  The positive live run stored two windows and a final overview of five items;
+  the nonbinding live run stored two windows and a final overview of two items.
+  These are checked outputs for these inputs, not a general semantic guarantee.
+- Each post-meeting case was interrupted after its first durable step and
+  resumed from disk. Both original snapshots and first checkpoints remained
+  byte-identical, and the two confirmed steps were not requested again. Finished
+  results were read back through the production result validator.
+- Completing the post owner preserved the live owner. Live windows and the
+  final overview were read from disk before the harness invoked the production
+  coordinator's completion method. Remaining client leases delayed unloading;
+  dropping the last client released the owned instance. Fresh native inventory
+  confirmed no loaded instances and the complete original catalog unchanged.
+
+Working Set and Private Bytes were sampled separately per process. The observed
+`llama-server` peaks were 6,803,124,224 Working Set bytes and 6,855,098,368 Private
+Bytes; these distinct measures are not added together. NVIDIA's whole-device
+memory-used counter peaked at 8,286 MiB and read 3,599 MiB after release. That GPU
+counter includes the desktop and other applications; it is not model-exclusive
+VRAM or proof of complete RAM/VRAM reclamation. Sampling targeted five seconds,
+with actual timestamp gaps retained in private evidence. Existing desktop
+applications remained running. No capture or speech-recognition load was started.
+
+The reference establishes this installed LM Studio/model combination and the
+observed idle interval. There were no unrelated pre-existing loaded instances,
+so actual foreign preservation here covers a separately test-owned instance of
+the selected key; nonempty unrelated-key preservation remains synthetic protocol
+coverage. It was one private harness process using the real provider and original
+core/coordinator modules, not an installed-app UI test, independent application
+process test, automatic full-worker finalization test, crash test, physical
+capture test or combined two-hour endurance test. Actual Ollama and generic
+OpenAI-compatible residency are not established by this LM Studio run. External
+server changes, suspension and unacknowledged management remain the boundaries
+described above. The PR remains a draft and this evidence does not authorize a
+merge, release, version bump or installed update.
+
+Raw artificial conversations, local paths, instance records and process samples
+remain private. Only this sanitized note is published; TEST_REPORT.md remains
+byte-identical. Fresh final-head reviews and CI are tracked separately from the
+older candidate results.
