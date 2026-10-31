@@ -863,6 +863,127 @@ fn loopback_aliases_defer_cleanup_without_merging_routes_or_model_instances() {
     );
 }
 
+/// Models native Ollama inventory changes caused by actual fixture load/unload requests.
+fn stateful_ollama(initial_seconds: i64) -> (Server, Arc<std::sync::atomic::AtomicI64>) {
+    let lifetime = Arc::new(std::sync::atomic::AtomicI64::new(initial_seconds));
+    let observed = Arc::clone(&lifetime);
+    let server = Server::new(move |path, body| {
+        if path == "/api/ps" {
+            let seconds = observed.load(Ordering::Acquire);
+            let expires = chrono::Utc::now()
+                + if seconds == -1 {
+                    chrono::Duration::days(730)
+                } else {
+                    chrono::Duration::seconds(seconds)
+                };
+            let mut models =
+                vec![json!({"name":"foreign-key","expires_at":"2999-01-01T00:00:00Z"})];
+            if seconds != 0 {
+                models.push(json!({"name":"synthetic:latest","expires_at":expires.to_rfc3339()}));
+            }
+            return (200, json!({"models":models}));
+        }
+        if path == "/api/generate" {
+            assert!(matches!(
+                body["model"].as_str(),
+                Some("synthetic" | "synthetic:latest")
+            ));
+            observed.store(body["keep_alive"].as_i64().unwrap(), Ordering::Release);
+        }
+        ollama(path, body)
+    });
+    (server, lifetime)
+}
+
+/// Both load orders on one fixed registry expose HashMap-order cleanup errors deterministically.
+#[test]
+fn stateful_ollama_aliases_preserve_original_absent_finite_and_indefinite_policies() {
+    let (server, lifetime) = stateful_ollama(0);
+    let pool = LocalModelPool::default();
+    let first_connection = server.connection();
+    let mut alias = server.connection();
+    alias.endpoint = alias.endpoint.replace("127.0.0.1", "localhost");
+    alias.model = "synthetic:latest".into();
+    let mut outcomes = Vec::new();
+    // No new registry entries after the first pair: reversing load ownership must
+    // cover both cleanup orders, independent of the registry's random hash seed.
+    for initial in [0, 1200, -1] {
+        for reverse in [false, true] {
+            lifetime.store(initial, Ordering::Release); // Only fixture-owned provider state.
+            let first = pool
+                .reserve(&first_connection, LocalProvider::Ollama)
+                .unwrap();
+            let second = pool.reserve(&alias, LocalProvider::Ollama).unwrap();
+            let (early, later) = if reverse {
+                (second, first)
+            } else {
+                (first, second)
+            };
+            early.prepare(&AnalysisControl::default()).unwrap();
+            later.prepare(&AnalysisControl::default()).unwrap();
+            drop(early);
+            assert_ne!(
+                lifetime.load(Ordering::Acquire),
+                0,
+                "Active alias was unloaded"
+            );
+            drop(later);
+            outcomes.push((initial, reverse, lifetime.load(Ordering::Acquire)));
+        }
+    }
+    assert!(
+        outcomes.iter().all(|&(initial, _, after)| match initial {
+            0 => after == 0,
+            1200 => after >= 1190, // At most ten seconds of fixture/clock rounding, not five minutes.
+            -1 => after == -1,
+            _ => unreachable!(),
+        }),
+        "Original Ollama policy changed across aliases: {outcomes:?}"
+    );
+    assert!(!server
+        .seen()
+        .iter()
+        .any(|(_, body)| body["model"] == "foreign-key"));
+}
+
+/// Equal model names on distinct local servers do not authorize borrowing or foreign unloading.
+#[test]
+fn stateful_ollama_distinct_servers_keep_their_own_original_policies() {
+    let (owned, owned_lifetime) = stateful_ollama(0);
+    let (foreign, foreign_lifetime) = stateful_ollama(1200);
+    let pool = LocalModelPool::default();
+    for reverse in [false, true] {
+        owned_lifetime.store(0, Ordering::Release);
+        foreign_lifetime.store(1200, Ordering::Release);
+        let own = pool
+            .reserve(&owned.connection(), LocalProvider::Ollama)
+            .unwrap();
+        let other = pool
+            .reserve(&foreign.connection(), LocalProvider::Ollama)
+            .unwrap();
+        if reverse {
+            other.prepare(&AnalysisControl::default()).unwrap();
+            own.prepare(&AnalysisControl::default()).unwrap();
+        } else {
+            own.prepare(&AnalysisControl::default()).unwrap();
+            other.prepare(&AnalysisControl::default()).unwrap();
+        }
+        drop(own);
+        assert_ne!(
+            owned_lifetime.load(Ordering::Acquire),
+            0,
+            "Conservative family deferral lost"
+        );
+        drop(other);
+        assert_eq!(owned_lifetime.load(Ordering::Acquire), 0);
+        assert!(foreign_lifetime.load(Ordering::Acquire) >= 1190);
+    }
+    assert!(!foreign
+        .seen()
+        .iter()
+        .any(|(_, body)| body["keep_alive"] == 0));
+}
+
 /// Abruptly exiting our synthetic child must leave a finite server TTL, never an orphan pin.
 #[test]
 fn terminated_owner_leaves_bounded_ollama_residency_and_restart_can_release() {

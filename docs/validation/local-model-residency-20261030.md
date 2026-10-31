@@ -294,3 +294,87 @@ combined two-hour endurance test. Raw synthetic content, paths, instance records
 and process samples remain private. TEST_REPORT.md remains byte-identical.
 Required final verification and fresh final-head review/CI receipts are tracked
 separately; the PR stays a draft without a merge, release or installed update.
+
+## Candidate 08: preserve Ollama alias cleanup policy
+
+The first complete candidate-07 review round was not clean. Codex identified a
+valid Ollama ownership-policy failure: a second loopback spelling could observe
+the first slot's app-owned load as pre-existing finite residency. Arbitrary
+HashMap cleanup order could then unload through the original slot and reload
+through the later finite restoration, leaving the model warm after all users
+finished. The old alias fixture always reported an empty inventory and could
+not expose this stateful interaction.
+
+A new stateful native-protocol fixture changes its actual inventory after load
+and unload requests. Both load orders run on the same fixed two-slot registry,
+so the test covers both cleanup orders independently of hash randomization.
+Before correction, one initially absent case ended at 300 seconds rather than
+unloaded; the opposite load order ended unloaded. Originally finite and
+indefinite policies and an unrelated model are also checked. A separate fixture
+uses equal selected names on two distinct local servers and verifies each
+server's own original policy, including no unload request to the foreign one.
+
+Cleanup now restores finite policies before performing app-owned unloads. Finite
+restorations run in ascending lifetime order, so a longer observed foreign
+policy is restored last. The existing family transition keeps these policies
+stable; the shared registry remains released throughout state waits and network
+requests. Every request still uses its original route, credential and model
+identity. No server identity is guessed, no reservation authority is transferred
+between servers, and no unload eligibility or provider deadline is broadened.
+Both new stateful tests pass after correction; all prior regressions remain.
+
+CodeRabbit's complete base-to-head round also identified missing first-load
+guidance in the German README and an initially unverified matching English
+documentation suggestion. The omission was independently confirmed against the
+native preflight code and real selected-instance refusal. Both READMEs now say
+that the selected LM Studio key must have no loaded instance for the first
+app-owned load during preparation. They also state that an already confirmed
+own reservation is reused and foreign instances are not adopted, duplicated or
+unloaded. This is a preparation requirement, not a rule that the model must be
+unloaded before starting the whole application. Link labels now describe the
+actual reference evidence and remaining limits. No behavior was changed for this
+documentation correction.
+
+Fresh candidate-08 product checks passed: 376 Rust workspace/all-target tests,
+the same two special entries normally ignored, all 23 provider protocol cases,
+Clippy with warnings as errors, and Rust format check. The existing pinned SDK
+and locked dependencies were used unchanged. Frontend bytes remain equal to the
+prior 225-test/TypeScript/build proof; no new frontend run is claimed.
+
+The same preregistered actual selected LM Studio/Gemma reference was repeated on
+this corrected production core and unchanged desktop coordinator. All 2,979
+source files were unchanged during the run; only the READMEs and this sanitized
+note were updated afterward. Provider, model, hardware, prompt versions and
+native API/configuration scope are those documented above. The original raw
+records and all earlier outcomes remain private and preserved.
+
+The repeat passed in 449.759 seconds, including 330.162 seconds idle without
+inference or reload and eleven samples of the same single instance. Actual
+selected-instance refusal/preservation, owned native load, positive/nonbinding
+live and post outputs, two preserved resumed checkpoints, durable live final
+readback, other-owner/client preservation and exact final owned unload passed.
+Positive live/post cases retained one decision and one task; nonbinding cases
+retained zero of each. The valid task kept its literal owner/due expression,
+and the unanswered question retained unknown values. The positive final overview
+again stored five items and rejected one `ownerOrDueOutsideTasks` item; the task
+remained in its separate list. The nonbinding overview stored two items. The
+unchanged validator and this semantic coverage limit are retained explicitly.
+
+Ninety-one memory samples targeted five seconds, with actual gaps retained.
+Highest individual `llama-server` observed peaks were 6,801,133,568 Working Set
+bytes and 6,852,231,168 Private Bytes, reported separately. Whole-device GPU
+memory used was 4,466 MiB before inference, peaked at 9,431 MiB, and was 4,365 MiB
+after release. These device counters include other desktop activity; they are
+not model-exclusive VRAM or a complete memory-reclamation claim. Own Rust tests,
+Clippy and the harness build had finished before this repeat; existing desktop
+applications remained running. No capture or ASR load was started.
+
+Final fresh native inventory matched the original catalog and contained no
+loaded instances. The limits remain: actual evidence for this installed LM
+Studio/model combination and observed interval, synthetic Ollama behavior, no
+installed UI/full-worker/independent app-process or physical capture proof, and
+no combined two-hour endurance result. No downloads or user meetings were used.
+TEST_REPORT.md, dependencies and protection/reviewer rules remain unchanged.
+Final verification, immutable publication and two fresh final-head review rounds
+per provider are tracked separately. The PR remains a draft; no merge, release,
+version bump or installed update is authorized.

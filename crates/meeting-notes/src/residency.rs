@@ -370,10 +370,15 @@ impl Drop for ModelLease {
         {
             return;
         }
-        let releasing: Vec<_> = slots.values().filter(same_model).cloned().collect();
+        let mut releasing: Vec<_> = slots.values().filter(same_model).cloned().collect();
         // Keep the family transition through provider acknowledgement, but release
         // the shared registry before any slot-state wait or management request.
         drop(slots);
+        // An alias can observe another slot's app-owned Ollama load as preexisting.
+        // Restore finite foreign policies before owned unloads, otherwise a later
+        // restore could reload the just-released model. Keep every request on its
+        // original route: equal keys do not establish equal local servers.
+        releasing.sort_by_cached_key(|slot| slot.cleanup_order());
         for slot in releasing {
             slot.release();
         }
@@ -388,6 +393,17 @@ fn cleanup_group_model(provider: LocalProvider, model: &str) -> &str {
     }
 }
 impl Slot {
+    /// Restores the longest observed finite policy last, then performs owned unloads.
+    /// Family serialization keeps this policy stable until release; no registry is held.
+    fn cleanup_order(&self) -> (bool, i64) {
+        let Ok(state) = self.state.lock() else {
+            return (false, -1);
+        };
+        match &state.loaded {
+            Some(Loaded::Ollama { release_after }) => (*release_after == 0, *release_after),
+            _ => (false, -1),
+        }
+    }
     /// Serializes the final release against refresh; no subsequent refresh can
     /// recreate a model once its loaded state was removed under this mutex.
     fn release(&self) {
