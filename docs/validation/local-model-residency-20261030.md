@@ -439,3 +439,32 @@ an installed GUI, full automatic worker, physical capture, independent applicati
 process, Ollama server, GPU endurance or combined two-hour test. Generic OpenAI
 routes receive no residency guarantee. Fresh CI and reviews on the eventual
 published integration head are still required before merge.
+
+
+### Legacy notes crash-fixture correction after integration candidate 09
+
+The candidate 09 CI notes check failed after its own crash child had exited:
+the immediate single resume encountered a still-held exclusive processing.lock.
+The saved diagnostic establishes contention, not the identity of the remaining
+holder. The notes fixture now reuses the already tested template fixture's
+bounded lease-release probe after confirming its own child has exited. The same
+existing five-second test bound is used. Production GenerateAsync/FileShare.None,
+the 30-second checkpoint-ready limit, consent, content validation and persisted
+prefix comparison are unchanged. The probe never deletes the lock, catches only
+actual sharing/lock violations and does not retry GenerateAsync. Its established
+held-lease expiry and other-I/O countercases remain part of the template checks.
+
+Fresh required verification passes on both integrated sources: 47 PCM, 35 notes,
+28 templates, eight agent checks and the monitor checks. Ten further independent
+notes runs each pass all 35 cases; each records confirmed own-child exit, the same
+5000 ms bound and no lock deletion. The failed CI artifact and log are retained.
+This is a crash-test harness correction, not a production model/recording change.
+
+The 380 native and 248 shared UI test results and the real local reference above
+belong to their actual candidate 09 sources. The follow-up changes only the two
+legacy verification source files and this sanitized note. Production native,
+model/coordinator/prompt, UI and dependency bytes remain exact. The complete
+source fingerprint therefore changes, while the referenced production modules
+remain byte-identical; a separate equivalence proof records that distinction.
+No old reference is represented as a new run on the later head. Fresh current CI
+and two new review rounds remain required on the corrected published head.
