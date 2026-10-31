@@ -55,6 +55,7 @@ Für Zusammenfassungen braucht es zusätzlich ein lokales Textmodell: **Ollama**
 
 Live-Zusammenfassungen halten das gewählte lokale Modell bis zum gespeicherten Abschluss reserviert; bei fehlgeschlagenem Abschluss bleibt es für die Wiederaufnahme verfügbar. LM Studio benötigt native REST-v1-Unterstützung und eine bestätigte eigene Modellinstanz.
 Für die erste eigene Ladung bei der Vorbereitung einer Auswertung oder Live-Zusammenfassung darf der ausgewählte LM-Studio-Modellschlüssel keine geladene Instanz haben. Eine bereits geladene fremde Instanz wird weder übernommen noch entladen; die App lädt dann keine zweite Kopie. Eine bereits bestätigte eigene Reservierung wird wiederverwendet.
+Ollama verwendet eine gemeinsame serverseitige Lebensdauer statt eigener Instanzen je Client. Beim letzten eigenen Abschluss endet die Erneuerung ohne Entladeanfrage oder Zurücksetzen einer alten Lebensdauer. Das Modell kann daher bis zum Ablauf der bestehenden endlichen Frist warm bleiben (normalerweise bis zu 300 Sekunden nach der letzten Anfrage); andere Clients können sie verlängern. LM Studio gibt weiterhin nur die exakt bestätigte eigene Instanz frei.
 Siehe [Anbietervoraussetzungen, Referenzprüfung und Grenzen](docs/validation/local-model-residency-20261030.md).
 
 ## Datenschutz und Grenzen

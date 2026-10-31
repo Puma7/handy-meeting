@@ -227,10 +227,38 @@ fn check_unrelated_progress_during_cleanup(provider: LocalProvider) {
         .iter()
         .any(|(path, _)| path.ends_with("/chat") || path.ends_with("/completions")));
 }
-/// Exercises the actual Ollama management path while another model completes inference.
+/// Ollama logical release must finish without invoking even a deliberately gated
+/// destructive endpoint, then leave the shared registry usable by another model.
 #[test]
-fn slow_ollama_final_cleanup_does_not_block_unrelated_model_work() {
-    check_unrelated_progress_during_cleanup(LocalProvider::Ollama);
+fn ollama_final_release_avoids_global_cleanup_and_keeps_unrelated_work_usable() {
+    let (server, entered, release) = gated_cleanup(LocalProvider::Ollama);
+    let pool = LocalModelPool::default();
+    let lease = pool
+        .reserve(&server.connection(), LocalProvider::Ollama)
+        .unwrap();
+    lease.prepare(&AnalysisControl::default()).unwrap();
+    let (done, finished) = std::sync::mpsc::sync_channel(1);
+    let cleanup = thread::spawn(move || {
+        drop(lease);
+        done.send(()).unwrap();
+    });
+    let immediate = finished.recv_timeout(Duration::from_secs(2)).is_ok();
+    let destructive_request = entered.try_recv().is_ok();
+    release.send(()).unwrap();
+    cleanup.join().unwrap();
+    assert!(
+        immediate && !destructive_request,
+        "Shared Ollama cleanup was attempted"
+    );
+    assert_eq!(server.seen().len(), 2);
+    let mut connection = server.connection();
+    connection.model = "unrelated".into();
+    let lease = pool.reserve(&connection, LocalProvider::Ollama).unwrap();
+    let client = TextClient::new(&connection)
+        .unwrap()
+        .with_residency(lease)
+        .unwrap();
+    generate(&client).unwrap();
 }
 /// Exercises the native LM Studio unload path while another model completes inference.
 #[test]
@@ -239,51 +267,68 @@ fn slow_lm_studio_final_cleanup_does_not_block_unrelated_model_work() {
 }
 /// A newly inserted loopback alias must not load until its family's old cleanup acknowledges.
 #[test]
-fn a_new_model_alias_waits_for_pending_cleanup_then_keeps_its_own_lease() {
-    for provider in [LocalProvider::Ollama, LocalProvider::LmStudio] {
-        let (server, entered, release) = gated_cleanup(provider);
-        let pool = Arc::new(LocalModelPool::default());
-        let first = pool.reserve(&server.connection(), provider).unwrap();
-        first.prepare(&AnalysisControl::default()).unwrap();
-        let cleanup = thread::spawn(move || drop(first));
-        entered.recv_timeout(Duration::from_secs(2)).unwrap();
-        let mut alias = server.connection();
-        alias.endpoint = alias.endpoint.replace("127.0.0.1", "localhost");
-        if provider == LocalProvider::Ollama {
-            alias.model.push_str(":latest");
-        }
-        let other_pool = Arc::clone(&pool);
-        let (started, observed_start) = std::sync::mpsc::sync_channel(1);
-        let (reserved, observed) = std::sync::mpsc::sync_channel(1);
-        let reserve = thread::spawn(move || {
-            started.send(()).unwrap();
-            let lease = other_pool.reserve(&alias, provider).unwrap();
-            lease.prepare(&AnalysisControl::default()).unwrap();
-            reserved.send(lease).unwrap();
-        });
-        observed_start.recv_timeout(Duration::from_secs(2)).unwrap();
-        let early = observed.recv_timeout(Duration::from_millis(150));
-        let waited = early.is_err();
-        release.send(()).unwrap();
-        cleanup.join().unwrap();
-        let lease =
-            early.unwrap_or_else(|_| observed.recv_timeout(Duration::from_secs(2)).unwrap());
-        reserve.join().unwrap();
-        let unloads = |seen: &[(String, Value)]| {
-            seen.iter()
-                .filter(|(path, body)| {
-                    path == "/api/v1/models/unload"
-                        || (path == "/api/generate" && body["keep_alive"] == 0)
-                })
-                .count()
-        };
-        assert_eq!(unloads(&server.seen()), 1, "New active alias was unloaded");
-        release.send(()).unwrap();
-        drop(lease);
-        assert_eq!(unloads(&server.seen()), 2);
-        assert!(waited, "Same-model reservation overtook pending cleanup");
-    }
+fn a_new_lm_alias_waits_for_pending_cleanup_then_keeps_its_own_lease() {
+    let provider = LocalProvider::LmStudio;
+    let (server, entered, release) = gated_cleanup(provider);
+    let pool = Arc::new(LocalModelPool::default());
+    let first = pool.reserve(&server.connection(), provider).unwrap();
+    first.prepare(&AnalysisControl::default()).unwrap();
+    let cleanup = thread::spawn(move || drop(first));
+    entered.recv_timeout(Duration::from_secs(2)).unwrap();
+    let mut alias = server.connection();
+    alias.endpoint = alias.endpoint.replace("127.0.0.1", "localhost");
+    let other_pool = Arc::clone(&pool);
+    let (started, observed_start) = std::sync::mpsc::sync_channel(1);
+    let (reserved, observed) = std::sync::mpsc::sync_channel(1);
+    let reserve = thread::spawn(move || {
+        started.send(()).unwrap();
+        let lease = other_pool.reserve(&alias, provider).unwrap();
+        lease.prepare(&AnalysisControl::default()).unwrap();
+        reserved.send(lease).unwrap();
+    });
+    observed_start.recv_timeout(Duration::from_secs(2)).unwrap();
+    let early = observed.recv_timeout(Duration::from_millis(150));
+    let waited = early.is_err();
+    release.send(()).unwrap();
+    cleanup.join().unwrap();
+    let lease = early.unwrap_or_else(|_| observed.recv_timeout(Duration::from_secs(2)).unwrap());
+    reserve.join().unwrap();
+    let unloads = |seen: &[(String, Value)]| {
+        seen.iter()
+            .filter(|(path, body)| {
+                path == "/api/v1/models/unload"
+                    || (path == "/api/generate" && body["keep_alive"] == 0)
+            })
+            .count()
+    };
+    assert_eq!(unloads(&server.seen()), 1, "New active alias was unloaded");
+    release.send(()).unwrap();
+    drop(lease);
+    assert_eq!(unloads(&server.seen()), 2);
+    assert!(waited, "Same-model reservation overtook pending cleanup");
 }
+/// Ollama aliases read fresh provider state after logical release without any global eviction.
+#[test]
+fn a_new_ollama_alias_after_release_keeps_its_own_finite_reservation() {
+    let (server, lifetime) = stateful_ollama(0);
+    let pool = LocalModelPool::default();
+    let first = pool
+        .reserve(&server.connection(), LocalProvider::Ollama)
+        .unwrap();
+    first.prepare(&AnalysisControl::default()).unwrap();
+    drop(first);
+    let mut connection = server.connection();
+    connection.endpoint = connection.endpoint.replace("127.0.0.1", "localhost");
+    connection.model.push_str(":latest");
+    let alias = pool.reserve(&connection, LocalProvider::Ollama).unwrap();
+    alias.prepare(&AnalysisControl::default()).unwrap();
+    assert!((1..=300).contains(&lifetime.load(Ordering::Acquire)));
+    let before = server.seen();
+    drop(alias);
+    assert_eq!(server.seen(), before);
+    assert!((1..=300).contains(&lifetime.load(Ordering::Acquire)));
+}
+
 /// Uses one nonbinding synthetic source and the actual evidence-schema transport path.
 fn generate(client: &TextClient) -> anyhow::Result<String> {
     client.generate(
@@ -343,8 +388,11 @@ fn ollama_pins_before_text_and_last_user_releases_after_all_client_clones() {
     );
     drop(client);
     let seen = server.seen();
-    assert_eq!(seen.len(), 4);
-    assert_eq!(seen[3].1["keep_alive"], 0);
+    assert_eq!(
+        seen.len(),
+        3,
+        "Final Ollama release must send no management request"
+    );
 }
 
 /// Checks instance-specific inference and proves the unrelated loaded instance is never unloaded.
@@ -406,13 +454,10 @@ fn lm_studio_reused_foreign_id_is_explicit_failure_without_unload_or_inference()
     assert_eq!(server.seen().len(), 2);
 }
 
-/// Preserves foreign indefinite residency and restores finite idle grace rather than forcing unload.
+/// Finite and indefinite initial policies remain intact without a final global TTL rewrite.
 #[test]
-fn borrowed_ollama_indefinite_load_is_preserved_and_finite_idle_grace_is_restored() {
-    for (expiry, release) in [
-        ("9999-01-01T00:00:00Z", None),
-        ("2020-01-01T00:00:00Z", Some(300)),
-    ] {
+fn borrowed_ollama_policies_remain_without_cached_ttl_restore() {
+    for (expiry, seconds) in [("9999-01-01T00:00:00Z", -1), ("2020-01-01T00:00:00Z", 300)] {
         let server = Server::new(move |p, b| {
             if p == "/api/ps" {
                 (
@@ -428,12 +473,15 @@ fn borrowed_ollama_indefinite_load_is_preserved_and_finite_idle_grace_is_restore
             .reserve(&server.connection(), LocalProvider::Ollama)
             .unwrap();
         lease.prepare(&AnalysisControl::default()).unwrap();
+        let prepared = server.seen();
+        assert_eq!(prepared.len(), 2);
+        assert_eq!(prepared[1].1["keep_alive"], seconds);
         drop(lease);
-        let seen = server.seen();
-        assert_eq!(seen.len(), if release.is_some() { 3 } else { 2 });
-        if let Some(seconds) = release {
-            assert_eq!(seen[2].1["keep_alive"], seconds);
-        }
+        assert_eq!(
+            server.seen(),
+            prepared,
+            "Final release rewrote shared provider policy"
+        );
     }
 }
 
@@ -482,7 +530,10 @@ fn failure_keeps_warm_reservation_for_retry_and_rejects_truncated_native_answers
         "Retry must not reload or unload"
     );
     drop(anchor);
-    assert_eq!(server.seen().last().unwrap().1["keep_alive"], 0);
+    assert!(!server
+        .seen()
+        .iter()
+        .any(|(path, body)| path == "/api/generate" && body["keep_alive"] == 0));
 }
 
 /// Proves cancelled or unconfirmed preparation cannot transmit inference text.
@@ -514,9 +565,9 @@ fn cancellation_before_prepare_does_not_contact_provider_and_failed_load_sends_n
     assert_eq!(server.seen().len(), 2);
 }
 
-/// An idle Ollama route must re-read provider state after a failed finite release.
+/// Final Ollama release sends no global cleanup, and a new reservation reads fresh provider state.
 #[test]
-fn review_failed_ollama_cleanup_can_be_reconciled_by_fresh_provider_state() {
+fn review_ollama_logical_release_avoids_cleanup_and_next_reservation_reads_fresh_state() {
     let server = Server::new(|p, b| {
         if p == "/api/generate" && b["keep_alive"] == 0 {
             (500, json!({}))
@@ -531,8 +582,8 @@ fn review_failed_ollama_cleanup_can_be_reconciled_by_fresh_provider_state() {
     drop(lease);
     let retry = pool.reserve(&conn, LocalProvider::Ollama).unwrap();
     retry.prepare(&AnalysisControl::default()).unwrap();
-    assert_eq!(server.seen()[3].0, "/api/ps");
-    assert_eq!(server.seen().len(), 5);
+    assert_eq!(server.seen()[2].0, "/api/ps");
+    assert_eq!(server.seen().len(), 4);
     drop(retry);
 }
 
@@ -650,7 +701,16 @@ fn bounded_idle_grace_keeps_the_model_between_live_updates() {
         remaining.load(Ordering::Acquire) > 0,
         "Idle coordinator awaits finalization"
     );
+    let before_release = server.seen();
     drop(anchor);
+    assert_eq!(
+        server.seen(),
+        before_release,
+        "Logical release must not alter shared TTL"
+    );
+    assert_eq!(remaining.load(Ordering::Acquire), 60);
+    // Only this fixture's clock advances the remaining server grace to its finite expiry.
+    assert_eq!(remaining.fetch_sub(60, Ordering::AcqRel), 60);
     assert_eq!(remaining.load(Ordering::Acquire), 0);
 }
 
@@ -824,7 +884,10 @@ fn failed_live_overview_stays_warm_and_resume_preserves_the_window_before_final_
     drop(resumed);
     assert!(!server.seen().iter().any(|(_, b)| b["keep_alive"] == 0));
     drop(anchor);
-    assert_eq!(server.seen().last().unwrap().1["keep_alive"], 0);
+    assert!(!server
+        .seen()
+        .iter()
+        .any(|(path, body)| path == "/api/generate" && body["keep_alive"] == 0));
 }
 
 /// Prevents premature cleanup across aliases while preserving their distinct validated destinations.
@@ -859,7 +922,7 @@ fn loopback_aliases_defer_cleanup_without_merging_routes_or_model_instances() {
             .iter()
             .filter(|(_, b)| b["keep_alive"] == 0)
             .count(),
-        2
+        0
     );
 }
 
@@ -895,9 +958,41 @@ fn stateful_ollama(initial_seconds: i64) -> (Server, Arc<std::sync::atomic::Atom
     (server, lifetime)
 }
 
-/// Both load orders on one fixed registry expose HashMap-order cleanup errors deterministically.
+/// Final logical release must not overwrite policy another local application changed
+/// after our prepare, including finite/indefinite adoption or deliberate removal.
 #[test]
-fn stateful_ollama_aliases_preserve_original_absent_finite_and_indefinite_policies() {
+fn ollama_final_release_preserves_later_external_model_policy() {
+    let (server, lifetime) = stateful_ollama(0);
+    let pool = LocalModelPool::default();
+    let connection = server.connection();
+    let mut outcomes = Vec::new();
+    for initial in [0, 1200] {
+        for external in [-1, 2400, 0] {
+            lifetime.store(initial, Ordering::Release);
+            let lease = pool.reserve(&connection, LocalProvider::Ollama).unwrap();
+            lease.prepare(&AnalysisControl::default()).unwrap();
+            lifetime.store(external, Ordering::Release); // Independent fixture-owned client.
+            let before_release = server.seen().len();
+            drop(lease);
+            outcomes.push((
+                initial,
+                external,
+                lifetime.load(Ordering::Acquire),
+                server.seen().len() - before_release,
+            ));
+        }
+    }
+    assert!(
+        outcomes
+            .iter()
+            .all(|&(_, external, after, requests)| external == after && requests == 0),
+        "Final release changed independently updated shared-server policy: {outcomes:?}"
+    );
+}
+
+/// Both alias orders retain bounded own TTLs and preserve initial finite/indefinite foreign policy.
+#[test]
+fn stateful_ollama_aliases_stop_renewal_without_overwriting_shared_policies() {
     let (server, lifetime) = stateful_ollama(0);
     let pool = LocalModelPool::default();
     let first_connection = server.connection();
@@ -933,7 +1028,7 @@ fn stateful_ollama_aliases_preserve_original_absent_finite_and_indefinite_polici
     }
     assert!(
         outcomes.iter().all(|&(initial, _, after)| match initial {
-            0 => after == 0,
+            0 => (1..=300).contains(&after),
             1200 => after >= 1190, // At most ten seconds of fixture/clock rounding, not five minutes.
             -1 => after == -1,
             _ => unreachable!(),
@@ -975,7 +1070,7 @@ fn stateful_ollama_distinct_servers_keep_their_own_original_policies() {
             "Conservative family deferral lost"
         );
         drop(other);
-        assert_eq!(owned_lifetime.load(Ordering::Acquire), 0);
+        assert!((1..=300).contains(&owned_lifetime.load(Ordering::Acquire)));
         assert!(foreign_lifetime.load(Ordering::Acquire) >= 1190);
     }
     assert!(!foreign
@@ -1036,7 +1131,10 @@ fn terminated_owner_leaves_bounded_ollama_residency_and_restart_can_release() {
         .unwrap();
     lease.prepare(&AnalysisControl::default()).unwrap();
     drop(lease);
-    assert_eq!(server.seen().last().unwrap().1["keep_alive"], 0);
+    assert!(!server
+        .seen()
+        .iter()
+        .any(|(path, body)| path == "/api/generate" && body["keep_alive"] == 0));
 }
 
 /// A retained owner renews through an actual idle interval without generating text.
@@ -1063,7 +1161,17 @@ fn retained_owner_renews_ollama_without_inference_then_last_owner_releases() {
     assert_eq!(renewal.recv_timeout(Duration::from_secs(75)).unwrap(), 300);
     assert!(!server.seen().iter().any(|(path, _)| path == "/api/chat"));
     drop(lease);
-    assert_eq!(server.seen().last().unwrap().1["keep_alive"], 0);
+    let after_release = server.seen();
+    assert!(renewal.recv_timeout(Duration::from_secs(65)).is_err());
+    assert_eq!(
+        server.seen(),
+        after_release,
+        "Renewal continued after final logical release"
+    );
+    assert!(!server
+        .seen()
+        .iter()
+        .any(|(path, body)| path == "/api/generate" && body["keep_alive"] == 0));
 }
 
 /// Failed background renewal cannot be silently treated as a confirmed warm model.
@@ -1098,5 +1206,8 @@ fn failed_background_renewal_blocks_text_until_explicit_retry_succeeds() {
     assert!(generate(&client).is_ok());
     drop(client);
     drop(lease);
-    assert_eq!(server.seen().last().unwrap().1["keep_alive"], 0);
+    assert!(!server
+        .seen()
+        .iter()
+        .any(|(path, body)| path == "/api/generate" && body["keep_alive"] == 0));
 }

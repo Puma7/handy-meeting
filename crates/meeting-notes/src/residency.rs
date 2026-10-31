@@ -42,8 +42,13 @@ struct State {
     lm_load_uncertain: bool,
 }
 enum Loaded {
-    Ollama { release_after: i64 },
-    LmStudio { instance: String },
+    /// Initial observed policy controls active retention, never final eviction authority.
+    Ollama {
+        release_after: i64,
+    },
+    LmStudio {
+        instance: String,
+    },
 }
 
 /// One logical user's reservation. Arc clones retain an in-flight user's ownership.
@@ -370,15 +375,12 @@ impl Drop for ModelLease {
         {
             return;
         }
-        let mut releasing: Vec<_> = slots.values().filter(same_model).cloned().collect();
+        let releasing: Vec<_> = slots.values().filter(same_model).cloned().collect();
         // Keep the family transition through provider acknowledgement, but release
         // the shared registry before any slot-state wait or management request.
         drop(slots);
-        // An alias can observe another slot's app-owned Ollama load as preexisting.
-        // Restore finite foreign policies before owned unloads, otherwise a later
-        // restore could reload the just-released model. Keep every request on its
-        // original route: equal keys do not establish equal local servers.
-        releasing.sort_by_cached_key(|slot| slot.cleanup_order());
+        // LM Studio owns explicit instance IDs. Ollama exposes only a shared model
+        // TTL, so logical release must not rewrite policy another client changed.
         for slot in releasing {
             slot.release();
         }
@@ -393,17 +395,6 @@ fn cleanup_group_model(provider: LocalProvider, model: &str) -> &str {
     }
 }
 impl Slot {
-    /// Restores the longest observed finite policy last, then performs owned unloads.
-    /// Family serialization keeps this policy stable until release; no registry is held.
-    fn cleanup_order(&self) -> (bool, i64) {
-        let Ok(state) = self.state.lock() else {
-            return (false, -1);
-        };
-        match &state.loaded {
-            Some(Loaded::Ollama { release_after }) => (*release_after == 0, *release_after),
-            _ => (false, -1),
-        }
-    }
     /// Serializes the final release against refresh; no subsequent refresh can
     /// recreate a model once its loaded state was removed under this mutex.
     fn release(&self) {
@@ -419,15 +410,14 @@ impl Slot {
         };
         let control = AnalysisControl::default();
         let result = match loaded {
-            Loaded::Ollama { release_after: -1 } => return,
-            Loaded::Ollama { release_after } => state.client.model_request(
-                "api/generate",
-                Some(
-                    &json!({"model":state.client.model,"stream":false,"keep_alive":release_after}),
-                ),
-                &control,
-                Duration::from_secs(10),
-            ),
+            Loaded::Ollama { .. } => {
+                // Ollama has no per-client instance ownership/CAS. Stop our renewal
+                // without an unload or cached-TTL restore: either would overwrite
+                // an independent client's later adoption, extension or removal.
+                // App-owned loads remain bounded by their existing server TTL.
+                self.cleanup_failed.store(false, Ordering::Release);
+                return;
+            }
             Loaded::LmStudio { instance } => state.client.model_request(
                 "api/v1/models/unload",
                 Some(&json!({"instance_id":instance})),

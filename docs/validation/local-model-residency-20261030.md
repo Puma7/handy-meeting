@@ -533,3 +533,111 @@ exact for publication. Earlier reference runs retain their original fingerprints
 and are not reassigned. The installed GUI, full automatic worker, independent
 app-process, actual Ollama, hardware capture and endurance limitations above
 remain. Fresh current CI and two clean review rounds are still required.
+
+
+### Conservative Ollama final logical release after the candidate 11 architecture review
+
+The complete candidate 11 review had no inline comments and Minimal merge risk,
+but retained a Low architecture concern. It is not counted as a clean round.
+The concern is valid: final Ollama cleanup used the initial global model policy
+snapshot to send keep_alive=0 or restore an older finite lifetime. An independent
+client could have adopted/extended the same model or deliberately removed it
+since preparation. App-local owner synchronization cannot establish server-wide
+ownership of Ollama's shared model key.
+
+A new stateful six-case regression confirms the issue before correction: all
+six final releases send a global management request, and five change the later
+independently set state. Both initially absent and initially finite models are
+covered after late indefinite adoption, longer finite adoption and removal.
+The old finite restore even reloads a model deliberately removed by that other
+fixture client. These are actual assertion failures against synthetic HTTP
+provider state, not a real Ollama server or process-coordination proof.
+
+Final Ollama release now removes the local loaded/owner state and stops our
+renewal without any provider request. It sends neither an unload nor a cached
+TTL restore. The existing app-owned server lease remains finite: normally up
+to 300 seconds after the last app request, unless another client extends it.
+Finalization/erasure therefore ends our logical reservation, not a promise of
+immediate Ollama eviction or physical memory reclamation. Initial observed
+foreign finite/indefinite retention and the existing 300/60-second active
+load/renewal behavior are retained. Active independent server changes still
+have no cross-application CAS/ownership guarantee; no new general coordination
+or exact shared-server unload authority is claimed. LM Studio remains different:
+its actual acknowledged own instance ID is still unloaded and checked exactly;
+foreign, uncertain or in-flight instances retain the existing protections.
+
+The six-case regression passes after the correction. Alias/client-owner and
+unrelated-work tests now assert no global final Ollama write, preserved later
+foreign state and fresh provider discovery for the next reservation. The native
+LM Studio delayed-cleanup/alias/acknowledgement countercases remain strict.
+A virtual idle fixture still uses the same 300-second finite bound: 240 seconds
+of virtual quiet leaves 60 seconds, logical release does not rewrite it, and the
+remaining virtual grace then expires naturally. No timeout or validation bar is
+weakened. The failed intermediate full-run log retaining the old immediate-zero
+expectation is preserved separately. The actual 60-second renewal fixture also
+continues for 65 seconds after final logical release and requires no further
+request while the registry remains alive. Fresh full-source verification and
+selected-provider reference results follow below when completed.
+
+The corrected full workspace/all-target run passes all 385 Rust tests with two
+existing special entries regularly ignored, including all 25 provider fixtures.
+The actual 60-second renewal plus 65-second no-renewal interval passes. Rust
+format, Clippy with warnings denied and required verification (47 PCM, 35 notes,
+28 templates, eight agents and monitor checks) pass. Shared UI/dependency bytes
+are unchanged; no UI results are represented as a new run. The fresh selected
+real-provider reference03 remains to be completed before publication.
+
+The [documented Ollama generate request](https://docs.ollama.com/api/generate)
+identifies a model and a retention duration. The [Ollama lifetime FAQ](https://docs.ollama.com/faq#how-do-i-keep-a-model-loaded-in-memory-or-make-it-unload-immediately)
+explains immediate removal with zero, finite durations and indefinite negative
+values. From this used interface we infer no client-specific compare-and-swap
+ownership for final eviction; the conservative application policy therefore
+avoids that final global mutation. This is an integration design inference,
+not a claim that documentation proves arbitrary external-client coordination.
+
+
+The fresh selected-provider reference03 after the conservative Ollama correction
+passes all preregistered real checks through the actual production selector,
+coordinator and core modules. The existing google/gemma-4-e4b Q4_K_M model is
+used with LM Studio 0.4.26+4 / CLI dcefd5a, 8192 context and
+6,326,936,720 installed model bytes, HandyMeeting 1.0.7, Windows 11 Pro 26200,
+i7-13700 and RTX 4070. No downloads or user meetings are used. The configured
+provider is recognized and a different same-port loopback bind is rejected.
+Actual same-instance idle residency lasts 331.076433 seconds at eleven
+samples. Harness duration is 457.311727 seconds, with sampling
+wrapper 461.407000 seconds. Positive live/post decisions and tasks,
+nonbinding rejection of commitments, original literal sources, durable checkpoint
+resume, final readback, other-owner/client deferral and exact own LM Studio
+instance release all pass. Baseline native catalog/loaded state is preserved.
+
+All accepted output items and original quotes/source IDs were manually read.
+The positive final overview accepts 5 items and rejects
+1; its rejection reason is not persisted and is not
+assigned from old runs. The positive task remains separately present, unknown
+owner/due stay unknown, and the nonbinding post summary has
+0 items. No semantic completeness, zero-rejection
+or validator-relaxation claim follows.
+
+Memory has 93 samples at nominal five-second intervals. Maximum
+individual model-server Working Set is 6,802,620,416 bytes and maximum individual
+Private Bytes is 6,851,530,752 bytes. Whole-device GPU usage is
+3995 MiB before inference / 8799 MiB peak /
+4525 MiB after release. These are model-server process peaks; the
+renamed private harness is excluded by the sampler's process-name filter, so
+no harness or installed-application memory peak is claimed. GPU readings include
+other desktop load; no simultaneous process-peak sum, exclusive attribution or
+complete reclamation is established. Own builds/local checks ended before the
+reference; existing desktop apps and light source/GitHub inspection remained.
+No capture, ASR or model download overlapped.
+
+All 2,987 tracked source files stayed unchanged during this
+actual run. Only the final sanitized result note is subsequently appended;
+production code and dependencies remain exact. Historical references retain
+their original source fingerprints and are not reassigned. This real selected
+LM Studio reference is not a real Ollama-server, full automatic worker, installed
+GUI, independent app-process, erasure-against-real-provider, physical capture,
+GPU endurance, combined two-hour or forensic-memory proof. Conservative Ollama
+final release is separately proved by stateful protocol fixtures and the actual
+60-second renewal plus 65-second post-release silence, with virtual natural
+expiry at the unchanged 300-second bound. Current final-head CI and two clean
+rounds per reviewer are still required before merge.
