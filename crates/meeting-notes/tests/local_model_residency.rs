@@ -23,8 +23,14 @@ struct Server {
 }
 impl Server {
     /// Starts only this fixture-owned bounded loopback HTTP server; no actual model service is contacted.
-    fn new(mut handler: impl FnMut(&str, &Value) -> (u16, Value) + Send + 'static) -> Self {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    fn new(handler: impl FnMut(&str, &Value) -> (u16, Value) + Send + 'static) -> Self {
+        Self::on(TcpListener::bind("127.0.0.1:0").unwrap(), handler)
+    }
+    /// Serves only the caller-owned concrete IPv4/IPv6 fixture listener for origin-binding checks.
+    fn on(
+        listener: TcpListener,
+        mut handler: impl FnMut(&str, &Value) -> (u16, Value) + Send + 'static,
+    ) -> Self {
         listener.set_nonblocking(true).unwrap();
         let endpoint = format!("http://{}/v1/", listener.local_addr().unwrap());
         let requests = Arc::new(Mutex::new(Vec::new()));
@@ -327,6 +333,205 @@ fn a_new_ollama_alias_after_release_keeps_its_own_finite_reservation() {
     drop(alias);
     assert_eq!(server.seen(), before);
     assert!((1..=300).contains(&lifetime.load(Ordering::Acquire)));
+}
+
+/// Native authority for localhost's configured IPv4 identity must never reach an
+/// IPv6-only same-port listener; explicit IPv6 remains a separately valid route.
+#[test]
+fn review_native_localhost_management_rejects_an_ipv6_only_listener() {
+    let mut outcomes = Vec::new();
+    for provider in [LocalProvider::Ollama, LocalProvider::LmStudio] {
+        let listener = TcpListener::bind("[::1]:0")
+            .expect("IPv6 loopback required by this binding regression");
+        let server = Server::on(listener, move |p, b| match provider {
+            LocalProvider::Ollama => ollama(p, b),
+            LocalProvider::LmStudio => lm(p, b),
+        });
+        let mut alias = server.connection();
+        alias.endpoint = alias.endpoint.replace("[::1]", "localhost");
+        let pool = LocalModelPool::default();
+        let lease = pool.reserve(&alias, provider).unwrap();
+        let refused = lease.prepare(&AnalysisControl::default()).is_err();
+        drop(lease);
+        outcomes.push((provider, refused, server.seen().len()));
+        // Positive control: choosing this exact IPv6 service retains native support.
+        let explicit = server.connection();
+        let lease = pool.reserve(&explicit, provider).unwrap();
+        lease.prepare(&AnalysisControl::default()).unwrap();
+        let client = TextClient::new(&explicit)
+            .unwrap()
+            .with_residency(lease)
+            .unwrap();
+        generate(&client).unwrap();
+        drop(client);
+    }
+    assert!(
+        outcomes
+            .iter()
+            .all(|&(_, refused, requests)| refused && requests == 0),
+        "Ambiguous localhost acquired native authority on IPv6: {outcomes:?}"
+    );
+}
+
+/// Every response closes its connection; after the configured IPv4 service exits,
+/// leased inference and exact-instance cleanup must fail without contacting the IPv6 peer.
+#[test]
+fn review_native_localhost_inference_and_cleanup_keep_the_configured_origin() {
+    let mut outcomes = Vec::new();
+    for provider in [LocalProvider::Ollama, LocalProvider::LmStudio] {
+        let primary = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = primary.local_addr().unwrap().port();
+        let alternate = Server::on(
+            TcpListener::bind((std::net::Ipv6Addr::LOCALHOST, port)).unwrap(),
+            move |p, b| match provider {
+                LocalProvider::Ollama => ollama(p, b),
+                LocalProvider::LmStudio => lm(p, b),
+            },
+        );
+        let primary = Server::on(primary, move |p, b| match provider {
+            LocalProvider::Ollama => ollama(p, b),
+            LocalProvider::LmStudio => lm(p, b),
+        });
+        let mut connection = primary.connection();
+        connection.endpoint = connection.endpoint.replace("127.0.0.1", "localhost");
+        let pool = LocalModelPool::default();
+        let lease = pool.reserve(&connection, provider).unwrap();
+        lease.prepare(&AnalysisControl::default()).unwrap();
+        drop(primary); // Only this fixture listener stops, before reconnecting for text.
+        let client = TextClient::new(&connection)
+            .unwrap()
+            .with_residency(Arc::clone(&lease))
+            .unwrap();
+        let refused = generate(&client).is_err();
+        drop(client);
+        drop(lease);
+        let cleanup_blocked =
+            provider != LocalProvider::LmStudio || pool.reserve(&connection, provider).is_err();
+        outcomes.push((provider, refused, alternate.seen().len(), cleanup_blocked));
+    }
+    assert!(
+        outcomes
+            .iter()
+            .all(|&(_, refused, requests, blocked)| refused && requests == 0 && blocked),
+        "A lifecycle reconnect reached the different IPv6 service: {outcomes:?}"
+    );
+}
+
+/// Drops the listening socket before writing the first inventory response so a
+/// second native request necessarily opens a new connection after IPv4 is gone.
+#[test]
+fn review_native_localhost_load_does_not_switch_after_inventory() {
+    let mut outcomes = Vec::new();
+    for provider in [LocalProvider::Ollama, LocalProvider::LmStudio] {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        listener.set_nonblocking(true).unwrap();
+        let alternate = Server::on(
+            TcpListener::bind((std::net::Ipv6Addr::LOCALHOST, port)).unwrap(),
+            move |p, b| match provider {
+                LocalProvider::Ollama => ollama(p, b),
+                LocalProvider::LmStudio => lm(p, b),
+            },
+        );
+        let inventory = thread::spawn(move || {
+            let deadline = std::time::Instant::now() + Duration::from_secs(3);
+            loop {
+                match listener.accept() {
+                    Ok((mut stream, _)) => {
+                        drop(listener);
+                        let (path, body) = read(&mut stream);
+                        let (status, reply) = match provider {
+                            LocalProvider::Ollama => ollama(&path, &body),
+                            LocalProvider::LmStudio => lm(&path, &body),
+                        };
+                        let bytes = reply.to_string();
+                        write!(stream,"HTTP/1.1 {status} Synthetic\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{bytes}",bytes.len()).unwrap();
+                        return Some(path);
+                    }
+                    Err(e)
+                        if e.kind() == std::io::ErrorKind::WouldBlock
+                            && std::time::Instant::now() < deadline =>
+                    {
+                        thread::sleep(Duration::from_millis(2))
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => return None,
+                    Err(e) => panic!("{e}"),
+                }
+            }
+        });
+        let connection = Connection {
+            endpoint: format!("http://localhost:{port}/v1/"),
+            model: "synthetic".into(),
+            mode: "local".into(),
+            cloud_consent: false,
+            api_key: String::new(),
+        };
+        let pool = LocalModelPool::default();
+        let lease = pool.reserve(&connection, provider).unwrap();
+        let refused = lease.prepare(&AnalysisControl::default()).is_err();
+        drop(lease);
+        let path = inventory.join().unwrap();
+        let expected = if provider == LocalProvider::Ollama {
+            "/api/ps"
+        } else {
+            "/api/v1/models"
+        };
+        outcomes.push((
+            provider,
+            refused,
+            alternate.seen().len(),
+            path.as_deref() == Some(expected),
+        ));
+    }
+    assert!(
+        outcomes
+            .iter()
+            .all(|&(_, refused, requests, correct_first)| refused
+                && requests == 0
+                && correct_first),
+        "Native inventory/load crossed configured origin: {outcomes:?}"
+    );
+}
+
+/// Unknown observed expiry cannot authorize an indefinite write to a shared model.
+#[test]
+fn review_native_ollama_unreadable_expiry_refuses_before_any_mutation() {
+    let mut outcomes = Vec::new();
+    for expiry in [
+        None,
+        Some(Value::Null),
+        Some(json!(12)),
+        Some(json!("")),
+        Some(json!("not-a-timestamp")),
+    ] {
+        let server = Server::new(move |p, b| {
+            if p == "/api/ps" {
+                let mut model = json!({"name":"synthetic:latest"});
+                if let Some(value) = &expiry {
+                    model["expires_at"] = value.clone();
+                }
+                (200, json!({"models":[model]}))
+            } else {
+                ollama(p, b)
+            }
+        });
+        let pool = LocalModelPool::default();
+        let lease = pool
+            .reserve(&server.connection(), LocalProvider::Ollama)
+            .unwrap();
+        let refused = lease.prepare(&AnalysisControl::default()).is_err();
+        drop(lease);
+        outcomes.push((
+            refused,
+            server.seen().iter().filter(|(p, _)| p != "/api/ps").count(),
+        ));
+    }
+    assert!(
+        outcomes
+            .iter()
+            .all(|&(refused, mutations)| refused && mutations == 0),
+        "Unreadable expiry became native indefinite authority: {outcomes:?}"
+    );
 }
 
 /// Uses one nonbinding synthetic source and the actual evidence-schema transport path.

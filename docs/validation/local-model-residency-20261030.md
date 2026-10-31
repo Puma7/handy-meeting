@@ -7,8 +7,9 @@ the later Conservative Ollama final logical release section supplying details.
 Evidence sections retain the actual historical candidate states and measurements.
 Their earlier draft/unavailable-provider or eager-cleanup statements describe
 those snapshots, not the current runtime policy or current GitHub merge status.
-The latest selected-provider reference03 and final-head CI/reviews govern the
-current validation status; no older result is reassigned.
+The latest completed selected-provider reference and final-head CI/reviews govern
+validation status; references01–03 predate the concrete-origin correction below
+and are not reassigned to that changed runtime.
 
 ## Behavior
 
@@ -25,6 +26,8 @@ Cleanup is also deferred across separate loopback spellings of the same provider
 - Ollama: app-owned native `/api/generate` loads and `/api/chat` inference use a finite 300-second lifetime. Each finite slot has one weakly owned worker that renews it every 60 seconds, including idle intervals without inference and failed/partial work awaiting retry. Renewals use per-slot state; final cleanup and new reservations serialize within a provider/model family. The global reservation registry is released before management or a slot-state wait. Same-family startup can still wait for a pending bounded load or renewal state transition. Messages, JSON schema and output budget are unchanged. Final logical release stops this app's renewal and sends no unload or TTL-restore request. The existing finite server lifetime (normally up to 300 seconds after the last app request) expires naturally unless another client extends it; an initially present indefinite model stays loaded. See Conservative Ollama final logical release below for the tested ownership limits.
 - LM Studio: native REST v1 explicitly loads the chosen catalog key. Inference addresses the returned instance ID. Only a newly returned instance absent from the pre-load inventory is eligible for app cleanup. A reused existing instance is rejected with a clear error because the app cannot establish its pin or ownership. Cleanup must acknowledge the exact owned instance ID. Native REST v1 support is required; no silent provider or API fallback occurs.
 - Native loading is bounded to 300 seconds. Once submitted, its acknowledgement is read even after cancellation so a confirmed LM Studio instance remains tracked for exact cleanup. Ollama logical release instead ends renewal without changing its existing server lifetime. User cancellation is still recorded immediately; a replacement live worker waits for its predecessor to finish. Inference requests remain cancellable.
+- Native management and leased inference use the same concrete origin throughout the lifecycle. The existing localhost canonical identity selects 127.0.0.1; an IPv6-only provider requires an explicit [::1] endpoint. Unleased legacy text and discovery retain their dual-loopback behavior; stored credential and resume identities are unchanged. Distinct same-port IPv4/IPv6 listeners cannot substitute for one another during native inventory, loading, inference or cleanup. This binds the network origin, not a process that later replaces a server at the same address and port.
+- An already loaded selected Ollama model must have a readable RFC3339 expires_at before mutation. Missing, null, numeric, empty or invalid values cause a compatibility refusal. No indefinite lifetime is guessed from unreadable inventory. Valid readable finite/indefinite policies and the existing 300-second / 60-second bounds are unchanged; real Ollama compatibility remains untested.
 - Management uses the existing loopback-only, no-proxy, no-redirect transport. It receives provider/model metadata and credentials only, never session objects or audio-file access. Management errors do not expose server response bodies. Cloud consent and source validation remain unchanged.
 
 These are application-owned reservations, not exclusive locks against another program or a user changing the model server. Server shutdown, manual unload, app termination, a management timeout without an acknowledgement or concurrent external instance changes can invalidate residency or leave an unconfirmed server-side load. No foreign instance is guessed and unloaded to repair such uncertainty. An unconfirmed LM Studio load or exact-instance cleanup prevents unconfirmed reuse and requires checking the local service. A fresh idle Ollama reservation must re-read native inventory and confirm its load before inference; final logical release itself sends no provider mutation.
@@ -631,6 +634,93 @@ individual model-server Working Set is 6,802,620,416 bytes and maximum individua
 Private Bytes is 6,851,530,752 bytes. Whole-device GPU usage is
 3995 MiB before inference / 8799 MiB peak /
 4525 MiB after release. These are model-server process peaks; the
+renamed private harness is excluded by the sampler's process-name filter, so
+no harness or installed-application memory peak is claimed. GPU readings include
+other desktop load; no simultaneous process-peak sum, exclusive attribution or
+complete reclamation is established. Own builds/local checks ended before the
+reference; existing desktop apps and light source/GitHub inspection remained.
+No capture, ASR or model download overlapped.
+
+All 2,987 tracked source files stayed unchanged during this
+actual run. Only the final sanitized result note is subsequently appended;
+production code and dependencies remain exact. Historical references retain
+their original source fingerprints and are not reassigned. This real selected
+LM Studio reference is not a real Ollama-server, full automatic worker, installed
+GUI, independent app-process, erasure-against-real-provider, physical capture,
+GPU endurance, combined two-hour or forensic-memory proof. Conservative Ollama
+final release is separately proved by stateful protocol fixtures and the actual
+60-second renewal plus 65-second post-release silence, with virtual natural
+expiry at the unchanged 300-second bound. Current final-head CI and two clean
+rounds per reviewer are still required before merge.
+
+
+## Concrete native origin and unreadable Ollama expiry — integration candidate14
+
+The full candidate13 review had no inline finding and minimal merge risk, but
+retained a Medium architecture concern: a localhost route could gain native
+authority from the configured IPv4 provider and contact a different IPv6
+listener on the same port. Legacy unleased text fallback was preexisting;
+new native load/renew/unload authority and leased inference must use a single
+concrete origin. Four new wire-level regressions genuinely failed before this
+correction and pass afterwards. Separate owned IPv4/IPv6 services prove refusal
+of IPv6-only substitution, no fallback after the original IPv4 service stops,
+and no switch between inventory and native loading. Explicit IPv6 remains a
+positive control. These synthetic services do not establish actual credential
+disclosure, foreign eviction or elevated privileges.
+
+The additional expiry proposal was also validated: five missing/unreadable
+Ollama expiry representations formerly caused a guessed indefinite request.
+Preparation now refuses all five before mutation. Existing readable finite
+and indefinite cases remain covered. No real Ollama server/version compatibility
+is inferred from these protocol fixtures. Existing limits for external changes
+at the same concrete origin and shared active Ollama TTLs remain explicit.
+No proxy, redirect, local/cloud, credential, cancellation, response-size,
+deadline or reviewer threshold was relaxed. TEST_REPORT.md remains byte-identical
+to the approved public main report. The fresh full checks and selected-provider reference04 below apply to this
+changed runtime; neither is inherited from candidate13.
+
+
+The corrected candidate14 passes 389 Rust workspace/all-target tests, with two
+existing special child/credential entry points regularly ignored, including
+all 29 provider protocol tests and the real 60-second renewal / 65-second
+post-release silence. Strict locked/offline Clippy with -D warnings, Rust format
+and verify.ps1 (47 PCM, 35 notes, 28 template, 8 agent and monitor checks) pass.
+Frontend files and dependency locks are unchanged from the existing 248-test,
+TypeScript and production-build integration proof; no new frontend run is
+claimed. The prepared combined deletion source separately passes 432 native
+tests with the same two regular ignores, strict Clippy, format and verify.
+No deadline or threshold was weakened. Actual model references follow below.
+
+
+The fresh selected-provider reference04 after the concrete-origin and unreadable-expiry corrections
+passes all preregistered real checks through the actual production selector,
+coordinator and core modules. The existing google/gemma-4-e4b Q4_K_M model is
+used with LM Studio 0.4.26+4 / CLI dcefd5a, 8192 context and
+6,326,936,720 installed model bytes, HandyMeeting 1.0.7, Windows 11 Pro 26200,
+i7-13700 and RTX 4070. No downloads or user meetings are used. The configured
+provider is recognized through localhost pinned to 127.0.0.1, while a different
+same-port loopback bind is rejected.
+Actual same-instance idle residency lasts 330.202894 seconds at eleven
+samples. Harness duration is 473.170428 seconds, with sampling
+wrapper 476.594000 seconds. Positive live/post decisions and tasks,
+nonbinding rejection of commitments, original literal sources, durable checkpoint
+resume, final readback, other-owner/client deferral and exact own LM Studio
+instance release all pass. Baseline native catalog/loaded state is preserved.
+
+All accepted output items and original quotes/source IDs were manually read.
+The positive final overview accepts 5 items and rejects
+1; the actual persisted rejection count is
+ownerOrDueOutsideTasks: 1. This item is excluded from the accepted overview;
+no reason is assigned from an earlier run. The positive task remains separately present, unknown
+owner/due stay unknown, and the nonbinding post summary has
+0 items. No semantic completeness, zero-rejection
+or validator-relaxation claim follows.
+
+Memory has 96 samples at nominal five-second intervals. Maximum
+individual model-server Working Set is 6,802,763,776 bytes and maximum individual
+Private Bytes is 6,851,641,344 bytes. Whole-device GPU usage is
+3935 MiB before inference / 8789 MiB peak /
+3894 MiB after release. These are model-server process peaks; the
 renamed private harness is excluded by the sampler's process-name filter, so
 no harness or installed-application memory peak is claimed. GPU readings include
 other desktop load; no simultaneous process-peak sum, exclusive attribution or

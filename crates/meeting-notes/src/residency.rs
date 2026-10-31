@@ -195,17 +195,15 @@ impl ModelLease {
                     Some(model) => {
                         let expiry = model["expires_at"]
                             .as_str()
-                            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok());
-                        match expiry {
-                            Some(at)
-                                if at.signed_duration_since(chrono::Utc::now()).num_days()
-                                    <= 365 =>
-                            {
-                                at.signed_duration_since(chrono::Utc::now())
-                                    .num_seconds()
-                                    .max(300)
-                            }
-                            _ => -1,
+                            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                            .context("Die Ablaufzeit des bereits geladenen Ollama-Modells ist nicht lesbar. Der gemeinsame Modellzustand wird nicht verändert; lokalen Dienst und API-Unterstützung prüfen.")?;
+                        if expiry.signed_duration_since(chrono::Utc::now()).num_days() <= 365 {
+                            expiry
+                                .signed_duration_since(chrono::Utc::now())
+                                .num_seconds()
+                                .max(300)
+                        } else {
+                            -1
                         }
                     }
                 };

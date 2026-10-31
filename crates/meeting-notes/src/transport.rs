@@ -37,10 +37,12 @@ pub struct TextClient {
     client: Client,
     /// Stable identity of the validated route, used for credential scopes and
     /// saved analyses. `localhost` stays canonicalized to `127.0.0.1` here so
-    /// existing stored keys and resumable analyses keep their identity.
+    /// existing stored keys and resumable analyses keep their identity. Native
+    /// management and leased inference bind to this same concrete origin.
     pub(crate) base: Url,
     /// The address actually requested. For `localhost` it keeps the name, which
-    /// connects to 127.0.0.1 or ::1 (whichever accepts) without DNS.
+    /// connects to 127.0.0.1 or ::1 without DNS for legacy unleased text/discovery.
+    /// Native management and leased inference instead use the concrete base origin.
     target: Url,
     pub(crate) model: String,
     key: Zeroizing<String>,
@@ -170,7 +172,8 @@ impl TextClient {
             ),
             "Unbekannter lokaler Modellvorgang."
         );
-        self.request(&format!("../{path}"), body, control, timeout)
+        let path = format!("../{path}");
+        self.request_at(self.base.join(&path)?, &path, body, control, timeout)
             .map_err(|error| if crate::is_cancelled(&error) { error } else { anyhow::anyhow!("Lokale Modellverwaltung fehlgeschlagen. Dienst, Modell und native API-Unterstützung prüfen; Audio und gespeicherte Ergebnisse bleiben erhalten.") })
     }
     /// Sends a bounded JSON request on the validated route, with cancellation and redacted failures.
@@ -181,8 +184,24 @@ impl TextClient {
         control: &AnalysisControl,
         timeout: Duration,
     ) -> Result<serde_json::Value> {
+        let target = if self.residency.is_some() {
+            &self.base
+        } else {
+            &self.target
+        };
+        self.request_at(target.join(path)?, path, body, control, timeout)
+    }
+    /// Uses one validated concrete origin for the complete native lease lifecycle;
+    /// request bounds, credential redaction and cancellation remain shared with legacy text.
+    fn request_at(
+        &self,
+        url: Url,
+        path: &str,
+        body: Option<&serde_json::Value>,
+        control: &AnalysisControl,
+        timeout: Duration,
+    ) -> Result<serde_json::Value> {
         control.check()?;
-        let url = self.target.join(path)?;
         let mut request = if let Some(body) = body {
             self.client.post(url).json(body)
         } else {
