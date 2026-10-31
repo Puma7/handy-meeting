@@ -966,3 +966,51 @@ limits are unchanged. The nine-second positive/negative boundary regression and
 full Python guards passed locally; fresh actual Linux/macOS CI remains required.
 No private meeting, physical device, local text model, GPU or endurance proof is
 added. The approved historical report prefix remains byte-identical.
+
+
+## Oberflächen-Nacharbeit vom 30.10.2026 (PR36)
+
+Dieser Abschnitt beschreibt die gesonderte Oberflächen-Nacharbeit; frühere
+Prüfstände oben bleiben historische Nachweise. Pegelanzeigen stehen auf gleicher
+Höhe. Hinweise, Einrichtung und Optionen öffnen sich schrittweise; die
+Nachbearbeitung zeigt jeweils einen Startknopf und die Laufzeit einmal. Neue
+Aufnahmewarnungen werden sichtbar, identische Statusabfragen öffnen bewusst
+geschlossene Hinweise nicht erneut. Fehler der lokalen Modellerkennung und
+Wartungsfehler bleiben auch bei geschlossener Einrichtung sichtbar. Rechnerdetails
+sind bei schmalem Fenster erreichbar; RAM-Mengen und die nicht gemessene
+GPU-Auslastung werden erklärt.
+
+Der lokale Kandidat08 bestand 233 Frontendtests, TypeScript,
+Produktionsbuild, Formatierung und ./verify.ps1. Aussagekräftige synthetische
+Vorher-/Nachher-Prüfungen sichern die behobenen Reviewbefunde ab. Sichtbare
+Browserprüfungen verwenden ausschließlich künstliche IPC-Beispieldaten. Sie
+belegen keine echte Aufnahme, Textmodellqualität, GPU-Messung oder Langzeitlast.
+Native Aufnahme, Transportschicht, Prompts und Abhängigkeiten sind unverändert.
+
+Die einzelnen Prüfstände und Grenzen sind in
+[docs/validation/interface-clarity-20261030.md](docs/validation/interface-clarity-20261030.md)
+zugeordnet. Neue CI-Ergebnisse und saubere Reviews müssen sich auf den tatsächlich
+veröffentlichten neuen Head beziehen; frühere Ergebnisse ersetzen sie nicht.
+
+
+### Weitere Reviewkorrekturen (Kandidat09)
+
+Auch bei einer vorhandenen Auswertung bleibt ein Fehler der lokalen
+Modellerkennung sichtbar. Fehler aus Wiederherstellung, Archivkompaktierung und
+Audiokopien werden außerhalb geschlossener Wartungseinstellungen angezeigt.
+Die schmale Seitenleiste liegt über dem normalen Inhalt, aber unter Dialogen.
+Vier neue synthetische Regressionen scheiterten vorher und bestehen nachher.
+Alle 237 Frontendtests sowie TypeScript und Produktionsbuild bestehen lokal.
+Eine sichtbare 600px-Prüfung belegt die korrigierte Ebenenfolge ohne seitlichen
+Überlauf. Native Quellen und Abhängigkeiten bleiben unverändert; dies ist kein
+Hardware-, Modellserver-, GPU- oder Langzeitnachweis.
+
+
+### Oberflaechen-Nachweis Kandidat10 vom 30.10.2026
+
+Der CPU-Messwert bleibt in schmalen Fenstern ueber Rechnerdetails erreichbar,
+einschliesslich hoher Last und fehlender Messdaten. Drei synthetische Vorherfaelle
+schlugen fehl; alle 240 Frontendtests sowie TypeScript/Produktionsbuild bestehen.
+Die sichtbare 600px-Pruefung verwendet nur kuenstliche CPU-28%-/RAM-Werte und zeigt
+den weiterhin ausdruecklich ungemessenen GPU-Zustand. Native Quellen bleiben
+byteunveraendert. Hardware-, Modellserver-, GPU- und Langzeitgrenzen bleiben offen.
