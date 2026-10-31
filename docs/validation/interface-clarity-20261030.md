@@ -259,3 +259,35 @@ real provider, audio device, archive, deletion, filesystem or clipboard action.
 Physical recording, permissions, provider, GPU and combined endurance limits
 remain open. Current target CI and two fresh clean reviews per provider on this
 same final head remain required.
+
+
+## Integration with the merged portable checks (31 October 2026)
+
+The UI changes were combined with the actual merged PR35 source before merging
+PR36. The two already approved and published report additions are retained byte
+for byte after their single shared report prefix. No private report preparation
+was used.
+
+The first PR35 run on main failed the synthetic startup-progress readiness test
+on macOS ARM. The same wall-clock-dependent fixture had already been investigated
+and corrected in PR38. This integration carries that reviewed fixture correction
+forward while retaining the PR35 passive startup timing API. A scoped synthetic
+clock tests both deadline renewal and expiry after progress stops. Release clock
+reads, capture time limits and privacy behavior remain unchanged. The failed run
+is retained; no actual scheduler trace or physical device cause was established.
+
+Fresh local integration checks pass 352 Rust tests with two existing special
+entry points ignored, Clippy with warnings denied, and Rust formatting. The
+unchanged UI bytes pass 246 tests, TypeScript, production build and formatting.
+The unchanged Python checks run 124 cases: 123 pass and one Unix-only case is
+regularly skipped on Windows. These are synthetic checks, not new physical
+recording, screen-reader speech, GPU or endurance evidence. A restricted local
+rerun could not start some fixture subprocesses or local test servers; the same
+suite passed with the access those fixtures require. No checks or deadlines were
+relaxed. Current target CI and reviews must be read on this integration head;
+earlier reviews remain evidence only for their original heads.
+
+The required project verification also passed: 47 PCM, 35 notes,
+28 template and 8 agent checks, plus the monitor checks.
+This is the existing synthetic project verification, not a hardware or installed
+application test.
