@@ -805,6 +805,7 @@ mod tests {
 
     #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
     #[test]
+    /// Acknowledged synthetic progress must renew the idle deadline before readiness.
     fn reported_startup_progress_extends_the_readiness_wait() {
         let (_root, store, mut controller) = interrupted_slow_microphone(true);
         reconnect_with_progress_clock(&mut controller, &store, Duration::from_millis(100), true)
@@ -820,6 +821,7 @@ mod tests {
 
     #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
     #[test]
+    /// A final idle interval must still stop the late track and retain healthy capture.
     fn reported_startup_progress_does_not_waive_the_idle_deadline() {
         let (_root, store, mut controller) = interrupted_slow_microphone(true);
         let error = reconnect_with_progress_clock(

@@ -295,6 +295,62 @@ it("keeps the cloud-settings remedy visible while an invalid endpoint disables s
   expect(start).not.toHaveBeenCalled();
 });
 
+it.each([
+  [
+    "de",
+    "Alle Textmodell-Einstellungen",
+    "Optionen und Hinweise",
+    "Live-Zusammenfassung starten",
+  ],
+  [
+    "en",
+    "All text model settings",
+    "Options and guidance",
+    "Start live summary",
+  ],
+] as const)(
+  "offers visible cloud settings for an empty model in %s",
+  async (locale, action, options, startLabel) => {
+    const onOpenTextModelSettings = vi.fn();
+    const start = vi.fn();
+    setup(
+      {
+        getLiveNotes: vi.fn().mockResolvedValue(status()),
+        startLiveNotes: start,
+      },
+      {
+        locale,
+        connection: {
+          ...local,
+          mode: "cloud",
+          endpoint: "https://openrouter.ai/api/v1/",
+          model: "",
+        },
+        preferences: { auto: true, intervalMinutes: 3 },
+        onOpenTextModelSettings,
+      },
+    );
+    const startButton = await screen.findByRole("button", { name: startLabel });
+    expect((startButton as HTMLButtonElement).disabled).toBe(true);
+    const disclosure = screen.getByText(options).closest("details")!;
+    expect(disclosure.open).toBe(false);
+    const remedy = screen.getByRole("button", { name: action });
+    expect(remedy.closest("details")).toBeNull();
+    await userEvent.click(remedy);
+    expect(onOpenTextModelSettings).toHaveBeenCalledOnce();
+    await userEvent.click(screen.getByText(options));
+    expect(disclosure.open).toBe(true);
+    expect(screen.getAllByRole("button", { name: action })).toHaveLength(1);
+    await userEvent.click(startButton);
+    expect(start).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole("checkbox", {
+        name: /Send this meeting|Transkripttext dieses/,
+      }),
+    ).toBeNull();
+  },
+);
+
 it("auto-starts once for a local model while the meeting is recording", async () => {
   const start = vi
     .fn()

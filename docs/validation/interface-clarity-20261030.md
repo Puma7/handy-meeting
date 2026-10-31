@@ -291,3 +291,23 @@ The required project verification also passed: 47 PCM, 35 notes,
 28 template and 8 agent checks, plus the monitor checks.
 This is the existing synthetic project verification, not a hardware or installed
 application test.
+
+
+### Integration follow-up: empty cloud model
+
+The first full integration review found one additional recovery state: a valid
+HTTPS cloud endpoint with an empty model disabled Start while its settings remedy
+remained inside the closed options disclosure. The visible remedy now covers
+both invalid endpoints and empty models. Opening options still shows exactly one
+settings action. German and English component regressions failed before the fix
+and pass afterwards; they also assert disabled Start, no automatic request and
+no implicit consent. All 248 frontend tests pass. These use synthetic IPC and do
+not send text to a provider. The initial restricted test process failed before
+running any cases and is retained separately from the two actual before failures.
+The readiness test contracts also have explicit function documentation; the
+80-percent documentation requirement remains unchanged.
+
+TypeScript, the production build, UI formatting, Rust formatting and a fresh
+required project verification pass after this follow-up as well. The 352-test
+native result belongs to the same executable native code: only documentation
+comments were added to the readiness test functions afterwards.

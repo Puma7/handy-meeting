@@ -573,7 +573,7 @@ export default function LiveNotesPanel({
           <Settings2 size={13} />
           {de ? "Lokales Modell einrichten" : "Set up local model"}
         </button>
-        {connection.mode === "cloud" && !endpointValid && (
+        {connection.mode === "cloud" && !modelReady && (
           <button className="link-button" onClick={onOpenTextModelSettings}>
             {de ? "Alle Textmodell-Einstellungen" : "All text model settings"}
           </button>
@@ -690,7 +690,7 @@ export default function LiveNotesPanel({
               : "The local text model runs next to the recording and takes several GB of memory even in small sizes (around 4B). When memory runs short, the summary and recognition slow down and the audio can stutter; the sidebar shows the load. With little memory, run the analysis after the recording instead."}
           </p>
         )}
-        {(connection.mode !== "cloud" || endpointValid) && (
+        {(connection.mode !== "cloud" || modelReady) && (
           <button className="link-button" onClick={onOpenTextModelSettings}>
             {de ? "Alle Textmodell-Einstellungen" : "All text model settings"}
           </button>
