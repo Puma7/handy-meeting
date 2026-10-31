@@ -378,3 +378,64 @@ TEST_REPORT.md, dependencies and protection/reviewer rules remain unchanged.
 Final verification, immutable publication and two fresh final-head review rounds
 per provider are tracked separately. The PR remains a draft; no merge, release,
 version bump or installed update is authorized.
+
+
+## Combined source validation before sequential merge (31 October 2026)
+
+The PR37 model coordinator, provider transport and prompts retain their reviewed
+candidate 08 code. The source is combined with the PR35/36 integration, including
+the scoped readiness fixture and the cloud empty-model UI recovery correction.
+Fresh native workspace/all-target checks pass 380 tests with two existing special
+entries ignored; Clippy denies warnings, and Rust formatting and the required
+project verification pass. The first native attempt stopped at the missing Tauri
+frontend build prerequisite; that build was then produced from the locked local
+package cache before the successful suite. This was not a runtime test failure.
+The exact shared UI bytes pass the 248-case PR36 suite, TypeScript, production
+build and formatting. Dependency locks, protection rules and version 1.0.7 remain
+unchanged. TEST_REPORT.md inherits only the already approved public main report;
+no private PR37 full report is added.
+
+A new real local reference uses only the existing selected google/gemma-4-e4b
+Q4_K_M model with the already running LM Studio 0.4.26+4 installation (CLI commit
+dcefd5a rechecked), native REST v1 instance management and synthetic conversations.
+The existing Windows 11/i7-13700/RTX4070 host and locked model dependencies are
+recorded privately; GPU capacity is 12,282 MiB and the driver is 621.01. No model was
+downloaded, and no user meeting or capture was used.
+
+The native-instance idle interval is 330.2569121 seconds with 11 inventory samples,
+no inference and no reload during idle. The full harness takes 619.6541797 seconds
+(623.14 seconds for the measuring wrapper). The independently preloaded selected
+fixture instance is refused before app load and preserved. Durable post-step
+cancellation/resume preserves checkpoints and reuses confirmed steps. Live window
+and overview files are read back before completion. Other coordinator owners and
+in-flight clients delay final cleanup; the exact owned instance is released only
+after the final client ends. Final inventory equals the original empty loaded
+state, and the installed model catalog is unchanged. No unrelated model was
+loaded just to produce a foreign-model demonstration; that case remains protocol
+fixture evidence.
+
+Actual positive live and post outputs each contain one decision and one task with
+literal “Anna” and “Freitag” attribution from the German originals. Nonbinding live and
+post outputs each contain zero decisions and zero tasks. Accepted source IDs and
+literal quotations were checked against the synthetic originals; the unanswered
+licensing question retains unknown owner and date. The final positive overview
+accepts five items and rejects one; its persisted diagnostic retains the count,
+not the rejection reason. The explicit task remains available separately. The
+nonbinding post summary is empty. These observations are disclosed, with no
+claim of complete semantics or zero rejection and no validator relaxation.
+
+Memory is sampled 125 times at a nominal five-second interval. Maximum individual
+llama-server Working Set is 6,802,272,256 bytes and maximum individual Private Bytes
+is 6,851,588,096 bytes; these are separate per-process peaks, not simultaneous sums.
+Whole-device GPU memory is 6,158 MiB before inference, peaks at 11,053 MiB and is 6,399 MiB
+after release. GPU readings include other desktop load and do not prove exclusive
+model usage or complete memory reclamation. Own Rust/Clippy/project checks and the
+harness build ended before this run. Existing desktop applications stayed running;
+private Git/source/ZIP comparisons and preparation of the separate PR38 source
+also overlapped. No concurrent capture, ASR or model download was started.
+
+This reference exercises actual production core/coordinator modules. It is not
+an installed GUI, full automatic worker, physical capture, independent application
+process, Ollama server, GPU endurance or combined two-hour test. Generic OpenAI
+routes receive no residency guarantee. Fresh CI and reviews on the eventual
+published integration head are still required before merge.
