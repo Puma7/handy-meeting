@@ -90,3 +90,7 @@ The [original discussion](https://github.com/cjpais/Handy/discussions/1923) plac
 **Legacy C# prototype:** `src/`, `verify.ps1`, `build.ps1`, `setup-native.ps1`, `global.json`, `NuGet.config`, `System.Numerics.Tensors.*`, `licenses/nuget/`, `licenses/nuget-packages.json`, `licenses/Avalonia-MIT.txt` and `licenses/Inter-OFL.txt` belong to the earlier C# prototypes (0.4/0.5). They are still checked by CI but no longer shipped. **They will be removed with version 2.0**; from then on the repository contains only the Rust project.
 
 MIT licensed. Thanks to Handy, transcribe.cpp, Tauri and the libraries this project builds on; their notices are in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) and `licenses/`.
+
+## Permanently remove one meeting
+
+In **History**, choose the trash action for a native meeting, or **Delete meeting** in its detail view. Stop active work first. Check the named meeting and type the displayed confirmation word to remove its app-managed audio, transcripts including their app-managed backups, analyses and attributed copies without a trash copy. Interrupted removal requires a fresh preview/confirmation in History. External exports, clipboard, external backups and imported external originals remain outside this action; physical storage erasure is not guaranteed. See [scope and validation](docs/validation/permanent-meeting-deletion-20261030.md).
