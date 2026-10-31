@@ -2,6 +2,14 @@
 
 Scope: HandyMeeting 1.0.7 development sources, based on `f2ccb8a8a268323da5ea0ad8ed1eb69102694da6`. This change does not publish or install a new application version.
 
+The current runtime contract is in Behavior and Provider boundaries below, with
+the later Conservative Ollama final logical release section supplying details.
+Evidence sections retain the actual historical candidate states and measurements.
+Their earlier draft/unavailable-provider or eager-cleanup statements describe
+those snapshots, not the current runtime policy or current GitHub merge status.
+The latest selected-provider reference03 and final-head CI/reviews govern the
+current validation status; no older result is reassigned.
+
 ## Behavior
 
 Previously, keeping a text client alive did not prevent the provider's idle policy from unloading its model between live updates. Known local Ollama and LM Studio connections now reserve their selected model explicitly. Generic local OpenAI-compatible servers retain their existing transport behavior; residency is not claimed for them.
@@ -14,12 +22,12 @@ Cleanup is also deferred across separate loopback spellings of the same provider
 
 ## Provider boundaries
 
-- Ollama: app-owned native `/api/generate` loads and `/api/chat` inference use a finite 300-second lifetime. Each finite slot has one weakly owned worker that renews it every 60 seconds, including idle intervals without inference and failed/partial work awaiting retry. Renewals use per-slot state; final cleanup and new reservations serialize within a provider/model family. The global reservation registry is released before management or a slot-state wait. Same-family startup can still wait for bounded per-route cleanup requests. Messages, JSON schema and output budget are unchanged. Final release unloads an initially absent model. An initially present indefinitely loaded model is left loaded. An initially present finite lifetime is restored with at least five minutes' idle grace, rather than forcibly unloaded.
+- Ollama: app-owned native `/api/generate` loads and `/api/chat` inference use a finite 300-second lifetime. Each finite slot has one weakly owned worker that renews it every 60 seconds, including idle intervals without inference and failed/partial work awaiting retry. Renewals use per-slot state; final cleanup and new reservations serialize within a provider/model family. The global reservation registry is released before management or a slot-state wait. Same-family startup can still wait for a pending bounded load or renewal state transition. Messages, JSON schema and output budget are unchanged. Final logical release stops this app's renewal and sends no unload or TTL-restore request. The existing finite server lifetime (normally up to 300 seconds after the last app request) expires naturally unless another client extends it; an initially present indefinite model stays loaded. See Conservative Ollama final logical release below for the tested ownership limits.
 - LM Studio: native REST v1 explicitly loads the chosen catalog key. Inference addresses the returned instance ID. Only a newly returned instance absent from the pre-load inventory is eligible for app cleanup. A reused existing instance is rejected with a clear error because the app cannot establish its pin or ownership. Cleanup must acknowledge the exact owned instance ID. Native REST v1 support is required; no silent provider or API fallback occurs.
-- Native loading is bounded to 300 seconds. Once submitted, its acknowledgement is read even after cancellation so a created instance is tracked and cleaned up. User cancellation is still recorded immediately; a replacement live worker waits for its predecessor to finish. Inference requests remain cancellable.
+- Native loading is bounded to 300 seconds. Once submitted, its acknowledgement is read even after cancellation so a confirmed LM Studio instance remains tracked for exact cleanup. Ollama logical release instead ends renewal without changing its existing server lifetime. User cancellation is still recorded immediately; a replacement live worker waits for its predecessor to finish. Inference requests remain cancellable.
 - Management uses the existing loopback-only, no-proxy, no-redirect transport. It receives provider/model metadata and credentials only, never session objects or audio-file access. Management errors do not expose server response bodies. Cloud consent and source validation remain unchanged.
 
-These are application-owned reservations, not exclusive locks against another program or a user changing the model server. Server shutdown, manual unload, app termination, a management timeout without an acknowledgement or concurrent external instance changes can invalidate residency or leave an unconfirmed server-side load. No foreign instance is guessed and unloaded to repair such uncertainty. A failed cleanup prevents unconfirmed reuse and requires checking the local service.
+These are application-owned reservations, not exclusive locks against another program or a user changing the model server. Server shutdown, manual unload, app termination, a management timeout without an acknowledgement or concurrent external instance changes can invalidate residency or leave an unconfirmed server-side load. No foreign instance is guessed and unloaded to repair such uncertainty. An unconfirmed LM Studio load or exact-instance cleanup prevents unconfirmed reuse and requires checking the local service. A fresh idle Ollama reservation must re-read native inventory and confirm its load before inference; final logical release itself sends no provider mutation.
 
 ## Evidence and remaining gates
 
